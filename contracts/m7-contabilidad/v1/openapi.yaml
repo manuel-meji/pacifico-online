@@ -1,0 +1,26 @@
+openapi: 3.0.3
+info:
+  title: Contrato de Integración - m7-contabilidad
+  description: Especificación OpenAPI v1 para el módulo m7-contabilidad en Pacíficos Online.
+  version: 1.0.0
+servers:
+  - url: /api/v1/m7-contabilidad
+    description: Servidor local / integración
+paths:
+  /health:
+    get:
+      summary: Verificación de estado del módulo
+      responses:
+        '200':
+          description: Módulo operando correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  module:
+                    type: string
+                    example: m7-contabilidad
