@@ -148,15 +148,35 @@ pacifico-online/
 
 ---
 
-## 6. Instalación y Puesta en Marcha
+## 6. Instalación y Puesta en Marcha (Estandarizado con Laragon)
 
-### Requisitos Previos
-- **PHP** >= 8.2 (con extensiones `pdo`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype`, `json`, `curl`)
-- **Composer** >= 2.x
-- **Node.js** >= 18.x y NPM
-- **Base de Datos:** MySQL / MariaDB / PostgreSQL / SQLite
+Para asegurar que todo el grupo trabaje sobre el mismo entorno y evitar incompatibilidades, el desarrollo está estandarizado utilizando **Laragon** (que incluye PHP 8.3+, Composer, MySQL y Node.js).
 
-### Pasos de Instalación
+### Paso 1: Configurar las Variables de Entorno de Laragon en Windows
+
+Si utilizas PowerShell o VS Code externo, Windows necesita saber dónde están `php` y `composer`. Tienes dos alternativas:
+
+#### Opción A: Configuración Permanente en PowerShell (Recomendada)
+Ejecuta el siguiente comando una sola vez en PowerShell para registrar PHP y Composer en tu usuario:
+```powershell
+[System.Environment]::SetEnvironmentVariable('Path', [System.Environment]::GetEnvironmentVariable('Path', 'User') + ";C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64;C:\laragon\bin\composer;C:\laragon\bin\git\cmd", 'User')
+```
+> **Nota:** Cierra y vuelve a abrir tu terminal / VS Code tras ejecutar el comando para aplicar los cambios.
+
+#### Opción B: Usar la Terminal Integrada de Laragon
+1. Abre la aplicación **Laragon**.
+2. Presiona el botón **"Terminal"** (Laragon carga automáticamente todas las rutas de PHP, Composer, Git y MySQL).
+
+#### Opción C: Configuración Temporal (Solo para la ventana actual)
+```powershell
+$env:Path = "C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64;C:\laragon\bin\composer;" + $env:Path
+```
+
+---
+
+### Paso 2: Clonación y Puesta en Marcha del Proyecto
+
+Ejecuta los siguientes comandos en orden dentro de tu terminal:
 
 1. **Clonar el repositorio:**
    ```bash
@@ -170,32 +190,48 @@ pacifico-online/
    npm install
    ```
 
-3. **Configurar el entorno:**
-   ```bash
+3. **Crear el archivo de variables de entorno `.env`:**
+   ```powershell
+   # En Windows PowerShell o CMD:
+   copy .env.example .env
+
+   # En Git Bash / Linux / macOS:
    cp .env.example .env
+   ```
+
+4. **Generar la clave de seguridad de la aplicación (OBLIGATORIO):**
+   ```bash
    php artisan key:generate
    ```
+   > ⚠️ **Importante:** Si omites este paso, obtendrás el error `MissingAppKeyException: No application encryption key has been specified`.
 
-4. **Configurar la base de datos en `.env`:**
-   ```env
-   DB_CONNECTION=mysql
-   DB_HOST=127.0.0.1
-   DB_PORT=3306
-   DB_DATABASE=pacifico_online
-   DB_USERNAME=root
-   DB_PASSWORD=
-   ```
+5. **Configurar y migrar la Base de Datos:**
+   * **Opción SQLite (Por defecto, lista sin configurar nada):**
+     ```bash
+     php artisan migrate
+     ```
+   * **Opción MySQL (Usando la base de datos de Laragon):**
+     Inicia MySQL en Laragon (botón *Start All*), crea la base de datos `pacifico_online` y configura tu `.env`:
+     ```env
+     DB_CONNECTION=mysql
+     DB_HOST=127.0.0.1
+     DB_PORT=3306
+     DB_DATABASE=pacifico_online
+     DB_USERNAME=root
+     DB_PASSWORD=
+     ```
+     Luego ejecuta:
+     ```bash
+     php artisan migrate --seed
+     ```
 
-5. **Ejecutar migraciones y seeders:**
-   ```bash
-   php artisan migrate --seed
-   ```
-
-6. **Iniciar el servidor de desarrollo:**
+6. **Iniciar el servidor local de desarrollo:**
    ```bash
    php artisan serve
    ```
-   Acceder en el navegador a `http://localhost:8000`.
+   Accede en tu navegador a: `http://localhost:8000`
+
+---
 
 ---
 
