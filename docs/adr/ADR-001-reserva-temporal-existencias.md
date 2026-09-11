@@ -5,8 +5,8 @@
 
 ## ADR-001: Reserva Temporal de Existencias con Expiración (TTL) para el Checkout
 
-- **Estado:** Aprobado
-- **Fecha:** 2026-09-08
+- **Estado:** Pendiente
+- **Fecha:** 2026-09-11
 - **Decisores:** Comité de Arquitectura e Integración
 - **Módulos Afectados:** M4 (Inventario), M5 (Carrito y Pedidos)
 
@@ -32,7 +32,7 @@ Cuando un cliente hace checkout, M5 necesita asegurarse de que el producto siga 
 ---
 
 ### 4. Decisión Tomada
-Se elige la **Opción 2: Reserva temporal con expiración (TTL)**. Al iniciar el checkout, M5 solicita a M4 una reserva con un identificador único y un tiempo de vencimiento (15 minutos). Si M6 confirma el pago dentro de ese plazo, M5 le pide a M4 confirmar la salida definitiva del inventario. Si el plazo vence sin pago confirmado, la reserva se libera automáticamente y el producto vuelve a estar disponible.
+Se elige tentativamente la **Opción 2: Reserva temporal con expiración (TTL)**. Al iniciar el checkout, M5 solicita a M4 una reserva con un identificador único y un tiempo de vencimiento (15 minutos). Si M6 confirma el pago dentro de ese plazo, M5 le pide a M4 confirmar la salida definitiva del inventario. Si el plazo vence sin pago confirmado, la reserva se libera automáticamente y el producto vuelve a estar disponible.
 
 ---
 
