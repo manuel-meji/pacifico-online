@@ -1,26 +1,1030 @@
 openapi: 3.0.3
 info:
-  title: Contrato de Integración - m5-pedidos
-  description: Especificación OpenAPI v1 para el módulo m5-pedidos en Pacíficos Online.
+  title: M5 Carrito y pedidos — Contrato del módulo
   version: 1.0.0
+  description: |
+    Contrato formal del módulo M5 Carrito y pedidos de Pacíficos Online
+    (IF6100, II Ciclo 2026, subgrupo SG5).
+
+
+    Publica las operaciones que M5 ofrece a los demás módulos y al frontend de la
+    plataforma, 100% alineado con el Modelo de Datos oficial de M5 para PC3
+    (PostgreSQL) y la Solicitud de Cambio SC-02 (Cancelación parcial de subpedidos).
+
+
+    Entidades canónicas propietarias de M5:
+    - pedidos_maestros (Cabecera global del pedido)
+    - pedidos_subpedidos (Desglose por comercio para envíos, comisiones y facturación individual)
+    - pedidos_lineas (Variaciones compradas por subpedido)
+    - pedidos_carritos (Contenedor activo por cliente)
+    - items_carrito (Líneas del carrito con soporte de reserva temporal M4)
+    - estados_pedido (Trazabilidad histórica de cambios de estado del pedido)
+    - notas_cliente_pedido (Observaciones de la persona compradora)
+    - recibos_cliente (Comprobantes temporales de venta)
+    - cancelaciones_pedido (Registro formal de cancelaciones y flag de reembolso hacia M6)
+
+
+    Relaciones con otros módulos:
+    - M1: Propietario de Cliente (`id_cliente`).
+    - M2: Propietario de Comercio (`id_comercio`).
+    - M3: Propietario de Variaciones y Precios (`id_variacion`).
+    - M4: Propietario de Inventario y Reservas (`id_reserva`).
+    - M6: Propietario de Pagos y Facturación Electrónica.
+    - M7: Consumidor contable para liquidaciones y asientos.
+
+
+    Versionado: Un cambio que rompe a los consumidores exige publicar una versión mayor
+    nueva (v2) y mantener la v1 en convivencia.
+  contact:
+    name: Subgrupo SG5 — Módulo M5
+  x-modulo: M5
+  x-subgrupo: SG5
+  x-propietario-de:
+    - pedidos_maestros
+    - pedidos_subpedidos
+    - pedidos_lineas
+    - pedidos_carritos
+    - items_carrito
+    - estados_pedido
+    - notas_cliente_pedido
+    - recibos_cliente
+    - cancelaciones_pedido
+  x-consumidores: [Frontend del portal, M2 Comercios, M6 Pagos y facturación, M7 ERP Contable]
 servers:
-  - url: /api/v1/m5-pedidos
-    description: Servidor local / integración
+  - url: /api/m5/v1
+    description: Ruta base del módulo M5 en el ambiente de integración
+tags:
+  - name: Carrito
+    description: Operaciones sobre pedidos_carritos e items_carrito.
+  - name: Pedidos
+    description: Orquestación de pedidos_maestros, notas, recibos y cancelaciones.
+  - name: Subpedidos
+    description: Gestión de pedidos_subpedidos y pedidos_lineas por comercio (despacho, entrega, SC-02).
+
+
 paths:
-  /health:
+  /carrito:
     get:
-      summary: Verificación de estado del módulo
+      tags: [Carrito]
+      operationId: obtenerCarrito
+      summary: Obtener carrito de compras activo
+      description: |
+        Devuelve el registro de `pedidos_carritos` activo para el cliente autenticado
+        con sus correspondientes `items_carrito`. Si hay reservas temporales activas en M4,
+        se incluye su `id_reserva`.
+      x-consumidores: [Frontend del portal]
+      security:
+        - tokenNucleo: []
       responses:
         '200':
-          description: Módulo operando correctamente
+          description: Carrito activo y sus ítems.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  module:
-                    type: string
-                    example: m5-pedidos
+                $ref: '#/components/schemas/Carrito'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+
+
+    delete:
+      tags: [Carrito]
+      operationId: vaciarCarrito
+      summary: Vaciar carrito de compras
+      description: |
+        Elimina todos los `items_carrito` asociados al carrito activo del cliente.
+        Si existían reservas en M4 (`id_reserva`), M5 dispara su liberación.
+      x-consumidores: [Frontend del portal]
+      security:
+        - tokenNucleo: []
+      responses:
+        '200':
+          description: Carrito vaciado correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensajeOperacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+
+
+  /carrito/items:
+    post:
+      tags: [Carrito]
+      operationId: agregarItemCarrito
+      summary: Agregar variación al carrito
+      description: |
+        Inserta un nuevo registro en `items_carrito` para la variación (`id_variacion`) y cantidad.
+        Opcionalmente puede almacenar `id_reserva` si M4 efectúa la reserva previa.
+      x-consumidores: [Frontend del portal]
+      security:
+        - tokenNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgregarItemCarritoRequest'
+      responses:
+        '201':
+          description: Ítem añadido al carrito.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Carrito'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+
+  /carrito/items/{id_item_carrito}:
+    parameters:
+      - $ref: '#/components/parameters/IdItemCarrito'
+    put:
+      tags: [Carrito]
+      operationId: actualizarCantidadItemCarrito
+      summary: Modificar cantidad de un ítem en el carrito
+      description: |
+        Actualiza el campo `cantidad` en la tabla `items_carrito`. Debe ser mayor a 0.
+      x-consumidores: [Frontend del portal]
+      security:
+        - tokenNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarCantidadItemRequest'
+      responses:
+        '200':
+          description: Cantidad actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Carrito'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/ItemCarritoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+
+    delete:
+      tags: [Carrito]
+      operationId: eliminarItemCarrito
+      summary: Eliminar un ítem del carrito
+      description: |
+        Elimina el registro de `items_carrito`.
+      x-consumidores: [Frontend del portal]
+      security:
+        - tokenNucleo: []
+      responses:
+        '200':
+          description: Ítem eliminado del carrito.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Carrito'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/ItemCarritoNoEncontrado'
+
+
+  /pedidos:
+    get:
+      tags: [Pedidos]
+      operationId: listarPedidos
+      summary: Listar pedidos del cliente
+      description: |
+        Lista los registros de `pedidos_maestros` asociados al cliente autenticado.
+      x-consumidores: [Frontend del portal]
+      security:
+        - tokenNucleo: []
+      parameters:
+        - name: estado_pedido
+          in: query
+          required: false
+          schema:
+            type: string
+            example: confirmado
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: por_pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 15
+      responses:
+        '200':
+          description: Lista paginada de pedidos maestros.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoPedidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+
+
+    post:
+      tags: [Pedidos]
+      operationId: crearPedidoCheckout
+      summary: Crear pedido maestro y subpedidos (Checkout)
+      description: |
+        Transforma el carrito en:
+        1. Un registro en `pedidos_maestros` (`monto_total`, `estado_pedido: pendiente`, `cupon_descuento`, `tarjeta_regalo`).
+        2. Registro de notas opcionales en `notas_cliente_pedido`.
+        3. Registros en `pedidos_subpedidos` desglosados por `id_comercio` (`subtotal`, `costo_envio`, `impuesto`).
+        4. Registros en `pedidos_lineas` por cada variación (`cantidad`, `precio_unitario`, `tarifa_impuesto`).
+        5. Registro inicial en `estados_pedido`.
+      x-consumidores: [Frontend del portal]
+      security:
+        - tokenNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearPedidoRequest'
+      responses:
+        '201':
+          description: Pedido maestro y subpedidos generados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoMaestro'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '409':
+          $ref: '#/components/responses/StockInsuficiente'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+
+  /pedidos/{id_pedido}:
+    parameters:
+      - $ref: '#/components/parameters/IdPedido'
+    get:
+      tags: [Pedidos]
+      operationId: obtenerPedido
+      summary: Obtener detalle completo del pedido maestro
+      description: |
+        Devuelve el registro de `pedidos_maestros`, sus `pedidos_subpedidos`, `pedidos_lineas`,
+        observaciones en `notas_cliente_pedido`, recibos en `recibos_cliente` e historial de `estados_pedido`.
+        Consumido por M6 para procesar el pago y facturar, y por M7 para contabilizar la transacción.
+      x-consumidores: [Frontend del portal, M6 Pagos y facturación, M7 ERP Contable]
+      security:
+        - tokenNucleo: []
+      responses:
+        '200':
+          description: Detalle completo del pedido maestro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoMaestro'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/PedidoNoEncontrado'
+
+
+  /pedidos/{id_pedido}/cancelar:
+    parameters:
+      - $ref: '#/components/parameters/IdPedido'
+    post:
+      tags: [Pedidos]
+      operationId: cancelarPedidoTotal
+      summary: Cancelar pedido maestro completo
+      description: |
+        Cancela el pedido en `pedidos_maestros`, actualiza `estado_pedido: cancelado`,
+        crea registro en `cancelaciones_pedido` especificando `motivo` y `requiere_reembolso`
+        (para que M6 devuelva el dinero si ya estaba pagado), e inserta en `estados_pedido`.
+        Gatilla la liberación de inventario en M4 y el evento canónico `PedidoCancelado`.
+      x-consumidores: [Frontend del portal, M6 Pagos y facturación]
+      security:
+        - tokenNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelarPedidoRequest'
+      responses:
+        '200':
+          description: Pedido cancelado y registrado en cancelaciones_pedido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoMaestro'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/PedidoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/EstadoInvalidoParaCancelar'
+
+
+  /subpedidos/{id_subpedido}:
+    parameters:
+      - $ref: '#/components/parameters/IdSubpedido'
+    get:
+      tags: [Subpedidos]
+      operationId: obtenerSubpedido
+      summary: Consultar detalle de un subpedido específico
+      description: |
+        Devuelve el registro de `pedidos_subpedidos` y sus correspondientes `pedidos_lineas`.
+        Permite a un comercio en M2 consultar únicamente las ventas que le corresponden.
+      x-consumidores: [Frontend del portal, M2 Comercios, M6 Pagos y facturación, M7 ERP Contable]
+      security:
+        - tokenNucleo: []
+      responses:
+        '200':
+          description: Detalle del subpedido por comercio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoSubpedido'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/SubpedidoNoEncontrado'
+
+
+  /subpedidos/{id_subpedido}/despachar:
+    parameters:
+      - $ref: '#/components/parameters/IdSubpedido'
+    post:
+      tags: [Subpedidos]
+      operationId: despacharSubpedido
+      summary: Registrar despacho de subpedido por el comercio
+      description: |
+        Actualiza `estado_subpedido: despachado` en `pedidos_subpedidos`. Emite el evento
+        canónico `SubpedidoDespachado` hacia M1 (seguimiento cliente), M4 (salida kardex)
+        y M7 (costo de ventas).
+      x-consumidores: [Frontend del portal, M2 Comercios]
+      security:
+        - tokenNucleo: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DespacharSubpedidoRequest'
+      responses:
+        '200':
+          description: Subpedido actualizado a estado despachado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoSubpedido'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/SubpedidoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/EstadoInvalidoParaOperacion'
+
+
+  /subpedidos/{id_subpedido}/entregar:
+    parameters:
+      - $ref: '#/components/parameters/IdSubpedido'
+    post:
+      tags: [Subpedidos]
+      operationId: confirmarEntregaSubpedido
+      summary: Confirmar entrega de subpedido al cliente
+      description: |
+        Actualiza `estado_subpedido: entregado` en `pedidos_subpedidos`. Emite el evento
+        `SubpedidoEntregado` para que M7 programe la liquidación de fondos al comercio.
+      x-consumidores: [Frontend del portal, M2 Comercios]
+      security:
+        - tokenNucleo: []
+      responses:
+        '200':
+          description: Entrega confirmada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoSubpedido'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/SubpedidoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/EstadoInvalidoParaOperacion'
+
+
+  /subpedidos/{id_subpedido}/cancelar:
+    parameters:
+      - $ref: '#/components/parameters/IdSubpedido'
+    post:
+      tags: [Subpedidos]
+      operationId: cancelarSubpedidoParcial
+      summary: Cancelar subpedido individual (Regla SC-02)
+      description: |
+        Ejecuta la cancelación parcial de un subpedido específico bajo la Solicitud de Cambio SC-02.
+        Actualiza `estado_subpedido: cancelado` en `pedidos_subpedidos` y registra la anulación
+        en `cancelaciones_pedido` con `requiere_reembolso: true`. Emite el evento `SubpedidoCancelado`
+        para que M4 libere solo las existencias de este comercio, M6 devuelva el monto correspondiente
+        y M7 asiente la reversión contable.
+      x-consumidores: [Frontend del portal, M2 Comercios, M6 Pagos y facturación]
+      security:
+        - tokenNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelarSubpedidoRequest'
+      responses:
+        '200':
+          description: Subpedido cancelado bajo SC-02.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoSubpedido'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/SubpedidoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/EstadoInvalidoParaCancelar'
+
+
+components:
+  securitySchemes:
+    tokenNucleo:
+      type: http
+      scheme: bearer
+      description: Token JWT emitido por el núcleo compartido (autenticación y roles).
+
+
+  parameters:
+    IdItemCarrito:
+      name: id_item_carrito
+      in: path
+      required: true
+      description: PK de la tabla items_carrito.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    IdPedido:
+      name: id_pedido
+      in: path
+      required: true
+      description: PK de la tabla pedidos_maestros.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    IdSubpedido:
+      name: id_subpedido
+      in: path
+      required: true
+      description: PK de la tabla pedidos_subpedidos.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+
+  schemas:
+    # 1.5 items_carrito
+    ItemCarrito:
+      type: object
+      required: [id_item_carrito, id_carrito, id_variacion, cantidad]
+      properties:
+        id_item_carrito:
+          type: integer
+          format: int64
+          description: PK de items_carrito.
+        id_carrito:
+          type: integer
+          format: int64
+          description: FK a pedidos_carritos.
+        id_variacion:
+          type: integer
+          format: int64
+          description: FK a variaciones (M3).
+        cantidad:
+          type: integer
+          minimum: 1
+          description: Cantidad a comprar (> 0).
+        id_reserva:
+          type: integer
+          format: int64
+          nullable: true
+          description: FK a reservas (M4). Asignación temporal de inventario.
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+
+    # 1.4 pedidos_carritos
+    Carrito:
+      type: object
+      required: [id_carrito, id_cliente, items]
+      properties:
+        id_carrito:
+          type: integer
+          format: int64
+          description: PK de pedidos_carritos.
+        id_cliente:
+          type: integer
+          format: int64
+          description: FK a clientes (M1).
+        monto_estimado:
+          type: number
+          format: double
+          nullable: true
+          description: Total calculado en base a precios de M3.
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemCarrito'
+
+
+    # 1.3 pedidos_lineas
+    PedidoLinea:
+      type: object
+      required: [id_linea, id_subpedido, id_variacion, cantidad, precio_unitario, tarifa_impuesto]
+      properties:
+        id_linea:
+          type: integer
+          format: int64
+          description: PK de pedidos_lineas.
+        id_subpedido:
+          type: integer
+          format: int64
+          description: FK a pedidos_subpedidos.
+        id_variacion:
+          type: integer
+          format: int64
+          description: FK a variaciones (M3).
+        cantidad:
+          type: integer
+          minimum: 1
+          description: Cantidad comprada (> 0).
+        precio_unitario:
+          type: number
+          format: double
+          description: Precio del catálogo al momento de la compra.
+        tarifa_impuesto:
+          type: number
+          format: double
+          description: Porcentaje de IVA aplicable (ej. 13% o reducida).
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+
+    # 1.2 pedidos_subpedidos
+    PedidoSubpedido:
+      type: object
+      required: [id_subpedido, id_pedido, id_comercio, subtotal, costo_envio, impuesto, estado_subpedido, lineas]
+      properties:
+        id_subpedido:
+          type: integer
+          format: int64
+          description: PK de pedidos_subpedidos.
+        id_pedido:
+          type: integer
+          format: int64
+          description: FK a pedidos_maestros.
+        id_comercio:
+          type: integer
+          format: int64
+          description: FK a comercios (M2). Comercio responsable.
+        subtotal:
+          type: number
+          format: double
+          description: Suma de productos antes de impuestos y envíos (>= 0).
+        costo_envio:
+          type: number
+          format: double
+          description: Monto cobrado por transporte (exento de IVA, >= 0).
+        impuesto:
+          type: number
+          format: double
+          description: IVA total calculado para este subpedido.
+        estado_subpedido:
+          type: string
+          maxLength: 50
+          description: Estado específico de la porción del comercio.
+          example: en_preparacion
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        lineas:
+          type: array
+          items:
+            $ref: '#/components/schemas/PedidoLinea'
+
+
+    # 1.6 estados_pedido
+    EstadoPedidoRegistro:
+      type: object
+      required: [id_estado_pedido, id_pedido, estado, fecha_estado]
+      properties:
+        id_estado_pedido:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        estado:
+          type: string
+          maxLength: 50
+        fecha_estado:
+          type: string
+          format: date-time
+
+
+    # 1.7 notas_cliente_pedido
+    NotaClientePedido:
+      type: object
+      required: [id_nota, id_pedido, nota]
+      properties:
+        id_nota:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        nota:
+          type: string
+
+
+    # 1.8 recibos_cliente
+    ReciboCliente:
+      type: object
+      required: [id_recibo, id_pedido, url_recibo]
+      properties:
+        id_recibo:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        url_recibo:
+          type: string
+          maxLength: 255
+
+
+    # 1.9 cancelaciones_pedido
+    CancelacionPedidoRegistro:
+      type: object
+      required: [id_cancelacion, id_pedido, motivo, requiere_reembolso, fecha_cancelacion]
+      properties:
+        id_cancelacion:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        motivo:
+          type: string
+        requiere_reembolso:
+          type: boolean
+          description: Indica si se debe proceder con la devolución de dinero (M6).
+        fecha_cancelacion:
+          type: string
+          format: date-time
+
+
+    # 1.1 pedidos_maestros
+    PedidoMaestro:
+      type: object
+      required: [id_pedido, fecha_creacion, monto_total, estado_pedido, subpedidos]
+      properties:
+        id_pedido:
+          type: integer
+          format: int64
+          description: PK de pedidos_maestros.
+        fecha_creacion:
+          type: string
+          format: date-time
+          description: Fecha en que se confirma el pedido.
+        monto_total:
+          type: number
+          format: double
+          description: Monto total unificado a cobrar al cliente (>= 0).
+        estado_pedido:
+          type: string
+          maxLength: 50
+          description: Condición actual (ej. confirmado, pagado, cancelado).
+          example: confirmado
+        cupon_descuento:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Código de descuento aplicado.
+        tarjeta_regalo:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Instrumento de regalo aplicado.
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        subpedidos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PedidoSubpedido'
+        notas:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotaClientePedido'
+        recibos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReciboCliente'
+        cancelacion:
+          $ref: '#/components/schemas/CancelacionPedidoRegistro'
+
+
+    # Requests
+    AgregarItemCarritoRequest:
+      type: object
+      required: [id_variacion, cantidad]
+      properties:
+        id_variacion:
+          type: integer
+          format: int64
+          description: FK a variaciones (M3).
+        cantidad:
+          type: integer
+          minimum: 1
+          default: 1
+        id_reserva:
+          type: integer
+          format: int64
+          nullable: true
+          description: Asignación temporal de inventario en M4 (opcional).
+
+
+    ActualizarCantidadItemRequest:
+      type: object
+      required: [cantidad]
+      properties:
+        cantidad:
+          type: integer
+          minimum: 1
+
+
+    CrearPedidoRequest:
+      type: object
+      properties:
+        cupon_descuento:
+          type: string
+          maxLength: 50
+          nullable: true
+        tarjeta_regalo:
+          type: string
+          maxLength: 50
+          nullable: true
+        nota:
+          type: string
+          nullable: true
+          description: Observación especial para notas_cliente_pedido.
+
+
+    DespacharSubpedidoRequest:
+      type: object
+      properties:
+        guia_transporte:
+          type: string
+          nullable: true
+          description: Información opcional de guía o notas de despacho.
+
+
+    CancelarPedidoRequest:
+      type: object
+      required: [motivo]
+      properties:
+        motivo:
+          type: string
+          description: Razón de la interrupción registrada en cancelaciones_pedido.
+        requiere_reembolso:
+          type: boolean
+          default: true
+          description: Flag para que M6 efectúe la reversión de fondos.
+
+
+    CancelarSubpedidoRequest:
+      type: object
+      required: [motivo]
+      properties:
+        motivo:
+          type: string
+          description: Razón de la cancelación parcial (SC-02) en cancelaciones_pedido.
+        requiere_reembolso:
+          type: boolean
+          default: true
+          description: Flag para que M6 efectúe la devolución parcial.
+
+
+    ResultadoPedidos:
+      type: object
+      required: [pagina, por_pagina, total_resultados, pedidos]
+      properties:
+        pagina:
+          type: integer
+        por_pagina:
+          type: integer
+        total_resultados:
+          type: integer
+        pedidos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PedidoMaestro'
+
+
+    MensajeOperacion:
+      type: object
+      required: [mensaje]
+      properties:
+        mensaje:
+          type: string
+          example: Operación realizada con éxito
+
+
+    Error:
+      type: object
+      description: Formato de error estandarizado del Comité acordado entre los módulos.
+      required: [codigo, mensaje, modulo]
+      properties:
+        codigo:
+          type: string
+          example: PEDIDO_NO_ENCONTRADO
+        mensaje:
+          type: string
+        modulo:
+          type: string
+          example: M5
+        detalles:
+          type: array
+          items:
+            type: object
+            required: [campo, problema]
+            properties:
+              campo:
+                type: string
+              problema:
+                type: string
+
+
+  responses:
+    NoAutenticado:
+      description: No se envió un token válido del núcleo compartido.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: NO_AUTENTICADO
+            mensaje: Se requiere sesión activa para esta operación.
+            modulo: M5
+    AccesoDenegado:
+      description: La persona o módulo no tiene permiso sobre el recurso solicitado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: ACCESO_DENEGADO
+            mensaje: No tiene autorización sobre el recurso solicitado.
+            modulo: M5
+    PedidoNoEncontrado:
+      description: No existe un registro en pedidos_maestros con ese identificador.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: PEDIDO_NO_ENCONTRADO
+            mensaje: El pedido solicitado no existe.
+            modulo: M5
+    SubpedidoNoEncontrado:
+      description: No existe un registro en pedidos_subpedidos con ese identificador.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: SUBPEDIDO_NO_ENCONTRADO
+            mensaje: El subpedido no existe.
+            modulo: M5
+    ItemCarritoNoEncontrado:
+      description: El ítem no existe en items_carrito.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: ITEM_CARRITO_NO_ENCONTRADO
+            mensaje: El producto no se encuentra en el carrito.
+            modulo: M5
+    StockInsuficiente:
+      description: M4 no pudo reservar las unidades solicitadas para el checkout.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: STOCK_INSUFICIENTE
+            mensaje: Uno o más productos no cuentan con existencias disponibles.
+            modulo: M5
+    EstadoInvalidoParaOperacion:
+      description: El subpedido o pedido no se encuentra en un estado admisible para la acción.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: ESTADO_INVALIDO
+            mensaje: El subpedido ya fue despachado o cancelado previamente.
+            modulo: M5
+    EstadoInvalidoParaCancelar:
+      description: No se puede cancelar porque el pedido o subpedido ya fue despachado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: NO_CANCELABLE
+            mensaje: El pedido no puede cancelarse en su estado actual.
+            modulo: M5
+    DatosInvalidos:
+      description: Datos de la solicitud incompletos o con formato incorrecto.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: DATOS_INVALIDOS
+            mensaje: Revise los datos enviados.
+            modulo: M5
+    DependenciaNoDisponible:
+      description: Uno de los módulos requeridos (M2, M3, M4 o M6) no respondió a tiempo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: SERVICIO_NO_DISPONIBLE
+            mensaje: El servicio de inventario o catálogo no respondió temporalmente.
+            modulo: M5
