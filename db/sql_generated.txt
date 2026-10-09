@@ -21,17 +21,22 @@
  ⇂ create index "failed_jobs_connection_queue_failed_at_index" on "failed_jobs" ("connection", "queue", "failed_at") 
  ⇂ create unique index "failed_jobs_uuid_unique" on "failed_jobs" ("uuid") 
  2026_10_09_013223_create_pedidos_maestros_table .. 
- ⇂ create table "pedidos_maestros" ("id_pedido" integer primary key autoincrement not null, "id_cliente" integer not null, "fecha_creacion" datetime not null, "monto_total" numeric not null, "estado_pedido" varchar not null, "cupon_descuento" varchar, "tarjeta_regalo" varchar, "created_at" datetime, "updated_at" datetime, foreign key("id_cliente") references "clientes"("id")) 
+ ⇂ create table "pedidos_maestros" ("id_pedido" integer primary key autoincrement not null, "id_cliente" integer not null, "fecha_creacion" datetime not null, "monto_total" numeric not null, "estado_pedido" varchar not null, "cupon_descuento" varchar, "tarjeta_regalo" varchar, "created_at" datetime, "updated_at" datetime) 
+ ⇂ ALTER TABLE pedidos_maestros ADD CONSTRAINT monto_total_positivo CHECK (monto_total >= 0) 
  2026_10_09_013224_create_pedidos_subpedidos_table .. 
- ⇂ create table "pedidos_subpedidos" ("id_subpedido" integer primary key autoincrement not null, "id_pedido" integer not null, "id_comercio" integer not null, "subtotal" numeric not null, "costo_envio" numeric not null, "impuesto" numeric not null, "estado_subpedido" varchar not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade, foreign key("id_comercio") references "comercios"("id")) 
+ ⇂ create table "pedidos_subpedidos" ("id_subpedido" integer primary key autoincrement not null, "id_pedido" integer not null, "id_comercio" integer not null, "subtotal" numeric not null, "costo_envio" numeric not null, "impuesto" numeric not null, "estado_subpedido" varchar not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
+ ⇂ ALTER TABLE pedidos_subpedidos ADD CONSTRAINT subtotal_positivo CHECK (subtotal >= 0) 
+ ⇂ ALTER TABLE pedidos_subpedidos ADD CONSTRAINT costo_envio_positivo CHECK (costo_envio >= 0) 
  2026_10_09_013225_create_pedidos_lineas_table .. 
- ⇂ create table "pedidos_lineas" ("id_linea" integer primary key autoincrement not null, "id_subpedido" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "precio_unitario" numeric not null, "tarifa_impuesto" numeric not null, "created_at" datetime, "updated_at" datetime, foreign key("id_subpedido") references "pedidos_subpedidos"("id_subpedido") on delete cascade, foreign key("id_variacion") references "variaciones"("id")) 
+ ⇂ create table "pedidos_lineas" ("id_linea" integer primary key autoincrement not null, "id_subpedido" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "precio_unitario" numeric not null, "tarifa_impuesto" numeric not null, "created_at" datetime, "updated_at" datetime, foreign key("id_subpedido") references "pedidos_subpedidos"("id_subpedido") on delete cascade) 
+ ⇂ ALTER TABLE pedidos_lineas ADD CONSTRAINT cantidad_positiva CHECK (cantidad > 0) 
  2026_10_09_013226_create_pedidos_carritos_table .. 
- ⇂ create table "pedidos_carritos" ("id_carrito" integer primary key autoincrement not null, "id_cliente" integer not null, "created_at" datetime, "updated_at" datetime, foreign key("id_cliente") references "clientes"("id")) 
+ ⇂ create table "pedidos_carritos" ("id_carrito" integer primary key autoincrement not null, "id_cliente" integer not null, "created_at" datetime, "updated_at" datetime) 
  ⇂ create unique index "pedidos_carritos_id_cliente_unique" on "pedidos_carritos" ("id_cliente") 
  2026_10_09_013227_create_items_carrito_table .. 
- ⇂ create table "items_carrito" ("id_item_carrito" integer primary key autoincrement not null, "id_carrito" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "id_reserva" varchar, "created_at" datetime, "updated_at" datetime, foreign key("id_carrito") references "pedidos_carritos"("id_carrito") on delete cascade, foreign key("id_variacion") references "variaciones"("id")) 
+ ⇂ create table "items_carrito" ("id_item_carrito" integer primary key autoincrement not null, "id_carrito" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "id_reserva" varchar, "created_at" datetime, "updated_at" datetime, foreign key("id_carrito") references "pedidos_carritos"("id_carrito") on delete cascade) 
  ⇂ create index "items_carrito_id_reserva_index" on "items_carrito" ("id_reserva") 
+ ⇂ ALTER TABLE items_carrito ADD CONSTRAINT cantidad_positiva_carrito CHECK (cantidad > 0) 
  2026_10_09_013228_create_estados_pedido_table .. 
  ⇂ create table "estados_pedido" ("id_estado_pedido" integer primary key autoincrement not null, "id_pedido" integer not null, "estado" varchar not null, "fecha_estado" datetime not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
  2026_10_09_013229_create_notas_cliente_pedido_table .. 
