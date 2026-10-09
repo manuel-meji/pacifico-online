@@ -18,7 +18,6 @@ return new class extends Migration
             $table->string('tarjeta_regalo', 50)->nullable();$table->timestamps();
 
             // Reglas
-            $table->check('monto_total >= 0', 'monto_total_positivo');
         });
     }
 

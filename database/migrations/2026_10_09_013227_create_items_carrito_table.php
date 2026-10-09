@@ -17,7 +17,6 @@ return new class extends Migration
             $table->uuid('id_reserva')->nullable()->index();$table->timestamps();
 
             // Reglas
-            $table->check('cantidad > 0', 'cantidad_positiva_carrito');
         });
     }
 

@@ -18,7 +18,6 @@ return new class extends Migration
             $table->string('estado_subpedido', 50);$table->timestamps();
 
             // Reglas
-            $table->check('subtotal >= 0', 'subtotal_positivo');$table->check('costo_envio >= 0', 'costo_envio_positivo');
         });
     }
 

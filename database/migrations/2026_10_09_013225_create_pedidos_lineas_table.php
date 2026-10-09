@@ -17,7 +17,6 @@ return new class extends Migration
             $table->decimal('tarifa_impuesto', 5, 2);$table->timestamps();
 
             // Reglas
-            $table->check('cantidad > 0', 'cantidad_positiva');
         });
     }
 
