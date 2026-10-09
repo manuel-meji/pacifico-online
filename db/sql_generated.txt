@@ -2,42 +2,42 @@
  INFO Running migrations. 
 
  0001_01_01_000000_create_users_table .. 
- Ôçé create table "users" ("id" integer primary key autoincrement not null, "name" varchar not null, "email" varchar not null, "email_verified_at" datetime, "password" varchar not null, "remember_token" varchar, "created_at" datetime, "updated_at" datetime) 
- Ôçé create unique index "users_email_unique" on "users" ("email") 
- Ôçé create table "password_reset_tokens" ("email" varchar not null, "token" varchar not null, "created_at" datetime, primary key ("email")) 
- Ôçé create table "sessions" ("id" varchar not null, "user_id" integer, "ip_address" varchar, "user_agent" text, "payload" text not null, "last_activity" integer not null, primary key ("id")) 
- Ôçé create index "sessions_user_id_index" on "sessions" ("user_id") 
- Ôçé create index "sessions_last_activity_index" on "sessions" ("last_activity") 
+ ⇂ create table "users" ("id" integer primary key autoincrement not null, "name" varchar not null, "email" varchar not null, "email_verified_at" datetime, "password" varchar not null, "remember_token" varchar, "created_at" datetime, "updated_at" datetime) 
+ ⇂ create unique index "users_email_unique" on "users" ("email") 
+ ⇂ create table "password_reset_tokens" ("email" varchar not null, "token" varchar not null, "created_at" datetime, primary key ("email")) 
+ ⇂ create table "sessions" ("id" varchar not null, "user_id" integer, "ip_address" varchar, "user_agent" text, "payload" text not null, "last_activity" integer not null, primary key ("id")) 
+ ⇂ create index "sessions_user_id_index" on "sessions" ("user_id") 
+ ⇂ create index "sessions_last_activity_index" on "sessions" ("last_activity") 
  0001_01_01_000001_create_cache_table .. 
- Ôçé create table "cache" ("key" varchar not null, "value" text not null, "expiration" integer not null, primary key ("key")) 
- Ôçé create index "cache_expiration_index" on "cache" ("expiration") 
- Ôçé create table "cache_locks" ("key" varchar not null, "owner" varchar not null, "expiration" integer not null, primary key ("key")) 
- Ôçé create index "cache_locks_expiration_index" on "cache_locks" ("expiration") 
+ ⇂ create table "cache" ("key" varchar not null, "value" text not null, "expiration" integer not null, primary key ("key")) 
+ ⇂ create index "cache_expiration_index" on "cache" ("expiration") 
+ ⇂ create table "cache_locks" ("key" varchar not null, "owner" varchar not null, "expiration" integer not null, primary key ("key")) 
+ ⇂ create index "cache_locks_expiration_index" on "cache_locks" ("expiration") 
  0001_01_01_000002_create_jobs_table .. 
- Ôçé create table "jobs" ("id" integer primary key autoincrement not null, "queue" varchar not null, "payload" text not null, "attempts" integer not null, "reserved_at" integer, "available_at" integer not null, "created_at" integer not null) 
- Ôçé create index "jobs_queue_index" on "jobs" ("queue") 
- Ôçé create table "job_batches" ("id" varchar not null, "name" varchar not null, "total_jobs" integer not null, "pending_jobs" integer not null, "failed_jobs" integer not null, "failed_job_ids" text not null, "options" text, "cancelled_at" integer, "created_at" integer not null, "finished_at" integer, primary key ("id")) 
- Ôçé create table "failed_jobs" ("id" integer primary key autoincrement not null, "uuid" varchar not null, "connection" varchar not null, "queue" varchar not null, "payload" text not null, "exception" text not null, "failed_at" datetime not null default CURRENT_TIMESTAMP) 
- Ôçé create index "failed_jobs_connection_queue_failed_at_index" on "failed_jobs" ("connection", "queue", "failed_at") 
- Ôçé create unique index "failed_jobs_uuid_unique" on "failed_jobs" ("uuid") 
+ ⇂ create table "jobs" ("id" integer primary key autoincrement not null, "queue" varchar not null, "payload" text not null, "attempts" integer not null, "reserved_at" integer, "available_at" integer not null, "created_at" integer not null) 
+ ⇂ create index "jobs_queue_index" on "jobs" ("queue") 
+ ⇂ create table "job_batches" ("id" varchar not null, "name" varchar not null, "total_jobs" integer not null, "pending_jobs" integer not null, "failed_jobs" integer not null, "failed_job_ids" text not null, "options" text, "cancelled_at" integer, "created_at" integer not null, "finished_at" integer, primary key ("id")) 
+ ⇂ create table "failed_jobs" ("id" integer primary key autoincrement not null, "uuid" varchar not null, "connection" varchar not null, "queue" varchar not null, "payload" text not null, "exception" text not null, "failed_at" datetime not null default CURRENT_TIMESTAMP) 
+ ⇂ create index "failed_jobs_connection_queue_failed_at_index" on "failed_jobs" ("connection", "queue", "failed_at") 
+ ⇂ create unique index "failed_jobs_uuid_unique" on "failed_jobs" ("uuid") 
  2026_10_09_013223_create_pedidos_maestros_table .. 
- Ôçé create table "pedidos_maestros" ("id_pedido" integer primary key autoincrement not null, "id_cliente" integer not null, "fecha_creacion" datetime not null, "monto_total" numeric not null, "estado_pedido" varchar not null, "cupon_descuento" varchar, "tarjeta_regalo" varchar, "created_at" datetime, "updated_at" datetime, foreign key("id_cliente") references "clientes"("id")) 
+ ⇂ create table "pedidos_maestros" ("id_pedido" integer primary key autoincrement not null, "id_cliente" integer not null, "fecha_creacion" datetime not null, "monto_total" numeric not null, "estado_pedido" varchar not null, "cupon_descuento" varchar, "tarjeta_regalo" varchar, "created_at" datetime, "updated_at" datetime, foreign key("id_cliente") references "clientes"("id")) 
  2026_10_09_013224_create_pedidos_subpedidos_table .. 
- Ôçé create table "pedidos_subpedidos" ("id_subpedido" integer primary key autoincrement not null, "id_pedido" integer not null, "id_comercio" integer not null, "subtotal" numeric not null, "costo_envio" numeric not null, "impuesto" numeric not null, "estado_subpedido" varchar not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade, foreign key("id_comercio") references "comercios"("id")) 
+ ⇂ create table "pedidos_subpedidos" ("id_subpedido" integer primary key autoincrement not null, "id_pedido" integer not null, "id_comercio" integer not null, "subtotal" numeric not null, "costo_envio" numeric not null, "impuesto" numeric not null, "estado_subpedido" varchar not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade, foreign key("id_comercio") references "comercios"("id")) 
  2026_10_09_013225_create_pedidos_lineas_table .. 
- Ôçé create table "pedidos_lineas" ("id_linea" integer primary key autoincrement not null, "id_subpedido" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "precio_unitario" numeric not null, "tarifa_impuesto" numeric not null, "created_at" datetime, "updated_at" datetime, foreign key("id_subpedido") references "pedidos_subpedidos"("id_subpedido") on delete cascade, foreign key("id_variacion") references "variaciones"("id")) 
+ ⇂ create table "pedidos_lineas" ("id_linea" integer primary key autoincrement not null, "id_subpedido" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "precio_unitario" numeric not null, "tarifa_impuesto" numeric not null, "created_at" datetime, "updated_at" datetime, foreign key("id_subpedido") references "pedidos_subpedidos"("id_subpedido") on delete cascade, foreign key("id_variacion") references "variaciones"("id")) 
  2026_10_09_013226_create_pedidos_carritos_table .. 
- Ôçé create table "pedidos_carritos" ("id_carrito" integer primary key autoincrement not null, "id_cliente" integer not null, "created_at" datetime, "updated_at" datetime, foreign key("id_cliente") references "clientes"("id")) 
- Ôçé create unique index "pedidos_carritos_id_cliente_unique" on "pedidos_carritos" ("id_cliente") 
+ ⇂ create table "pedidos_carritos" ("id_carrito" integer primary key autoincrement not null, "id_cliente" integer not null, "created_at" datetime, "updated_at" datetime, foreign key("id_cliente") references "clientes"("id")) 
+ ⇂ create unique index "pedidos_carritos_id_cliente_unique" on "pedidos_carritos" ("id_cliente") 
  2026_10_09_013227_create_items_carrito_table .. 
- Ôçé create table "items_carrito" ("id_item_carrito" integer primary key autoincrement not null, "id_carrito" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "id_reserva" varchar, "created_at" datetime, "updated_at" datetime, foreign key("id_carrito") references "pedidos_carritos"("id_carrito") on delete cascade, foreign key("id_variacion") references "variaciones"("id")) 
- Ôçé create index "items_carrito_id_reserva_index" on "items_carrito" ("id_reserva") 
+ ⇂ create table "items_carrito" ("id_item_carrito" integer primary key autoincrement not null, "id_carrito" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "id_reserva" varchar, "created_at" datetime, "updated_at" datetime, foreign key("id_carrito") references "pedidos_carritos"("id_carrito") on delete cascade, foreign key("id_variacion") references "variaciones"("id")) 
+ ⇂ create index "items_carrito_id_reserva_index" on "items_carrito" ("id_reserva") 
  2026_10_09_013228_create_estados_pedido_table .. 
- Ôçé create table "estados_pedido" ("id_estado_pedido" integer primary key autoincrement not null, "id_pedido" integer not null, "estado" varchar not null, "fecha_estado" datetime not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
+ ⇂ create table "estados_pedido" ("id_estado_pedido" integer primary key autoincrement not null, "id_pedido" integer not null, "estado" varchar not null, "fecha_estado" datetime not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
  2026_10_09_013229_create_notas_cliente_pedido_table .. 
- Ôçé create table "notas_cliente_pedido" ("id_nota" integer primary key autoincrement not null, "id_pedido" integer not null, "nota" text not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
+ ⇂ create table "notas_cliente_pedido" ("id_nota" integer primary key autoincrement not null, "id_pedido" integer not null, "nota" text not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
  2026_10_09_013230_create_recibos_cliente_table .. 
- Ôçé create table "recibos_cliente" ("id_recibo" integer primary key autoincrement not null, "id_pedido" integer not null, "url_recibo" varchar not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
+ ⇂ create table "recibos_cliente" ("id_recibo" integer primary key autoincrement not null, "id_pedido" integer not null, "url_recibo" varchar not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
  2026_10_09_013231_create_cancelaciones_pedido_table .. 
- Ôçé create table "cancelaciones_pedido" ("id_cancelacion" integer primary key autoincrement not null, "id_pedido" integer not null, "motivo" text not null, "requiere_reembolso" tinyint(1) not null, "fecha_cancelacion" datetime not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
+ ⇂ create table "cancelaciones_pedido" ("id_cancelacion" integer primary key autoincrement not null, "id_pedido" integer not null, "motivo" text not null, "requiere_reembolso" tinyint(1) not null, "fecha_cancelacion" datetime not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
 
