@@ -1,5 +1,7 @@
-# Solicitud de Cambio (SC-04-Cambios relacionados con el PC2_SG1 (M1))
+# Solicitud de Cambio (SC-04 - Cambios relacionados con el PC2_SG1 (M1))
+
 ---
+
 ### 1. Identificación
 - **Código de Solicitud:** SC-04
 - **Fecha:** 2026.10.10
@@ -43,5 +45,4 @@
 - **Resolución:** Diferida
 - **Justificación de la resolución:** El diagrama de casos de uso presenta una flecha en sentido opuesto, por lo que no refleja el uso correcto. Además, una especificación de caso de uso no está redactada correctamente.
 - **Número de Acta del Comité:** ACTA-COMITE-SC-04
-- **Fecha de Resolución:** 2026.10.10
 - **Fecha de Resolución:** 2026.10.10
