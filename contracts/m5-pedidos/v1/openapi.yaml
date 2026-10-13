@@ -25,12 +25,12 @@ info:
 
 
     Relaciones con otros módulos:
-    - M1: Propietario de Cliente (`id_cliente`).
-    - M2: Propietario de Comercio (`id_comercio`).
+    - M1: Propietario de Cliente (`id_cliente`). Consumidor de `SubpedidoDespachado` (seguimiento de envíos).
+    - M2: Propietario de Comercio (`id_comercio`). Consumidor de `SubpedidoDespachado` (liquidación de comisiones y métricas).
     - M3: Propietario de Variaciones y Precios (`id_variacion`).
-    - M4: Propietario de Inventario y Reservas (`id_reserva`).
+    - M4: Propietario de Inventario y Reservas (`id_reserva`). Consumidor de `SubpedidoDespachado` (salida definitiva kardex).
     - M6: Propietario de Pagos y Facturación Electrónica.
-    - M7: Consumidor contable para liquidaciones y asientos.
+    - M7: Consumidor contable para liquidaciones y asientos (`SubpedidoDespachado` para costo de ventas).
 
 
     Versionado: Un cambio que rompe a los consumidores exige publicar una versión mayor
@@ -378,8 +378,8 @@ paths:
       summary: Registrar despacho de subpedido por el comercio
       description: |
         Actualiza `estado_subpedido: despachado` en `pedidos_subpedidos`. Emite el evento
-        canónico `SubpedidoDespachado` hacia M1 (seguimiento cliente), M4 (salida kardex)
-        y M7 (costo de ventas).
+        canónico `SubpedidoDespachado` hacia M1 (seguimiento cliente), M2 (registro de comisión y panel del comercio),
+        M4 (salida kardex) y M7 (costo de ventas).
       x-consumidores: [Frontend del portal, M2 Comercios]
       security:
         - tokenNucleo: []
@@ -849,6 +849,49 @@ components:
           type: string
           nullable: true
           description: Información opcional de guía o notas de despacho.
+
+
+    SubpedidoDespachadoEvento:
+      type: object
+      description: |
+        Payload del evento canónico SubpedidoDespachado emitido por M5 hacia M1 (seguimiento),
+        M2 (registro de comisión y panel del comercio), M4 (salida kardex) y M7 (costo de ventas).
+      required: [evento, id_subpedido, id_pedido, id_comercio, subtotal, costo_envio, estado_subpedido, fecha_despacho]
+      properties:
+        evento:
+          type: string
+          example: SubpedidoDespachado
+        id_subpedido:
+          type: integer
+          format: int64
+          description: Identificador del subpedido despachado.
+        id_pedido:
+          type: integer
+          format: int64
+          description: Identificador del pedido maestro.
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio responsable del subpedido (usado por M2 para RN-12 y liquidación).
+        subtotal:
+          type: number
+          format: double
+          description: Subtotal del subpedido sobre el cual M2 calcula la comisión de la plataforma.
+        costo_envio:
+          type: number
+          format: double
+          description: Costo del envío correspondiente al subpedido.
+        estado_subpedido:
+          type: string
+          example: despachado
+        guia_transporte:
+          type: string
+          nullable: true
+          description: Guía de transporte o notas de despacho opcionales.
+        fecha_despacho:
+          type: string
+          format: date-time
+          description: Marca temporal en que se registró el despacho.
 
 
     CancelarPedidoRequest:
