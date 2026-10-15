@@ -1,0 +1,57 @@
+# =========================================================================
+# CODEOWNERS - Pacíficos Online
+# Define qué coordinador debe aprobar los cambios según el módulo modificado
+# =========================================================================
+
+# Regla global por defecto (Archivos raíz, configuración, base de datos, núcleo)
+# Cualquier coordinador puede aprobar cambios generales, o el coordinador general:
+* @Doffyexe @Diego-Alfaro-Alvarado @Jeaustin-cyber @Giorgio6016 @manuel-meji @jusMa13 @Dercross44t
+
+# Módulo 1: Portal Público y Búsqueda (SG1)
+/app/Contracts/M1_Portal/ @Doffyexe
+/app/Http/Controllers/M1_Portal/ @Doffyexe
+/app/Models/M1_Portal/ @Doffyexe
+/app/Services/M1_Portal/ @Doffyexe
+/contracts/m1-portal/ @Doffyexe
+
+# Módulo 2: Micrositios y Administración de Comercios (SG2)
+/app/Contracts/M2_Comercios/ @Diego-Alfaro-Alvarado
+/app/Http/Controllers/M2_Comercios/ @Diego-Alfaro-Alvarado
+/app/Models/M2_Comercios/ @Diego-Alfaro-Alvarado
+/app/Services/M2_Comercios/ @Diego-Alfaro-Alvarado
+/contracts/m2-comercios/ @Diego-Alfaro-Alvarado
+
+# Módulo 3: Catálogo de Productos (SG3)
+/app/Contracts/M3_Catalogo/ @Jeaustin-cyber
+/app/Http/Controllers/M3_Catalogo/ @Jeaustin-cyber
+/app/Models/M3_Catalogo/ @Jeaustin-cyber
+/app/Services/M3_Catalogo/ @Jeaustin-cyber
+/contracts/m3-catalogo/ @Jeaustin-cyber
+
+# Módulo 4: Inventario Multiempresa (SG4)
+/app/Contracts/M4_Inventario/ @Giorgio6016
+/app/Http/Controllers/M4_Inventario/ @Giorgio6016
+/app/Models/M4_Inventario/ @Giorgio6016
+/app/Services/M4_Inventario/ @Giorgio6016
+/contracts/m4-inventario/ @Giorgio6016
+
+# Módulo 5: Carrito y Pedidos (SG5)
+/app/Contracts/M5_Pedidos/ @manuel-meji
+/app/Http/Controllers/M5_Pedidos/ @manuel-meji
+/app/Models/M5_Pedidos/ @manuel-meji
+/app/Services/M5_Pedidos/ @manuel-meji
+/contracts/m5-pedidos/ @manuel-meji
+
+# Módulo 6: Pagos (SG6)
+/app/Contracts/M6_Pagos/ @jusMa13
+/app/Http/Controllers/M6_Pagos/ @jusMa13
+/app/Models/M6_Pagos/ @jusMa13
+/app/Services/M6_Pagos/ @jusMa13
+/contracts/m6-pagos/ @jusMa13
+
+# Módulo 7: Contabilidad (SG7)
+/app/Contracts/M7_Contabilidad/ @Dercross44t
+/app/Http/Controllers/M7_Contabilidad/ @Dercross44t
+/app/Models/M7_Contabilidad/ @Dercross44t
+/app/Services/M7_Contabilidad/ @Dercross44t
+/contracts/m7-contabilidad/ @Dercross44t
