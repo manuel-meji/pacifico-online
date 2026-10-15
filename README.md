@@ -190,7 +190,7 @@ Ejecuta los siguientes comandos en orden dentro de tu terminal:
    npm install
    ```
 
-3. **Crear el archivo de variables de entorno `.env`:**
+3. **Crear y configurar el archivo de variables de entorno `.env`:**
    ```powershell
    # En Windows PowerShell o CMD:
    copy .env.example .env
@@ -198,6 +198,7 @@ Ejecuta los siguientes comandos en orden dentro de tu terminal:
    # En Git Bash / Linux / macOS:
    cp .env.example .env
    ```
+   Abre el archivo `.env` recién creado y coloca las credenciales de acceso a **PostgreSQL en Supabase** provistas por tu coordinador de subgrupo o el Comité de Arquitectura.
 
 4. **Generar la clave de seguridad de la aplicación (OBLIGATORIO):**
    ```bash
@@ -205,25 +206,19 @@ Ejecuta los siguientes comandos en orden dentro de tu terminal:
    ```
    > ⚠️ **Importante:** Si omites este paso, obtendrás el error `MissingAppKeyException: No application encryption key has been specified`.
 
-5. **Configurar y migrar la Base de Datos:**
-   * **Opción SQLite (Por defecto, lista sin configurar nada):**
-     ```bash
-     php artisan migrate
-     ```
-   * **Opción MySQL (Usando la base de datos de Laragon):**
-     Inicia MySQL en Laragon (botón *Start All*), crea la base de datos `pacifico_online` y configura tu `.env`:
-     ```env
-     DB_CONNECTION=mysql
-     DB_HOST=127.0.0.1
-     DB_PORT=3306
-     DB_DATABASE=pacifico_online
-     DB_USERNAME=root
-     DB_PASSWORD=
-     ```
-     Luego ejecuta:
-     ```bash
-     php artisan migrate --seed
-     ```
+5. **Configuración de Base de Datos (PostgreSQL en Supabase):**
+   El proyecto opera con una base de datos centralizada de **PostgreSQL en Supabase** utilizando **Transaction Pooler** (puerto `6543` por defecto para el trabajo diario del equipo concurrente).
+   
+   > 🚫 **REGLA CRÍTICA - PROHIBIDO RESETEAR LA BASE DE DATOS:**  
+   > Está **terminantemente prohibido** ejecutar comandos destructivos como:
+   > ```bash
+   > php artisan migrate:fresh
+   > php artisan migrate:reset
+   > ```
+   > Ejecutar estos comandos destruiría la estructura y los datos compartidos de los 7 subgrupos de trabajo.
+   >
+   > ℹ️ **Nota sobre migraciones (`php artisan migrate`):**  
+   > Si necesitas correr migraciones nuevas, cambia temporalmente en tu `.env` el puerto a Session Mode (`DB_PORT=5432`), ejecuta `php artisan migrate` y vuelve a configurar el puerto `6543` para el uso regular.
 
 6. **Iniciar el servidor local de desarrollo:**
    ```bash
