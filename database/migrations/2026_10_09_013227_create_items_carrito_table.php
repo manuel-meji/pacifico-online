@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -16,9 +16,13 @@ return new class extends Migration
             $table->integer('cantidad');
             $table->uuid('id_reserva')->nullable()->index();
             $table->timestamps();
+
+            $table->unique(['id_carrito', 'id_variacion'], 'items_carrito_unique');
         });
-        
-        DB::statement('ALTER TABLE items_carrito ADD CONSTRAINT cantidad_positiva_carrito CHECK (cantidad > 0)');
+
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE items_carrito ADD CONSTRAINT cantidad_positiva_carrito CHECK (cantidad > 0)');
+        }
     }
 
     public function down(): void

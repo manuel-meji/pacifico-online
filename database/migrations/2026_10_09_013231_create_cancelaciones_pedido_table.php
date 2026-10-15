@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('cancelaciones_pedido', function (Blueprint $table) {
             $table->id('id_cancelacion');
             $table->foreignId('id_pedido')->references('id_pedido')->on('pedidos_maestros')->onDelete('cascade');
+            $table->foreignId('id_subpedido')->nullable()->references('id_subpedido')->on('pedidos_subpedidos')->onDelete('cascade');
             $table->text('motivo');
             $table->boolean('requiere_reembolso');
             $table->timestamp('fecha_cancelacion');
