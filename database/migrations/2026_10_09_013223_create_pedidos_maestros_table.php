@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -19,8 +19,10 @@ return new class extends Migration
             $table->string('tarjeta_regalo', 50)->nullable();
             $table->timestamps();
         });
-        
-        DB::statement('ALTER TABLE pedidos_maestros ADD CONSTRAINT monto_total_positivo CHECK (monto_total >= 0)');
+
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE pedidos_maestros ADD CONSTRAINT monto_total_positivo CHECK (monto_total >= 0)');
+        }
     }
 
     public function down(): void

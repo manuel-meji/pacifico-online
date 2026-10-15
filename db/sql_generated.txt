@@ -1,48 +1,51 @@
-﻿
- INFO Running migrations. 
+-- SQL generado para PostgreSQL a partir de las migraciones del Módulo 5 (Carrito y Pedidos)
+-- Equivalente a: php artisan migrate --pretend --database=pgsql
 
- 0001_01_01_000000_create_users_table .. 
- ⇂ create table "users" ("id" integer primary key autoincrement not null, "name" varchar not null, "email" varchar not null, "email_verified_at" datetime, "password" varchar not null, "remember_token" varchar, "created_at" datetime, "updated_at" datetime) 
- ⇂ create unique index "users_email_unique" on "users" ("email") 
- ⇂ create table "password_reset_tokens" ("email" varchar not null, "token" varchar not null, "created_at" datetime, primary key ("email")) 
- ⇂ create table "sessions" ("id" varchar not null, "user_id" integer, "ip_address" varchar, "user_agent" text, "payload" text not null, "last_activity" integer not null, primary key ("id")) 
- ⇂ create index "sessions_user_id_index" on "sessions" ("user_id") 
- ⇂ create index "sessions_last_activity_index" on "sessions" ("last_activity") 
- 0001_01_01_000001_create_cache_table .. 
- ⇂ create table "cache" ("key" varchar not null, "value" text not null, "expiration" integer not null, primary key ("key")) 
- ⇂ create index "cache_expiration_index" on "cache" ("expiration") 
- ⇂ create table "cache_locks" ("key" varchar not null, "owner" varchar not null, "expiration" integer not null, primary key ("key")) 
- ⇂ create index "cache_locks_expiration_index" on "cache_locks" ("expiration") 
- 0001_01_01_000002_create_jobs_table .. 
- ⇂ create table "jobs" ("id" integer primary key autoincrement not null, "queue" varchar not null, "payload" text not null, "attempts" integer not null, "reserved_at" integer, "available_at" integer not null, "created_at" integer not null) 
- ⇂ create index "jobs_queue_index" on "jobs" ("queue") 
- ⇂ create table "job_batches" ("id" varchar not null, "name" varchar not null, "total_jobs" integer not null, "pending_jobs" integer not null, "failed_jobs" integer not null, "failed_job_ids" text not null, "options" text, "cancelled_at" integer, "created_at" integer not null, "finished_at" integer, primary key ("id")) 
- ⇂ create table "failed_jobs" ("id" integer primary key autoincrement not null, "uuid" varchar not null, "connection" varchar not null, "queue" varchar not null, "payload" text not null, "exception" text not null, "failed_at" datetime not null default CURRENT_TIMESTAMP) 
- ⇂ create index "failed_jobs_connection_queue_failed_at_index" on "failed_jobs" ("connection", "queue", "failed_at") 
- ⇂ create unique index "failed_jobs_uuid_unique" on "failed_jobs" ("uuid") 
- 2026_10_09_013223_create_pedidos_maestros_table .. 
- ⇂ create table "pedidos_maestros" ("id_pedido" integer primary key autoincrement not null, "id_cliente" integer not null, "fecha_creacion" datetime not null, "monto_total" numeric not null, "estado_pedido" varchar not null, "cupon_descuento" varchar, "tarjeta_regalo" varchar, "created_at" datetime, "updated_at" datetime) 
- ⇂ ALTER TABLE pedidos_maestros ADD CONSTRAINT monto_total_positivo CHECK (monto_total >= 0) 
- 2026_10_09_013224_create_pedidos_subpedidos_table .. 
- ⇂ create table "pedidos_subpedidos" ("id_subpedido" integer primary key autoincrement not null, "id_pedido" integer not null, "id_comercio" integer not null, "subtotal" numeric not null, "costo_envio" numeric not null, "impuesto" numeric not null, "estado_subpedido" varchar not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
- ⇂ ALTER TABLE pedidos_subpedidos ADD CONSTRAINT subtotal_positivo CHECK (subtotal >= 0) 
- ⇂ ALTER TABLE pedidos_subpedidos ADD CONSTRAINT costo_envio_positivo CHECK (costo_envio >= 0) 
- 2026_10_09_013225_create_pedidos_lineas_table .. 
- ⇂ create table "pedidos_lineas" ("id_linea" integer primary key autoincrement not null, "id_subpedido" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "precio_unitario" numeric not null, "tarifa_impuesto" numeric not null, "created_at" datetime, "updated_at" datetime, foreign key("id_subpedido") references "pedidos_subpedidos"("id_subpedido") on delete cascade) 
- ⇂ ALTER TABLE pedidos_lineas ADD CONSTRAINT cantidad_positiva CHECK (cantidad > 0) 
- 2026_10_09_013226_create_pedidos_carritos_table .. 
- ⇂ create table "pedidos_carritos" ("id_carrito" integer primary key autoincrement not null, "id_cliente" integer not null, "created_at" datetime, "updated_at" datetime) 
- ⇂ create unique index "pedidos_carritos_id_cliente_unique" on "pedidos_carritos" ("id_cliente") 
- 2026_10_09_013227_create_items_carrito_table .. 
- ⇂ create table "items_carrito" ("id_item_carrito" integer primary key autoincrement not null, "id_carrito" integer not null, "id_variacion" integer not null, "cantidad" integer not null, "id_reserva" varchar, "created_at" datetime, "updated_at" datetime, foreign key("id_carrito") references "pedidos_carritos"("id_carrito") on delete cascade) 
- ⇂ create index "items_carrito_id_reserva_index" on "items_carrito" ("id_reserva") 
- ⇂ ALTER TABLE items_carrito ADD CONSTRAINT cantidad_positiva_carrito CHECK (cantidad > 0) 
- 2026_10_09_013228_create_estados_pedido_table .. 
- ⇂ create table "estados_pedido" ("id_estado_pedido" integer primary key autoincrement not null, "id_pedido" integer not null, "estado" varchar not null, "fecha_estado" datetime not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
- 2026_10_09_013229_create_notas_cliente_pedido_table .. 
- ⇂ create table "notas_cliente_pedido" ("id_nota" integer primary key autoincrement not null, "id_pedido" integer not null, "nota" text not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
- 2026_10_09_013230_create_recibos_cliente_table .. 
- ⇂ create table "recibos_cliente" ("id_recibo" integer primary key autoincrement not null, "id_pedido" integer not null, "url_recibo" varchar not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
- 2026_10_09_013231_create_cancelaciones_pedido_table .. 
- ⇂ create table "cancelaciones_pedido" ("id_cancelacion" integer primary key autoincrement not null, "id_pedido" integer not null, "motivo" text not null, "requiere_reembolso" tinyint(1) not null, "fecha_cancelacion" datetime not null, "created_at" datetime, "updated_at" datetime, foreign key("id_pedido") references "pedidos_maestros"("id_pedido") on delete cascade) 
+-- 2026_10_09_013223_create_pedidos_maestros_table
+create table "pedidos_maestros" ("id_pedido" bigserial not null primary key, "id_cliente" bigint not null, "fecha_creacion" timestamp(0) without time zone not null, "monto_total" decimal(10, 2) not null, "estado_pedido" varchar(50) not null, "cupon_descuento" varchar(50) null, "tarjeta_regalo" varchar(50) null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+ALTER TABLE pedidos_maestros ADD CONSTRAINT monto_total_positivo CHECK (monto_total >= 0);
+
+-- 2026_10_09_013224_create_pedidos_subpedidos_table
+create table "pedidos_subpedidos" ("id_subpedido" bigserial not null primary key, "id_pedido" bigint not null, "id_comercio" bigint not null, "subtotal" decimal(10, 2) not null, "costo_envio" decimal(10, 2) not null, "impuesto" decimal(10, 2) not null, "estado_subpedido" varchar(50) not null, "guia_seguimiento" varchar(255) null, "fecha_despacho" timestamp(0) without time zone null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "pedidos_subpedidos" add constraint "pedidos_subpedidos_id_pedido_foreign" foreign key ("id_pedido") references "pedidos_maestros" ("id_pedido") on delete cascade;
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT subtotal_positivo CHECK (subtotal >= 0);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT costo_envio_positivo CHECK (costo_envio >= 0);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT impuesto_positivo CHECK (impuesto >= 0);
+
+-- 2026_10_09_013225_create_pedidos_lineas_table
+create table "pedidos_lineas" ("id_linea" bigserial not null primary key, "id_subpedido" bigint not null, "id_variacion" bigint not null, "cantidad" integer not null, "precio_unitario" decimal(10, 2) not null, "tarifa_impuesto" decimal(5, 2) not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "pedidos_lineas" add constraint "pedidos_lineas_id_subpedido_foreign" foreign key ("id_subpedido") references "pedidos_subpedidos" ("id_subpedido") on delete cascade;
+ALTER TABLE pedidos_lineas ADD CONSTRAINT cantidad_positiva CHECK (cantidad > 0);
+ALTER TABLE pedidos_lineas ADD CONSTRAINT precio_unitario_positivo CHECK (precio_unitario >= 0);
+ALTER TABLE pedidos_lineas ADD CONSTRAINT tarifa_impuesto_positiva CHECK (tarifa_impuesto >= 0);
+
+-- 2026_10_09_013226_create_pedidos_carritos_table
+create table "pedidos_carritos" ("id_carrito" bigserial not null primary key, "id_cliente" bigint not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "pedidos_carritos" add constraint "pedidos_carritos_id_cliente_unique" unique ("id_cliente");
+
+-- 2026_10_09_013227_create_items_carrito_table
+create table "items_carrito" ("id_item_carrito" bigserial not null primary key, "id_carrito" bigint not null, "id_variacion" bigint not null, "cantidad" integer not null, "id_reserva" uuid null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "items_carrito" add constraint "items_carrito_id_carrito_foreign" foreign key ("id_carrito") references "pedidos_carritos" ("id_carrito") on delete cascade;
+alter table "items_carrito" add constraint "items_carrito_unique" unique ("id_carrito", "id_variacion");
+create index "items_carrito_id_reserva_index" on "items_carrito" ("id_reserva");
+ALTER TABLE items_carrito ADD CONSTRAINT cantidad_positiva_carrito CHECK (cantidad > 0);
+
+-- 2026_10_09_013228_create_estados_pedido_table
+create table "estados_pedido" ("id_estado_pedido" bigserial not null primary key, "id_pedido" bigint not null, "id_subpedido" bigint null, "estado_anterior" varchar(50) null, "estado" varchar(50) not null, "usuario_id" bigint null, "motivo" text null, "fecha_estado" timestamp(0) without time zone not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "estados_pedido" add constraint "estados_pedido_id_pedido_foreign" foreign key ("id_pedido") references "pedidos_maestros" ("id_pedido") on delete cascade;
+alter table "estados_pedido" add constraint "estados_pedido_id_subpedido_foreign" foreign key ("id_subpedido") references "pedidos_subpedidos" ("id_subpedido") on delete cascade;
+alter table "estados_pedido" add constraint "estados_pedido_usuario_id_foreign" foreign key ("usuario_id") references "users" ("id");
+
+-- 2026_10_09_013229_create_notas_cliente_pedido_table
+create table "notas_cliente_pedido" ("id_nota" bigserial not null primary key, "id_pedido" bigint not null, "nota" text not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "notas_cliente_pedido" add constraint "notas_cliente_pedido_id_pedido_foreign" foreign key ("id_pedido") references "pedidos_maestros" ("id_pedido") on delete cascade;
+
+-- 2026_10_09_013230_create_recibos_cliente_table
+create table "recibos_cliente" ("id_recibo" bigserial not null primary key, "id_pedido" bigint not null, "url_recibo" varchar(255) not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "recibos_cliente" add constraint "recibos_cliente_id_pedido_foreign" foreign key ("id_pedido") references "pedidos_maestros" ("id_pedido") on delete cascade;
+
+-- 2026_10_09_013231_create_cancelaciones_pedido_table
+create table "cancelaciones_pedido" ("id_cancelacion" bigserial not null primary key, "id_pedido" bigint not null, "id_subpedido" bigint null, "motivo" text not null, "requiere_reembolso" boolean not null, "fecha_cancelacion" timestamp(0) without time zone not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "cancelaciones_pedido" add constraint "cancelaciones_pedido_id_pedido_foreign" foreign key ("id_pedido") references "pedidos_maestros" ("id_pedido") on delete cascade;
+alter table "cancelaciones_pedido" add constraint "cancelaciones_pedido_id_subpedido_foreign" foreign key ("id_subpedido") references "pedidos_subpedidos" ("id_subpedido") on delete cascade;
 
