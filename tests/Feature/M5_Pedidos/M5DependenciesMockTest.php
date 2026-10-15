@@ -13,7 +13,8 @@ use Tests\TestCase;
  * Dobles de prueba (stubs) de las dependencias externas de M5.
  *
  * Cada doble implementa el contrato publicado por el módulo proveedor y se
- * registra en el contenedor para simular inyección de dependencias.
+ * registra en el contenedor para simular inyección de dependencias en escenarios
+ * de éxito y error según la especificación del PC3 (Sección 9).
  */
 class M5DependenciesMockTest extends TestCase
 {
@@ -63,6 +64,18 @@ class M5DependenciesMockTest extends TestCase
         $this->assertSame(2, $variacion['id_comercio']);
     }
 
+    public function test_m3_catalogo_mock_error_no_encontrado(): void
+    {
+        $stub = $this->createStub(CatalogoServiceInterface::class);
+        $stub->method('obtenerVariacion')->willThrowException(new Exception('Variación inexistente o no disponible', 422));
+        $this->app->instance(CatalogoServiceInterface::class, $stub);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionCode(422);
+
+        app(CatalogoServiceInterface::class)->obtenerVariacion(999);
+    }
+
     public function test_m4_inventario_mock_exito(): void
     {
         $stub = $this->createStub(InventarioServiceInterface::class);
@@ -83,11 +96,11 @@ class M5DependenciesMockTest extends TestCase
     public function test_m4_inventario_mock_error_sin_stock(): void
     {
         $stub = $this->createStub(InventarioServiceInterface::class);
-        $stub->method('solicitarReserva')->willThrowException(new Exception('Existencia insuficiente', 422));
+        $stub->method('solicitarReserva')->willThrowException(new Exception('Existencia insuficiente para reserva', 409));
         $this->app->instance(InventarioServiceInterface::class, $stub);
 
         $this->expectException(Exception::class);
-        $this->expectExceptionCode(422);
+        $this->expectExceptionCode(409);
 
         app(InventarioServiceInterface::class)->solicitarReserva(1, 100, 1);
     }
@@ -104,5 +117,17 @@ class M5DependenciesMockTest extends TestCase
         $respuesta = app(PagosServiceInterface::class)->procesarPago(1, 15000, 'tarjeta', []);
 
         $this->assertSame('TXN-12345', $respuesta['transaccion_id']);
+    }
+
+    public function test_m6_pagos_mock_error_pago_rechazado(): void
+    {
+        $stub = $this->createStub(PagosServiceInterface::class);
+        $stub->method('procesarPago')->willThrowException(new Exception('Pago rechazado por la pasarela', 402));
+        $this->app->instance(PagosServiceInterface::class, $stub);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionCode(402);
+
+        app(PagosServiceInterface::class)->procesarPago(1, 15000, 'tarjeta', []);
     }
 }
