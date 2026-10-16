@@ -1,4 +1,4 @@
-import { colones } from './calculos';
+import { colones } from '../services/calculos';
 
 export function Encabezado({ titulo, paso, onVolver }) {
   return (

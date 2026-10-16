@@ -4,19 +4,19 @@ Prototipo de las pantallas del módulo M5 con React y Tailwind CSS, el stack aco
 Funciona como un proyecto independiente dentro de `frontend/`; no modifica la configuración de Laravel.
 
 ## Pantallas (CU-001 y CU-004)
-Código en `src/modulos/m5-carrito-pedidos/`:
+Código en `src/modules/M5_Pedidos/`:
 
 | Archivo | Pantalla |
 |---|---|
-| `CarritoPage.jsx` | Carrito agrupado por comercio, cambio de cantidad, quitar ítem y subtotales |
-| `CheckoutPage.jsx` | Dirección, método de pago, cupón, tarjeta de regalo, nota y resumen por comercio |
-| `PedidoPendientePage.jsx` | Pedido en estado «Pendiente de Pago» y redirección a la pasarela |
+| `views/CarritoView.jsx` | Carrito agrupado por comercio, cambio de cantidad, quitar ítem y subtotales |
+| `views/CheckoutView.jsx` | Dirección, método de pago, cupón, tarjeta de regalo, nota y resumen por comercio |
+| `views/PedidoPendienteView.jsx` | Pedido en estado «Pendiente de Pago» y redirección a la pasarela |
 | `M5App.jsx` | Punto de entrada del módulo: navega entre pantallas y simula las respuestas del servidor |
-| `componentes.jsx`, `calculos.js` | Componentes comunes y cálculo de subtotales, impuestos, envío y total |
-| `datosMock.js` | Datos de ejemplo (productos, comercios, precios y envíos); no vienen de M2, M3 ni M4 |
+| `components/componentes.jsx`, `services/calculos.js` | Componentes comunes y cálculo de subtotales, impuestos, envío y total |
+| `services/datosMock.js` | Datos de ejemplo (productos, comercios, precios y envíos); no vienen de M2, M3 ni M4 |
 
 ## Verlo con doble clic (sin instalar nada)
-En la carpeta `prototipo-doble-clic/` de esta misma carpeta, abra con Chrome o Edge:
+En la carpeta `prototipos/` de esta misma carpeta, abra con Chrome o Edge:
 - `1_Abrir_prototipo.html`: flujo normal.
 - `2_Abrir_prototipo_producto_agotado.html`: alternativa del paso 4 del CU-004.
 - `3_Abrir_prototipo_comercio_suspendido.html`: alternativa del paso 5 del CU-004.
@@ -36,7 +36,7 @@ Si cambia el código, desde esta carpeta:
 
     npm run build:single
 
-Genera `dist-single/app.html`. Copie ese archivo sobre los de `prototipo-doble-clic/` (para las versiones 2 y 3 hay que agregar
+Genera `dist-single/app.html`. Copie ese archivo sobre los de `prototipos/` (para las versiones 2 y 3 hay que agregar
 `<script>window.SIMULAR_M5='stock';</script>` o `'comercio'` justo después de `<head>`).
 Nota: `npm audit` reporta vulnerabilidades en una dependencia de desarrollo de este paso (`vite-plugin-singlefile`); solo se usa al compilar.
 

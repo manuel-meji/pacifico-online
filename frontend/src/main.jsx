@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import M5App from './modulos/m5-carrito-pedidos/M5App';
+import M5App from './modules/M5_Pedidos/M5App';
 
 // Modo de simulación para la validación: window.SIMULAR_M5 (archivos de doble clic)
 // o ?simular=stock / ?simular=comercio en la dirección.

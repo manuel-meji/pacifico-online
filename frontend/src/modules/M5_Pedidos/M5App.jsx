@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { carritoInicial, comercios } from './datosMock';
-import { agruparPorComercio, totalGeneral } from './calculos';
-import CarritoPage from './CarritoPage';
-import CheckoutPage from './CheckoutPage';
-import PedidoPendientePage from './PedidoPendientePage';
+import { carritoInicial, comercios } from './services/datosMock';
+import { agruparPorComercio, totalGeneral } from './services/calculos';
+import CarritoView from './views/CarritoView';
+import CheckoutView from './views/CheckoutView';
+import PedidoPendienteView from './views/PedidoPendienteView';
 
 // Punto de entrada del módulo M5. `simular` fuerza las alternativas del CU-004 durante la validación:
 //   'stock'    → M4 no puede reservar (alternativa al paso 4, 409 STOCK_INSUFICIENTE)
@@ -50,11 +50,11 @@ export default function M5App({ simular = null }) {
   return (
     <div className="mx-auto min-h-screen max-w-md bg-slate-50 text-slate-900 overflow-x-hidden">
       {pantalla === 'carrito' && (
-        <CarritoPage items={items} comerciosSuspendidos={suspendidos} aviso={aviso}
+        <CarritoView items={items} comerciosSuspendidos={suspendidos} aviso={aviso}
           onCantidad={cambiarCantidad} onQuitar={quitar} onContinuar={() => { setAviso(null); setPantalla('checkout'); }} />
       )}
-      {pantalla === 'checkout' && <CheckoutPage items={items} onVolver={() => setPantalla('carrito')} onConfirmar={confirmar} />}
-      {pantalla === 'pedido' && <PedidoPendientePage pedido={pedido} />}
+      {pantalla === 'checkout' && <CheckoutView items={items} onVolver={() => setPantalla('carrito')} onConfirmar={confirmar} />}
+      {pantalla === 'pedido' && <PedidoPendienteView pedido={pedido} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { Encabezado, Linea } from './componentes';
+import { Encabezado, Linea } from '../components/componentes';
 
 // CU-004 postcondición: Pedido Maestro en estado "Pendiente de Pago" y redirección a la pasarela (paso 9).
-export default function PedidoPendientePage({ pedido }) {
+export default function PedidoPendienteView({ pedido }) {
   return (
     <>
       <Encabezado titulo="Pedido generado" />

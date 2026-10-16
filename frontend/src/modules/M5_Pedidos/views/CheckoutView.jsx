@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Campo, clasesInput, Encabezado, Linea, TarjetaComercio } from './componentes';
-import { agruparPorComercio, totalGeneral, validarCheckout } from './calculos';
-import { metodosPago } from './datosMock';
+import { Campo, clasesInput, Encabezado, Linea, TarjetaComercio } from '../components/componentes';
+import { agruparPorComercio, totalGeneral, validarCheckout } from '../services/calculos';
+import { metodosPago } from '../services/datosMock';
 
 // CU-004 Confirmar compra y generar pedido(s) (InterfazPedido), pasos 1, 2 y 9.
 // onConfirmar(payload) llama a POST /api/m5/v1/pedidos (crearPedidoCheckout) y devuelve { ok } o { ok:false, ... }.
-export default function CheckoutPage({ items, onVolver, onConfirmar }) {
+export default function CheckoutView({ items, onVolver, onConfirmar }) {
   const [f, setF] = useState({ direccion: '', metodoPago: '', cupon: '', tarjetaRegalo: '', nota: '' });
   const [errores, setErrores] = useState({});
   const [enviando, setEnviando] = useState(false);

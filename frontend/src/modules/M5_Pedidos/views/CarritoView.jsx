@@ -1,9 +1,9 @@
-import { Alerta, Encabezado, Linea, TarjetaComercio } from './componentes';
-import { agruparPorComercio, totalGeneral } from './calculos';
+import { Alerta, Encabezado, Linea, TarjetaComercio } from '../components/componentes';
+import { agruparPorComercio, totalGeneral } from '../services/calculos';
 
 // CU-001 Gestionar carrito de compras (InterfazCarrito): productos agrupados por comercio,
 // cambio de cantidad, eliminación de ítems y subtotales recalculados.
-export default function CarritoPage({ items, comerciosSuspendidos, aviso, onCantidad, onQuitar, onContinuar }) {
+export default function CarritoView({ items, comerciosSuspendidos, aviso, onCantidad, onQuitar, onContinuar }) {
   const grupos = agruparPorComercio(items);
   const unidades = items.reduce((s, i) => s + i.cantidad, 0);
   const hayBloqueo = grupos.some((g) => comerciosSuspendidos.includes(g.comercio.id_comercio));
