@@ -1,0 +1,691 @@
+openapi: 3.0.3
+info:
+  title: Pacíficos Online - M7 ERP Contable y Reportes Gerenciales
+  version: 1.0.0
+  description: >
+    Contrato formal corregido del módulo M7. Define las operaciones HTTP que M7 ofrece
+    a usuarios autorizados, al núcleo y a otros módulos. Las dependencias
+    externas y eventos consumidos se documentan en x-dependencies y deberán
+    concordar con los contratos publicados por M2, M4, M5 y M6.
+servers:
+  - url: /api/v1/m7
+    description: Ruta base relativa dentro de Pacíficos Online
+
+security:
+  - bearerAuth: []
+
+x-module: M7
+x-owner: SG7 - ERP contable y reportes gerenciales
+x-versioning:
+  strategy: SemVer
+  breakingChange: Incrementar versión mayor y mantener periodo de convivencia según acuerdo del Comité
+x-dependencies:
+  M2:
+    - ObtenerDatosFiscalesComercio(id_comercio)
+    - ObtenerComisionSubpedido(id_subpedido) -> monto_comision ya calculado
+  M4:
+    - operacion: ObtenerCostoProductosVendidos
+      entrada: id_subpedido
+      salida: costos por id_variacion y costo_total
+      manejo_409:
+        codigo: COSTOS_SUBPEDIDO_NO_DISPONIBLES
+        accion: >
+          Mantener pendiente el asiento de costo de ventas y reintentar
+          posteriormente. No registrar costo cero ni parcial.
+  M5:
+    - Evento SubpedidoDespachado
+    - Evento SubpedidoEntregado
+    - ObtenerSubpedido(id_subpedido)
+  M6:
+    - Evento PagoConfirmado
+    - ObtenerFacturaElectronica(id_factura) / listar facturas por id_pedido
+    - Evento ReembolsoProcesado para registrar la reversión contable definitiva
+  Nucleo:
+    - Autenticación y permisos
+    - Aislamiento por comercio
+    - Registro de auditoría
+
+x-pending-decisions:
+  reconocimiento_venta:
+    estado: Pendiente de ratificación del Comité
+    bloquea_publicacion_definitiva: true
+    descripcion: >
+      El contrato corregido de M5 establece SubpedidoDespachado para costo de ventas
+      y SubpedidoEntregado para el pasivo/cuenta por pagar. Debe ratificarse qué evento
+      dispara exactamente el asiento de venta en M7 antes de cerrar la integración.
+
+x-eventos-consumidos:
+  SubpedidoDespachado:
+    productor: M5
+    proposito: Registrar el costo de ventas correspondiente al subpedido despachado.
+    payload_esperado:
+      id_evento: uuid
+      id_pedido: int64
+      id_subpedido: int64
+      id_comercio: int64
+      fecha: date-time
+    nota: >
+      El evento canónico se adopta como SubpedidoDespachado según el contrato
+      corregido de M5 y la unidad multicomercio por subpedido.
+
+  SubpedidoEntregado:
+    productor: M5
+    proposito: >
+      Registrar el efecto contable correspondiente al pasivo o cuenta por pagar
+      al comercio, sin ejecutar transferencias ni dispersiones monetarias.
+    payload_esperado:
+      id_evento: uuid
+      id_pedido: int64
+      id_subpedido: int64
+      id_comercio: int64
+      fecha: date-time
+
+  PagoConfirmado:
+    productor: M6
+    proposito: Registrar contablemente el pago confirmado.
+    payload_esperado:
+      id_evento: uuid
+      id_pago: int64
+      id_pedido: int64
+      monto: decimal
+      fecha: date-time
+    nota: >
+      M6 debe agregar id_evento, o el Comité debe declarar formalmente id_pago
+      como clave idempotente.
+
+  ReembolsoProcesado:
+    productor: M6
+    proposito: >
+      Registrar una única reversión contable definitiva después del reembolso
+      y la nota de crédito.
+    payload_esperado:
+      id_evento: uuid
+      id_pedido: int64
+      id_subpedido: int64|null
+      id_comercio: int64|null
+      id_reembolso: int64
+      monto: decimal
+      nota_credito_id: int64|null
+      fecha: date-time
+    nota: >
+      M7 no genera la reversión financiera a partir de SubpedidoCancelado.
+      La reversión definitiva se registra al recibir ReembolsoProcesado desde M6.
+
+tags:
+  - name: Plan de cuentas
+  - name: Libros contables
+  - name: Reportes
+  - name: Integración
+
+paths:
+  /pedidos/{id_pedido}/estado-contable:
+    get:
+      tags: [Integración]
+      summary: Consultar estado contable de un pedido
+      operationId: consultarEstadoContablePedido
+      description: Operación ofrecida a M5 para verificar si el pedido ya generó sus asientos.
+      parameters:
+        - $ref: '#/components/parameters/PedidoId'
+      responses:
+        '200':
+          description: Estado contable del pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoContablePedido'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /subpedidos/{id_subpedido}/estado-contable:
+    get:
+      tags: [Integración]
+      summary: Consultar estado contable de un subpedido
+      operationId: consultarEstadoContableSubpedido
+      description: >
+        Operación ofrecida a M5 para verificar la contabilización de la unidad
+        multicomercio. Devuelve el estado de los efectos contables asociados al
+        subpedido según las decisiones ratificadas por el Comité.
+      parameters:
+        - $ref: '#/components/parameters/SubpedidoId'
+      responses:
+        '200':
+          description: Estado contable del subpedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoContableSubpedido'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /pagos/{id_pago}/registro-contable:
+    get:
+      tags: [Integración]
+      summary: Consultar registro contable de un pago
+      operationId: consultarRegistroContablePago
+      description: Operación ofrecida a M6 para verificar si el pago quedó registrado en libros.
+      parameters:
+        - $ref: '#/components/parameters/PagoId'
+      responses:
+        '200':
+          description: Estado del registro contable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistroContablePago'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /comercios/{id_comercio}/resumen-financiero:
+    get:
+      tags: [Reportes]
+      summary: Obtener resumen financiero de un comercio
+      operationId: obtenerResumenFinancieroComercio
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - $ref: '#/components/parameters/Desde'
+        - $ref: '#/components/parameters/Hasta'
+      responses:
+        '200':
+          description: Resumen financiero
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumenFinanciero'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/ParametrosInvalidos' }
+
+  /comercios/{id_comercio}/rentabilidad:
+    get:
+      tags: [Reportes]
+      summary: Consultar rentabilidad por centro de costo
+      operationId: consultarRentabilidadComercio
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - $ref: '#/components/parameters/Periodo'
+      responses:
+        '200':
+          description: Rentabilidad del comercio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rentabilidad'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/ParametrosInvalidos' }
+
+  /comercios/{id_comercio}/libro-diario:
+    get:
+      tags: [Libros contables]
+      summary: Consultar libro diario
+      operationId: consultarLibroDiario
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - $ref: '#/components/parameters/Desde'
+        - $ref: '#/components/parameters/Hasta'
+      responses:
+        '200':
+          description: Lista de asientos contables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AsientoContable'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+
+  /comercios/{id_comercio}/libro-mayor:
+    get:
+      tags: [Libros contables]
+      summary: Consultar libro mayor
+      operationId: consultarLibroMayor
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - name: id_cuenta_contable
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - $ref: '#/components/parameters/Desde'
+        - $ref: '#/components/parameters/Hasta'
+      responses:
+        '200':
+          description: Libro mayor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibroMayor'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /comercios/{id_comercio}/estado-resultados:
+    get:
+      tags: [Reportes]
+      summary: Consultar estado de resultados
+      operationId: consultarEstadoResultados
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - $ref: '#/components/parameters/Periodo'
+      responses:
+        '200':
+          description: Estado de resultados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoResultados'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+
+  /comercios/{id_comercio}/balance-general:
+    get:
+      tags: [Reportes]
+      summary: Consultar balance general
+      operationId: consultarBalanceGeneral
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - name: fecha_corte
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Balance general
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceGeneral'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+
+  /comercios/{id_comercio}/tablero:
+    get:
+      tags: [Reportes]
+      summary: Consultar tablero ejecutivo
+      operationId: consultarTableroEjecutivo
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - $ref: '#/components/parameters/Periodo'
+      responses:
+        '200':
+          description: Indicadores financieros
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableroEjecutivo'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+
+  /comercios/{id_comercio}/cuentas:
+    get:
+      tags: [Plan de cuentas]
+      summary: Listar cuentas contables
+      operationId: listarCuentasContables
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+      responses:
+        '200':
+          description: Cuentas contables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CuentaContable'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+    post:
+      tags: [Plan de cuentas]
+      summary: Crear cuenta contable
+      operationId: crearCuentaContable
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CuentaContableInput'
+      responses:
+        '201':
+          description: Cuenta creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CuentaContable'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '409':
+          description: Código de cuenta duplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422': { $ref: '#/components/responses/ParametrosInvalidos' }
+
+  /comercios/{id_comercio}/cuentas/{id_cuenta_contable}:
+    get:
+      tags: [Plan de cuentas]
+      summary: Consultar cuenta contable
+      operationId: consultarCuentaContable
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - $ref: '#/components/parameters/CuentaId'
+      responses:
+        '200':
+          description: Cuenta contable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CuentaContable'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    patch:
+      tags: [Plan de cuentas]
+      summary: Actualizar cuenta contable
+      operationId: actualizarCuentaContable
+      parameters:
+        - $ref: '#/components/parameters/ComercioId'
+        - $ref: '#/components/parameters/CuentaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CuentaContableInput'
+      responses:
+        '200':
+          description: Cuenta actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CuentaContable'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Cambio incompatible con movimientos existentes o código duplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422': { $ref: '#/components/responses/ParametrosInvalidos' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PedidoId:
+      name: id_pedido
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    PagoId:
+      name: id_pago
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    SubpedidoId:
+      name: id_subpedido
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    ComercioId:
+      name: id_comercio
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    CuentaId:
+      name: id_cuenta_contable
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Desde:
+      name: desde
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    Hasta:
+      name: hasta
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    Periodo:
+      name: periodo
+      in: query
+      required: true
+      schema:
+        type: string
+        example: 2026-09
+
+  responses:
+    NoAutenticado:
+      description: No autenticado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+    SinPermisos:
+      description: Sin permisos o comercio no autorizado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+    NoEncontrado:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+    ParametrosInvalidos:
+      description: Parámetros inválidos
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+
+
+  x-error-codes:
+    ERR-M7-001:
+      http: 404
+      descripcion: Recurso contable no encontrado.
+    ERR-M7-002:
+      http: 409
+      descripcion: Conflicto con el estado contable actual.
+    ERR-M7-003:
+      http: 422
+      descripcion: Parámetros o datos contables inválidos.
+
+  schemas:
+    ErrorEstandar:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [codigo, mensaje]
+          properties:
+            codigo:
+              type: string
+              example: ERR-M7-001
+            mensaje:
+              type: string
+              example: Recurso no encontrado
+            detalles:
+              type: object
+              nullable: true
+              additionalProperties: true
+
+    CuentaContable:
+      type: object
+      required: [id_cuenta_contable, codigo, nombre, tipo, activa]
+      properties:
+        id_cuenta_contable: { type: integer, format: int64 }
+        codigo: { type: string, example: '4101' }
+        nombre: { type: string, example: Ventas }
+        tipo:
+          type: string
+          enum: [ACTIVO, PASIVO, PATRIMONIO, INGRESO, GASTO]
+        id_cuenta_padre: { type: integer, format: int64, nullable: true }
+        activa: { type: boolean }
+
+    CuentaContableInput:
+      type: object
+      required: [codigo, nombre, tipo]
+      properties:
+        codigo: { type: string }
+        nombre: { type: string }
+        tipo:
+          type: string
+          enum: [ACTIVO, PASIVO, PATRIMONIO, INGRESO, GASTO]
+        id_cuenta_padre: { type: integer, format: int64, nullable: true }
+        activa: { type: boolean, default: true }
+
+    DetalleAsiento:
+      type: object
+      required: [id_cuenta_contable, debe, haber]
+      properties:
+        id_cuenta_contable: { type: integer, format: int64 }
+        id_centro_costo: { type: integer, format: int64, nullable: true }
+        debe: { type: number, format: double, minimum: 0 }
+        haber: { type: number, format: double, minimum: 0 }
+        descripcion: { type: string, nullable: true }
+
+    AsientoContable:
+      type: object
+      required: [id_asiento, tipo, fecha, evento_id, id_comercio, detalles]
+      properties:
+        id_asiento: { type: integer, format: int64 }
+        tipo: { type: string, example: VENTA }
+        fecha: { type: string, format: date-time }
+        evento_id: { type: string, format: uuid }
+        id_pedido: { type: integer, format: int64, nullable: true }
+        id_subpedido: { type: integer, format: int64, nullable: true }
+        id_comercio: { type: integer, format: int64 }
+        descripcion: { type: string }
+        estado:
+          type: string
+          enum: [REGISTRADO, PENDIENTE, ANULADO]
+        detalles:
+          type: array
+          minItems: 2
+          items:
+            $ref: '#/components/schemas/DetalleAsiento'
+
+    EstadoContablePedido:
+      type: object
+      required: [id_pedido, contabilizado]
+      properties:
+        id_pedido: { type: integer, format: int64 }
+        contabilizado: { type: boolean }
+        asiento_venta_id: { type: integer, format: int64, nullable: true }
+        asiento_costo_id: { type: integer, format: int64, nullable: true }
+        fecha_contabilizacion: { type: string, format: date-time, nullable: true }
+
+    EstadoContableSubpedido:
+      type: object
+      required: [id_subpedido, id_pedido, id_comercio, contabilizado]
+      properties:
+        id_subpedido: { type: integer, format: int64 }
+        id_pedido: { type: integer, format: int64 }
+        id_comercio: { type: integer, format: int64 }
+        contabilizado: { type: boolean }
+        asiento_venta_id: { type: integer, format: int64, nullable: true }
+        asiento_costo_id: { type: integer, format: int64, nullable: true }
+        fecha_contabilizacion: { type: string, format: date-time, nullable: true }
+
+    RegistroContablePago:
+      type: object
+      required: [id_pago, registrado]
+      properties:
+        id_pago: { type: integer, format: int64 }
+        registrado: { type: boolean }
+        asiento_id: { type: integer, format: int64, nullable: true }
+        fecha_registro: { type: string, format: date-time, nullable: true }
+
+    ResumenFinanciero:
+      type: object
+      required: [id_comercio, fecha_inicio, fecha_fin, ingresos, costos, gastos, utilidad]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        fecha_inicio: { type: string, format: date }
+        fecha_fin: { type: string, format: date }
+        ingresos: { type: number, format: double }
+        costos: { type: number, format: double }
+        gastos: { type: number, format: double }
+        utilidad: { type: number, format: double }
+
+    RentabilidadCentroCosto:
+      type: object
+      required: [id_centro_costo, nombre, ingresos, costos, utilidad]
+      properties:
+        id_centro_costo: { type: integer, format: int64, nullable: true }
+        nombre: { type: string }
+        ingresos: { type: number, format: double }
+        costos: { type: number, format: double }
+        utilidad: { type: number, format: double }
+
+    Rentabilidad:
+      type: object
+      required: [id_comercio, periodo, ingresos, costos, utilidad, centros_costo]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        periodo: { type: string, example: 2026-09 }
+        ingresos: { type: number, format: double }
+        costos: { type: number, format: double }
+        utilidad: { type: number, format: double }
+        centros_costo:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentabilidadCentroCosto'
+
+    LibroMayor:
+      type: object
+      required: [id_cuenta_contable, saldo, movimientos]
+      properties:
+        id_cuenta_contable: { type: integer, format: int64 }
+        saldo: { type: number, format: double }
+        movimientos:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleAsiento'
+
+    EstadoResultados:
+      type: object
+      required: [id_comercio, periodo, ingresos, costos, gastos, utilidad]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        periodo: { type: string }
+        ingresos: { type: number, format: double }
+        costos: { type: number, format: double }
+        gastos: { type: number, format: double }
+        utilidad: { type: number, format: double }
+
+    BalanceGeneral:
+      type: object
+      required: [id_comercio, fecha_corte, activos, pasivos, patrimonio]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        fecha_corte: { type: string, format: date }
+        activos: { type: number, format: double }
+        pasivos: { type: number, format: double }
+        patrimonio: { type: number, format: double }
+
+    TableroEjecutivo:
+      type: object
+      required: [id_comercio, periodo, indicadores]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        periodo: { type: string }
+        indicadores:
+          type: object
+          properties:
+            ventas: { type: number, format: double }
+            costos: { type: number, format: double }
+            utilidad: { type: number, format: double }
+            cuentas_por_cobrar: { type: number, format: double }
+            cuentas_por_pagar: { type: number, format: double }
