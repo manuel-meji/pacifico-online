@@ -34,9 +34,8 @@ info:
     Formato de error. Desde la versión 1.1.0 se usa el formato común definido por
     el núcleo compartido (sección 5.5 de los artefactos colectivos del PC3):
     {"error": {"codigo", "mensaje", "detalles"}}. Los códigos transversales son
-    ERR-001 a ERR-006; los errores propios del negocio de M1 conservan un código
-    con nombre (por ejemplo, CORREO_YA_REGISTRADO) hasta que el Comité defina la
-    regla para códigos por módulo.
+    ERR-001 a ERR-006; los errores propios del negocio de M1 siguen el formato
+    ERR-M1-nnn definido por el núcleo (ERR-M1-001, correo ya registrado).
 
     Integración con otros módulos. Por decisión del Comité de Arquitectura e
     Integración, los módulos se comunican de forma sincrónica por la interfaz PHP
@@ -53,7 +52,7 @@ info:
   x-subgrupo: SG1
   x-propietario-de: [Cliente, DireccionCliente]
   x-consumidores-http: [Frontend del portal]
-  x-consumidores-interfaz-php: [M5 Carrito y pedidos, M6 Pagos y facturación]
+  x-consumidores-interfaz-php: [M5 Carrito y pedidos, M6 Pagos y facturación, Núcleo compartido]
 servers:
   - url: /api/m1/v1
     description: Ruta base del módulo en el ambiente de integración (propuesta SG1)
@@ -248,8 +247,16 @@ paths:
         el orden que define M1 (tabla categorias_portal), con sus subcategorías.
         Los nombres y la jerarquía se obtienen de M3.listarCategorias (lista plana
         con id_categoria_padre); M1 arma el árbol.
+
+        Solo se incluyen las categorías y subcategorías que tienen al menos un
+        producto visible (RN-M1-09). Para saberlo, M1 consulta M3.buscarProductos
+        con el filtro id_categoria y por_pagina 1, y descarta las categorías con
+        total_resultados igual a 0. El resultado se guarda en caché del portal. Si
+        M3 agrega en su contrato la cantidad de productos visibles por categoría,
+        esta consulta adicional se reemplaza por ese dato.
       x-consumidores: [Frontend del portal]
-      x-dependencias: [M3.listarCategorias 1.2.0]
+      x-reglas: [RN-M1-09]
+      x-dependencias: [M3.listarCategorias 1.2.0, M3.buscarProductos 1.2.0 (filtro id_categoria)]
       security: []
       responses:
         '200':
@@ -384,14 +391,14 @@ paths:
 
         Desde 1.1.0: M1 coordina el registro dentro de una misma transacción.
         Solicita al núcleo compartido la creación de la cuenta de acceso con rol
-        Cliente, recibe el id_usuario y crea el registro en clientes con ese
+        Cliente (ServicioIdentidad::crearCuenta), recibe el id_usuario y crea el registro en clientes con ese
         id_usuario. La dirección enviada en direccion_envio se guarda como la
         dirección principal en direcciones_cliente. Ningún módulo escribe
         directamente en la tabla de usuarios del núcleo. Si cualquier paso falla,
         no queda ni la cuenta ni el cliente.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-14, RN-M1-15]
-      x-dependencias: [Nucleo.Identidad.registrarUsuario]
+      x-dependencias: [Nucleo.ServicioIdentidad::crearCuenta]
       security: []
       requestBody:
         required: true
@@ -1065,7 +1072,7 @@ components:
               detalles:
                 q: Debe tener al menos 2 caracteres si no se elige una categoría.
     DependenciaNoDisponible:
-      description: Un módulo proveedor (M2, M3 o M4) no respondió dentro de 3 segundos (RNF-M1-05, caso A3).
+      description: Un módulo proveedor (M2, M3 o M4) no respondió dentro de 3 segundos (RNF-M1-04, caso A3).
       content:
         application/json:
           schema:
@@ -1127,7 +1134,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error:
-              codigo: CORREO_YA_REGISTRADO
+              codigo: ERR-M1-001
               mensaje: Ya existe una cuenta con ese correo.
               detalles: null
     DatosInvalidos:
@@ -1160,7 +1167,7 @@ x-interfaz-php:
       - CriterioInvalidoException (ERR-005)
       - DatosInvalidosException (ERR-005, con detalles campo → mensaje)
       - DependenciaNoDisponibleException (ERR-006)
-      - CorreoYaRegistradoException (CORREO_YA_REGISTRADO)
+      - CorreoYaRegistradoException (ERR-M1-001)
   doble_de_prueba: tests/Doubles/M1/PortalPublicoFake.php
   metodos:
     - firma: "obtenerCliente(int $idCliente): array"
@@ -1184,6 +1191,13 @@ x-interfaz-php:
       excepciones:
         - DireccionNoEncontradaException (equivale a ERR-004). También se lanza si la dirección no pertenece a ese cliente, para que M5 no pueda usar la dirección de otra persona.
       notas: Pensado para que M5 valide el id_direccion_cliente que recibe al confirmar el pedido.
+    - firma: "obtenerIdClientePorUsuario(int $idUsuario): int"
+      desde: 1.1.0
+      consumidores: [Núcleo]
+      retorna: El id_cliente asociado a la cuenta de acceso (clientes.id_usuario es único).
+      excepciones:
+        - ClienteNoEncontradoException (equivale a ERR-004). Se lanza si la cuenta no tiene un cliente asociado.
+      notas: La usa el middleware EstablecerCliente del núcleo para registrar el id_cliente en ContextoCliente sin leer la tabla clientes. Sin sesión de usuario.
   metodos_de_uso_interno:
     descripcion: |
       Los usan los controladores de M1, que son una capa delgada sobre la
@@ -1217,7 +1231,7 @@ x-interfaz-php:
 # ---------------------------------------------------------------
 x-dependencias-consumidas:
   - modulo_proveedor: Núcleo
-    operaciones: [Identidad.registrarUsuario, sesión de Laravel, políticas de autorización]
+    operaciones: [ServicioIdentidad::crearCuenta, sesión de Laravel, políticas de autorización]
     uso: Crear la cuenta del cliente al registrarse y proteger las rutas de Clientes y Direcciones.
   - modulo_proveedor: M2
     version: 1.1.0
@@ -1275,6 +1289,9 @@ x-historial-versiones:
       - Seguridad de las rutas web con la sesión de Laravel (Inertia con React), en lugar del token bearer.
       - Formato de error común del núcleo (sección 5.5) en las rutas web.
       - Declaración de dependencias y eventos consumidos según M2 1.1.0, M3 1.2.0 y M4 1.1.0.
+      - Nuevo método de la interfaz PHP para el núcleo, obtenerIdClientePorUsuario, que usa el middleware EstablecerCliente.
+      - Código propio ERR-M1-001 (correo ya registrado) según el formato ERR-M{n}-{nnn} del núcleo.
+      - Registro de cliente con ServicioIdentidad::crearCuenta del núcleo y menú de categorías que cumple RN-M1-09.
       - Interfaz PHP documentada completa, con excepciones con nombre en lugar de RuntimeException con texto. Las excepciones extienden RuntimeException, así que las pruebas escritas con la 1.0.0 siguen pasando.
     nota_de_compatibilidad: |
       Los cambios de formato de error, de seguridad y del cuerpo de registro
