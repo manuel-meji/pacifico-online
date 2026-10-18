@@ -1,26 +1,1285 @@
 openapi: 3.0.3
 info:
-  title: Contrato de Integración - m1-portal
-  description: Especificación OpenAPI v1 para el módulo m1-portal en Pacíficos Online.
-  version: 1.0.0
+  title: M1 Portal público y búsqueda — Contrato del módulo
+  version: 1.1.0
+  description: |
+    Contrato formal del módulo M1 Portal público y búsqueda de Pacíficos Online
+    (IF6100, II Ciclo 2026, subgrupo SG1).
+
+    Publica las operaciones que M1 ofrece a los demás módulos y al frontend de la
+    plataforma, tal como se declararon en la sección 6.1 del PC2, más las que se
+    agregan en la versión 1.1.0 para acoplarse a las versiones corregidas de M2
+    (1.1.0), M3 (1.2.0), M4 (1.1.0) y M5, y a las decisiones del Comité.
+
+    - Buscar productos
+    - Listar destacados
+    - Obtener datos del cliente
+    - Registrar cliente y actualizar cliente (la operación "Registrar o actualizar
+      cliente" del PC2 se separa en dos rutas, una para crear y otra para modificar)
+    - Nuevas en 1.1.0: categorías del portal, ficha de producto, micrositio,
+      listado de comercios y direcciones de envío del cliente.
+
+    M1 es el módulo propietario de la entidad Cliente (tabla clientes) y de sus
+    direcciones de envío (tabla direcciones_cliente) según el modelo canónico
+    aprobado por el Comité en el PC2. Comercio, Producto y Disponibilidad
+    pertenecen a M2, M3 y M4; M1 solo los presenta y los obtiene por los contratos
+    de esos módulos. M1 es dueño de la selección de destacados, el orden de las
+    categorías del menú, las promociones y las noticias del portal.
+
+    Versionado. Un cambio que rompe a los consumidores (quitar o renombrar un campo,
+    cambiar un tipo, cambiar un código de respuesta) exige publicar una versión mayor
+    nueva (v2) y mantener la v1 en convivencia. Agregar un campo opcional o una
+    operación nueva aumenta solo la versión menor. Ver x-historial-versiones.
+
+    Formato de error. Desde la versión 1.1.0 se usa el formato común definido por
+    el núcleo compartido (sección 5.5 de los artefactos colectivos del PC3):
+    {"error": {"codigo", "mensaje", "detalles"}}. Los códigos transversales son
+    ERR-001 a ERR-006; los errores propios del negocio de M1 conservan un código
+    con nombre (por ejemplo, CORREO_YA_REGISTRADO) hasta que el Comité defina la
+    regla para códigos por módulo.
+
+    Integración con otros módulos. Por decisión del Comité de Arquitectura e
+    Integración, los módulos se comunican de forma sincrónica por la interfaz PHP
+    App\Contracts\M1\PortalPublicoContract, dentro de la misma aplicación Laravel.
+    Las rutas HTTP de este documento son para el frontend (Inertia con React,
+    decisión del PC2). Las llamadas por la interfaz PHP no llevan sesión de
+    usuario, por lo que pueden hacerse desde procesos en segundo plano. La
+    autorización de RN-M1-16 (cada persona compradora solo ve y edita sus propios
+    datos) se aplica en la capa web, no en la interfaz. Los métodos de la
+    interfaz se documentan en x-interfaz-php.
+  contact:
+    name: Subgrupo SG1 — Módulo M1
+  x-modulo: M1
+  x-subgrupo: SG1
+  x-propietario-de: [Cliente, DireccionCliente]
+  x-consumidores-http: [Frontend del portal]
+  x-consumidores-interfaz-php: [M5 Carrito y pedidos, M6 Pagos y facturación]
 servers:
-  - url: /api/v1/m1-portal
-    description: Servidor local / integración
+  - url: /api/m1/v1
+    description: Ruta base del módulo en el ambiente de integración (propuesta SG1)
+tags:
+  - name: Búsqueda
+    description: Búsqueda de productos de los comercios habilitados.
+  - name: Destacados
+    description: Comercios y productos destacados para la página principal.
+  - name: Navegación
+    description: Categorías del menú, ficha de producto, micrositio y listado de comercios.
+  - name: Clientes
+    description: Datos de la persona compradora. M1 es el propietario de esta entidad.
+  - name: Direcciones
+    description: Direcciones de envío de la persona compradora. M1 es el propietario.
+
 paths:
-  /health:
+  /productos/busqueda:
     get:
-      summary: Verificación de estado del módulo
+      tags: [Búsqueda]
+      operationId: buscarProductos
+      summary: Buscar productos
+      description: |
+        Devuelve los productos que coinciden con el término y los filtros, solo de
+        comercios habilitados (RN-M1-01, RN-M1-02). Precio y datos del producto se
+        muestran tal como los entrega M3 (RN-M1-03). La disponibilidad viene de M4.
+        Si no hay coincidencias se devuelve una lista vacía con código 200.
+        Realiza el caso de uso CU-002 Buscar productos.
+
+        Desde 1.1.0: la búsqueda la ejecuta M3 (buscarProductos 1.2.0, que solo
+        devuelve productos publicados de comercios activos) y M1 completa cada
+        resultado con la disponibilidad agregada por producto de M4
+        (consultarDisponibilidadProductoLote 1.1.0). Se agregan los filtros que M3
+        publicó en su versión 1.2.0. M1 registra cada búsqueda y sus filtros en
+        busquedas_usuario y filtros_aplicados.
+      x-consumidores: [Frontend del portal]
+      x-reglas: [RN-M1-01, RN-M1-02, RN-M1-03, RN-M1-07, RN-M1-08]
+      x-dependencias: [M3.buscarProductos 1.2.0, M4.consultarDisponibilidadProductoLote 1.1.0, M2.ObtenerResumenComerciosLote 1.1.0]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Texto de búsqueda. Mínimo 2 caracteres si no se envía categoría (RN-M1-08).
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+          example: camisa
+        - name: id_categoria
+          in: query
+          required: false
+          description: Filtra por categoría o subcategoría. Incluye los productos de sus subcategorías (M3 1.2.0).
+          schema:
+            type: integer
+            minimum: 1
+        - name: id_comercio
+          in: query
+          required: false
+          description: Filtra por comercio.
+          schema:
+            type: integer
+            minimum: 1
+        - name: id_marca
+          in: query
+          required: false
+          description: Filtra por marca (nuevo en 1.1.0).
+          schema:
+            type: integer
+            minimum: 1
+        - name: precio_minimo
+          in: query
+          required: false
+          description: Precio mínimo de alguna variación del producto (nuevo en 1.1.0).
+          schema:
+            type: number
+            format: double
+            minimum: 0
+        - name: precio_maximo
+          in: query
+          required: false
+          description: Precio máximo de alguna variación del producto (nuevo en 1.1.0).
+          schema:
+            type: number
+            format: double
+            minimum: 0
+        - name: orden
+          in: query
+          required: false
+          description: Criterio de ordenamiento (nuevo en 1.1.0). Si se omite, relevancia de la búsqueda.
+          schema:
+            type: string
+            enum: [precio_asc, precio_desc, novedad]
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: por_pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
       responses:
         '200':
-          description: Módulo operando correctamente
+          description: Resultado de la búsqueda (puede venir vacío).
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/ResultadoBusqueda'
+              examples:
+                conResultados:
+                  summary: Hay coincidencias
+                  value:
+                    pagina: 1
+                    por_pagina: 20
+                    total_resultados: 1
+                    productos:
+                      - id_producto: 1520
+                        nombre: Camisa de lino
+                        imagen_principal: https://cdn.pacificos.example/p/1520.jpg
+                        precio: 18500.00
+                        precio_hasta: 21000.00
+                        moneda: CRC
+                        disponibilidad: Disponible
+                        comercio:
+                          id_comercio: 34
+                          nombre_comercial: Tienda La Ceiba
+                sinResultados:
+                  summary: Sin coincidencias (A2)
+                  value:
+                    pagina: 1
+                    por_pagina: 20
+                    total_resultados: 0
+                    productos: []
+        '422':
+          $ref: '#/components/responses/CriterioInvalido'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /destacados:
+    get:
+      tags: [Destacados]
+      operationId: listarDestacados
+      summary: Listar comercios y productos destacados
+      description: |
+        Devuelve los comercios y productos destacados de la página principal, solo
+        de comercios habilitados (RN-M1-05, RN-M1-06). Si M2 o M3 no responden, la
+        sección afectada viene vacía y se informa en secciones_no_disponibles, sin
+        fallar la respuesta completa (RNF-M1-05, RNF-M1-06).
+
+        Aclaración 1.1.0 (sin cambio en la respuesta): M3 marca qué productos son
+        destacables y M1 decide cuáles se muestran en la portada, en qué posición y
+        durante qué periodo (tablas productos_destacados y comercios_destacados).
+        M1 obtiene los datos con M3.buscarProductos (filtro ids) y
+        M2.ObtenerResumenComerciosLote. Ambos omiten los productos no publicados y
+        los comercios no activos, que tampoco se muestran aquí. El orden de la
+        respuesta es el de la columna posicion de M1.
+      x-consumidores: [Frontend del portal]
+      x-reglas: [RN-M1-01, RN-M1-05, RN-M1-06]
+      x-dependencias: [M3.buscarProductos 1.2.0 (filtro ids), M2.ObtenerResumenComerciosLote 1.1.0, M4.consultarDisponibilidadProductoLote 1.1.0]
+      security: []
+      parameters:
+        - name: limite
+          in: query
+          required: false
+          description: Cantidad máxima de comercios y de productos.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 24
+            default: 8
+      responses:
+        '200':
+          description: Destacados vigentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Destacados'
+
+  /categorias:
+    get:
+      tags: [Navegación]
+      operationId: listarCategoriasPortal
+      summary: Listar categorías del menú del portal
+      description: |
+        Nuevo en 1.1.0. Devuelve las categorías visibles en el menú del portal, en
+        el orden que define M1 (tabla categorias_portal), con sus subcategorías.
+        Los nombres y la jerarquía se obtienen de M3.listarCategorias (lista plana
+        con id_categoria_padre); M1 arma el árbol.
+      x-consumidores: [Frontend del portal]
+      x-dependencias: [M3.listarCategorias 1.2.0]
+      security: []
+      responses:
+        '200':
+          description: Categorías del menú, ordenadas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoriaPortal'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /productos/{id_producto}:
+    parameters:
+      - $ref: '#/components/parameters/IdProducto'
+    get:
+      tags: [Navegación]
+      operationId: obtenerFichaProducto
+      summary: Obtener la ficha de un producto
+      description: |
+        Nuevo en 1.1.0. Arma la ficha del producto (alcance mínimo de M1 en el
+        PC4) a partir de M3.obtenerProducto, la disponibilidad por variación de
+        M4.consultarDisponibilidadLote, el resumen del comercio de M2 y los
+        productos relacionados de M3. Una variación es comprable solo si M3 la
+        declara disponible y M4 informa unidades. Responde 404 si M3 no devuelve
+        el producto (no existe, no está publicado o su comercio no está activo).
+      x-consumidores: [Frontend del portal]
+      x-dependencias: [M3.obtenerProducto 1.2.0, M3.listarRelacionados 1.2.0, M3.listarMarcas 1.2.0, M4.consultarDisponibilidadLote 1.1.0, M2.ObtenerResumenComerciosLote 1.1.0]
+      security: []
+      responses:
+        '200':
+          description: Ficha del producto.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FichaProducto'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /comercios:
+    get:
+      tags: [Navegación]
+      operationId: listarComercios
+      summary: Listar comercios habilitados
+      description: |
+        Nuevo en 1.1.0. Página de comercios del portal. Toma el listado de
+        M2.ListarComerciosHabilitados, que solo devuelve comercios activos.
+      x-consumidores: [Frontend del portal]
+      x-dependencias: [M2.ListarComerciosHabilitados 1.1.0]
+      security: []
+      parameters:
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: por_pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Página de comercios habilitados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListadoComercios'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /comercios/{id_comercio}/micrositio:
+    parameters:
+      - $ref: '#/components/parameters/IdComercio'
+    get:
+      tags: [Navegación]
+      operationId: obtenerMicrositio
+      summary: Obtener el micrositio de un comercio
+      description: |
+        Nuevo en 1.1.0. Arma la vista de micrositio (alcance mínimo de M1 en el
+        PC4): información pública del comercio de M2.ObtenerDatosComercioPublico y
+        sus productos de M3.buscarProductos (filtro id_comercio), con la
+        disponibilidad agregada de M4. Responde 404 si M2 responde 404 (el
+        comercio no existe o no está activo).
+      x-consumidores: [Frontend del portal]
+      x-dependencias: [M2.ObtenerDatosComercioPublico 1.1.0, M3.buscarProductos 1.2.0, M4.consultarDisponibilidadProductoLote 1.1.0]
+      security: []
+      parameters:
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: por_pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Micrositio del comercio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Micrositio'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /clientes:
+    post:
+      tags: [Clientes]
+      operationId: registrarCliente
+      summary: Registrar cliente
+      description: |
+        Crea la cuenta de una persona compradora (autorregistro desde el portal).
+        El correo no puede repetirse (RN-M1-14). Solo M1 crea clientes (RN-M1-15).
+
+        Desde 1.1.0: M1 coordina el registro dentro de una misma transacción.
+        Solicita al núcleo compartido la creación de la cuenta de acceso con rol
+        Cliente, recibe el id_usuario y crea el registro en clientes con ese
+        id_usuario. La dirección enviada en direccion_envio se guarda como la
+        dirección principal en direcciones_cliente. Ningún módulo escribe
+        directamente en la tabla de usuarios del núcleo. Si cualquier paso falla,
+        no queda ni la cuenta ni el cliente.
+      x-consumidores: [Frontend del portal]
+      x-reglas: [RN-M1-14, RN-M1-15]
+      x-dependencias: [Nucleo.Identidad.registrarUsuario]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistroCliente'
+      responses:
+        '201':
+          description: Cliente creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteId'
+        '409':
+          $ref: '#/components/responses/CorreoDuplicado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /clientes/{id_cliente}:
+    parameters:
+      - $ref: '#/components/parameters/IdCliente'
+    get:
+      tags: [Clientes]
+      operationId: obtenerCliente
+      summary: Obtener datos del cliente
+      description: |
+        Devuelve los datos de la persona compradora.
+
+        Por esta ruta web, usada por el frontend, solo la propia persona puede
+        consultar sus datos y ningún comercio puede consultar clientes
+        (RN-M1-16, RNF-M1-08).
+
+        M5 (pedido) y M6 (factura) no usan esta ruta. Consultan la misma operación
+        por la interfaz PHP con PortalPublicoContract::obtenerCliente(), sin
+        sesión de usuario, incluso desde procesos en segundo plano. Esa operación
+        no cambia en 1.1.0.
+      x-consumidores: [Frontend del portal]
+      x-operacion-interfaz-php: PortalPublicoContract::obtenerCliente
+      x-reglas: [RN-M1-15, RN-M1-16]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Datos del cliente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/ClienteNoEncontrado'
+    put:
+      tags: [Clientes]
+      operationId: actualizarCliente
+      summary: Actualizar cliente
+      description: |
+        Reemplaza los datos de la persona compradora. Solo la propia persona puede
+        modificarlos (RN-M1-16) y solo M1 los modifica (RN-M1-15). El campo
+        direccion_envio actualiza la dirección principal del cliente.
+      x-consumidores: [Frontend del portal]
+      x-reglas: [RN-M1-14, RN-M1-15, RN-M1-16]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosCliente'
+      responses:
+        '200':
+          description: Cliente actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteId'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/ClienteNoEncontrado'
+        '409':
+          $ref: '#/components/responses/CorreoDuplicado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /clientes/{id_cliente}/direcciones:
+    parameters:
+      - $ref: '#/components/parameters/IdCliente'
+    get:
+      tags: [Direcciones]
+      operationId: listarDireccionesCliente
+      summary: Listar direcciones de envío del cliente
+      description: |
+        Nuevo en 1.1.0. Devuelve las direcciones de envío de la persona
+        compradora, para que elija una al confirmar la compra. Solo la propia
+        persona puede consultarlas (RN-M1-16). M5 usa la operación equivalente de
+        la interfaz PHP (PortalPublicoContract::listarDireccionesCliente).
+      x-consumidores: [Frontend del portal]
+      x-operacion-interfaz-php: PortalPublicoContract::listarDireccionesCliente
+      x-reglas: [RN-M1-16]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Direcciones del cliente. La principal viene primero.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DireccionCliente'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/ClienteNoEncontrado'
+    post:
+      tags: [Direcciones]
+      operationId: agregarDireccionCliente
+      summary: Agregar una dirección de envío
+      description: |
+        Nuevo en 1.1.0. Agrega una dirección. El alias no puede repetirse para el
+        mismo cliente y solo puede haber una dirección principal: si la nueva se
+        marca como principal, la anterior deja de serlo.
+      x-consumidores: [Frontend del portal]
+      x-reglas: [RN-M1-15, RN-M1-16]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosDireccionCliente'
+      responses:
+        '201':
+          description: Dirección creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DireccionCliente'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/ClienteNoEncontrado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /clientes/{id_cliente}/direcciones/{id_direccion_cliente}:
+    parameters:
+      - $ref: '#/components/parameters/IdCliente'
+      - $ref: '#/components/parameters/IdDireccionCliente'
+    put:
+      tags: [Direcciones]
+      operationId: actualizarDireccionCliente
+      summary: Actualizar una dirección de envío
+      description: Nuevo en 1.1.0. Reemplaza los datos de una dirección del propio cliente.
+      x-consumidores: [Frontend del portal]
+      x-reglas: [RN-M1-15, RN-M1-16]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosDireccionCliente'
+      responses:
+        '200':
+          description: Dirección actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DireccionCliente'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+components:
+  securitySchemes:
+    sesionNucleo:
+      type: apiKey
+      in: cookie
+      name: laravel_session
+      description: |
+        Sesión estándar de Laravel gestionada por el núcleo compartido
+        (identidad, roles y permisos), coherente con la decisión del PC2 de usar
+        Inertia con React. Las peticiones de escritura incluyen el token CSRF que
+        Inertia y Axios envían automáticamente. Solo aplica a las rutas web; las
+        llamadas entre módulos por la interfaz PHP no la usan. Reemplaza el
+        esquema tokenNucleo de la versión 1.0.0.
+
+  parameters:
+    IdCliente:
+      name: id_cliente
+      in: path
+      required: true
+      description: Identificador del cliente en el modelo canónico.
+      schema:
+        type: integer
+        minimum: 1
+    IdDireccionCliente:
+      name: id_direccion_cliente
+      in: path
+      required: true
+      description: Identificador de la dirección de envío.
+      schema:
+        type: integer
+        minimum: 1
+    IdProducto:
+      name: id_producto
+      in: path
+      required: true
+      description: Identificador del producto (propiedad de M3).
+      schema:
+        type: integer
+        minimum: 1
+    IdComercio:
+      name: id_comercio
+      in: path
+      required: true
+      description: Identificador del comercio (propiedad de M2).
+      schema:
+        type: integer
+        minimum: 1
+
+  schemas:
+    Disponibilidad:
+      type: string
+      description: |
+        Estado que entrega M4. Para un producto con variaciones es Disponible si
+        al menos una variación lo está. M1 traduce los valores de M4
+        (disponible, agotado) a este formato.
+      enum: [Disponible, Agotado]
+
+    ComercioResumen:
+      type: object
+      required: [id_comercio, nombre_comercial]
+      properties:
+        id_comercio:
+          type: integer
+        nombre_comercial:
+          type: string
+
+    ProductoResumen:
+      type: object
+      required: [id_producto, nombre, precio, moneda, disponibilidad, comercio]
+      properties:
+        id_producto:
+          type: integer
+        nombre:
+          type: string
+        imagen_principal:
+          type: string
+          format: uri
+          nullable: true
+        precio:
+          type: number
+          format: double
+          description: |
+            Precio tal como lo entrega M3 (RN-M1-03). Cuando el producto tiene
+            variaciones con precios distintos, es el precio más bajo
+            (precio_desde de M3 1.2.0).
+        precio_hasta:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            Nuevo en 1.1.0, opcional. Precio más alto entre las variaciones
+            (precio_hasta de M3 1.2.0). Igual a precio si todas cuestan lo mismo.
+        moneda:
+          type: string
+          example: CRC
+        disponibilidad:
+          $ref: '#/components/schemas/Disponibilidad'
+        comercio:
+          $ref: '#/components/schemas/ComercioResumen'
+
+    ResultadoBusqueda:
+      type: object
+      required: [pagina, por_pagina, total_resultados, productos]
+      properties:
+        pagina:
+          type: integer
+        por_pagina:
+          type: integer
+        total_resultados:
+          type: integer
+        productos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoResumen'
+
+    ComercioDestacado:
+      type: object
+      required: [id_comercio, nombre_comercial]
+      properties:
+        id_comercio:
+          type: integer
+        nombre_comercial:
+          type: string
+        logotipo:
+          type: string
+          format: uri
+          nullable: true
+          description: Corresponde a logo_url de M2.
+
+    Destacados:
+      type: object
+      required: [comercios, productos, secciones_no_disponibles]
+      properties:
+        comercios:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComercioDestacado'
+        productos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoResumen'
+        secciones_no_disponibles:
+          type: array
+          description: Secciones que no se pudieron cargar porque M2 o M3 no respondieron.
+          items:
+            type: string
+            enum: [comercios, productos]
+
+    CategoriaPortal:
+      type: object
+      required: [id_categoria, nombre, orden_visualizacion, subcategorias]
+      properties:
+        id_categoria:
+          type: integer
+          description: Identificador de la categoría en M3.
+        nombre:
+          type: string
+          description: Nombre tal como lo entrega M3.
+        icono_url:
+          type: string
+          format: uri
+          nullable: true
+        orden_visualizacion:
+          type: integer
+          minimum: 1
+        subcategorias:
+          type: array
+          items:
+            type: object
+            required: [id_categoria, nombre]
+            properties:
+              id_categoria:
+                type: integer
+              nombre:
+                type: string
+
+    VariacionFicha:
+      type: object
+      required: [id_variacion, sku, precio, atributos, comprable, disponibilidad]
+      properties:
+        id_variacion:
+          type: integer
+        sku:
+          type: string
+        precio:
+          type: number
+          format: double
+        atributos:
+          type: array
+          items:
+            type: object
+            required: [tipo_atributo, valor]
+            properties:
+              tipo_atributo:
+                type: string
+                example: Talla
+              valor:
+                type: string
+                example: M
+        disponibilidad:
+          $ref: '#/components/schemas/Disponibilidad'
+        comprable:
+          type: boolean
+          description: true solo si M3 declara la variación disponible para la venta y M4 informa unidades.
+
+    FichaProducto:
+      type: object
+      required: [id_producto, nombre, moneda, imagenes, variaciones, comercio, relacionados]
+      properties:
+        id_producto:
+          type: integer
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        marca:
+          type: string
+          nullable: true
+          description: Nombre de la marca, resuelto con M3.listarMarcas.
+        video_url:
+          type: string
+          format: uri
+          nullable: true
+        moneda:
+          type: string
+          example: CRC
+        imagenes:
+          type: array
+          items:
+            type: string
+            format: uri
+        variaciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariacionFicha'
+        comercio:
+          $ref: '#/components/schemas/ComercioResumen'
+        relacionados:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoResumen'
+
+    ListadoComercios:
+      type: object
+      required: [pagina, por_pagina, total, comercios]
+      properties:
+        pagina:
+          type: integer
+        por_pagina:
+          type: integer
+        total:
+          type: integer
+        comercios:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComercioDestacado'
+
+    Micrositio:
+      type: object
+      required: [comercio, productos]
+      properties:
+        comercio:
+          type: object
+          description: Información pública del comercio, tal como la entrega M2.ObtenerDatosComercioPublico 1.1.0.
+          required: [id_comercio, nombre_comercial]
+          properties:
+            id_comercio:
+              type: integer
+            nombre_comercial:
+              type: string
+            descripcion:
+              type: string
+              nullable: true
+            logo_url:
+              type: string
+              format: uri
+              nullable: true
+            banners:
+              type: array
+              items:
                 type: object
                 properties:
-                  status:
+                  imagen_url:
                     type: string
-                    example: ok
-                  module:
+                    format: uri
+                  texto_alternativo:
                     type: string
-                    example: m1-portal
+            galeria:
+              type: array
+              items:
+                type: object
+                properties:
+                  imagen_url:
+                    type: string
+                    format: uri
+                  texto_alternativo:
+                    type: string
+            horarios:
+              type: array
+              items:
+                type: object
+                properties:
+                  dia_semana:
+                    type: integer
+                    minimum: 1
+                    maximum: 7
+                  hora_apertura:
+                    type: string
+                    nullable: true
+                  hora_cierre:
+                    type: string
+                    nullable: true
+                  cerrado:
+                    type: boolean
+            contacto:
+              type: object
+              properties:
+                telefono:
+                  type: string
+                  nullable: true
+                correo:
+                  type: string
+                  format: email
+                  nullable: true
+                direccion:
+                  type: string
+                  nullable: true
+            redes_sociales:
+              type: array
+              items:
+                type: object
+                properties:
+                  plataforma:
+                    type: string
+                  url:
+                    type: string
+                    format: uri
+            politicas:
+              type: array
+              items:
+                type: object
+                properties:
+                  tipo:
+                    type: string
+                  descripcion:
+                    type: string
+        productos:
+          $ref: '#/components/schemas/ResultadoBusqueda'
+
+    DatosCliente:
+      type: object
+      required: [nombre, apellidos, correo_electronico, telefono, direccion_envio]
+      properties:
+        nombre:
+          type: string
+          maxLength: 100
+        apellidos:
+          type: string
+          maxLength: 150
+        correo_electronico:
+          type: string
+          format: email
+          maxLength: 150
+        telefono:
+          type: string
+          maxLength: 20
+        direccion_envio:
+          type: string
+          maxLength: 300
+          description: |
+            Dirección principal del cliente en texto, tal como la usan M5 y M6
+            desde la versión 1.0.0. Desde 1.1.0 corresponde a la dirección
+            marcada como principal en direcciones_cliente; para elegir otra
+            dirección, usar las operaciones de Direcciones.
+
+    RegistroCliente:
+      description: Nuevo en 1.1.0. Datos para el autorregistro; incluye la contraseña de la cuenta que crea el núcleo.
+      allOf:
+        - $ref: '#/components/schemas/DatosCliente'
+        - type: object
+          required: [contrasena]
+          properties:
+            contrasena:
+              type: string
+              format: password
+              minLength: 8
+              writeOnly: true
+              description: Se entrega al núcleo para crear la cuenta; M1 no la guarda.
+
+    Cliente:
+      allOf:
+        - $ref: '#/components/schemas/ClienteId'
+        - $ref: '#/components/schemas/DatosCliente'
+
+    ClienteId:
+      type: object
+      required: [id_cliente]
+      properties:
+        id_cliente:
+          type: integer
+
+    DatosDireccionCliente:
+      type: object
+      required: [alias_direccion, nombre_destinatario, telefono_destinatario, provincia, canton, distrito, otras_senas]
+      properties:
+        alias_direccion:
+          type: string
+          maxLength: 40
+          example: Casa
+        nombre_destinatario:
+          type: string
+          maxLength: 150
+        telefono_destinatario:
+          type: string
+          maxLength: 20
+        provincia:
+          type: string
+          maxLength: 40
+        canton:
+          type: string
+          maxLength: 60
+        distrito:
+          type: string
+          maxLength: 60
+        otras_senas:
+          type: string
+          maxLength: 300
+        es_principal:
+          type: boolean
+          default: false
+
+    DireccionCliente:
+      allOf:
+        - type: object
+          required: [id_direccion_cliente, id_cliente]
+          properties:
+            id_direccion_cliente:
+              type: integer
+            id_cliente:
+              type: integer
+        - $ref: '#/components/schemas/DatosDireccionCliente'
+
+    Error:
+      type: object
+      description: |
+        Formato común de error de la plataforma (núcleo compartido, sección 5.5
+        del PC3). Reemplaza el formato propuesto por SG1 en la versión 1.0.0.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [codigo, mensaje]
+          properties:
+            codigo:
+              type: string
+              description: Código transversal ERR-001 a ERR-006, o código propio del negocio de M1.
+              example: ERR-004
+            mensaje:
+              type: string
+              description: Texto legible para mostrar al usuario.
+            detalles:
+              type: object
+              nullable: true
+              additionalProperties: true
+              description: En ERR-005, un mapa campo → mensaje.
+
+  responses:
+    CriterioInvalido:
+      description: El término está vacío o tiene menos de 2 caracteres y no se envió categoría (RN-M1-08).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-005
+              mensaje: Ingrese un término de al menos 2 caracteres o elija una categoría.
+              detalles:
+                q: Debe tener al menos 2 caracteres si no se elige una categoría.
+    DependenciaNoDisponible:
+      description: Un módulo proveedor (M2, M3 o M4) no respondió dentro de 3 segundos (RNF-M1-05, caso A3).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-006
+              mensaje: Servicio temporalmente no disponible, intente de nuevo.
+              detalles: null
+    NoAutenticado:
+      description: No hay una sesión válida del núcleo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-001
+              mensaje: Tu sesión expiró, inicia sesión de nuevo.
+              detalles: null
+    AccesoDenegado:
+      description: Solo en las rutas web. La persona con sesión intenta ver o editar los datos de otro cliente (RN-M1-16).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-003
+              mensaje: El recurso solicitado no existe o no es accesible.
+              detalles: null
+    ClienteNoEncontrado:
+      description: No existe un cliente con ese identificador.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-004
+              mensaje: No se encontró lo que buscas.
+              detalles: null
+    RecursoNoEncontrado:
+      description: El producto, el comercio o la dirección no existe o no está disponible en el portal.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-004
+              mensaje: No se encontró lo que buscas.
+              detalles: null
+    CorreoDuplicado:
+      description: El correo ya pertenece a otro cliente (RN-M1-14). Error propio del negocio de M1.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: CORREO_YA_REGISTRADO
+              mensaje: Ya existe una cuenta con ese correo.
+              detalles: null
+    DatosInvalidos:
+      description: Faltan datos obligatorios o tienen un formato incorrecto.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-005
+              mensaje: Revise los datos enviados.
+              detalles:
+                correo_electronico: No tiene un formato de correo válido.
+
+# ---------------------------------------------------------------
+# Interfaz PHP App\Contracts\M1\PortalPublicoContract
+# Es el contrato que usan M5 y M6 dentro de la misma aplicación Laravel.
+# ---------------------------------------------------------------
+x-interfaz-php:
+  interfaz: App\Contracts\M1\PortalPublicoContract
+  ubicacion: app/Contracts/M1/PortalPublicoContract.php
+  excepciones:
+    ubicacion: app/Contracts/M1/Exceptions/
+    base: PortalPublicoException (extiende RuntimeException y expone codigo() con el código de error de la ruta web equivalente)
+    lista:
+      - ClienteNoEncontradoException (ERR-004)
+      - DireccionNoEncontradaException (ERR-004)
+      - RecursoNoEncontradoException (ERR-004, producto o comercio)
+      - CriterioInvalidoException (ERR-005)
+      - DatosInvalidosException (ERR-005, con detalles campo → mensaje)
+      - DependenciaNoDisponibleException (ERR-006)
+      - CorreoYaRegistradoException (CORREO_YA_REGISTRADO)
+  doble_de_prueba: tests/Doubles/M1/PortalPublicoFake.php
+  metodos:
+    - firma: "obtenerCliente(int $idCliente): array"
+      desde: 1.0.0
+      cambios_en_1_1_0: Ninguno.
+      consumidores: [M5, M6]
+      retorna: Arreglo con la misma estructura que el esquema Cliente.
+      excepciones:
+        - ClienteNoEncontradoException (equivale a ERR-004)
+      notas: Sin sesión de usuario; puede llamarse desde procesos en segundo plano.
+    - firma: "listarDireccionesCliente(int $idCliente): array"
+      desde: 1.1.0
+      consumidores: [M5]
+      retorna: Lista con la estructura del esquema DireccionCliente; la principal va primero.
+      excepciones:
+        - ClienteNoEncontradoException (equivale a ERR-004)
+    - firma: "obtenerDireccionCliente(int $idCliente, int $idDireccionCliente): array"
+      desde: 1.1.0
+      consumidores: [M5]
+      retorna: Arreglo con la estructura del esquema DireccionCliente.
+      excepciones:
+        - DireccionNoEncontradaException (equivale a ERR-004). También se lanza si la dirección no pertenece a ese cliente, para que M5 no pueda usar la dirección de otra persona.
+      notas: Pensado para que M5 valide el id_direccion_cliente que recibe al confirmar el pedido.
+  metodos_de_uso_interno:
+    descripcion: |
+      Los usan los controladores de M1, que son una capa delgada sobre la
+      interfaz (sección 6 del enunciado). Hoy ningún otro módulo los consume.
+      Cada uno corresponde a la ruta web con el mismo operationId.
+    lista:
+      - firma: "buscarProductos(?string $termino, ?int $idCategoria = null, ?int $idComercio = null, int $pagina = 1, int $porPagina = 20, ?int $idMarca = null, ?float $precioMinimo = null, ?float $precioMaximo = null, ?string $orden = null): array"
+        notas: Los filtros de 1.1.0 se agregan al final como opcionales, así las llamadas de 1.0.0 siguen funcionando.
+        excepciones: [CriterioInvalidoException, DependenciaNoDisponibleException]
+      - firma: "listarDestacados(int $limite = 8): array"
+      - firma: "listarCategoriasPortal(): array"
+        excepciones: [DependenciaNoDisponibleException]
+      - firma: "obtenerFichaProducto(int $idProducto): array"
+        excepciones: [RecursoNoEncontradoException, DependenciaNoDisponibleException]
+      - firma: "listarComercios(int $pagina = 1, int $porPagina = 20): array"
+        excepciones: [DependenciaNoDisponibleException]
+      - firma: "obtenerMicrositio(int $idComercio, int $pagina = 1, int $porPagina = 20): array"
+        excepciones: [RecursoNoEncontradoException, DependenciaNoDisponibleException]
+      - firma: "registrarCliente(array $datos): int"
+        notas: $datos sigue el esquema RegistroCliente. La contraseña se entrega al núcleo y M1 no la guarda.
+        excepciones: [CorreoYaRegistradoException, DatosInvalidosException]
+      - firma: "actualizarCliente(int $idCliente, array $datos): int"
+        excepciones: [ClienteNoEncontradoException, CorreoYaRegistradoException, DatosInvalidosException]
+      - firma: "agregarDireccionCliente(int $idCliente, array $datos): array"
+        excepciones: [ClienteNoEncontradoException, DatosInvalidosException]
+      - firma: "actualizarDireccionCliente(int $idCliente, int $idDireccionCliente, array $datos): array"
+        excepciones: [DireccionNoEncontradaException, DatosInvalidosException]
+
+# ---------------------------------------------------------------
+# Dependencias que M1 consume (validadas contra las versiones corregidas)
+# ---------------------------------------------------------------
+x-dependencias-consumidas:
+  - modulo_proveedor: Núcleo
+    operaciones: [Identidad.registrarUsuario, sesión de Laravel, políticas de autorización]
+    uso: Crear la cuenta del cliente al registrarse y proteger las rutas de Clientes y Direcciones.
+  - modulo_proveedor: M2
+    version: 1.1.0
+    operaciones: [ObtenerDatosComercioPublico, ObtenerResumenComerciosLote, ListarComerciosHabilitados]
+    uso: Micrositio, comercios destacados, nombre del comercio en resultados y página de comercios.
+  - modulo_proveedor: M3
+    version: 1.2.0
+    operaciones: [listarCategorias, listarMarcas, buscarProductos, obtenerProducto, listarRelacionados]
+    uso: Menú de categorías, búsqueda y filtros, destacados (filtro ids), ficha y relacionados.
+  - modulo_proveedor: M4
+    version: 1.1.0
+    operaciones: [consultarStockDisponible, consultarDisponibilidadLote, consultarDisponibilidadProducto, consultarDisponibilidadProductoLote]
+    uso: Disponibilidad por variación en la ficha y por producto en resultados, destacados y micrositio. Todas son públicas.
+    nota: consultarStockDisponible responde 404 si la variación no tiene inventario; M1 lo interpreta como Agotado mientras M4 no lo corrija.
+  - modulo_proveedor: M5
+    operaciones: [agregarItemCarrito, obtenerCarrito]
+    uso: Botón Agregar al carrito de la ficha y contador del carrito del encabezado. Requieren sesión; sin sesión, el portal envía a iniciar sesión.
+
+# ---------------------------------------------------------------
+# Eventos que M1 consume (M1 no publica eventos)
+# ---------------------------------------------------------------
+x-eventos-consumidos:
+  - nombre: ComercioAprobado
+    productor: M2
+    version: v1
+    accion: Invalidar la caché del comercio para que su micrositio y productos aparezcan en el portal.
+  - nombre: ComercioSuspendido
+    productor: M2
+    version: v1
+    accion: Invalidar la caché del comercio. M1 no modifica sus tablas; el comercio deja de mostrarse porque M2 y M3 ya no lo devuelven.
+  - nombre: ComercioReactivado
+    productor: M2
+    version: v1
+    accion: Invalidar la caché del comercio para que vuelva a mostrarse, en la misma posición de destacados que tenía.
+  - nombre: ExistenciaAgotada
+    productor: M4
+    version: 1.0.0 (pendiente de ratificación)
+    accion: Marcar la variación y, si corresponde, el producto (id_producto del evento) como Agotado en la caché del portal.
+  - nombre: ExistenciaRepuesta
+    productor: M4
+    version: 1.0.0 (pendiente de ratificación)
+    accion: Quitar la marca de Agotado de la variación y del producto.
+  - nota: M1 ya no consume ProductoPublicado. La búsqueda la ejecuta M3, por lo que M1 no mantiene un índice propio.
+
+x-historial-versiones:
+  - version: 1.0.0
+    cambios: Publicación inicial.
+  - version: 1.1.0
+    cambios:
+      - Sin cambios en la interfaz PHP obtenerCliente que usan M5 y M6, ni en los esquemas Cliente y DatosCliente.
+      - Nuevas rutas web: categorías, ficha de producto, micrositio, listado de comercios y direcciones del cliente.
+      - Nuevos métodos de la interfaz PHP para M5: listarDireccionesCliente y obtenerDireccionCliente.
+      - Nuevos filtros de búsqueda (marca, precio, orden) y campo opcional precio_hasta, alineados con M3 1.2.0.
+      - Registro de cliente coordinado con el núcleo; el cuerpo agrega la contraseña (esquema RegistroCliente).
+      - Seguridad de las rutas web con la sesión de Laravel (Inertia con React), en lugar del token bearer.
+      - Formato de error común del núcleo (sección 5.5) en las rutas web.
+      - Declaración de dependencias y eventos consumidos según M2 1.1.0, M3 1.2.0 y M4 1.1.0.
+      - Interfaz PHP documentada completa, con excepciones con nombre en lugar de RuntimeException con texto. Las excepciones extienden RuntimeException, así que las pruebas escritas con la 1.0.0 siguen pasando.
+    nota_de_compatibilidad: |
+      Los cambios de formato de error, de seguridad y del cuerpo de registro
+      solo afectan a las rutas web, cuyo único consumidor es el frontend del
+      propio M1. Ningún otro módulo usa esas rutas: M5 y M6 consumen M1 por la
+      interfaz PHP, que no cambia. Por eso se publica como versión menor. Si el
+      Comité considera que deben tratarse como cambios que rompen, se renombra
+      esta versión como 2.0.0 sin modificar su contenido.
