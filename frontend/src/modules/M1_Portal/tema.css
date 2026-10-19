@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Paleta de Pacíficos Online (colores del logo), con los mismos nombres que usa el prototipo de ficha de producto:
+   bg-brandBlue, text-brandDarkBlue, bg-brandGreen, bg-brandLightBg, etc. */
+@theme {
+  --color-brandBlue: #3b82f6;
+  --color-brandDarkBlue: #1e3a8a;
+  --color-brandGreen: #a3be4d;
+  --color-brandLightBg: #f8fafc;
+}

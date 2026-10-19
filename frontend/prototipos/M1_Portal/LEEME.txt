@@ -1,0 +1,11 @@
+PROTOTIPO M1 - FICHA DE COMERCIO (CU-009 Consultar informacion publica de un comercio)
+
+Abra con doble clic (Chrome o Edge):
+  1_Ficha_comercio.html                    flujo normal: comercio, filtros, orden y paginacion
+  2_Ficha_comercio_no_disponible.html      alternativa: M2 responde 404 (comercio no Activo, RN-M1-01)
+  3_Ficha_comercio_sin_productos.html      alternativa: el comercio no tiene productos publicados
+  4_Ficha_comercio_sin_inventario.html     alternativa: M4 no responde; productos sin disponibilidad (RNF-M1-05)
+
+Para verlo a 360 px de ancho: F12, modo dispositivo (Ctrl + Shift + M), ancho 360.
+El comercio, los productos, precios y existencias son datos de ejemplo.
+El codigo fuente esta en frontend/src/modules/M1_Portal/.
