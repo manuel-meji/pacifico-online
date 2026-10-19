@@ -4,17 +4,6 @@ import { correoDuplicado, credencialesIncorrectas, registroExitoso } from './ser
 import CrearCuentaView from './views/CrearCuentaView';
 import IniciarSesionView from './views/IniciarSesionView';
 
-// Paleta de la guía del grupo, definida solo para M1 (no cambia los estilos de M5).
-const colores = {
-  '--m1-azul': '#1e3a8a',
-  '--m1-brillante': '#3b82f6',
-  '--m1-verde': '#a3be4d',
-  '--m1-fondo': '#f8fafc',
-  '--m1-tarjeta': '#ffffff',
-  '--m1-texto': '#1f2937',
-  '--m1-texto2': '#4b5563',
-};
-
 const esperar = () => new Promise((r) => setTimeout(r, 600));
 
 // Punto de entrada del módulo M1. `simular` fuerza las respuestas alternativas durante la validación:
@@ -38,7 +27,7 @@ export default function M1App({ simular = null }) {
   }
 
   return (
-    <div style={colores} className="min-h-screen overflow-x-hidden bg-(--m1-fondo) font-sans font-normal text-(--m1-texto)">
+    <div className="min-h-screen overflow-x-hidden bg-brandLightBg font-sans font-normal text-gray-800">
       <Encabezado pantalla={pantalla} onIr={setPantalla} />
       {pantalla === 'ingresar' && <IniciarSesionView onIngresar={ingresar} onIrCrear={() => setPantalla('crear')} />}
       {pantalla === 'crear' && <CrearCuentaView onRegistrar={registrar} onIrIngresar={() => setPantalla('ingresar')} />}

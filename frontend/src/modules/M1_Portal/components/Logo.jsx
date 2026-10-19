@@ -7,7 +7,7 @@
 export default function Logo() {
   return (
     <span className="inline-flex items-center gap-2">
-      <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-(--m1-verde) text-lg font-bold text-(--m1-azul)">P</span>
+      <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brandGreen text-lg font-extrabold text-white">P</span>
       <span className="whitespace-nowrap text-lg font-bold text-white">Pacíficos Online</span>
     </span>
   );
