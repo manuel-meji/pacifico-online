@@ -18,6 +18,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 ## Conventions
 
 - You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
+- Follow the design system standards defined in [design.md](file:///c:/pacifico-online/design.md). Emojis are strictly prohibited as UI icons; always use vector icon libraries (such as `lucide-react` or `react-icons`) or clean SVGs.
 - Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
 - Check for existing components to reuse before writing a new one.
 
