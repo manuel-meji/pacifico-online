@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Encabezado } from './components/componentes';
 import { correoDuplicado, credencialesIncorrectas, registroExitoso } from './services/datosMock';
 import CrearCuentaView from './views/CrearCuentaView';
@@ -6,6 +6,12 @@ import FichaComercioView from './views/FichaComercioView';
 import IniciarSesionView from './views/IniciarSesionView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
+
+// Título de la pestaña por pantalla. La ficha de comercio conserva el título de m1.html.
+const titulos = {
+  ingresar: 'Pacíficos Online · M1 Iniciar sesión',
+  crear: 'Pacíficos Online · M1 Crear cuenta',
+};
 
 // Punto de entrada del módulo M1 para el prototipo.
 // `pantalla` elige la pantalla inicial: 'comercio' (por defecto), 'ingresar' o 'crear'.
@@ -15,6 +21,10 @@ const esperar = () => new Promise((r) => setTimeout(r, 600));
 //   'credenciales' → el ingreso responde que el correo o la contraseña no son correctos
 export default function M1App({ pantalla: pantallaInicial = 'comercio', simular = null }) {
   const [pantalla, setPantalla] = useState(pantallaInicial);
+
+  useEffect(() => {
+    if (titulos[pantalla]) document.title = titulos[pantalla];
+  }, [pantalla]);
 
   // Doble de POST /api/m1/v1/clientes (registrarCliente). Se sustituye por la llamada real cuando el módulo esté desplegado.
   async function registrar() {
