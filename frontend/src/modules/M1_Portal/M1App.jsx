@@ -2,15 +2,19 @@ import { useState } from 'react';
 import { Encabezado } from './components/componentes';
 import { correoDuplicado, credencialesIncorrectas, registroExitoso } from './services/datosMock';
 import CrearCuentaView from './views/CrearCuentaView';
+import FichaComercioView from './views/FichaComercioView';
 import IniciarSesionView from './views/IniciarSesionView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
 
-// Punto de entrada del módulo M1. `simular` fuerza las respuestas alternativas durante la validación:
+// Punto de entrada del módulo M1 para el prototipo.
+// `pantalla` elige la pantalla inicial: 'comercio' (por defecto), 'ingresar' o 'crear'.
+// `simular` fuerza las respuestas alternativas durante la validación:
+//   Ficha de comercio (CU-009): 'suspendido', 'vacio' o 'sininventario'.
 //   'correo'       → POST /api/m1/v1/clientes responde 409 ERR-M1-001 (correo ya registrado, RN-M1-14)
 //   'credenciales' → el ingreso responde que el correo o la contraseña no son correctos
-export default function M1App({ simular = null }) {
-  const [pantalla, setPantalla] = useState('ingresar');
+export default function M1App({ pantalla: pantallaInicial = 'comercio', simular = null }) {
+  const [pantalla, setPantalla] = useState(pantallaInicial);
 
   // Doble de POST /api/m1/v1/clientes (registrarCliente). Se sustituye por la llamada real cuando el módulo esté desplegado.
   async function registrar() {
@@ -24,6 +28,10 @@ export default function M1App({ simular = null }) {
     await esperar();
     if (simular === 'credenciales') return { ok: false, ...credencialesIncorrectas };
     return { ok: true };
+  }
+
+  if (pantalla !== 'ingresar' && pantalla !== 'crear') {
+    return <FichaComercioView idComercio={7} simular={simular} />;
   }
 
   return (
