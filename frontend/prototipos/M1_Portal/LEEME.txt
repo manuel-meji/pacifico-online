@@ -9,3 +9,12 @@ Abra con doble clic (Chrome o Edge):
 Para verlo a 360 px de ancho: F12, modo dispositivo (Ctrl + Shift + M), ancho 360.
 El comercio, los productos, precios y existencias son datos de ejemplo.
 El codigo fuente esta en frontend/src/modules/M1_Portal/.
+
+PROTOTIPO M1 - INICIAR SESION Y CREAR CUENTA
+
+Abra con doble clic (Chrome o Edge):
+  5_Iniciar_sesion.html                            flujo normal: iniciar sesion y crear cuenta (enlace Registrarse)
+  6_Crear_cuenta_correo_duplicado.html             alternativa: el correo ya esta registrado (ERR-M1-001, RN-M1-14)
+  7_Iniciar_sesion_credenciales_incorrectas.html   alternativa: el correo o la contrasena no son correctos
+
+Las respuestas del registro y del ingreso son simuladas; no se guarda ningun dato.

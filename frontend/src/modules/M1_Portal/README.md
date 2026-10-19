@@ -26,3 +26,24 @@ Desde `frontend/`: `npm install` y `npm run dev`, luego abrir `http://localhost:
 - Unificar `EncabezadoPortal` y `TarjetaProducto` con las demás pantallas de M1.
 - Filtros y orden: el contrato de `obtenerMicrositio` solo tiene paginación; salen de la búsqueda con el comercio fijo o de un cambio de versión.
 - Etiqueta de oferta y precio anterior: solo si M3 publica ese dato en su contrato.
+
+## Iniciar sesión y Crear cuenta (prototipo)
+
+Pantallas de ingreso y autorregistro del cliente. El registro respeta el esquema `RegistroCliente` del contrato de M1
+(`POST /api/m1/v1/clientes`); el ingreso lo resuelve el núcleo y aquí se simula.
+
+| Archivo | Contenido |
+|---|---|
+| `views/IniciarSesionView.jsx` | Correo y contraseña, con validación en pantalla |
+| `views/CrearCuentaView.jsx` | Nombre, apellidos, correo, teléfono, dirección de envío, contraseña y confirmación (no se envía), con los límites de `RegistroCliente` |
+| `components/componentes.jsx` | Encabezado, migas de pan, campo con ícono, avisos y botón principal de estas pantallas |
+| `components/Logo.jsx` | Logotipo (`assets/logo-pacificos.png`) con el nombre al lado |
+| `services/datosMock.js` | Respuestas simuladas: registro exitoso, ERR-M1-001 y credenciales incorrectas |
+
+Se abren con `m1.html?pantalla=ingresar` o `m1.html?pantalla=crear` (en los archivos de doble clic, `window.PANTALLA_M1`).
+Sin `pantalla` se muestra la ficha de comercio.
+
+Simular: `?pantalla=crear&simular=correo` (409 ERR-M1-001, correo ya registrado) y `?pantalla=ingresar&simular=credenciales`.
+
+Pendiente: cambiar `registrar` e `ingresar` de `M1App.jsx` por las llamadas reales cuando existan el backend de M1
+y el contrato de ingreso del núcleo.
