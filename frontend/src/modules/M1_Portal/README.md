@@ -10,6 +10,7 @@ Ruta prevista en el contrato de M1: `GET /m1/comercios/{idComercio}/micrositio`.
 | `components/TarjetaProducto.jsx` | Tarjeta de producto (ProductoResumenDTO) con etiqueta de agotado; reutilizable en búsqueda y destacados |
 | `components/FiltrosComercio.jsx` | Barra lateral: tipo de producto, marca, precio y disponibilidad |
 | `components/Paginacion.jsx`, `components/InfoComercio.jsx` | Paginación y datos públicos del comercio (horarios, contacto, redes, políticas) |
+| `components/IconoComercio.jsx` | Íconos SVG con los trazos de Lucide (sin emojis, según `design.md`), usados por la ficha de comercio |
 | `services/micrositio.js` | Doble de `obtenerMicrositio`: filtra, ordena, pagina y simula M2, M3 y M4 |
 | `services/datosMockComercio.js` | Datos de ejemplo con la forma de ComercioPublico (M2) y ProductoResumenDTO (M1) |
 | `tema.css`, `assets/logo-pacificos.png` | Paleta de la marca (brandBlue, brandDarkBlue, brandGreen, brandLightBg) y logotipo |

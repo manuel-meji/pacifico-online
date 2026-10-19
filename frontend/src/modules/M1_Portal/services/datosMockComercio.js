@@ -29,14 +29,14 @@ export const comercio = {
   estado: 'Activo',
 };
 
-// Categorías del comercio (M3), con el ícono y el orden del menú de M1 (categorias_portal).
+// Categorías del comercio (M3), con el ícono (nombre de components/IconoComercio.jsx) y el orden del menú de M1 (categorias_portal).
 export const categorias = [
-  { idCategoria: 1, nombre: 'Cámaras de vigilancia', icono: '📷' },
-  { idCategoria: 2, nombre: 'Routers y mesh', icono: '📶' },
-  { idCategoria: 3, nombre: 'Switches de red', icono: '🔌' },
-  { idCategoria: 4, nombre: 'Casa inteligente', icono: '💡' },
-  { idCategoria: 5, nombre: 'Audio', icono: '🎧' },
-  { idCategoria: 6, nombre: 'Adaptadores', icono: '🧩' },
+  { idCategoria: 1, nombre: 'Cámaras de vigilancia', icono: 'camara' },
+  { idCategoria: 2, nombre: 'Routers y mesh', icono: 'wifi' },
+  { idCategoria: 3, nombre: 'Switches de red', icono: 'red' },
+  { idCategoria: 4, nombre: 'Casa inteligente', icono: 'bombillo' },
+  { idCategoria: 5, nombre: 'Audio', icono: 'audifonos' },
+  { idCategoria: 6, nombre: 'Adaptadores', icono: 'usb' },
 ];
 
 export const marcas = ['Tapo', 'Archer', 'Omada', 'Mercusys', 'SoundMax'];

@@ -1,4 +1,5 @@
 import logo from '../assets/logo-pacificos.png';
+import Icono from './IconoComercio';
 
 // Encabezado del portal, con la misma estructura que el prototipo de ficha de producto (Royland):
 // franja superior azul oscuro, encabezado blanco con logotipo, buscador, cuenta y carrito, y barra de categorías.
@@ -9,8 +10,8 @@ export default function EncabezadoPortal({ categorias = [], cantidadCarrito = 0,
       <div className="hidden border-b border-blue-900 bg-brandDarkBlue px-4 py-2 text-xs text-white sm:block">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-4">
-            <span>📍 Envíos rápidos a todo Costa Rica</span>
-            <span>📞 Soporte y Ventas: +506 2000-0000</span>
+            <span className="flex items-center gap-1.5"><Icono nombre="ubicacion" className="h-4 w-4 text-brandGreen" /> Envíos rápidos a todo Costa Rica</span>
+            <span className="flex items-center gap-1.5"><Icono nombre="telefono" className="h-4 w-4 text-brandGreen" /> Soporte y Ventas: +506 2000-0000</span>
           </div>
           <div className="flex gap-4">
             <a href="#" className="hover:underline">Comercios</a>
@@ -34,17 +35,17 @@ export default function EncabezadoPortal({ categorias = [], cantidadCarrito = 0,
             <input id="buscar-portal" type="search" placeholder="Buscar productos, marcas o comercios..."
               className="w-full rounded-full border-2 border-gray-200 py-2.5 pl-5 pr-12 text-sm transition focus:border-brandBlue focus:outline-none" />
             <button className="absolute right-1 rounded-full bg-brandDarkBlue p-2 text-white transition hover:bg-brandBlue" aria-label="Buscar">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <Icono nombre="buscar" className="h-4 w-4" />
             </button>
           </form>
 
           <nav className="ml-auto flex shrink-0 items-center gap-5 text-sm font-medium text-gray-700 sm:ml-0">
             <a href="#" className="flex items-center gap-1 transition hover:text-brandBlue">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+              <Icono nombre="usuario" className="h-5 w-5" />
               <span className="hidden sm:inline">Mi Cuenta</span>
             </a>
             <a href="#" className="relative flex items-center gap-1 transition hover:text-brandBlue" aria-label={`Carrito, ${cantidadCarrito} productos`}>
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
+              <Icono nombre="carrito" className="h-6 w-6" />
               <span className="absolute -top-2 left-4 flex h-5 w-5 items-center justify-center rounded-full bg-brandGreen text-xs font-bold text-white">{cantidadCarrito}</span>
               <span className="ml-2 hidden sm:inline">Carrito</span>
             </a>
@@ -54,8 +55,8 @@ export default function EncabezadoPortal({ categorias = [], cantidadCarrito = 0,
         <nav className="border-t border-blue-900 bg-brandDarkBlue text-sm font-medium text-white" aria-label="Categorías">
           <div className="mx-auto flex max-w-7xl gap-8 overflow-x-auto px-4 py-2.5">
             {categorias.map((c) => (
-              <button key={c.idCategoria} onClick={() => onCategoria?.(c.idCategoria)} className="whitespace-nowrap hover:text-brandGreen">
-                {c.icono} {c.nombre}
+              <button key={c.idCategoria} onClick={() => onCategoria?.(c.idCategoria)} className="flex items-center gap-2 whitespace-nowrap hover:text-brandGreen">
+                <Icono nombre={c.icono} className="h-4 w-4" /> {c.nombre}
               </button>
             ))}
           </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { RANGOS_PRECIO } from '../services/micrositio';
+import Icono from './IconoComercio';
 
 function Grupo({ titulo, onLimpiar, children }) {
   const [abierto, setAbierto] = useState(true);
@@ -7,11 +8,11 @@ function Grupo({ titulo, onLimpiar, children }) {
     <section className="border-b border-gray-200 py-3 last:border-0">
       <button onClick={() => setAbierto(!abierto)} aria-expanded={abierto}
         className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-wide text-gray-800">
-        {titulo}<span aria-hidden>{abierto ? '▾' : '▸'}</span>
+        {titulo}<Icono nombre={abierto ? 'abajo' : 'derecha'} className="h-4 w-4 text-gray-500" />
       </button>
       {abierto && (
         <div className="mt-2 space-y-1.5">
-          {onLimpiar && <button onClick={onLimpiar} className="text-xs text-brandBlue hover:underline">❮ Limpiar</button>}
+          {onLimpiar && <button onClick={onLimpiar} className="inline-flex items-center gap-1 text-xs font-medium text-brandBlue hover:underline"><Icono nombre="izquierda" className="h-3.5 w-3.5" /> Limpiar</button>}
           {children}
         </div>
       )}
@@ -70,12 +71,12 @@ export default function FiltrosComercio({ categorias, marcas, conteoCategorias, 
         <form onSubmit={aplicarPrecio} className="flex items-center gap-1 pt-1">
           <label className="sr-only" htmlFor="precio-min">Precio mínimo</label>
           <input id="precio-min" inputMode="numeric" placeholder="Mín" value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, ''))}
-            className="w-full min-w-0 rounded border border-gray-300 px-2 py-1 text-sm" />
+            className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-brandBlue focus:outline-none" />
           <span className="text-gray-400">-</span>
           <label className="sr-only" htmlFor="precio-max">Precio máximo</label>
           <input id="precio-max" inputMode="numeric" placeholder="Máx" value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ''))}
-            className="w-full min-w-0 rounded border border-gray-300 px-2 py-1 text-sm" />
-          <button className="shrink-0 rounded bg-brandDarkBlue px-2 py-1 text-sm font-semibold text-white hover:bg-brandBlue" aria-label="Aplicar rango de precio">›</button>
+            className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-brandBlue focus:outline-none" />
+          <button className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brandDarkBlue text-white transition hover:bg-brandBlue" aria-label="Aplicar rango de precio"><Icono nombre="derecha" className="h-4 w-4" /></button>
         </form>
       </Grupo>
 
