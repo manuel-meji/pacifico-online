@@ -1,0 +1,51 @@
+
+export const comerciosTemporales = [
+  {
+    idComercio: 1,
+    nombre: 'Moda Guanacaste',
+    categoria: 'Moda',
+    descripcion: 'Ropa y accesorios para todos los estilos.',
+    imagen: null,
+    habilitado: true,
+  },
+  {
+    idComercio: 2,
+    nombre: 'TecnoPacífico',
+    categoria: 'Tecnología',
+    descripcion: 'Tecnología y accesorios electrónicos.',
+    imagen: null,
+    habilitado: true,
+  },
+  {
+    idComercio: 3,
+    nombre: 'Hogar y Estilo',
+    categoria: 'Hogar',
+    descripcion: 'Artículos para decorar y equipar tu hogar.',
+    imagen: null,
+    habilitado: true,
+  },
+  {
+    idComercio: 4,
+    nombre: 'Artesanías del Pacífico',
+    categoria: 'Artesanías',
+    descripcion: 'Productos artesanales de inspiración regional.',
+    imagen: null,
+    habilitado: true,
+  },
+  {
+    idComercio: 5,
+    nombre: 'Sabores de Guanacaste',
+    categoria: 'Alimentos',
+    descripcion: 'Productos alimenticios y sabores locales.',
+    imagen: null,
+    habilitado: true,
+  },
+  {
+    idComercio: 6,
+    nombre: 'Belleza Natural',
+    categoria: 'Belleza',
+    descripcion: 'Productos de belleza y cuidado personal.',
+    imagen: null,
+    habilitado: true,
+  },
+];
