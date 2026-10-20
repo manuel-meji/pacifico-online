@@ -4,7 +4,7 @@ import Icono from './IconoComercio';
 // Encabezado del portal, con la misma estructura que el prototipo de ficha de producto (Royland):
 // franja superior azul oscuro, encabezado blanco con logotipo, buscador, cuenta y carrito, y barra de categorías.
 // Es común a todas las pantallas de M1; se unifica en un solo componente cuando se junten las pantallas.
-export default function EncabezadoPortal({ categorias = [], cantidadCarrito = 0, onCategoria }) {
+export default function EncabezadoPortal({ categorias = [], cantidadCarrito = 0, onCategoria, onMiCuenta }) {
   return (
     <>
       <div className="hidden border-b border-blue-900 bg-brandDarkBlue px-4 py-2 text-xs text-white sm:block">
@@ -40,10 +40,17 @@ export default function EncabezadoPortal({ categorias = [], cantidadCarrito = 0,
           </form>
 
           <nav className="ml-auto flex shrink-0 items-center gap-5 text-sm font-medium text-gray-700 sm:ml-0">
-            <a href="#" className="flex items-center gap-1 transition hover:text-brandBlue">
-              <Icono nombre="usuario" className="h-5 w-5" />
-              <span className="hidden sm:inline">Mi Cuenta</span>
-            </a>
+            <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              onMiCuenta?.();
+            }}
+            className="flex items-center gap-1 transition hover:text-brandBlue"
+          >
+            <Icono nombre="usuario" className="h-5 w-5" />
+            <span className="hidden sm:inline">Mi Cuenta</span>
+          </a>
             <a href="#" className="relative flex items-center gap-1 transition hover:text-brandBlue" aria-label={`Carrito, ${cantidadCarrito} productos`}>
               <Icono nombre="carrito" className="h-6 w-6" />
               <span className="absolute -top-2 left-4 flex h-5 w-5 items-center justify-center rounded-full bg-brandGreen text-xs font-bold text-white">{cantidadCarrito}</span>

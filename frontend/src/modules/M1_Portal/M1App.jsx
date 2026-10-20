@@ -4,11 +4,13 @@ import { correoDuplicado, credencialesIncorrectas, registroExitoso } from './ser
 import CrearCuentaView from './views/CrearCuentaView';
 import FichaComercioView from './views/FichaComercioView';
 import IniciarSesionView from './views/IniciarSesionView';
+import InicioView from './views/InicioView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
 
 // Título de la pestaña por pantalla. La ficha de comercio conserva el título de m1.html.
 const titulos = {
+  inicio: 'Pacíficos Online · Inicio',
   ingresar: 'Pacíficos Online · M1 Iniciar sesión',
   crear: 'Pacíficos Online · M1 Crear cuenta',
 };
@@ -39,6 +41,10 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
     if (simular === 'credenciales') return { ok: false, ...credencialesIncorrectas };
     return { ok: true };
   }
+   if (pantalla === 'inicio') {
+  return <InicioView onIr={setPantalla} />;
+
+}
 
   if (pantalla !== 'ingresar' && pantalla !== 'crear') {
     return <FichaComercioView idComercio={7} simular={simular} />;
