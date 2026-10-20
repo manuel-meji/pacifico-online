@@ -13,8 +13,11 @@ const FILTROS_VACIOS = { categorias: [], marcas: [], rango: null, precioMin: nul
 // CU-009 Consultar información pública de un comercio (micrositio). Ruta del PC3: GET /m1/comercios/{idComercio}/micrositio.
 // Flujo normal: datos del comercio (M2) + productos paginados (M3) + disponibilidad (M4).
 // Alternativas: comercio no disponible (404 de M2), comercio sin productos, filtros sin resultados, M4 sin respuesta.
-export default function FichaComercioView({ idComercio = 7, simular = null }) {
-  const [estado, setEstado] = useState('cargando');
+export default function FichaComercioView({
+  idComercio = 7,
+  simular = null,
+  onVerProducto
+}) {  const [estado, setEstado] = useState('cargando');
   const [datos, setDatos] = useState(null);
   const [pestana, setPestana] = useState('productos');
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
@@ -210,7 +213,15 @@ export default function FichaComercioView({ idComercio = 7, simular = null }) {
                   </div>
                 ) : (
                   <div className={`mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 ${estado === 'actualizando' ? 'opacity-60' : ''}`}>
-                    {res.productos.map((pr) => <TarjetaProducto key={pr.idProducto} producto={pr} icono={icono(pr.idCategoria)} />)}
+
+                    {res.productos.map((pr) => (
+                      <TarjetaProducto
+                        key={pr.idProducto}
+                        producto={pr}
+                        icono={icono(pr.idCategoria)}
+                        onAbrir={() => onVerProducto?.()}
+                      />
+                    ))}
                   </div>
                 )}
 
