@@ -1,0 +1,12 @@
+Módulos Prototipos HTML - SG6 (M6: Pagos y Facturación Electrónica)
+
+Archivos incluidos:
+- 1_Simulador_pago.html: Formulario de procesamiento de pago con tarjeta, SINPE o PayPal (CU-001).
+- 2_Simulador_pago_exitoso.html: Vista de pago confirmado y notificación de eventos idempotentes (RN-002).
+- 3_Gestion_facturas_xml.html: Listado de facturas electrónicas, estados ante Hacienda y descarga XML (CU-004).
+- 4_Tablero_conciliacion.html: Panel de conciliación periódica y reporte de diferencias (CU-003 / RN-007).
+
+Estándares aplicados:
+- Cero emojis (sólo iconos vectoriales Lucide Icons).
+- Colores oficiales de marca (#1e3a8a, #3b82f6, #a3be4d, #f8fafc).
+- Adaptable a dispositivos móviles desde 360px sin scroll horizontal.

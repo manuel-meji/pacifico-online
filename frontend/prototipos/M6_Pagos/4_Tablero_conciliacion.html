@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M6 - Conciliación Periódica (CU-003)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brandDarkBlue: '#1e3a8a',
+            brandBlue: '#3b82f6',
+            brandGreen: '#a3be4d',
+            brandLightBg: '#f8fafc',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-brandLightBg text-gray-800 font-sans antialiased min-h-screen flex flex-col">
+
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-full bg-brandGreen flex items-center justify-center font-extrabold text-white text-lg">P</div>
+        <div>
+          <span class="text-lg font-extrabold text-brandDarkBlue tracking-tight block">Pacíficos Online</span>
+          <span class="text-[10px] text-brandGreen font-bold tracking-widest block -mt-1 uppercase">M6 · Conciliación Bancaria</span>
+        </div>
+      </div>
+      <a href="1_Simulador_pago.html" class="text-xs font-semibold text-brandBlue hover:underline">Ir al Simulador</a>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 flex-1 w-full space-y-6">
+
+    <div class="bg-gradient-to-r from-brandDarkBlue to-blue-900 rounded-2xl p-6 text-white shadow-md">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-800 text-blue-200 mb-2 border border-blue-700">
+        <i data-lucide="sliders" class="w-3.5 h-3.5 text-brandGreen"></i>
+        Caso de Uso CU-003 & Regla RN-007
+      </span>
+      <h1 class="text-xl md:text-2xl font-extrabold">Tablero de Conciliación Periódica</h1>
+      <p class="text-xs md:text-sm text-blue-100 mt-1">Cruce de saldos locales contra reportes externos de pasarelas[cite: 4].</p>
+    </div>
+
+    <!-- TARJETAS DE RESUMEN DE CONCILIACIÓN -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+        <span class="text-xs font-medium text-gray-500 block">Total Cobrado Sistema (M6)</span>
+        <span class="text-xl font-extrabold text-brandDarkBlue mt-1 block">₡12,480,500</span>
+        <span class="text-[11px] text-green-700 inline-flex items-center gap-1 mt-2">
+          <i data-lucide="check" class="w-3 h-3"></i> Cuadrado con M5 & M7
+        </span>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+        <span class="text-xs font-medium text-gray-500 block">Total Reportado Pasarela</span>
+        <span class="text-xl font-extrabold text-gray-900 mt-1 block">₡12,475,200</span>
+        <span class="text-[11px] text-amber-700 inline-flex items-center gap-1 mt-2">
+          <i data-lucide="alert-triangle" class="w-3 h-3"></i> Discrepancia de ₡5,300
+        </span>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-xs">
+        <span class="text-xs font-medium text-gray-500 block">Estado Conciliación</span>
+        <span class="text-sm font-bold text-amber-700 mt-2 block bg-amber-50 px-2.5 py-1 rounded border border-amber-200 w-max">
+          parcial (Revisión M7)
+        </span>
+      </div>
+    </div>
+
+    <!-- TABLA DE DIFERENCIAS -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+      <div class="p-4 border-b border-gray-100">
+        <h2 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600"></i> Pagos con Discrepancia (<code class="text-brandBlue">diferencias_conciliacion</code>)
+        </h2>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 uppercase font-bold tracking-wider border-b border-gray-100">
+              <th class="p-3">ID Pago</th>
+              <th class="p-3">Tipo de Diferencia</th>
+              <th class="p-3">Monto Discrepancia</th>
+              <th class="p-3">Estado Revisión</th>
+              <th class="p-3 text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 text-gray-700">
+            <tr class="hover:bg-gray-50/50 transition">
+              <td class="p-3 font-mono font-bold">#10450</td>
+              <td class="p-3 font-medium text-amber-800">faltante_en_pasarela</td>
+              <td class="p-3 font-bold text-red-600">₡5,300.00</td>
+              <td class="p-3">
+                <span class="bg-red-50 text-red-700 font-semibold px-2 py-0.5 rounded border border-red-200">
+                  pendiente_revision
+                </span>
+              </td>
+              <td class="p-3 text-right">
+                <button onclick="alert('Diferencia resuelta manualmente');" class="bg-brandDarkBlue hover:bg-brandBlue text-white px-3 py-1.5 rounded text-xs font-semibold transition">
+                  Resolver
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
