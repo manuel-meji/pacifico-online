@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M6 - Pago Confirmado (CU-001 / RN-002)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brandDarkBlue: '#1e3a8a',
+            brandBlue: '#3b82f6',
+            brandGreen: '#a3be4d',
+            brandLightBg: '#f8fafc',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-brandLightBg text-gray-800 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- TOP BAR -->
+  <div class="bg-brandDarkBlue text-white text-xs py-2 px-4 border-b border-blue-900">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <span class="inline-flex items-center gap-1.5 text-blue-100">
+        <i data-lucide="check-circle" class="w-3.5 h-3.5 text-brandGreen"></i>
+        <span>Transacción Aprobada Exitosamente</span>
+      </span>
+      <span class="font-mono text-blue-200">id_pago: 10482</span>
+    </div>
+  </div>
+
+  <main class="max-w-3xl mx-auto px-4 py-12 flex-1 w-full space-y-6">
+
+    <!-- TARJETA DE CONFIRMACIÓN -->
+    <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm text-center space-y-4">
+      <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+        <i data-lucide="check" class="w-10 h-10 stroke-[3]"></i>
+      </div>
+      
+      <h1 class="text-2xl font-extrabold text-brandDarkBlue">¡Pago Confirmado!</h1>
+      <p class="text-xs text-gray-500 max-w-md mx-auto">
+        La transacción se procesó e idempotentemente se registró en la bitácora. El pedido pasa automáticamente a estado <strong class="text-gray-800">Pagado</strong> en M5[cite: 4].
+      </p>
+
+      <div class="bg-gray-50 rounded-xl p-4 text-left text-xs space-y-2 border border-gray-100 max-w-md mx-auto">
+        <div class="flex justify-between">
+          <span class="text-gray-500">Referencia Proveedor:</span>
+          <span class="font-mono font-bold text-gray-800">AUTH-99382104</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-500">Estado en <code class="text-brandBlue">pagos</code>:</span>
+          <span class="font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">confirmado</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-500">Monto Acreditado:</span>
+          <span class="font-extrabold text-brandDarkBlue">₡59,840.00 CRC</span>
+        </div>
+      </div>
+
+      <!-- BOTONES DE ACCIÓN -->
+      <div class="flex flex-col sm:flex-row gap-3 justify-center pt-4">
+        <a href="3_Gestion_facturas_xml.html" class="bg-brandDarkBlue hover:bg-brandBlue text-white font-bold py-2.5 px-5 rounded-lg text-xs transition inline-flex items-center justify-center gap-2">
+          <i data-lucide="file-text" class="w-4 h-4"></i> Ver Factura Electrónica
+        </a>
+        <a href="1_Simulador_pago.html" class="border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 px-4 rounded-lg text-xs transition inline-flex items-center justify-center gap-2">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Probar Otro Pago
+        </a>
+      </div>
+    </div>
+
+    <!-- LOG DE EVENTOS ENVIADOS -->
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 space-y-1">
+      <div class="font-bold text-brandDarkBlue flex items-center gap-1.5">
+        <i data-lucide="activity" class="w-4 h-4 text-brandBlue"></i> Evento Publicado en Bus de Integración:
+      </div>
+      <p class="font-mono text-[11px] bg-blue-100/60 p-2 rounded text-blue-950 mt-1">
+        Event: PagoConfirmado { id_pago: 10482, id_pedido: 8942, monto: 59840.00, timestamp: "2026-10-19T19:44:00Z" }
+      </p>
+    </div>
+
+  </main>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
