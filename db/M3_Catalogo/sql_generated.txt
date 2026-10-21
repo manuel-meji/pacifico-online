@@ -12,12 +12,13 @@ create table "marcas" ("id_marca" bigserial not null primary key, "nombre" varch
 alter table "marcas" add constraint "uq_marcas_nombre" unique ("nombre");
 
 -- 2026_10_20_000003_create_productos_table
-create table "productos" ("id_producto" bigserial not null primary key, "id_comercio" bigint not null, "id_categoria" bigint not null, "id_marca" bigint null, "nombre" varchar(150) not null, "descripcion" text null, "video_url" varchar(500) null, "destacado" boolean not null default '0', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+create table "productos" ("id_producto" bigserial not null primary key, "id_comercio" bigint not null, "id_categoria" bigint not null, "id_marca" bigint null, "nombre" varchar(150) not null, "descripcion" text null, "video_url" varchar(500) null, "destacado" boolean not null default '0', "estado_producto" varchar(20) not null default 'borrador', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
 alter table "productos" add constraint "productos_id_categoria_foreign" foreign key ("id_categoria") references "categorias" ("id_categoria") on delete restrict;
 alter table "productos" add constraint "productos_id_marca_foreign" foreign key ("id_marca") references "marcas" ("id_marca") on delete set null;
 alter table "productos" add constraint "uq_productos_producto_comercio" unique ("id_producto", "id_comercio");
 create index "ix_productos_comercio" on "productos" ("id_comercio");
 create index "ix_productos_categoria" on "productos" ("id_categoria");
+ALTER TABLE productos ADD CONSTRAINT ck_productos_estado CHECK (estado_producto IN ('borrador', 'publicado', 'desactivado'));
 
 -- 2026_10_20_000004_create_producto_variaciones_table
 create table "producto_variaciones" ("id_variacion" bigserial not null primary key, "id_producto" bigint not null, "id_comercio" bigint not null, "sku" varchar(100) not null, "precio" decimal(12, 2) not null, "tarifa_impuesto" decimal(5, 2) not null, "codigo_barras" varchar(14) null, "codigo_fabricante" varchar(100) null, "disponible" boolean not null default '1', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
@@ -34,13 +35,13 @@ alter table "atributos_variacion" add constraint "atributos_variacion_id_variaci
 alter table "atributos_variacion" add constraint "uq_atributos_variacion_tipo" unique ("id_variacion", "tipo_atributo");
 
 -- 2026_10_20_000006_create_imagenes_producto_table
-create table "imagenes_producto" ("id_imagen" bigserial not null primary key, "id_producto" bigint not null, "id_variacion" bigint null, "imagen_url" varchar(500) not null, "formato" varchar(3) not null, "tamano_bytes" integer not null, "orden" smallint not null default '1', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+create table "imagenes_producto" ("id_imagen" bigserial not null primary key, "id_producto" bigint not null, "id_variacion" bigint null, "imagen_url" varchar(500) not null, "formato" varchar(3) null, "tamano_bytes" integer null, "orden" smallint not null default '1', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
 alter table "imagenes_producto" add constraint "imagenes_producto_id_producto_foreign" foreign key ("id_producto") references "productos" ("id_producto") on delete cascade;
 alter table "imagenes_producto" add constraint "imagenes_producto_id_variacion_foreign" foreign key ("id_variacion") references "producto_variaciones" ("id_variacion") on delete set null;
 alter table "imagenes_producto" add constraint "uq_imagenes_producto_orden" unique ("id_producto", "orden");
 ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_orden CHECK (orden BETWEEN 1 AND 8);
-ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_formato CHECK (formato IN ('jpg', 'png'));
-ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_tamano CHECK (tamano_bytes > 0 AND tamano_bytes <= 5242880);
+ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_formato CHECK (formato IS NULL OR formato IN ('jpg', 'png'));
+ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_tamano CHECK (tamano_bytes IS NULL OR (tamano_bytes > 0 AND tamano_bytes <= 5242880));
 
 -- 2026_10_20_000007_create_productos_relacionados_table
 create table "productos_relacionados" ("id_producto" bigint not null, "id_producto_relacionado" bigint not null, "id_comercio" bigint not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);

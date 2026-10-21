@@ -16,8 +16,9 @@ return new class extends Migration
             $table->foreignId('id_variacion')->nullable()
                 ->constrained('producto_variaciones', 'id_variacion')->nullOnDelete();
             $table->string('imagen_url', 500);
-            $table->string('formato', 3);
-            $table->unsignedInteger('tamano_bytes');
+            // Opcionales: el contrato no los recibe; la logica del modulo los valida.
+            $table->string('formato', 3)->nullable();
+            $table->unsignedInteger('tamano_bytes')->nullable();
             $table->unsignedSmallInteger('orden')->default(1);
             $table->timestamps();
 
@@ -26,8 +27,8 @@ return new class extends Migration
         });
 
         DB::statement('ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_orden CHECK (orden BETWEEN 1 AND 8)');
-        DB::statement("ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_formato CHECK (formato IN ('jpg', 'png'))");
-        DB::statement('ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_tamano CHECK (tamano_bytes > 0 AND tamano_bytes <= 5242880)');
+        DB::statement("ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_formato CHECK (formato IS NULL OR formato IN ('jpg', 'png'))");
+        DB::statement('ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_tamano CHECK (tamano_bytes IS NULL OR (tamano_bytes > 0 AND tamano_bytes <= 5242880))');
     }
 
     public function down(): void
