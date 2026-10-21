@@ -1,0 +1,50 @@
+-- SQL generado para PostgreSQL a partir de las migraciones del Módulo 3 (Catálogo)
+-- Equivalente a: php artisan migrate --pretend --database=pgsql
+
+-- 2026_10_20_000001_create_categorias_table
+create table "categorias" ("id_categoria" bigserial not null primary key, "id_categoria_padre" bigint null, "nombre" varchar(100) not null, "descripcion" text null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "categorias" add constraint "categorias_id_categoria_padre_foreign" foreign key ("id_categoria_padre") references "categorias" ("id_categoria") on delete restrict;
+alter table "categorias" add constraint "uq_categorias_padre_nombre" unique ("id_categoria_padre", "nombre");
+ALTER TABLE categorias ADD CONSTRAINT ck_categorias_no_autopadre CHECK (id_categoria_padre IS NULL OR id_categoria_padre <> id_categoria);
+
+-- 2026_10_20_000002_create_marcas_table
+create table "marcas" ("id_marca" bigserial not null primary key, "nombre" varchar(100) not null, "logotipo_url" varchar(500) null, "destacada" boolean not null default '0', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "marcas" add constraint "uq_marcas_nombre" unique ("nombre");
+
+-- 2026_10_20_000003_create_productos_table
+create table "productos" ("id_producto" bigserial not null primary key, "id_comercio" bigint not null, "id_categoria" bigint not null, "id_marca" bigint null, "nombre" varchar(150) not null, "descripcion" text null, "video_url" varchar(500) null, "destacado" boolean not null default '0', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "productos" add constraint "productos_id_categoria_foreign" foreign key ("id_categoria") references "categorias" ("id_categoria") on delete restrict;
+alter table "productos" add constraint "productos_id_marca_foreign" foreign key ("id_marca") references "marcas" ("id_marca") on delete set null;
+alter table "productos" add constraint "uq_productos_producto_comercio" unique ("id_producto", "id_comercio");
+create index "ix_productos_comercio" on "productos" ("id_comercio");
+create index "ix_productos_categoria" on "productos" ("id_categoria");
+
+-- 2026_10_20_000004_create_producto_variaciones_table
+create table "producto_variaciones" ("id_variacion" bigserial not null primary key, "id_producto" bigint not null, "id_comercio" bigint not null, "sku" varchar(100) not null, "precio" decimal(12, 2) not null, "tarifa_impuesto" decimal(5, 2) not null, "codigo_barras" varchar(14) null, "codigo_fabricante" varchar(100) null, "disponible" boolean not null default '1', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "producto_variaciones" add constraint "fk_variaciones_producto_comercio" foreign key ("id_producto", "id_comercio") references "productos" ("id_producto", "id_comercio") on delete cascade;
+alter table "producto_variaciones" add constraint "uq_variaciones_comercio_sku" unique ("id_comercio", "sku");
+create index "ix_variaciones_producto" on "producto_variaciones" ("id_producto");
+ALTER TABLE producto_variaciones ADD CONSTRAINT ck_variaciones_precio CHECK (precio >= 0);
+ALTER TABLE producto_variaciones ADD CONSTRAINT ck_variaciones_tarifa CHECK (tarifa_impuesto >= 0 AND tarifa_impuesto <= 100);
+ALTER TABLE producto_variaciones ADD CONSTRAINT ck_variaciones_codigo_barras CHECK (codigo_barras IS NULL OR codigo_barras ~ '^[0-9]{8,14}$');
+
+-- 2026_10_20_000005_create_atributos_variacion_table
+create table "atributos_variacion" ("id_atributo" bigserial not null primary key, "id_variacion" bigint not null, "tipo_atributo" varchar(50) not null, "valor" varchar(100) not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "atributos_variacion" add constraint "atributos_variacion_id_variacion_foreign" foreign key ("id_variacion") references "producto_variaciones" ("id_variacion") on delete cascade;
+alter table "atributos_variacion" add constraint "uq_atributos_variacion_tipo" unique ("id_variacion", "tipo_atributo");
+
+-- 2026_10_20_000006_create_imagenes_producto_table
+create table "imagenes_producto" ("id_imagen" bigserial not null primary key, "id_producto" bigint not null, "id_variacion" bigint null, "imagen_url" varchar(500) not null, "formato" varchar(3) not null, "tamano_bytes" integer not null, "orden" smallint not null default '1', "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "imagenes_producto" add constraint "imagenes_producto_id_producto_foreign" foreign key ("id_producto") references "productos" ("id_producto") on delete cascade;
+alter table "imagenes_producto" add constraint "imagenes_producto_id_variacion_foreign" foreign key ("id_variacion") references "producto_variaciones" ("id_variacion") on delete set null;
+alter table "imagenes_producto" add constraint "uq_imagenes_producto_orden" unique ("id_producto", "orden");
+ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_orden CHECK (orden BETWEEN 1 AND 8);
+ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_formato CHECK (formato IN ('jpg', 'png'));
+ALTER TABLE imagenes_producto ADD CONSTRAINT ck_imagenes_tamano CHECK (tamano_bytes > 0 AND tamano_bytes <= 5242880);
+
+-- 2026_10_20_000007_create_productos_relacionados_table
+create table "productos_relacionados" ("id_producto" bigint not null, "id_producto_relacionado" bigint not null, "id_comercio" bigint not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+alter table "productos_relacionados" add constraint "pk_productos_relacionados" primary key ("id_producto", "id_producto_relacionado");
+alter table "productos_relacionados" add constraint "fk_relacionados_origen" foreign key ("id_producto", "id_comercio") references "productos" ("id_producto", "id_comercio") on delete cascade;
+alter table "productos_relacionados" add constraint "fk_relacionados_destino" foreign key ("id_producto_relacionado", "id_comercio") references "productos" ("id_producto", "id_comercio") on delete cascade;
+ALTER TABLE productos_relacionados ADD CONSTRAINT ck_relacionados_distintos CHECK (id_producto <> id_producto_relacionado);
