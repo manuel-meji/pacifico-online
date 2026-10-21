@@ -1,0 +1,1038 @@
+openapi: 3.0.3
+info:
+  title: M3 Catálogo de productos — Contrato del módulo
+  version: 1.3.0
+  description: |
+    Contrato formal del módulo M3 Catálogo de productos de Pacíficos Online
+    (IF6100, II Ciclo 2026, subgrupo SG3).
+
+    Ofrece las operaciones necesarias para gestionar categorías, marcas,
+    productos base, variaciones, atributos e imágenes del catálogo.
+
+    M3 es el propietario exclusivo de las entidades Categoría, Marca, Producto,
+    Variación y Atributos según el modelo canónico de la plataforma.
+
+    Cambios en 1.3.0 (alineación con la sección 5.5 del PC3 y con M1 1.1.0):
+      - Formato de error: se reemplaza `Error` por `ErrorEstandar`, el esquema
+        común del núcleo ({"error": {"codigo", "mensaje", "detalles"}}). Los
+        errores propios de M3 usan el formato ERR-M3-nnn.
+      - Seguridad: se reemplaza `tokenNucleo` (bearer, sin uso) por
+        `sesionNucleo` (sesión de Laravel con Sanctum). Las consultas públicas
+        no exigen sesión; las escrituras sí.
+      - Se agregan `actualizarProducto` (estado de publicación y destacado) y
+        `actualizarDisponibilidadVariacion`. `estado_producto` se puede indicar
+        al crear un producto (por defecto `borrador`).
+      - `listarRelacionados` devuelve `ProductoResumenBusqueda` (imagen y
+        precio) en lugar de `Producto`. Cambio aditivo.
+      - `asociarRelacionado` responde 201 con cuerpo.
+      - Se documentan las respuestas 401, 403, 404, 409 y 422 de las
+        operaciones de escritura, y se agregan `required`, `pattern` y límites
+        que coinciden con las restricciones de la base de datos.
+      - Se documentan la interfaz PHP, los eventos consumidos y el historial.
+
+    Cambios en 1.2.1 (solicitud de M2: incorporar `ComercioReactivado`,
+    publicado en M2 v1.1.0, que lista a M3 como consumidor):
+      - Se documenta que M3 también consume `ComercioReactivado` y que su
+        efecto es el mismo que `ComercioAprobado`: vuelve a mostrar los
+        productos publicados del comercio. Cambio aditivo, no rompe a ningún
+        consumidor de M3.
+      - Se menciona `ComercioAprobado` en la misma descripción para dejar
+        completo el ciclo de visibilidad: aprobado → se muestran, suspendido
+        → se ocultan, reactivado → se vuelven a mostrar.
+
+    Cambios en 1.2.0 (corrección según "Validación del contrato M3 para M1"):
+      - buscarProductos ahora devuelve un resumen con imagen principal y
+        rango de precio por resultado (problema 1, prioridad alta).
+      - Se agrega estado_producto; las consultas públicas solo devuelven
+        productos publicados de comercios activos (problema 2, prioridad alta).
+      - Se agrega el filtro ids para pedir varios productos por identificador
+        en una sola llamada (problema 3, prioridad alta).
+      - Se agregan los filtros precio_minimo, precio_maximo y orden, y se
+        documenta que el filtro de categoría incluye subcategorías (problema 4).
+      - Se documenta el significado de "disponible" en M3 frente al de M4
+        (problema 5).
+      - Se documenta que listarCategorias devuelve una lista plana y se
+        define un máximo para por_pagina (problema 7).
+  contact:
+    name: Subgrupo SG3 — Módulo M3
+  x-modulo: M3
+  x-subgrupo: SG3
+  x-propietario-de: [Categoria, Marca, Producto, ProductoVariacion, AtributoVariacion, ImagenProducto]
+  x-consumidores: [Frontend del portal, M1 Portal público y búsqueda, M4 Inventario, M5 Carrito y pedidos]
+
+servers:
+  - url: /api/m3/v1
+    description: Ruta base del módulo en el ambiente de integración
+
+tags:
+  - name: Categorías
+    description: Gestión jerárquica de categorías del catálogo.
+  - name: Marcas
+    description: Catálogo de marcas comercializadas.
+  - name: Productos
+    description: Administración de productos base.
+  - name: Variaciones
+    description: Especificaciones y SKUs de venta por producto.
+  - name: Imágenes
+    description: Galería multimedia de productos y variaciones.
+  - name: Relacionados
+    description: Asociación de productos para venta cruzada.
+
+paths:
+  /categorias:
+    get:
+      tags: [Categorías]
+      operationId: listarCategorias
+      security: []
+      summary: Listar categorías
+      description: |
+        Devuelve la lista plana de categorías y subcategorías disponibles
+        (no un árbol anidado). Cada elemento incluye `id_categoria_padre`,
+        que el consumidor debe usar para reconstruir la jerarquía del lado
+        del cliente si la necesita.
+      responses:
+        '200':
+          description: Lista de categorías obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Categoria'
+    post:
+      tags: [Categorías]
+      operationId: crearCategoria
+      security:
+        - sesionNucleo: []
+      summary: Crear categoría
+      description: Registra una nueva categoría o subcategoría en la plataforma.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosCategoria'
+      responses:
+        '201':
+          description: Categoría creada con éxito.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Categoria'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /marcas:
+    get:
+      tags: [Marcas]
+      operationId: listarMarcas
+      security: []
+      summary: Listar marcas
+      description: |
+        Obtiene el catálogo de marcas, con filtro opcional para destacadas.
+        M1 puede usar este listado para resolver el nombre de una marca a
+        partir del `id_marca` que trae cada producto.
+      parameters:
+        - name: destacada
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filtra solo las marcas destacadas para marquesinas.
+      responses:
+        '200':
+          description: Lista de marcas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Marca'
+    post:
+      tags: [Marcas]
+      operationId: crearMarca
+      security:
+        - sesionNucleo: []
+      summary: Crear marca
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosMarca'
+      responses:
+        '201':
+          description: Marca registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Marca'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /productos:
+    get:
+      tags: [Productos]
+      operationId: buscarProductos
+      security: []
+      summary: Buscar / Listar productos
+      description: |
+        Retorna productos paginados aplicando filtros de búsqueda. Cada
+        resultado trae un resumen (imagen principal y rango de precio) listo
+        para tarjeta de listado, sin necesidad de llamar a `obtenerProducto`
+        por cada uno.
+
+        Solo se devuelven productos con `estado_producto = publicado`
+        pertenecientes a comercios activos (M3 sincroniza el estado del
+        comercio a partir de los eventos `ComercioAprobado`, `ComercioSuspendido`
+        y `ComercioReactivado` de M2: `ComercioAprobado` y `ComercioReactivado`
+        habilitan de nuevo la visibilidad pública de los productos publicados
+        de ese comercio, con la misma acción para ambos; `ComercioSuspendido`
+        la retira).
+
+        Si se envía `id_categoria`, el resultado incluye también los
+        productos de sus subcategorías.
+
+        Para pedir varios productos puntuales por identificador (por ejemplo,
+        para armar la portada con una lista fija), use el parámetro `ids` en
+        lugar de iterar `obtenerProducto`.
+      parameters:
+        - name: id_comercio
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: id_categoria
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Incluye productos de esta categoría y de todas sus subcategorías.
+        - name: id_marca
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: destacado
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: ids
+          in: query
+          required: false
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+            maxItems: 50
+          description: |
+            Lista de identificadores de producto separados por coma
+            (ej. `?ids=12,45,78`) para obtener varios productos puntuales en
+            una sola llamada. Cuando se envía, los demás filtros de búsqueda
+            se ignoran y la paginación no aplica; se devuelven todos los
+            productos solicitados que existan y estén publicados.
+        - name: precio_minimo
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+            minimum: 0
+          description: Filtra productos cuyo precio de alguna variación sea mayor o igual a este valor.
+        - name: precio_maximo
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+            minimum: 0
+          description: Filtra productos cuyo precio de alguna variación sea menor o igual a este valor.
+        - name: orden
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [precio_asc, precio_desc, novedad]
+          description: Criterio de ordenamiento de los resultados. Por defecto, relevancia de la búsqueda.
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: por_pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Cantidad de resultados por página. Máximo 100.
+      responses:
+        '200':
+          description: Listado paginado de productos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoProductos'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+    post:
+      tags: [Productos]
+      operationId: crearProducto
+      security:
+        - sesionNucleo: []
+      summary: Crear producto base
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosProducto'
+      responses:
+        '201':
+          description: Producto base creado correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '409':
+          $ref: '#/components/responses/ComercioSuspendido'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /productos/{id_producto}:
+    parameters:
+      - $ref: '#/components/parameters/IdProducto'
+    get:
+      tags: [Productos]
+      operationId: obtenerProducto
+      security: []
+      summary: Obtener detalle del producto
+      description: |
+        Devuelve el producto base con todas sus variaciones, atributos e
+        imágenes. Al igual que `buscarProductos`, solo retorna productos con
+        `estado_producto = publicado` de comercios activos.
+      responses:
+        '200':
+          description: Detalle completo del producto.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoDetalle'
+        '404':
+          $ref: '#/components/responses/ProductoNoEncontrado'
+    patch:
+      tags: [Productos]
+      operationId: actualizarProducto
+      summary: Cambiar el estado de publicación o destacado de un producto
+      description: |
+        Permite publicar (`publicado`), volver a borrador o desactivar un
+        producto, y marcarlo o desmarcarlo como destacado (RN-M3-14). Un
+        producto desactivado o en borrador conserva sus datos, pero deja de
+        aparecer en las consultas públicas. Un comercio suspendido no puede
+        publicar productos (RN-M3-07).
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CambioProducto'
+      responses:
+        '200':
+          description: Producto actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/ProductoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ComercioSuspendido'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /productos/{id_producto}/variaciones:
+    parameters:
+      - $ref: '#/components/parameters/IdProducto'
+    post:
+      tags: [Variaciones]
+      operationId: crearVariacion
+      security:
+        - sesionNucleo: []
+      summary: Crear variación de producto
+      description: Agrega una variación vendible (SKU) asociada a un producto base con sus atributos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosVariacion'
+      responses:
+        '201':
+          description: Variación registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoVariacion'
+        '409':
+          $ref: '#/components/responses/SkuDuplicado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/ProductoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /variaciones/{id_variacion}:
+    parameters:
+      - $ref: '#/components/parameters/IdVariacion'
+    get:
+      tags: [Variaciones]
+      operationId: obtenerVariacion
+      security: []
+      summary: Obtener variación por su ID
+      description: Permite a M4 (Inventario) y M5 (Carrito/Pedidos) consultar directamente los datos de una variación por id_variacion.
+      responses:
+        '200':
+          description: Detalle de la variación solicitada con los datos del producto asociado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariacionDetalle'
+        '404':
+          $ref: '#/components/responses/VariacionNoEncontrada'
+    patch:
+      tags: [Variaciones]
+      operationId: actualizarDisponibilidadVariacion
+      summary: Cambiar la disponibilidad de una variación
+      description: |
+        Actualiza `disponible` en la variación. Pasar a no disponible no
+        elimina la variación ni el producto del catálogo (RN-M3-04, RN-M3-05).
+        Es la disponibilidad declarada por el comercio; la existencia física
+        la expone M4.
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CambioDisponibilidad'
+      responses:
+        '200':
+          description: Variación actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoVariacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/VariacionNoEncontrada'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /productos/{id_producto}/imagenes:
+    parameters:
+      - $ref: '#/components/parameters/IdProducto'
+    post:
+      tags: [Imágenes]
+      operationId: agregarImagen
+      security:
+        - sesionNucleo: []
+      summary: Asociar imagen a un producto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosImagen'
+      responses:
+        '201':
+          description: Imagen vinculada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImagenProducto'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/ProductoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/LimiteImagenes'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /productos/{id_producto}/relacionados:
+    parameters:
+      - $ref: '#/components/parameters/IdProducto'
+    get:
+      tags: [Relacionados]
+      operationId: listarRelacionados
+      security: []
+      summary: Listar productos relacionados
+      responses:
+        '200':
+          description: Lista de productos cruzados sugeridos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductoResumenBusqueda'
+        '404':
+          $ref: '#/components/responses/ProductoNoEncontrado'
+    post:
+      tags: [Relacionados]
+      operationId: asociarRelacionado
+      security:
+        - sesionNucleo: []
+      summary: Vincular producto relacionado
+      description: Ambos productos deben pertenecer al mismo comercio (RN-M3-12).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_producto_relacionado]
+              properties:
+                id_producto_relacionado:
+                  type: integer
+      responses:
+        '201':
+          description: Asociación creada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelacionadoCreado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/ProductoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/RelacionadoInvalido'
+
+components:
+  securitySchemes:
+    sesionNucleo:
+      type: apiKey
+      in: cookie
+      name: laravel_session
+      description: |
+        Sesión de Laravel gestionada por el núcleo compartido (Sanctum en modo
+        SPA). Solo aplica a las rutas web; las llamadas entre módulos usan la
+        interfaz PHP y no la necesitan. Reemplaza a `tokenNucleo`.
+
+  parameters:
+    IdProducto:
+      name: id_producto
+      in: path
+      required: true
+      description: Identificador único del producto en el catálogo.
+      schema:
+        type: integer
+        minimum: 1
+    IdVariacion:
+      name: id_variacion
+      in: path
+      required: true
+      description: Identificador único de la variación (SKU).
+      schema:
+        type: integer
+        minimum: 1
+
+  schemas:
+    DatosCategoria:
+      type: object
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          maxLength: 100
+        descripcion:
+          type: string
+        id_categoria_padre:
+          type: integer
+          nullable: true
+
+    Categoria:
+      allOf:
+        - type: object
+          required: [id_categoria]
+          properties:
+            id_categoria:
+              type: integer
+        - $ref: '#/components/schemas/DatosCategoria'
+
+    DatosMarca:
+      type: object
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          maxLength: 100
+        logotipo_url:
+          type: string
+          format: uri
+        destacada:
+          type: boolean
+          default: false
+
+    Marca:
+      allOf:
+        - type: object
+          required: [id_marca]
+          properties:
+            id_marca:
+              type: integer
+        - $ref: '#/components/schemas/DatosMarca'
+
+    DatosProducto:
+      type: object
+      required: [id_comercio, id_categoria, nombre]
+      properties:
+        id_comercio:
+          type: integer
+        id_categoria:
+          type: integer
+        id_marca:
+          type: integer
+          nullable: true
+        nombre:
+          type: string
+          maxLength: 150
+        descripcion:
+          type: string
+        video_url:
+          type: string
+          format: uri
+          nullable: true
+        destacado:
+          type: boolean
+          default: false
+        estado_producto:
+          type: string
+          enum: [borrador, publicado, desactivado]
+          default: borrador
+
+    Producto:
+      allOf:
+        - type: object
+          required: [id_producto, created_at, estado_producto]
+          properties:
+            id_producto:
+              type: integer
+            created_at:
+              type: string
+              format: date-time
+            estado_producto:
+              type: string
+              enum: [borrador, publicado, desactivado]
+              description: |
+                Estado de publicación del producto. Las consultas públicas
+                (`buscarProductos`, `obtenerProducto`) solo devuelven
+                productos en estado `publicado` pertenecientes a un comercio
+                activo; nunca se exponen productos en `borrador` ni
+                `desactivado`, ni productos de comercios suspendidos.
+        - $ref: '#/components/schemas/DatosProducto'
+
+    ProductoResumenBusqueda:
+      description: |
+        Representación resumida de un producto para resultados de búsqueda y
+        listados, pensada para tarjeta: trae la imagen principal y el precio
+        (o rango de precio) sin requerir una llamada adicional a
+        `obtenerProducto` por cada resultado.
+      allOf:
+        - $ref: '#/components/schemas/Producto'
+        - type: object
+          properties:
+            imagen_principal_url:
+              type: string
+              format: uri
+              nullable: true
+              description: URL de la primera imagen (según `orden`) entre las variaciones del producto, o null si no tiene imágenes cargadas.
+            precio_desde:
+              type: number
+              format: double
+              nullable: true
+              description: Precio más bajo entre las variaciones disponibles del producto. Null si el producto no tiene variaciones con precio.
+            precio_hasta:
+              type: number
+              format: double
+              nullable: true
+              description: Precio más alto entre las variaciones disponibles del producto. Igual a `precio_desde` cuando todas las variaciones comparten el mismo precio.
+
+    AtributoItem:
+      type: object
+      required: [tipo_atributo, valor]
+      properties:
+        tipo_atributo:
+          type: string
+          example: Talla
+        valor:
+          type: string
+          example: XL
+
+    DatosVariacion:
+      type: object
+      required: [sku, precio, tarifa_impuesto]
+      properties:
+        sku:
+          type: string
+          maxLength: 100
+        precio:
+          type: number
+          format: double
+          minimum: 0
+        tarifa_impuesto:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          example: 13.0
+          description: Tarifa del impuesto (IVA) expresada en porcentaje (ej. 13.0 o 0.0 para exento).
+        codigo_barras:
+          type: string
+          pattern: '^[0-9]{8,14}$'
+          description: Solo dígitos, de 8 a 14 (independiente del SKU, RN-M3-11).
+        codigo_fabricante:
+          type: string
+        disponible:
+          type: boolean
+          default: true
+          description: |
+            Disponibilidad declarada por el comercio: indica si el comercio
+            habilitó esta variación para la venta. No representa existencia
+            física — la existencia real la expone M4 (Inventario). Una
+            variación es comprable solo cuando `disponible = true` en M3 Y
+            M4 reporta unidades en stock; M5 es responsable de consultar
+            ambas condiciones antes de permitir agregarla al carrito.
+        atributos:
+          type: array
+          items:
+            $ref: '#/components/schemas/AtributoItem'
+
+    ProductoVariacion:
+      allOf:
+        - type: object
+          required: [id_variacion, id_producto]
+          properties:
+            id_variacion:
+              type: integer
+            id_producto:
+              type: integer
+        - $ref: '#/components/schemas/DatosVariacion'
+
+    VariacionDetalle:
+      allOf:
+        - $ref: '#/components/schemas/ProductoVariacion'
+        - type: object
+          properties:
+            producto:
+              $ref: '#/components/schemas/Producto'
+
+    DatosImagen:
+      type: object
+      required: [imagen_url]
+      properties:
+        id_variacion:
+          type: integer
+          nullable: true
+        imagen_url:
+          type: string
+          format: uri
+        orden:
+          type: integer
+          minimum: 1
+          maximum: 8
+          default: 1
+          description: Posición de la imagen. Un producto admite máximo 8 imágenes (RN-M3-09).
+
+    ImagenProducto:
+      allOf:
+        - type: object
+          required: [id_imagen, id_producto]
+          properties:
+            id_imagen:
+              type: integer
+            id_producto:
+              type: integer
+        - $ref: '#/components/schemas/DatosImagen'
+
+    ProductoDetalle:
+      allOf:
+        - $ref: '#/components/schemas/Producto'
+        - type: object
+          properties:
+            variaciones:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductoVariacion'
+            imagenes:
+              type: array
+              items:
+                $ref: '#/components/schemas/ImagenProducto'
+
+    ResultadoProductos:
+      type: object
+      required: [pagina, por_pagina, total_resultados, productos]
+      properties:
+        pagina:
+          type: integer
+        por_pagina:
+          type: integer
+        total_resultados:
+          type: integer
+        productos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoResumenBusqueda'
+
+    CambioProducto:
+      type: object
+      minProperties: 1
+      properties:
+        estado_producto:
+          type: string
+          enum: [borrador, publicado, desactivado]
+        destacado:
+          type: boolean
+
+    CambioDisponibilidad:
+      type: object
+      required: [disponible]
+      properties:
+        disponible:
+          type: boolean
+
+    RelacionadoCreado:
+      type: object
+      required: [id_producto, id_producto_relacionado]
+      properties:
+        id_producto:
+          type: integer
+        id_producto_relacionado:
+          type: integer
+
+    ErrorEstandar:
+      type: object
+      description: Formato común de error de la plataforma (sección 5.5 del PC3).
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [codigo, mensaje]
+          properties:
+            codigo:
+              type: string
+              example: ERR-004
+            mensaje:
+              type: string
+            detalles:
+              type: object
+              nullable: true
+              additionalProperties: true
+
+  responses:
+    NoAutenticado:
+      description: No hay una sesión válida del núcleo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-001
+              mensaje: Tu sesión expiró, inicia sesión de nuevo.
+              detalles: null
+
+    AccesoDenegado:
+      description: El rol de la persona no tiene permiso para esta operación.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-002
+              mensaje: No se encuentra autorizado para realizar esta acción.
+              detalles: null
+
+    ProductoNoEncontrado:
+      description: El producto solicitado no existe, no está publicado o su comercio no está activo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-004
+              mensaje: No se encontró lo que buscas.
+              detalles: null
+
+    VariacionNoEncontrada:
+      description: La variación solicitada no existe.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-004
+              mensaje: No se encontró lo que buscas.
+              detalles: null
+
+    DatosInvalidos:
+      description: Faltan datos obligatorios o tienen un formato incorrecto.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-005
+              mensaje: Revisa los datos marcados.
+              detalles:
+                nombre: Es obligatorio.
+
+    SkuDuplicado:
+      description: El SKU enviado ya existe para este comercio (RN-M3-01).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-M3-001
+              mensaje: Ya existe una variación con el mismo SKU en este comercio.
+              detalles:
+                sku: SKU-001-AZUL
+
+    RelacionadoInvalido:
+      description: El producto relacionado no existe o pertenece a otro comercio, o se relaciona consigo mismo (RN-M3-12).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-M3-002
+              mensaje: Los productos relacionados deben ser del mismo comercio.
+              detalles: null
+
+    LimiteImagenes:
+      description: El producto ya tiene 8 imágenes (RN-M3-09).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-M3-003
+              mensaje: El producto ya alcanzó el máximo de 8 imágenes.
+              detalles: null
+
+    ComercioSuspendido:
+      description: El comercio está suspendido y no puede publicar ni modificar productos (RN-M3-07).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-M3-004
+              mensaje: El comercio está suspendido.
+              detalles: null
+
+# ---------------------------------------------------------------
+# Interfaz PHP App\Contracts\M3_Catalogo\CatalogoServiceInterface
+# Es el contrato que usan M1, M4 y M5 dentro de la misma aplicación Laravel.
+# ---------------------------------------------------------------
+x-interfaz-php:
+  interfaz: App\Contracts\M3_Catalogo\CatalogoServiceInterface
+  ubicacion: app/Contracts/M3_Catalogo/CatalogoServiceInterface.php
+  implementacion: app/Services/M3_Catalogo/CatalogoService.php
+  metodos:
+    - firma: "obtenerDetalleProducto(int $productoId): ?array"
+      operacion: obtenerProducto
+      consumidores: [M1, M5]
+      retorna: Estructura del esquema ProductoDetalle, o null si no existe, no está publicado o su comercio no está activo (equivale a ERR-004).
+    - firma: "obtenerVariacion(int $variacionId): ?array"
+      operacion: obtenerVariacion
+      consumidores: [M4, M5]
+      retorna: Estructura del esquema VariacionDetalle, o null si no existe (equivale a ERR-004).
+  metodos_pendientes:
+    descripcion: Se agregan a la interfaz en el PC4, coordinados con M1.
+    lista: [buscarProductos, listarCategorias, listarMarcas, listarRelacionados]
+
+# ---------------------------------------------------------------
+# Eventos que M3 consume (M3 no publica eventos)
+# ---------------------------------------------------------------
+x-eventos-consumidos:
+  - nombre: ComercioAprobado
+    productor: M2
+    accion: Habilita el alta y la visibilidad pública de los productos publicados del comercio (RN-M3-08).
+  - nombre: ComercioSuspendido
+    productor: M2
+    accion: Oculta los productos del comercio y bloquea nuevas publicaciones (RN-M3-07).
+  - nombre: ComercioReactivado
+    productor: M2
+    accion: Igual que ComercioAprobado; vuelve a mostrar los productos publicados.
+  - nombre: ExistenciaAgotada
+    productor: M4
+    version: 1.0.0 (pendiente de ratificación)
+    accion: Marca la variación como no disponible (RN-M3-06).
+    nota: El Comité debe fijar el nombre del evento (4.3 y 4.4 lo llaman StockAgotado).
+
+x-historial-versiones:
+  - version: 1.2.0
+    cambios: Resumen de búsqueda, estado_producto, filtro ids, filtros de precio y orden.
+  - version: 1.2.1
+    cambios: Se documenta ComercioReactivado.
+  - version: 1.3.0
+    cambios:
+      - Formato de error común (ErrorEstandar) y códigos ERR-M3-nnn.
+      - Seguridad por sesión de Laravel (sesionNucleo).
+      - Nuevas operaciones actualizarProducto y actualizarDisponibilidadVariacion.
+      - listarRelacionados devuelve ProductoResumenBusqueda; asociarRelacionado responde 201.
+      - Se documentan la interfaz PHP y los eventos consumidos.
+    nota_de_compatibilidad: |
+      El cambio del formato de error y de seguridad afecta a los consumidores
+      de M3. Si el Comité lo considera un cambio que rompe, esta versión se
+      publica como 2.0.0 sin modificar su contenido.
