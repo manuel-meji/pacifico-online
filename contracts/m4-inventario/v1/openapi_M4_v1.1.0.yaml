@@ -4,15 +4,12 @@ info:
   description: 'Contrato de integración v1 del módulo M4 (Inventario multiempresa) de Pacíficos Online. Incluye
     en un único archivo: API REST ofrecida por M4, dependencias síncronas consumidas y contrato de eventos publicados/consumidos.
     Proveedor de servicios para M1, M3, M5, M7 y el rol Soporte/Auditoría de la plataforma (núcleo). Consume dependencias
-    de M2 y M3. Todo acceso a datos de inventario desde otros módulos se realiza por los contratos aquí documentados.
-    Los identificadores siguen el formato id_entidad del modelo canónico. Versión candidata corregida, aún no publicada
-    ni ratificada. Conserva v1 para revisión conjunta con M5; si la versión anterior ya fue publicada, estos cambios
-    incompatibles requieren versión mayor y convivencia conforme a ADR-004. Incorpora además los cambios CS-01 a
-    CS-04 solicitados por M1 (consulta de disponibilidad pública, consulta por producto y aclaración de eventos);
-    M1 confirmó que ninguno rompe a otros consumidores, por lo que se publican como incremento MINOR (1.1.0) sobre
-    esta misma revisión candidata.'
-  version: 1.1.0
-  x-estado: Candidato para validación de integración; no constituye aprobación del Comité
+    de M2, M3 y M5. Todo acceso a datos de inventario desde otros módulos se realiza por los contratos aquí documentados.
+    Los identificadores siguen el formato id_entidad del modelo canónico. La versión 1.2.0 alinea el contrato con las
+    reglas de publicación 4.1 y el formato de error 5.5 del PC3 colectivo: esquema ErrorEstandar, códigos propios
+    ERR-M4-nnn y ERR-003 en 404 para el aislamiento por comercio.'
+  version: 1.2.0
+  x-estado: 'Versión 1.2.0 lista para subir a contracts/m4-inventario/v1/ (reemplaza a la 1.1.0 publicada)'
 servers:
 - url: /api/m4/v1
   description: Servidor local / integración
@@ -291,18 +288,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Reserva'
         '404':
-          description: 'No existe existencia para la variación en esa ubicación. Códigos: EXISTENCIA_NO_ENCONTRADA.'
+          description: 'ERR-003 si la variación o la ubicación son de otro comercio; ERR-M4-002 si no existe existencia para la variación en esa ubicación.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: 'EXISTENCIA_INSUFICIENTE: ninguna ubicación válida tiene toda la cantidad solicitada (sin
-            compromiso parcial); CLAVE_IDEMPOTENCIA_REUTILIZADA: misma clave con datos distintos.'
+          description: 'ERR-M4-001: ninguna ubicación válida tiene toda la cantidad solicitada (sin
+            compromiso parcial); ERR-M4-003: misma clave con datos distintos.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '401':
@@ -343,11 +340,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/Reserva'
         '404':
-          description: 'La reserva no existe o pertenece a otro comercio. Códigos: RESERVA_NO_ENCONTRADA.'
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '401':
           $ref: '#/components/responses/NoAutenticado'
         '403':
@@ -390,17 +387,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/Reserva'
         '404':
-          description: 'Reserva inexistente. Códigos: RESERVA_NO_ENCONTRADA.'
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: RESERVA_VENCIDA, ESTADO_RESERVA_INVALIDO o VINCULO_PEDIDO_INVALIDO.
+          description: ERR-M4-005, ERR-M4-006 o ERR-M4-007.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '401':
@@ -413,7 +410,7 @@ paths:
       - Reservas
       summary: Liberar reserva
       description: 'Libera una reserva que todavía no produjo una salida física. Puede atender de forma síncrona
-        situaciones como PagoRechazado o PedidoCancelado mientras dichos eventos sigan pendientes de ratificación.
+        situaciones como PagoRechazado o PedidoCancelado (eventos del catálogo 4.3 del PC3).
         Si el pedido ya fue despachado, esta operación NO aumenta existencias: debe verificarse el retorno físico
         y utilizar registrarReingresoPorReserva. Solo ACTIVA o CONFIRMADA pueden pasar a LIBERADA. Libera unidades
         una vez y conserva historial y registro de Kardex de disponibilidad. Repetir LIBERADA o VENCIDA devuelve
@@ -444,17 +441,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/Reserva'
         '404':
-          description: 'Reserva inexistente. Códigos: RESERVA_NO_ENCONTRADA.'
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: 'La reserva ya se convirtió en salida. Códigos: RESERVA_YA_CONSUMIDA.'
+          description: 'La reserva ya se convirtió en salida. Códigos: ERR-M4-008.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '401':
@@ -505,17 +502,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalidaReserva'
         '404':
-          description: 'Reserva inexistente. Códigos: RESERVA_NO_ENCONTRADA.'
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: ESTADO_RESERVA_INVALIDO, RESERVA_VENCIDA, PEDIDO_NO_PAGADO o VINCULO_PEDIDO_INVALIDO.
+          description: ERR-M4-006, ERR-M4-005, ERR-M4-009 o ERR-M4-007.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '401':
@@ -523,11 +520,11 @@ paths:
         '403':
           $ref: '#/components/responses/AccesoDenegado'
         '503':
-          description: No se pudo validar el estado y vínculo con M5; no se registra salida.
+          description: 'ERR-006: no se pudo validar el estado y vínculo con M5; no se registra salida.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
   /reservas/{id_reserva}/reingreso:
     post:
       tags:
@@ -567,17 +564,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/Movimiento'
         '404':
-          description: 'Reserva inexistente. Códigos: RESERVA_NO_ENCONTRADA.'
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: ESTADO_RESERVA_INVALIDO, REINGRESO_YA_REGISTRADO, RETORNO_NO_VERIFICADO o VINCULO_PEDIDO_INVALIDO.
+          description: ERR-M4-006, ERR-M4-010, ERR-M4-011 o ERR-M4-007.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '401':
@@ -658,15 +655,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/KardexRespuesta'
         '422':
-          description: Rango de fechas inválido o datos de consulta inválidos. Sin máximo de días impuesto sin acuerdo.
+          description: ERR-M4-012 si el rango de fechas es inválido; ERR-005 si los demás datos de consulta son inválidos. Sin máximo de días impuesto sin acuerdo.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '401':
           $ref: '#/components/responses/NoAutenticado'
         '403':
           $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/RecursoNoAccesible'
   /auditoria/inventario:
     get:
       tags:
@@ -713,11 +712,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuditoriaInventarioRespuesta'
         '422':
-          description: 'Comercios o fechas inválidos. Códigos: RANGO_FECHAS_INVALIDO, ERR-005.'
+          description: 'Comercios o fechas inválidos. Códigos: ERR-M4-012, ERR-005.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '401':
           $ref: '#/components/responses/NoAutenticado'
         '403':
@@ -793,6 +792,8 @@ paths:
           $ref: '#/components/responses/NoAutenticado'
         '403':
           $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/RecursoNoAccesible'
   /existencias/{id_existencia}/stock-minimo:
     put:
       tags:
@@ -831,11 +832,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/Existencia'
         '404':
-          description: 'Existencia inexistente. Códigos: EXISTENCIA_NO_ENCONTRADA.'
+          description: 'ERR-003 si la existencia pertenece a otro comercio; ERR-M4-002 si la existencia no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '401':
@@ -874,17 +875,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/Movimiento'
         '404':
-          description: 'Variación, ubicación o existencia inexistente. Códigos: VARIACION_NO_ENCONTRADA, UBICACION_NO_ENCONTRADA.'
+          description: 'ERR-003 si el recurso es de otro comercio; ERR-M4-013 si la variación no existe; ERR-M4-014 si la ubicación no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: 'Regla de negocio. Códigos: COMERCIO_NO_HABILITADO, EXISTENCIA_INSUFICIENTE.'
+          description: 'Regla de negocio. Códigos: ERR-M4-015, ERR-M4-001.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '503':
@@ -965,6 +966,8 @@ paths:
           $ref: '#/components/responses/NoAutenticado'
         '403':
           $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/RecursoNoAccesible'
       description: ' Cada registro incluye usuario, motivo y saldos. Las reservas y liberaciones se distinguen de
         movimientos físicos; no imputar sus cantidades a ventas o costos. Saldo físico del último registro coincide
         con existencia física.'
@@ -1002,17 +1005,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/TransferenciaRespuesta'
         '404':
-          description: 'Variación o ubicación inexistente. Códigos: VARIACION_NO_ENCONTRADA, UBICACION_NO_ENCONTRADA.'
+          description: 'ERR-003 si el recurso es de otro comercio; ERR-M4-013 si la variación no existe; ERR-M4-014 si la ubicación no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: 'Regla de negocio. Códigos: COMERCIO_NO_HABILITADO, EXISTENCIA_INSUFICIENTE.'
+          description: 'Regla de negocio. Códigos: ERR-M4-015, ERR-M4-001.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '503':
@@ -1027,11 +1030,11 @@ paths:
       - Ajustes
       summary: Registrar conteo físico y ajuste
       description: 'Conteo físico bajo bloqueo: cantidad_sistema_vista debe coincidir con la física actual o devolver
-        409 CONTEO_DESACTUALIZADO. Con diferencia exige motivo no vacío y autorización previa del Administrador
+        409 ERR-M4-016. Con diferencia exige motivo no vacío y autorización previa del Administrador
         del comercio, validada en servidor por id_autorizacion, antes de aplicar; registra ejecutor, autorizador
         y fecha/hora (RN-M4-011). Sin autorización válida no modifica stock. El flujo previo de solicitud/aprobación
         debe registrar esa autorización; los endpoints de dicho flujo se acordarán con la interfaz de bodega y núcleo.
-        Si cantidad_contada es menor que unidades reservadas ACTIVA y CONFIRMADA, rechazar AJUSTE_BAJO_COMPROMETIDO.
+        Si cantidad_contada es menor que unidades reservadas ACTIVA y CONFIRMADA, rechazar ERR-M4-017.
         Sin diferencia registra conteo sin movimiento. Con diferencia actualiza física y crea Kardex en una transacción
         atómica.'
       operationId: registrarAjusteInventario
@@ -1058,17 +1061,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/Ajuste'
         '404':
-          description: 'Existencia inexistente. Códigos: EXISTENCIA_NO_ENCONTRADA.'
+          description: 'ERR-003 si la existencia pertenece a otro comercio; ERR-M4-002 si la existencia no existe.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: 'Regla de negocio. Códigos: CONTEO_DESACTUALIZADO, COMERCIO_NO_HABILITADO, AJUSTE_BAJO_COMPROMETIDO.'
+          description: 'Regla de negocio. Códigos: ERR-M4-016, ERR-M4-015, ERR-M4-017.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
         '503':
@@ -1126,17 +1129,17 @@ paths:
         '403':
           $ref: '#/components/responses/AccesoDenegado'
         '404':
-          description: No hay registros asociados al subpedido en M4. Código SUBPEDIDO_NO_ENCONTRADO.
+          description: ERR-003 si el subpedido es de otro comercio; ERR-M4-018 si no hay registros asociados al subpedido en M4.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '409':
-          description: Las salidas del subpedido aún no están completamente confirmadas y valorizadas. Código COSTOS_SUBPEDIDO_NO_DISPONIBLES. Reintentar sin registrar un costo de ventas parcial ni cero.
+          description: Las salidas del subpedido aún no están completamente confirmadas y valorizadas. Código ERR-M4-019. Reintentar sin registrar un costo de ventas parcial ni cero.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ErrorEstandar'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
 components:
@@ -1200,30 +1203,17 @@ components:
           type: number
           minimum: 0
           description: Suma de los importes valorizados registrados para las salidas confirmadas de esta variación.
-    Error:
+    ErrorEstandar:
       type: object
-      required:
-      - error
-      description: 'Formato de error estándar del núcleo (sección 5.5): { error: { codigo, mensaje, detalles } }. Los
-        errores transversales usan los códigos numerados del núcleo (ERR-001 token inválido, ERR-002 rol sin permiso,
-        ERR-003 recurso de otro comercio, ERR-005 parámetro inválido); los errores de negocio de M4 conservan su código
-        propio (EXISTENCIA_INSUFICIENTE, RESERVA_VENCIDA, etc.) según la regla que defina el Comité.'
+      required: [error]
       properties:
         error:
           type: object
-          required:
-          - codigo
-          - mensaje
+          required: [codigo, mensaje]
           properties:
-            codigo:
-              type: string
-              example: EXISTENCIA_INSUFICIENTE
-            mensaje:
-              type: string
-            detalles:
-              type: object
-              additionalProperties: true
-              description: Datos del error; en ERR-005, un mapa campo → mensaje.
+            codigo: { type: string, example: "ERR-004" }
+            mensaje: { type: string }
+            detalles: { type: object, nullable: true }
     Paginacion:
       type: object
       properties:
@@ -2401,37 +2391,6 @@ components:
         id_variacion:
           type: integer
           format: int64
-    EventoPedidoDespachado:
-      type: object
-      required:
-      - id_evento
-      - fecha_evento
-      - id_comercio
-      - id_pedido
-      - id_subpedido
-      - reservas
-      properties:
-        id_evento:
-          type: string
-          format: uuid
-        fecha_evento:
-          type: string
-          format: date-time
-        id_comercio:
-          type: integer
-          format: int64
-        id_pedido:
-          type: integer
-          format: int64
-        id_subpedido:
-          type: integer
-          format: int64
-        reservas:
-          type: array
-          minItems: 1
-          items:
-            type: string
-            format: uuid
     EventoPedidoConfirmado:
       type: object
       required:
@@ -2551,7 +2510,7 @@ components:
           type: string
     EventoComercioReactivado:
       type: object
-      description: Propuesto; payload publicado por M2 en su contrato v1.2.0.
+      description: Carga útil publicada por M2 en su contrato v1.2.0 y registrada en la sección 4.3 del PC3.
       required:
       - id_evento
       - fecha_hora
@@ -2663,59 +2622,73 @@ components:
             format: uuid
   responses:
     NoAutenticado:
-      description: Token ausente o inválido.
+      description: 'ERR-001: sesión inválida o expirada.'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorEstandar'
           example:
             error:
               codigo: ERR-001
-              mensaje: Debe autenticarse.
+              mensaje: Tu sesión expiró, inicia sesión de nuevo.
+              detalles: null
     AccesoDenegado:
-      description: 'El comercio de la solicitud no es el del usuario, RN-12 (ERR-003), o el rol no tiene permiso (ERR-002).'
+      description: 'ERR-002: el rol del usuario no tiene permiso para la operación.'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-002
+              mensaje: No se encuentra autorizado para realizar esta acción.
+              detalles: null
+    RecursoNoAccesible:
+      description: 'ERR-003: el recurso es de otro comercio o de otro cliente (aislamiento, RN-12); se responde como si no existiera.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
           example:
             error:
               codigo: ERR-003
-              mensaje: No tiene acceso a datos de otro comercio.
+              mensaje: El recurso solicitado no existe o no es accesible.
+              detalles: null
     ErrorValidacion:
-      description: Datos inválidos. En detalles viene el mapa campo → mensaje.
+      description: 'ERR-005: validación de datos fallida. El detalle por campo viene en detalles.'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorEstandar'
           example:
             error:
               codigo: ERR-005
-              mensaje: Datos inválidos.
+              mensaje: Revisa los datos marcados (detalle por campo en detalles).
               detalles:
                 cantidad: Debe ser mayor o igual a 1.
     DependenciaNoDisponible:
-      description: M2 o M3 no respondieron a tiempo.
+      description: 'ERR-006: M2, M3 o M5 no respondieron. La operación es parte de la compra en curso: no se reintenta en segundo plano ni se confirma a medias.'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorEstandar'
           example:
             error:
-              codigo: DEPENDENCIA_NO_DISPONIBLE
-              mensaje: No se pudo validar con el módulo proveedor; reintente.
+              codigo: ERR-006
+              mensaje: Servicio temporalmente no disponible, intentar de nuevo.
+              detalles: null
 x-dependencias-consumidas:
 - modulo_proveedor: M2
   operacion: ObtenerSedesComercio
-  ruta: GET /comercios/{id_comercio}/sedes
+  ruta: GET /api/m2/v1/comercios/{id_comercio}/sedes
   respuesta:
     $ref: '#/components/schemas/M2SedesComercio'
-  estado: Verificado contra openapi_M2_v1.2.0.yaml; M2 declara a M4 como consumidor.
+  estado: Registrada en la validación cruzada 4.4 del PC3 colectivo; verificado contra openapi_M2_v1.2.0.yaml; M2 declara a M4 como consumidor.
   uso: Sedes habilitadas. id_sede de M2 es el mismo identificador que id_ubicacion de M4 (confirmado por M2 en su
     contrato v1.2.0); sede cubre tienda y bodega.
 - modulo_proveedor: M2
   operacion: ObtenerComercioActivo
-  ruta: GET /comercios/{id_comercio}/estado
+  ruta: GET /api/m2/v1/comercios/{id_comercio}/estado
   respuesta:
     $ref: '#/components/schemas/M2EstadoComercio'
   estado: Verificado contra openapi_M2_v1.2.0.yaml; M2 declara a M4 como consumidor (bearerAuth) para bloquear movimientos
@@ -2723,40 +2696,36 @@ x-dependencias-consumidas:
   uso: Verificar activo (activo = true); ObtenerSedesComercio no devuelve estado operativo del comercio.
 - modulo_proveedor: M3
   operacion: obtenerVariacion
-  ruta: GET /variaciones/{id_variacion}
-  estado: Nombre y ruta tomados del informe de validación de M3 sobre su contrato v1.2.0 (reemplazan al nombre
-    obtenerDetalleVariacion del PC2 de M4); pendiente verificar contra el openapi de M3.
+  ruta: GET /api/m3/v1/variaciones/{id_variacion}
+  estado: Registrada en la validación cruzada 4.4 del PC3 colectivo (M4 → M3); reemplaza al nombre obtenerDetalleVariacion
+    del PC2 de M4.
   uso: Validar la variación y su pertenencia al comercio. La respuesta (VariacionDetalle) trae el producto embebido,
     de donde M4 toma id_comercio para compararlo con el de la solicitud.
 - modulo_proveedor: M5
   operacion: obtenerPedido
-  ruta: GET /pedidos/{id_pedido}
-  estado: Verificado contra contrato M5; permisos de M4 por coordinar.
+  ruta: GET /api/m5/v1/pedidos/{id_pedido}
+  estado: Registrada en la validación cruzada 4.4 del PC3 colectivo; M5 declara a M4 como consumidor.
   uso: Verificar estado pagado y pertenencia pedido/subpedidos.
 - modulo_proveedor: M5
   operacion: obtenerSubpedido
-  ruta: GET /subpedidos/{id_subpedido}
-  estado: Operación existe; proveedor describe consumo M2. Permisos para M4 por acordar.
+  ruta: GET /api/m5/v1/subpedidos/{id_subpedido}
+  estado: Registrada en la validación cruzada 4.4 del PC3 colectivo; M5 declara a M4 como consumidor.
   uso: Verificar vínculo del subpedido con pedido, comercio y líneas, sin consultas directas a tablas de M5.
 x-eventos:
-  nota: Contratos asíncronos en extensión x-eventos. Los schemas de proveedores son propuestas salvo datos publicados
-    por M2. ExistenciaReservada/Agotada y PedidoConfirmado ya existen en catálogo; su payload candidato no equivale
-    a aprobación colectiva. Tras commit publicar eventos; el mecanismo durable/reintentos y versionado de proveedores
-    debe acordarse. UUID de reserva se conserva.
+  nota: 'Contratos asíncronos en la extensión x-eventos. Los eventos de esta lista están registrados en la sección 4.3 del PC3 colectivo con versión 1.0.0 y cada uno se implementa como clase DTO en app/Events/M4_Inventario/{NombreEvento}.php con id_evento (UUID) para la idempotencia. Los esquemas de los eventos que M4 consume declaran solo los campos que M4 usa; la carga útil completa la define el módulo productor. Los eventos se publican tras el commit.'
   publicados_por_m4:
   - nombre: ExistenciaReservada
-    estado: Evento del catálogo colectivo PC2; esquema JSON candidato pendiente de ratificación
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M4
     consumidores:
     - M5
     disparador: Se crea correctamente una reserva de existencia.
     esquema:
       $ref: '#/components/schemas/EventoExistenciaReservada'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: ExistenciaAgotada
-    estado: Evento del catálogo colectivo PC2; esquema JSON candidato pendiente de ratificación
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M4
     consumidores:
     - M1
@@ -2765,25 +2734,22 @@ x-eventos:
       (CS-03); id_ubicacion viaja nulo.'
     esquema:
       $ref: '#/components/schemas/EventoExistenciaAgotada'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: SalidaInventarioConfirmada
-    estado: Propuesto por M4 / pendiente de ratificación (SC-M4-09)
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M4
     consumidores:
     - M7
     disparador: Se confirma la salida física asociada a una reserva/pedido despachado y se registra el movimiento
       valorizado.
-    nota: Nombre y monto_total del PC2 M4; evento propuesto SC-M4-09. Coordinar con M7 para no duplicar costo al
-      recibir también el evento de despacho.
+    nota: Nombre y monto_total del PC2 M4; Coordinar con M7 para no duplicar costo al recibir también el evento de despacho.
     esquema:
       $ref: '#/components/schemas/EventoSalidaInventarioConfirmada'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: ExistenciaRepuesta
-    estado: Propuesto
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M4
     consumidores:
     - M1
@@ -2793,64 +2759,44 @@ x-eventos:
       0 (CS-03); id_ubicacion viaja nulo.'
     esquema:
       $ref: '#/components/schemas/EventoExistenciaRepuesta'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: ReservaVencida
-    estado: Propuesto
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M4
     consumidores:
     - M5
     disparador: Una reserva activa alcanza su fecha de expiración sin confirmarse.
     esquema:
       $ref: '#/components/schemas/EventoReservaVencida'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: AlertaStockMinimo
-    estado: Propuesto
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M4
     consumidores:
     - M2
     disparador: La cantidad disponible queda igual o por debajo del stock mínimo configurado.
     esquema:
       $ref: '#/components/schemas/EventoAlertaStockMinimo'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   consumidos_por_m4:
   - nombre: ProductoPublicado
-    estado: Catálogo colectivo
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M3
     consumidores:
     - M1
     - M4
     accion_en_m4: Crear de manera idempotente el registro de existencia inicial de la variación, sin inventar unidades
       físicas. Asignación a ubicaciones por acordar con M3/M2.
-    estado_payload: Propuesta de M4. M3 reconoce en su informe de validación que su contrato v1.2.0 aún no declara
-      x-eventos ni publica ProductoPublicado; es una tarea pendiente de M3. Ratificar el payload con M3 antes de integrar.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
     esquema:
       $ref: '#/components/schemas/EventoProductoPublicado'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
-  - nombre: PedidoDespachado
-    estado: Catálogo colectivo PC2; discrepancia con SubpedidoDespachado del proveedor M5, por resolver
-    productor: M5
-    consumidores:
-    - M4
-    - M7
-    - M2
-    accion_en_m4: Procesar salida con misma validación de pago y vínculo que confirmarSalidaPorReserva; no duplicar
-      por ruta HTTP y evento.
-    estado_payload: Propuesta de M4; el contrato del proveedor no publica este esquema. Ratificar antes de integrar.
-    esquema:
-      $ref: '#/components/schemas/EventoPedidoDespachado'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: PedidoConfirmado
-    estado: Catálogo colectivo PC2 y ADR-005; payload candidato por acordar con M5
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M5
     consumidores:
     - M4
@@ -2858,109 +2804,96 @@ x-eventos:
     - M2
     accion_en_m4: Transición idempotente ACTIVA a CONFIRMADA sin vencimiento automático; validar vínculo y plazo.
       Si vencida, liberar una vez y notificar rechazo por mecanismo acordado con M5.
-    estado_payload: Propuesta de M4; el contrato del proveedor no publica este esquema. Ratificar antes de integrar.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
     esquema:
       $ref: '#/components/schemas/EventoPedidoConfirmado'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: PagoRechazado
-    estado: Propuesto / pendiente (PC3, INC-13); consumidores y payload por ratificar
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M6
     consumidores:
     - M4
     accion_en_m4: Liberar la reserva únicamente si aún no existe salida física.
-    nota: No etiquetar como 'Catálogo' hasta resolución del Comité.
-    estado_payload: Propuesta de M4; el contrato del proveedor no publica este esquema. Ratificar antes de integrar.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
     esquema:
       $ref: '#/components/schemas/EventoPagoRechazado'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: PedidoCancelado
-    estado: Propuesto / pendiente (PC3, INC-13); consumidores y payload por ratificar
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M5
     consumidores:
     - M4
     accion_en_m4: Liberar la reserva si el pedido aún no fue despachado. Si ya hubo salida, no incrementar existencias
       hasta verificar el retorno físico y registrar el reingreso.
-    estado_payload: Propuesta de M4; el contrato del proveedor no publica este esquema. Ratificar antes de integrar.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
     esquema:
       $ref: '#/components/schemas/EventoPedidoCancelado'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: ComercioAprobado
-    version: v1
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    version: 1.0.0
     productor: M2
     consumidores:
     - M4
-    estado: Catálogo PC2 y contrato M2
     accion_en_m4: Habilitar sedes del comercio para registrar existencias, sin crear unidades físicas.
     esquema:
       $ref: '#/components/schemas/EventoComercioAprobado'
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: ComercioSuspendido
-    version: v1
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0; M4 figura como consumidor.
+    version: 1.0.0
     productor: M2
     consumidores:
     - M4
-    estado: 'Contrato M2 v1.2.0 lista a M4 como consumidor; el catálogo PC2 colectivo aún registra solo M1/M3/M5:
-      pendiente actualizar el catálogo en el Comité'
     accion_en_m4: Bloquear nuevas entradas, ajustes y transferencias manuales (RN-M4-009). Pedidos pagados en curso
       no se alteran unilateralmente; resolución SC-M4-11.
     esquema:
       $ref: '#/components/schemas/EventoComercioSuspendido'
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: ComercioReactivado
-    version: v1
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0; M4 figura como consumidor.
+    version: 1.0.0
     productor: M2
     consumidores:
     - M4
-    estado: 'Propuesto: publicado por M2 en su contrato v1.2.0 (consumen M1, M3, M4 y M5); no figura en el catálogo
-      PC2 colectivo, pendiente de ratificación del Comité'
     accion_en_m4: Desbloquear las entradas, ajustes y transferencias manuales del comercio cuando vuelve a estado Activo
       (revierte el bloqueo de RN-M4-009). La configuración de comisión y membresía del comercio no afecta a M4.
     esquema:
       $ref: '#/components/schemas/EventoComercioReactivado'
-    idempotencia: Deduplicar por id_evento y por identidad de negocio. Un evento repetido o fuera de orden respecto
-      de ComercioSuspendido no debe dejar al comercio en un estado incorrecto; ante duda, confirmar con ObtenerComercioActivo.
+    idempotencia: Deduplicar por id_evento y por identidad de negocio. Un evento repetido o fuera de orden respecto de ComercioSuspendido no debe dejar al comercio en un estado incorrecto; ante duda, confirmar con ObtenerComercioActivo.
   - nombre: SubpedidoDespachado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0; el catálogo lo registra también como PedidoDespachado.
     productor: M5
     consumidores:
     - M4
-    estado: Mencionado en contrato M5; reconciliación con catálogo y payload pendientes
     accion_en_m4: Salida solo de reservas vinculadas al subpedido pagado y su comercio.
-    estado_payload: Propuesta de M4; el contrato del proveedor no publica este esquema. Ratificar antes de integrar.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
     esquema:
       $ref: '#/components/schemas/EventoSubpedidoDespachado'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: SubpedidoCancelado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
     productor: M5
     consumidores:
     - M4
-    estado: Mencionado en contrato M5; reconciliación con catálogo y payload pendientes
     accion_en_m4: Liberar solo reservas ACTIVA/CONFIRMADA del subpedido; si consumidas, requerir recepción física
       para reingreso.
-    estado_payload: Propuesta de M4; el contrato del proveedor no publica este esquema. Ratificar antes de integrar.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
     esquema:
       $ref: '#/components/schemas/EventoSubpedidoCancelado'
-    version: 1.0.0 candidata
-    idempotencia: Deduplicar por id_evento cuando el contrato ratificado lo incluya y por identidad de negocio.
-      No duplicar movimientos ni efectos ante reintentos.
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
 x-versionado:
-  version_candidata: 1.1.0
-  politica: MAJOR para cambios incompatibles, MINOR para adiciones compatibles, PATCH para correcciones compatibles.
-    Si v1 ya está publicada, publicar esta revisión con versión mayor, nueva ruta y convivencia acordada; no sobrescribirla.
-  estado_publicacion: Pendiente; no se afirma publicación en repositorio
-  cambio_1_1_0: 'CS-01 a CS-04 (M1): dos operaciones existentes pasan a públicas, dos operaciones nuevas de disponibilidad
-    por producto, y dos eventos aclarados (disparador por total del comercio + id_producto agregado). M1 confirmó
-    que no rompe a M3 ni M5, que siguen usando las mismas operaciones y el mismo esquema Disponibilidad; por eso
-    es MINOR y no MAJOR.'
+  version_candidata: 1.2.0
+  politica: MAJOR para cambios incompatibles, MINOR para adiciones compatibles, PATCH para correcciones compatibles (ADR-004 y sección 4.1 del PC3).
+  estado_publicacion: La versión 1.1.0 ya está publicada en contracts/m4-inventario/v1/openapi.yaml; la 1.2.0 la reemplaza en esa misma ruta.
+  cambio_1_1_0: 'CS-01 a CS-04 (M1): dos operaciones existentes pasan a públicas, dos operaciones nuevas de disponibilidad por producto y dos eventos aclarados (disparador por total del comercio + id_producto).'
+  cambio_1_2_0: 'Alineación con el PC3 colectivo: esquema ErrorEstandar (5.5); códigos de negocio ERR-M4-001 a ERR-M4-019; ERR-001, ERR-002, ERR-005 y ERR-006 para los errores transversales; aislamiento por comercio en 404 con ERR-003 (antes 403); respuesta 200 agotado en la consulta individual de disponibilidad; ruta base /api/m4/v1; operación de costo de productos vendidos para M7; consulta de auditoría; interfaz PHP; eventos del catálogo 4.3 con v1.0.0.'
+  compatibilidad: 'El cambio de códigos de error y del HTTP del aislamiento afecta a los consumidores que leen esos códigos. La sección 5.5 y la 5.7 del PC3 lo exigen a todos los módulos (M3 y M5 ajustan el suyo). Se publica como 1.2.0 por decisión del módulo; si el Comité lo trata como cambio incompatible, debe publicarse /v2/ con convivencia mínima de 14 días (sección 4.1).'
 x-interfaz-php:
   nota: 'Con Inertia, M1 llama a M4 por esta interfaz y no por HTTP (validación de M1). Cada método equivale a la
     operación REST indicada y devuelve el mismo cuerpo. Los arreglos de entrada y salida usan los nombres de campo
@@ -2994,6 +2927,106 @@ x-interfaz-php:
     retorna: 'Lista de DisponibilidadProducto en el mismo orden que $items.'
     errores: ERR-005 (lista vacía, más de 100 elementos o elemento inválido).
   doble_de_prueba: M1 puede sustituir la interfaz por un doble que devuelva estas mismas estructuras.
+  eventos_dto: app/Events/M4_Inventario/{NombreEvento}.php, con id_evento (UUID), según la sección 4.1 del PC3.
+  dobles_y_pruebas: tests/Doubles/M4_Inventario/ y pruebas contractuales en tests/Feature/Contracts/ (sección 4.1 del PC3).
+x-codigos-error:
+  nota: 'Códigos propios de M4 con el formato ERR-M{n}-{nnn} (sección 5.5 del PC3). Los códigos ERR-001 a ERR-006 son del núcleo: M4 usa ERR-001 (401), ERR-002 (403), ERR-003 (404, aislamiento), ERR-005 (422) y ERR-006 (503). nombre_anterior es el código con nombre de la versión 1.1.0.'
+  propios:
+  - codigo: ERR-M4-001
+    http: 409
+    nombre_anterior: EXISTENCIA_INSUFICIENTE
+    mensaje: 'No hay existencias suficientes para la cantidad solicitada.'
+    operaciones: 'reservarExistencias, registrarMovimientoManual, registrarTransferencia'
+  - codigo: ERR-M4-002
+    http: 404
+    nombre_anterior: EXISTENCIA_NO_ENCONTRADA
+    mensaje: 'No hay existencias registradas para la variación en esa ubicación.'
+    operaciones: 'reservarExistencias, fijarStockMinimo, registrarAjusteInventario'
+  - codigo: ERR-M4-003
+    http: 409
+    nombre_anterior: CLAVE_IDEMPOTENCIA_REUTILIZADA
+    mensaje: 'La clave de idempotencia ya se usó con otros datos.'
+    operaciones: 'reservarExistencias'
+  - codigo: ERR-M4-004
+    http: 404
+    nombre_anterior: RESERVA_NO_ENCONTRADA
+    mensaje: 'No se encontró la reserva.'
+    operaciones: 'obtenerReserva, confirmarReserva, liberarReserva, confirmarSalidaPorReserva, registrarReingresoPorReserva'
+  - codigo: ERR-M4-005
+    http: 409
+    nombre_anterior: RESERVA_VENCIDA
+    mensaje: 'La reserva venció y ya no puede confirmarse.'
+    operaciones: 'confirmarReserva, confirmarSalidaPorReserva'
+  - codigo: ERR-M4-006
+    http: 409
+    nombre_anterior: ESTADO_RESERVA_INVALIDO
+    mensaje: 'La reserva no está en un estado que permita esta operación.'
+    operaciones: 'confirmarReserva, confirmarSalidaPorReserva, registrarReingresoPorReserva'
+  - codigo: ERR-M4-007
+    http: 409
+    nombre_anterior: VINCULO_PEDIDO_INVALIDO
+    mensaje: 'El pedido o subpedido no corresponde a la reserva.'
+    operaciones: 'confirmarReserva, confirmarSalidaPorReserva, registrarReingresoPorReserva'
+  - codigo: ERR-M4-008
+    http: 409
+    nombre_anterior: RESERVA_YA_CONSUMIDA
+    mensaje: 'La reserva ya se convirtió en salida y no puede liberarse.'
+    operaciones: 'liberarReserva'
+  - codigo: ERR-M4-009
+    http: 409
+    nombre_anterior: PEDIDO_NO_PAGADO
+    mensaje: 'El pedido aún no está pagado.'
+    operaciones: 'confirmarSalidaPorReserva'
+  - codigo: ERR-M4-010
+    http: 409
+    nombre_anterior: REINGRESO_YA_REGISTRADO
+    mensaje: 'El reingreso de esta reserva ya fue registrado.'
+    operaciones: 'registrarReingresoPorReserva'
+  - codigo: ERR-M4-011
+    http: 409
+    nombre_anterior: RETORNO_NO_VERIFICADO
+    mensaje: 'La recepción física de la mercadería no está verificada.'
+    operaciones: 'registrarReingresoPorReserva'
+  - codigo: ERR-M4-012
+    http: 422
+    nombre_anterior: RANGO_FECHAS_INVALIDO
+    mensaje: 'El rango de fechas no es válido.'
+    operaciones: 'obtenerKardexValorizado, consultarInventarioAuditoria'
+  - codigo: ERR-M4-013
+    http: 404
+    nombre_anterior: VARIACION_NO_ENCONTRADA
+    mensaje: 'No se encontró la variación.'
+    operaciones: 'registrarMovimientoManual, registrarTransferencia'
+  - codigo: ERR-M4-014
+    http: 404
+    nombre_anterior: UBICACION_NO_ENCONTRADA
+    mensaje: 'No se encontró la ubicación.'
+    operaciones: 'registrarMovimientoManual, registrarTransferencia'
+  - codigo: ERR-M4-015
+    http: 409
+    nombre_anterior: COMERCIO_NO_HABILITADO
+    mensaje: 'El comercio no está habilitado para registrar movimientos.'
+    operaciones: 'registrarMovimientoManual, registrarTransferencia, registrarAjusteInventario'
+  - codigo: ERR-M4-016
+    http: 409
+    nombre_anterior: CONTEO_DESACTUALIZADO
+    mensaje: 'El conteo físico está desactualizado; vuelve a contar.'
+    operaciones: 'registrarAjusteInventario'
+  - codigo: ERR-M4-017
+    http: 409
+    nombre_anterior: AJUSTE_BAJO_COMPROMETIDO
+    mensaje: 'El ajuste dejaría el stock por debajo de lo comprometido.'
+    operaciones: 'registrarAjusteInventario'
+  - codigo: ERR-M4-018
+    http: 404
+    nombre_anterior: SUBPEDIDO_NO_ENCONTRADO
+    mensaje: 'No hay registros del subpedido en inventario.'
+    operaciones: 'ObtenerCostoProductosVendidos'
+  - codigo: ERR-M4-019
+    http: 409
+    nombre_anterior: COSTOS_SUBPEDIDO_NO_DISPONIBLES
+    mensaje: 'Las salidas del subpedido aún no están confirmadas; reintenta más tarde.'
+    operaciones: 'ObtenerCostoProductosVendidos'
 x-procesos-segundo-plano:
 - proceso: Liberación de reservas vencidas
   modulo: M4
@@ -3001,33 +3034,18 @@ x-procesos-segundo-plano:
   control: Solo ACTIVA con fecha_expiracion cumplida; transición y decremento reservado atómicos e idempotentes.
     Conservar detalle e historial. Confirmación comprueba plazo aun si temporizador no ejecutó.
 x-acuerdos-pendientes:
-- 'M1/Comité: publicar este contrato y ratificar los eventos que M1 consume (ExistenciaAgotada, ExistenciaRepuesta); hoy
-  siguen como candidatos.'
-- 'Comité: regla para los códigos de negocio de M4 junto a los códigos numerados del núcleo. Además, M2 responde 404
-  (ERR-003) cuando un recurso es de otro comercio, mientras M4 responde 403; unificar el estado HTTP.'
-- 'M1/M4: confirmar la interfaz PHP. M1 sugirió app/Contracts/M4/InventarioContract.php; aquí se usó la convención del
-  repositorio (app/Contracts/M4_Inventario/) y el nombre InventarioModuleInterface del PC2 de M4.'
-- 'M3: publicar ProductoPublicado en su contrato (x-eventos) y ratificar su payload con M4; verificar obtenerVariacion
-  contra el openapi de M3. El nombre de operación ya quedó alineado.'
-- 'Comité: agregar a M4 como consumidor de ComercioSuspendido en el catálogo PC2 y registrar ComercioReactivado como evento
-  nuevo (M2 ya lo publica en su v1.2.0). M2 y M4 ya acordaron id_sede = id_ubicacion y el acceso de M4 a /estado.'
+- 'M1, M3, M5 y M7: avisar de la versión 1.2.0, porque cambian los códigos de error (ERR-M4-nnn) y el HTTP del aislamiento (403 pasa a 404 con ERR-003).'
+- 'M3: confirmar en su openapi la operación obtenerVariacion y la publicación de ProductoPublicado, registradas en las secciones 4.3 y 4.4 del PC3.'
 - 'M2: confirmar que id_sede es único globalmente (no solo dentro del comercio); su contrato v1.2.0 no lo declara.'
-- 'M5: actualizar id_reserva integer a string UUID en ItemCarrito y AgregarItemCarritoRequest; mensaje de M5 confirma
-  intención, YAML todavía integer.'
-- 'M5/Comité: selección de ubicación y eventual reparto multiubicación. Esta candidata usa una ubicación con cantidad
-  completa; falta ratificar criterio de desempate.'
-- 'M5/Comité: PedidoDespachado vs SubpedidoDespachado, cancelación parcial y payloads; impedir doble efecto de REST/evento.'
-- 'M4/M7: SC-M4-07 valoración y SC-M4-09 SalidaInventarioConfirmada.'
-- 'M4/M5: SC-M4-08 Idempotency-Key.'
-- 'Comité: orden estricto de llegada solicitado por cliente; bloqueo garantiza atomicidad pero no FIFO. Seleccionar
-  mecanismo de cola/orden antes de afirmar cumplimiento.'
-- 'Núcleo/bodega: contrato de autorización previa y verificación de recepción física; no asumir que un ID suministrado
-  acredita autorización o devolución.'
-- 'Actualizar PC2: ubicación opcional en RF-M4-006, CU-M4-06, interfaz PHP y OpenAPI; estados y nombres API; retorno
-  reserva incluye ubicación y vencimiento.'
-- 'Comité: publicación/versionado y mecanismos de entrega de eventos; formato de error sigue candidato hasta acuerdo
-  con núcleo.'
+- 'M5/Comité: selección de ubicación y eventual reparto multiubicación. Esta versión usa una ubicación con cantidad completa; falta ratificar el criterio de desempate.'
+- 'M5/Comité: cancelación parcial y payloads de SubpedidoDespachado, PedidoCancelado y SubpedidoCancelado; impedir doble efecto de REST y evento.'
+- 'M4/M7: SC-M4-07, método de valoración del costo.'
+- 'M4/M5: SC-M4-08, Idempotency-Key.'
+- 'Comité: orden estricto de llegada solicitado por el cliente; el bloqueo garantiza atomicidad pero no FIFO. Seleccionar el mecanismo de cola u orden antes de afirmar cumplimiento.'
+- 'Núcleo/bodega: contrato de autorización previa y verificación de recepción física; no asumir que un ID suministrado acredita autorización o devolución.'
+- 'Actualizar PC2: ubicación opcional en RF-M4-006, CU-M4-06, interfaz PHP y OpenAPI; estados y nombres API; el retorno de la reserva incluye ubicación y vencimiento.'
 x-cambios-aplicados:
+- 'v1.2.0, alineación con el PC3 colectivo: ErrorEstandar (5.5), ERR-M4-001 a ERR-M4-019, ERR-001/002/003/005/006 para errores transversales, ERR-003 en 404 para recursos de otro comercio, tabla x-codigos-error, eventos del catálogo 4.3 con v1.0.0 (PedidoDespachado queda como alias de SubpedidoDespachado) y rutas completas /api/mX/v1 en las dependencias.'
 - 'Validación de M1: interfaz PHP de las cuatro consultas de disponibilidad (x-interfaz-php); formato de error sin marca de supuesto,
   sin id_solicitud y con códigos del núcleo (ERR-001, ERR-002, ERR-003, ERR-005); consultarStockDisponible responde 200
   agotado en lugar de 404; ruta base /api/m4/v1.'
