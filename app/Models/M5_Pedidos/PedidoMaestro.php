@@ -1,63 +1,103 @@
 <?php
+
 namespace App\Models\M5_Pedidos;
+
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
-class Subpedido extends Model
+class PedidoMaestro extends Model
 {
-    protected $table = 'pedidos_subpedidos';
-    protected $primaryKey = 'id_subpedido';
-    protected $fillable = ['id_pedido', 'id_comercio', 'subtotal', 'costo_envio', 'impuesto', 'estado_subpedido'];
+    protected $table = 'pedidos_maestros';
 
-    // Aplicación del Patrón Composite: Nodo intermedio
-    public function calcularSubtotal(): float
+    protected $primaryKey = 'id_pedido';
+
+    protected $fillable = [
+        'id_cliente',
+        'fecha_creacion',
+        'monto_total',
+        'estado_pedido',
+        'cupon_descuento',
+        'tarjeta_regalo',
+    ];
+
+    protected $casts = [
+        'id_cliente' => 'integer',
+        'fecha_creacion' => 'datetime',
+        'monto_total' => 'decimal:2',
+    ];
+
+    // Aplicación del Patrón Composite: Raíz Composite
+    public function calcularTotal(): float
     {
-        $subtotalLineas = 0;
-        $totalImpuestos = 0;
-        
-        foreach ($this->lineas as $linea) {
-            $subtotalLineas += $linea->calcularSubtotalLinea(); //[cite: 27]
-            $totalImpuestos += $linea->obtenerMontoImpuesto(); //[cite: 27]
+        $total = 0.0;
+        foreach ($this->subpedidos as $subpedido) {
+            $total += $subpedido->calcularSubtotal();
         }
-        
-        $this->subtotal = $subtotalLineas;
-        $this->impuesto = $totalImpuestos;
-        $this->save(); //[cite: 14]
-        
-        return $this->subtotal + $this->impuesto + $this->costo_envio; 
+        $this->monto_total = $total;
+        $this->save();
+
+        return (float) $this->monto_total;
     }
 
-    public function cambiarEstado(string $nuevoEstado): void
+    public function calcularMontoTotal(): float
     {
-        $this->estado_subpedido = $nuevoEstado;
-        $this->save(); //[cite: 14]
+        return $this->calcularTotal();
     }
 
-    public function cancelar(string $motivo): void
+    public function agregarSubpedido(Subpedido $subpedido): void
     {
-        $this->estado_subpedido = 'cancelado';
-        $this->save(); //[cite: 14]
+        $subpedido->id_pedido = $this->id_pedido;
+        $subpedido->save();
     }
 
-    public function crearSubpedidos(array $comerciosInvolucrados): array
+    public function crearPedidoMaestro(
+        float $montoTotal,
+        int $idCliente = 1,
+        ?string $cupon = null,
+        ?string $tarjetaRegalo = null
+    ): int {
+        $this->id_cliente = $idCliente;
+        $this->fecha_creacion = now();
+        $this->monto_total = $montoTotal;
+        $this->estado_pedido = 'confirmado';
+        $this->cupon_descuento = $cupon;
+        $this->tarjeta_regalo = $tarjetaRegalo;
+        $this->save();
+
+        return (int) $this->id_pedido;
+    }
+
+    public function actualizarEstado(string $nuevoEstado): void
     {
-        $creados = [];
-        foreach ($comerciosInvolucrados as $comercioId) {
-            $creados[] = self::create([
-                'id_pedido' => $this->id_pedido,
-                'id_comercio' => $comercioId,
-                'estado_subpedido' => 'pendiente'
-            ]); //[cite: 14]
+        $this->estado_pedido = $nuevoEstado;
+        $this->save();
+    }
+
+    public function cancelar(string $motivo = ''): void
+    {
+        $this->estado_pedido = 'cancelado';
+        $this->save();
+
+        foreach ($this->subpedidos as $subpedido) {
+            $subpedido->cancelar($motivo);
         }
-        return $creados;
     }
 
-    public function pedidoMaestro()
+    public function subpedidos(): HasMany
     {
-        return $this->belongsTo(PedidoMaestro::class, 'id_pedido'); //[cite: 13]
+        return $this->hasMany(Subpedido::class, 'id_pedido');
     }
 
-    public function lineas()
+    public function lineas(): HasManyThrough
     {
-        return $this->hasMany(PedidoLinea::class, 'id_subpedido'); //[cite: 13]
+        return $this->hasManyThrough(
+            PedidoLinea::class,
+            Subpedido::class,
+            'id_pedido',
+            'id_subpedido',
+            'id_pedido',
+            'id_subpedido'
+        );
     }
 }

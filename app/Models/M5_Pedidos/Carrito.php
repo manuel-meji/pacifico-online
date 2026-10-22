@@ -1,42 +1,61 @@
 <?php
+
 namespace App\Models\M5_Pedidos;
+
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class Carrito extends Model
 {
     protected $table = 'pedidos_carritos';
+
     protected $primaryKey = 'id_carrito';
-    protected $fillable = ['id_cliente', 'monto_estimado'];
+
+    protected $fillable = ['id_cliente'];
+
+    protected $casts = [
+        'id_cliente' => 'integer',
+    ];
 
     public function obtenerOCrearCarrito(int $clienteId): self
     {
         return self::firstOrCreate(
-            ['id_cliente' => $clienteId],
-            ['monto_estimado' => 0.00]
-        ); //[cite: 12]
+            ['id_cliente' => $clienteId]
+        );
     }
 
-    public function recalcularTotales(): void
+    public function recalcularTotales(float $montoCalculado = 0.00): void
     {
-        // Se asume que el monto estimado es la suma de cantidades por precio (manejado en conjunto con M3)
-        $this->monto_estimado = $this->items()->sum('cantidad'); 
-        $this->save(); //[cite: 12]
+        $monto = $montoCalculado > 0.00 ? $montoCalculado : (float) $this->items()->sum('cantidad');
+
+        if (Schema::hasColumn('pedidos_carritos', 'monto_estimado')) {
+            $this->monto_estimado = $monto;
+            $this->save();
+        } else {
+            $this->setAttribute('monto_estimado', $monto);
+        }
     }
 
     public function vaciar(): void
     {
-        $this->items()->delete(); //[cite: 12]
-        $this->monto_estimado = 0.00;
-        $this->save();
+        $this->items()->delete();
+
+        if (Schema::hasColumn('pedidos_carritos', 'monto_estimado')) {
+            $this->monto_estimado = 0.00;
+            $this->save();
+        } else {
+            $this->setAttribute('monto_estimado', 0.00);
+        }
     }
 
     public function actualizarTotales(): void
     {
-        $this->recalcularTotales(); //[cite: 12]
+        $this->recalcularTotales();
     }
 
-    public function items()
+    public function items(): HasMany
     {
-        return $this->hasMany(ItemCarrito::class, 'id_carrito'); //[cite: 12]
+        return $this->hasMany(ItemCarrito::class, 'id_carrito');
     }
 }
