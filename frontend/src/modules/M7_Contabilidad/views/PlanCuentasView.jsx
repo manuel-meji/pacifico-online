@@ -370,9 +370,106 @@ export default function PlanCuentasView({ onNavegar }) {
             </div>
           </div>
 
-          {/* Tabla */}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-left text-sm">
+
+          {/* Vista móvil: cuentas como tarjetas */}
+          <div className="space-y-3 p-3 md:hidden">
+            {cuentasVisibles.map((cuenta) => (
+              <article
+                key={cuenta.codigo}
+                className="rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Código
+                    </p>
+                    <p className="break-words font-bold text-[#1e3a8a]">
+                      {cuenta.codigo}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                      cuenta.estado === 'Activa'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {cuenta.estado}
+                  </span>
+                </div>
+
+                <h3 className="mt-3 break-words font-semibold text-gray-900">
+                  {cuenta.nivel > 1 && (
+                    <span className="mr-1 text-gray-400">↳</span>
+                  )}
+                  {cuenta.nombre}
+                </h3>
+
+                <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-gray-100 pt-3 text-sm">
+                  <div>
+                    <dt className="text-gray-500">Tipo</dt>
+                    <dd className="break-words font-medium text-gray-800">
+                      {cuenta.tipo}
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt className="text-gray-500">Naturaleza</dt>
+                    <dd>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                          cuenta.naturaleza === 'Deudora'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-lime-100 text-lime-800'
+                        }`}
+                      >
+                        {cuenta.naturaleza}
+                      </span>
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt className="text-gray-500">Cuenta padre</dt>
+                    <dd className="break-words font-medium text-gray-800">
+                      {cuenta.cuentaPadre ?? '—'}
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt className="text-gray-500">Nivel</dt>
+                    <dd className="font-medium text-gray-800">
+                      {cuenta.nivel}
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt className="text-gray-500">Permite movimientos</dt>
+                    <dd className="font-medium text-gray-800">
+                      {cuenta.permiteMovimientos ? 'Sí' : 'No'}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+
+            {cuentasVisibles.length === 0 && (
+              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+                No hay cuentas que coincidan con los filtros.
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="mt-3 block w-full font-semibold text-[#1e3a8a] underline"
+                >
+                  Limpiar búsqueda y filtros
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Vista de escritorio: tabla original */}
+          <div className="hidden md:block">
+            <table className="w-full text-left text-sm">
               <thead className="bg-[#1e3a8a] text-white">
                 <tr>
                   <th scope="col" className="px-4 py-4 font-semibold">Código</th>
@@ -388,10 +485,7 @@ export default function PlanCuentasView({ onNavegar }) {
 
               <tbody className="divide-y divide-gray-100">
                 {cuentasVisibles.map((cuenta) => (
-                  <tr
-                    key={cuenta.codigo}
-                    className="transition hover:bg-blue-50"
-                  >
+                  <tr key={cuenta.codigo} className="transition hover:bg-blue-50">
                     <td className="whitespace-nowrap px-4 py-4 font-semibold text-[#1e3a8a]">
                       {cuenta.codigo}
                     </td>
@@ -418,9 +512,7 @@ export default function PlanCuentasView({ onNavegar }) {
                     <td className="whitespace-nowrap px-4 py-4 text-gray-600">
                       {cuenta.cuentaPadre ?? '—'}
                     </td>
-                    <td className="px-4 py-4 text-gray-600">
-                      {cuenta.nivel}
-                    </td>
+                    <td className="px-4 py-4 text-gray-600">{cuenta.nivel}</td>
                     <td className="px-4 py-4">
                       {cuenta.permiteMovimientos ? 'Sí' : 'No'}
                     </td>
@@ -440,10 +532,7 @@ export default function PlanCuentasView({ onNavegar }) {
 
                 {cuentasVisibles.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={8}
-                      className="px-5 py-12 text-center text-gray-500"
-                    >
+                    <td colSpan={8} className="px-5 py-12 text-center text-gray-500">
                       No hay cuentas que coincidan con los filtros.
                       <div className="mt-3">
                         <button
@@ -460,6 +549,7 @@ export default function PlanCuentasView({ onNavegar }) {
               </tbody>
             </table>
           </div>
+
 
           {/* Navegación entre páginas */}
           <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">

@@ -429,8 +429,106 @@ export default function CentrosCostoView({ onNavegar }) {
             </label>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] text-left text-sm">
+
+          {/* Vista móvil: tarjetas de centros de costo */}
+          <div className="space-y-3 p-3 md:hidden">
+            {centrosVisibles.map((centro) => {
+              const porcentaje = porcentajeEjecucion(centro);
+              const excedido = porcentaje > 100;
+
+              return (
+                <article
+                  key={centro.id}
+                  className="rounded-lg border border-gray-200 bg-white p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Código
+                      </p>
+                      <p className="break-words font-bold text-[#1e3a8a]">
+                        {centro.codigo}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                        centro.estado === 'Activo'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {centro.estado}
+                    </span>
+                  </div>
+
+                  <h3 className="mt-3 break-words font-semibold text-gray-900">
+                    {centro.nombre}
+                  </h3>
+
+                  <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-gray-100 pt-3 text-sm">
+                    <div>
+                      <dt className="text-gray-500">Tipo</dt>
+                      <dd className="break-words font-medium text-gray-800">
+                        {centro.tipo}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-gray-500">Responsable</dt>
+                      <dd className="break-words font-medium text-gray-800">
+                        {centro.responsable}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-gray-500">Presupuesto</dt>
+                      <dd className="break-words font-medium text-gray-800">
+                        {formatoMoneda(centro.presupuesto)}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-gray-500">Costo acumulado</dt>
+                      <dd className="break-words font-semibold text-gray-900">
+                        {formatoMoneda(centro.costo)}
+                      </dd>
+                    </div>
+
+                    <div className="col-span-2">
+                      <dt className="text-gray-500">Ejecución presupuestaria</dt>
+                      <dd
+                        className={`font-semibold ${
+                          excedido ? 'text-red-700' : 'text-gray-700'
+                        }`}
+                      >
+                        {porcentaje.toLocaleString('es-CR', {
+                          maximumFractionDigits: 1,
+                        })}%
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })}
+
+            {centrosVisibles.length === 0 && (
+              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+                No hay centros que coincidan con los filtros.
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="mt-3 block w-full font-semibold text-[#1e3a8a] underline"
+                >
+                  Limpiar búsqueda y filtros
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Vista de escritorio: tabla original */}
+          <div className="hidden md:block">
+            <table className="w-full text-left text-sm">
               <thead className="bg-[#1e3a8a] text-white">
                 <tr>
                   <th scope="col" className="px-4 py-4 font-semibold">Código</th>
@@ -457,31 +555,31 @@ export default function CentrosCostoView({ onNavegar }) {
                       <td className="px-4 py-4 font-medium text-gray-800">
                         {centro.nombre}
                       </td>
-                      <td className="px-4 py-4 text-gray-600">
-                        {centro.tipo}
-                      </td>
-                      <td className="px-4 py-4 text-gray-600">
-                        {centro.responsable}
-                      </td>
+                      <td className="px-4 py-4 text-gray-600">{centro.tipo}</td>
+                      <td className="px-4 py-4 text-gray-600">{centro.responsable}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-right">
                         {formatoMoneda(centro.presupuesto)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 text-right font-medium">
                         {formatoMoneda(centro.costo)}
                       </td>
-                      <td className={`whitespace-nowrap px-4 py-4 text-right font-semibold ${
-                        excedido ? 'text-red-700' : 'text-gray-700'
-                      }`}>
+                      <td
+                        className={`whitespace-nowrap px-4 py-4 text-right font-semibold ${
+                          excedido ? 'text-red-700' : 'text-gray-700'
+                        }`}
+                      >
                         {porcentaje.toLocaleString('es-CR', {
                           maximumFractionDigits: 1,
                         })}%
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          centro.estado === 'Activo'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}>
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                            centro.estado === 'Activo'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
                           {centro.estado}
                         </span>
                       </td>
@@ -508,6 +606,7 @@ export default function CentrosCostoView({ onNavegar }) {
               </tbody>
             </table>
           </div>
+
 
           <div className="flex flex-col justify-between gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center">
             <p className="text-sm text-gray-500">

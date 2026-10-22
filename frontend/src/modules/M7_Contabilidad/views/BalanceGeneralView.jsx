@@ -249,8 +249,70 @@ export default function BalanceGeneralView({ onNavegar }) {
             </p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
+
+          {/* Vista móvil: cada cuenta se muestra como una tarjeta */}
+          <div className="space-y-3 p-3 md:hidden">
+            {cuentasFiltradas.map((cuenta) => (
+              <article
+                key={cuenta.codigo}
+                className="rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Código
+                    </p>
+                    <p className="break-words font-bold text-[#1e3a8a]">
+                      {cuenta.codigo}
+                    </p>
+                  </div>
+
+                </div>
+
+                <h3 className="break-words font-semibold text-gray-900">
+                  {cuenta.nombre}
+                </h3>
+
+                <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-sm">
+                  <div>
+                    <dt className="text-gray-500">Tipo</dt>
+                    <dd className="break-words font-medium text-gray-800">
+                      {cuenta.tipo}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">Grupo</dt>
+                    <dd className="break-words font-medium text-gray-800">
+                      {cuenta.grupo}
+                    </dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-gray-500">Saldo</dt>
+                    <dd className="font-semibold text-gray-900">
+                      {formatoMoneda(cuenta.saldo)}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+
+            {cuentasFiltradas.length === 0 && (
+              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+                No hay cuentas que coincidan con los filtros.
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="mt-3 block w-full font-semibold text-[#1e3a8a] underline"
+                >
+                  Limpiar búsqueda y filtros
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Vista de escritorio: se conserva la tabla */}
+          <div className="hidden md:block">
+            <table className="w-full text-left text-sm">
               <thead className="bg-[#1e3a8a] text-white">
                 <tr>
                   <th scope="col" className="px-4 py-4 font-semibold">Código</th>

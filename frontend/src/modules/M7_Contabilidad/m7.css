@@ -538,3 +538,55 @@
     padding: 0 5px;
   }
 }
+
+/* Últimos asientos: tarjetas en móviles */
+.m7-journal-mobile {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .m7-journal-mobile {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .m7-journal-desktop {
+    display: none;
+  }
+
+  .m7-journal-entry {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--m7-border);
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .m7-journal-entry-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .m7-journal-entry p {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    margin: 10px 0 0;
+    font-size: 13px;
+  }
+
+  .m7-journal-entry p span {
+    color: #6d7d91;
+    font-size: 12px;
+  }
+
+  .m7-journal-entry p strong {
+    overflow-wrap: anywhere;
+    color: #26364a;
+    font-weight: 500;
+  }
+}

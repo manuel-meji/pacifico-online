@@ -13,7 +13,7 @@ export default function TableroEjecutivoView({ onNavegar }) {
     <EncabezadoM7
   seccionActiva="Tablero ejecutivo"
   onNavegar={onNavegar}
-/>           
+/>
       <main id="contenido" className="m7-main">
         <div className="m7-page-heading">
           <div>
@@ -34,7 +34,7 @@ export default function TableroEjecutivoView({ onNavegar }) {
           <span className="m7-demo-dot" />
           Prototipo de demostración: los datos mostrados son de ejemplo.
         </div>
-        
+
 <section className="m7-indicators" aria-label="Indicadores financieros">
   {indicadores.map((indicador) => (
     <TarjetaIndicador
@@ -133,7 +133,38 @@ export default function TableroEjecutivoView({ onNavegar }) {
             <span className="m7-tag">Vista demostrativa</span>
           </div>
 
-          <div className="m7-table-wrap">
+
+          {/* Vista móvil: últimos asientos como tarjetas */}
+          <div className="m7-journal-mobile">
+            {asientos.map((asiento) => (
+              <article className="m7-journal-entry" key={asiento.numero}>
+                <div className="m7-journal-entry-heading">
+                  <strong className="m7-entry-number">
+                    {asiento.numero}
+                  </strong>
+                  <span className="m7-status-badge">
+                    {asiento.estado}
+                  </span>
+                </div>
+
+                <p>
+                  <span>Fecha</span>
+                  <strong>{asiento.fecha}</strong>
+                </p>
+                <p>
+                  <span>Descripción</span>
+                  <strong>{asiento.descripcion}</strong>
+                </p>
+                <p>
+                  <span>Tipo</span>
+                  <strong>{asiento.tipo}</strong>
+                </p>
+              </article>
+            ))}
+          </div>
+
+          {/* Vista de escritorio: tabla original */}
+          <div className="m7-table-wrap m7-journal-desktop">
             <table>
               <thead>
                 <tr>
@@ -161,6 +192,7 @@ export default function TableroEjecutivoView({ onNavegar }) {
               </tbody>
             </table>
           </div>
+
         </section>
 
         <footer className="m7-footer">

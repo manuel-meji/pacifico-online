@@ -344,8 +344,107 @@ export default function LibroDiarioView({ onNavegar }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[950px] text-left text-sm">
+
+          {/* Vista móvil: tarjetas de asientos contables */}
+          <div className="space-y-3 p-3 md:hidden">
+            {asientosVisibles.map((asiento) => {
+              const totalDebe = asiento.lineas.reduce(
+                (total, linea) => total + linea.debe,
+                0
+              );
+              const totalHaber = asiento.lineas.reduce(
+                (total, linea) => total + linea.haber,
+                0
+              );
+
+              return (
+                <article
+                  key={asiento.numero}
+                  className="rounded-lg border border-gray-200 bg-white p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Asiento
+                      </p>
+                      <p className="break-words font-bold text-[#1e3a8a]">
+                        {asiento.numero}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                        asiento.estado === 'Registrado'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {asiento.estado}
+                    </span>
+                  </div>
+
+                  <p className="mt-3 break-words font-semibold text-gray-900">
+                    {asiento.descripcion}
+                  </p>
+                  <p className="mt-1 break-words text-xs text-gray-500">
+                    Referencia: {asiento.referencia}
+                  </p>
+
+                  <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-gray-100 pt-3 text-sm">
+                    <div>
+                      <dt className="text-gray-500">Fecha</dt>
+                      <dd className="break-words font-medium text-gray-800">
+                        {formatoFecha(asiento.fecha)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Tipo</dt>
+                      <dd className="break-words font-medium text-gray-800">
+                        {asiento.tipo}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Total debe</dt>
+                      <dd className="break-words font-semibold text-gray-900">
+                        {formatoMoneda(totalDebe)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Total haber</dt>
+                      <dd className="break-words font-semibold text-gray-900">
+                        {formatoMoneda(totalHaber)}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <button
+                    type="button"
+                    onClick={() => setAsientoSeleccionado(asiento)}
+                    className="mt-4 w-full rounded-lg border border-[#1e3a8a] px-4 py-2.5 text-sm font-semibold text-[#1e3a8a] transition hover:bg-blue-50"
+                  >
+                    Ver detalle
+                  </button>
+                </article>
+              );
+            })}
+
+            {asientosVisibles.length === 0 && (
+              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+                No hay asientos que coincidan con los filtros.
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="mt-3 block w-full font-semibold text-[#1e3a8a] underline"
+                >
+                  Limpiar búsqueda y filtros
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Vista de escritorio: tabla original */}
+          <div className="hidden md:block">
+            <table className="w-full text-left text-sm">
               <thead className="bg-[#1e3a8a] text-white">
                 <tr>
                   <th scope="col" className="px-4 py-4 font-semibold">Número</th>
@@ -541,7 +640,72 @@ export default function LibroDiarioView({ onNavegar }) {
               </div>
             </div>
 
-            <div className="overflow-x-auto px-5 pb-5">
+
+            {/* Detalle móvil: una tarjeta por línea contable */}
+            <div className="space-y-3 px-5 pb-5 md:hidden">
+              {asientoSeleccionado.lineas.map((linea, indice) => (
+                <article
+                  key={`${linea.codigo}-${indice}`}
+                  className="rounded-lg border border-gray-200 p-3"
+                >
+                  <p className="text-xs text-gray-500">Código</p>
+                  <p className="font-semibold text-[#1e3a8a]">
+                    {linea.codigo}
+                  </p>
+
+                  <p className="mt-2 text-xs text-gray-500">Cuenta contable</p>
+                  <p className="break-words font-medium text-gray-900">
+                    {linea.cuenta}
+                  </p>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Debe</p>
+                      <p className="break-words font-medium">
+                        {linea.debe ? formatoMoneda(linea.debe) : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Haber</p>
+                      <p className="break-words font-medium">
+                        {linea.haber ? formatoMoneda(linea.haber) : '—'}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+
+              <div className="rounded-lg bg-gray-50 p-4">
+                <h3 className="mb-3 font-bold text-gray-900">Totales</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">Total debe</p>
+                    <p className="break-words font-bold text-gray-900">
+                      {formatoMoneda(
+                        asientoSeleccionado.lineas.reduce(
+                          (total, linea) => total + linea.debe,
+                          0
+                        )
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Total haber</p>
+                    <p className="break-words font-bold text-gray-900">
+                      {formatoMoneda(
+                        asientoSeleccionado.lineas.reduce(
+                          (total, linea) => total + linea.haber,
+                          0
+                        )
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabla original para escritorio */}
+            <div className="hidden overflow-x-auto px-5 pb-5 md:block">
               <table className="w-full min-w-[550px] text-left text-sm">
                 <thead className="bg-[#1e3a8a] text-white">
                   <tr>
@@ -572,12 +736,18 @@ export default function LibroDiarioView({ onNavegar }) {
                     <td colSpan={2} className="px-4 py-3">Totales</td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       {formatoMoneda(
-                        asientoSeleccionado.lineas.reduce((total, linea) => total + linea.debe, 0)
+                        asientoSeleccionado.lineas.reduce(
+                          (total, linea) => total + linea.debe,
+                          0
+                        )
                       )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       {formatoMoneda(
-                        asientoSeleccionado.lineas.reduce((total, linea) => total + linea.haber, 0)
+                        asientoSeleccionado.lineas.reduce(
+                          (total, linea) => total + linea.haber,
+                          0
+                        )
                       )}
                     </td>
                   </tr>

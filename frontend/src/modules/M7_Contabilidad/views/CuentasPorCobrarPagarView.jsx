@@ -411,8 +411,96 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
             </label>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-left text-sm">
+          {/* Vista móvil: tarjetas de documentos */}
+          <div className="space-y-3 p-3 md:hidden">
+            {documentosVisibles.map((documento) => {
+              const vencido = estaVencido(documento);
+              const pendiente = saldoPendiente(documento);
+
+              return (
+                <article
+                  key={documento.id}
+                  className="rounded-lg border border-gray-200 bg-white p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Referencia
+                      </p>
+                      <p className="break-words font-bold text-[#1e3a8a]">
+                        {documento.referencia}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                        documento.estado === 'Pagado'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {documento.estado}
+                    </span>
+                  </div>
+
+                  <h3 className="mt-3 break-words font-semibold text-gray-900">
+                    {documento.tercero}
+                  </h3>
+
+                  <p className="mt-1 text-sm text-gray-600">
+                    Tipo: {documento.tipo}
+                  </p>
+
+                  <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-gray-100 pt-3 text-sm">
+                    <div>
+                      <dt className="text-gray-500">Emisión</dt>
+                      <dd className="break-words font-medium text-gray-800">
+                        {formatoFecha(documento.fechaEmision)}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-gray-500">Vencimiento</dt>
+                      <dd className={`break-words font-medium ${
+                        vencido ? 'text-red-700' : 'text-gray-800'
+                      }`}>
+                        {formatoFecha(documento.fechaVencimiento)}
+                      </dd>
+                      {vencido && (
+                        <span className="mt-1 block text-xs font-semibold text-red-700">
+                          Vencido
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <dt className="text-gray-500">Monto</dt>
+                      <dd className="break-words font-medium text-gray-800">
+                        {formatoMoneda(documento.monto)}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-gray-500">Pendiente</dt>
+                      <dd className="break-words font-semibold text-gray-900">
+                        {formatoMoneda(pendiente)}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })}
+
+            {documentosVisibles.length === 0 && (
+              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+                No hay documentos que coincidan con los filtros.
+              </div>
+            )}
+          </div>
+
+          {/* Vista de escritorio: tabla original */}
+          <div className="hidden md:block">
+            <table className="w-full text-left text-sm">
               <thead className="bg-[#1e3a8a] text-white">
                 <tr>
                   <th scope="col" className="px-4 py-4 font-semibold">Referencia</th>
@@ -439,9 +527,7 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
                       <td className="px-4 py-4 font-medium text-gray-800">
                         {documento.tercero}
                       </td>
-                      <td className="px-4 py-4 text-gray-600">
-                        {documento.tipo}
-                      </td>
+                      <td className="px-4 py-4 text-gray-600">{documento.tipo}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-gray-600">
                         {formatoFecha(documento.fechaEmision)}
                       </td>

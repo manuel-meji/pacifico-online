@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import logo from '../../M1_Portal/assets/logo-pacificos.png';
-import Icono from '../../M1_Portal/components/IconoComercio';
+import logo from '../assets/logo-pacificos.png';
+import IconoM7 from './IconoM7';
 
 const secciones = [
   'Tablero ejecutivo',
@@ -67,11 +67,11 @@ export default function EncabezadoM7({
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4">
             <span className="flex items-center gap-1.5">
-              <Icono nombre="ubicacion" className="h-4 w-4 text-[#a3be4d]" />
+              <IconoM7 nombre="ubicacion" className="h-4 w-4 text-[#a3be4d]" />
               Envíos rápidos a todo Costa Rica
             </span>
             <span className="flex items-center gap-1.5">
-              <Icono nombre="telefono" className="h-4 w-4 text-[#a3be4d]" />
+              <IconoM7 nombre="telefono" className="h-4 w-4 text-[#a3be4d]" />
               Soporte y Ventas: +506 2000-0000
             </span>
           </div>
@@ -127,7 +127,7 @@ export default function EncabezadoM7({
               className="absolute right-1 rounded-full bg-[#1e3a8a] p-2 text-white transition hover:bg-[#3b82f6]"
               aria-label="Buscar"
             >
-              <Icono nombre="buscar" className="h-4 w-4" />
+              <IconoM7 nombre="buscar" className="h-4 w-4" />
             </button>
           </form>
           {mensajeBusqueda && (
@@ -143,7 +143,7 @@ export default function EncabezadoM7({
             href="/m7.html"
             className="ml-auto flex shrink-0 items-center gap-2 text-sm font-medium text-gray-700 transition hover:text-[#3b82f6]"
           >
-            <Icono nombre="usuario" className="h-5 w-5" />
+            <IconoM7 nombre="usuario" className="h-5 w-5" />
             <span>Inicio</span>
           </a>
         </div>
@@ -155,7 +155,7 @@ export default function EncabezadoM7({
         className="border-t border-blue-900 bg-[#1e3a8a] text-sm font-medium text-white"
         aria-label="Secciones contables"
       >
-        <div className="mx-auto flex max-w-7xl gap-5 overflow-x-auto px-4">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-2 px-3 py-2 sm:flex sm:flex-wrap sm:gap-5 sm:px-4">
           {secciones.map((seccion) => {
             const activa = seccion === seccionActiva;
             const disponible = [
@@ -180,7 +180,7 @@ export default function EncabezadoM7({
                 }}
                 disabled={!disponible}
                 aria-current={activa ? 'page' : undefined}
-                className={`flex shrink-0 items-center whitespace-nowrap border-b-[3px] px-1 py-3 transition ${activa
+                className={`flex min-w-0 items-center justify-center break-words border-b-[3px] px-2 py-3 text-center transition ${activa
                   ? 'border-[#a3be4d] text-[#a3be4d]'
                   : disponible
                     ? 'border-transparent text-white hover:text-[#a3be4d]'

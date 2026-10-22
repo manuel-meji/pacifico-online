@@ -362,8 +362,77 @@ export default function LibroMayorView({ onNavegar }) {
             </p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
+
+          {/* Vista móvil: movimientos como tarjetas */}
+          <div className="space-y-3 p-3 md:hidden">
+            {movimientosCuenta.map((movimiento) => (
+              <article
+                key={movimiento.id}
+                className="rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Asiento
+                    </p>
+                    <p className="break-words font-bold text-[#1e3a8a]">
+                      {movimiento.asiento}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                      movimiento.estado === 'Registrado'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {movimiento.estado}
+                  </span>
+                </div>
+
+                <p className="mt-3 text-sm text-gray-500">Descripción</p>
+                <p className="break-words font-medium text-gray-900">
+                  {movimiento.descripcion}
+                </p>
+
+                <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-gray-100 pt-3 text-sm">
+                  <div>
+                    <dt className="text-gray-500">Fecha</dt>
+                    <dd className="break-words font-medium text-gray-800">
+                      {formatoFecha(movimiento.fecha)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">Debe</dt>
+                    <dd className="break-words font-semibold text-gray-900">
+                      {movimiento.debe
+                        ? formatoMoneda(movimiento.debe)
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-gray-500">Haber</dt>
+                    <dd className="break-words font-semibold text-gray-900">
+                      {movimiento.haber
+                        ? formatoMoneda(movimiento.haber)
+                        : '—'}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+
+            {movimientosCuenta.length === 0 && (
+              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+                No hay movimientos que coincidan con la cuenta y los filtros.
+              </div>
+            )}
+          </div>
+
+          {/* Vista de escritorio: tabla original */}
+          <div className="hidden md:block">
+            <table className="w-full text-left text-sm">
               <thead className="bg-[#1e3a8a] text-white">
                 <tr>
                   <th scope="col" className="px-4 py-4 font-semibold">Fecha</th>
@@ -417,6 +486,7 @@ export default function LibroMayorView({ onNavegar }) {
               </tbody>
             </table>
           </div>
+
 
           <div className="border-t border-gray-200 px-5 py-4 text-sm text-gray-500">
             Saldo calculado a partir de los movimientos visibles del período.
