@@ -9,6 +9,7 @@
     "build:single": "vite build --mode single --outDir dist-single"
   },
   "dependencies": {
+    "lucide-react": "^1.61.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

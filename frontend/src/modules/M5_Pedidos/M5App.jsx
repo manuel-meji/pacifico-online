@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { carritoInicial, comercios } from './services/datosMock';
 import { agruparPorComercio, totalGeneral } from './services/calculos';
-import CarritoView from './views/CarritoView';
-import CheckoutView from './views/CheckoutView';
-import PedidoPendienteView from './views/PedidoPendienteView';
+import CarritoPage from './views/CarritoView';
+import CheckoutPage from './views/CheckoutView';
+import PedidoPendientePage from './views/PedidoPendienteView';
 
 // Punto de entrada del módulo M5. `simular` fuerza las alternativas del CU-004 durante la validación:
 //   'stock'    → M4 no puede reservar (alternativa al paso 4, 409 STOCK_INSUFICIENTE)
@@ -32,13 +32,13 @@ export default function M5App({ simular = null }) {
     if (simular === 'stock') {
       const agotado = items[0];
       setItems((xs) => xs.map((i) => (i === agotado ? { ...i, aviso: 'Este producto se agotó. Ajuste la cantidad o quítelo.' } : i)));
-      setAviso({ tipo: 'error', texto: `${agotado.nombre} se agotó mientras compraba. Ajuste las cantidades para continuar.` });
+      setAviso({ tipo: 'error', titulo: 'Stock insuficiente', texto: `${agotado.nombre} se agotó mientras compraba. Ajuste las cantidades para continuar.` });
       setPantalla('carrito');
       return;
     }
     if (simular === 'comercio' && !suspendidos.length) {
       setSuspendidos([2]);
-      setAviso({ tipo: 'aviso', texto: `${comercios[2].nombre} tiene su membresía suspendida. Quite sus productos para continuar con el resto de su compra.` });
+      setAviso({ tipo: 'aviso', titulo: 'Comercio suspendido', texto: `${comercios[2].nombre} tiene su membresía suspendida. Quite sus productos para continuar con el resto de su compra.` });
       setPantalla('carrito');
       return;
     }
@@ -48,13 +48,15 @@ export default function M5App({ simular = null }) {
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-slate-50 text-slate-900 overflow-x-hidden">
-      {pantalla === 'carrito' && (
-        <CarritoView items={items} comerciosSuspendidos={suspendidos} aviso={aviso}
-          onCantidad={cambiarCantidad} onQuitar={quitar} onContinuar={() => { setAviso(null); setPantalla('checkout'); }} />
-      )}
-      {pantalla === 'checkout' && <CheckoutView items={items} onVolver={() => setPantalla('carrito')} onConfirmar={confirmar} />}
-      {pantalla === 'pedido' && <PedidoPendienteView pedido={pedido} />}
+    <div className="min-h-screen bg-brandLightBg text-gray-800 font-sans antialiased flex flex-col">
+      <div className="flex-1 w-full">
+        {pantalla === 'carrito' && (
+          <CarritoPage items={items} comerciosSuspendidos={suspendidos} aviso={aviso}
+            onCantidad={cambiarCantidad} onQuitar={quitar} onContinuar={() => { setAviso(null); setPantalla('checkout'); }} />
+        )}
+        {pantalla === 'checkout' && <CheckoutPage items={items} onVolver={() => setPantalla('carrito')} onConfirmar={confirmar} />}
+        {pantalla === 'pedido' && <PedidoPendientePage pedido={pedido} />}
+      </div>
     </div>
   );
 }
