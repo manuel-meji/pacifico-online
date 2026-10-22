@@ -2,8 +2,6 @@
 
 namespace Tests\Doubles\M3_Catalogo;
 
-use App\Services\M1_Portal\Dobles\ErrorProveedorException;
-
 class InventarioNoDisponible extends InventarioStub
 {
     public function consultarExistencias(int $variacionId): int

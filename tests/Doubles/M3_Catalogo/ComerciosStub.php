@@ -3,11 +3,17 @@
 namespace Tests\Doubles\M3_Catalogo;
 
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
-use App\Services\M1_Portal\Dobles\ErrorProveedorException;
 
 class ComerciosStub implements ComerciosServiceInterface
 {
     private array $comercios = [
+        1 => [
+            'id_comercio' => 1,
+            'nombre_comercial' => 'Comercio de prueba M3',
+            'estado' => 'Activo',
+            'activo' => true,
+            'motivo_estado' => null,
+        ],
         34 => [
             'id_comercio' => 34,
             'nombre_comercial' => 'Tienda La Ceiba',
@@ -61,8 +67,8 @@ class ComerciosStub implements ComerciosServiceInterface
         }
 
         return [
-            'comercio_id' => $comercio['id_comercio'],
-            'nombre' => $comercio['nombre_comercial'],
+            'id_comercio' => $comercio['id_comercio'],
+            'nombre_comercial' => $comercio['nombre_comercial'],
             'descripcion' => 'Micrositio de prueba.',
             'estado' => $comercio['estado'],
         ];

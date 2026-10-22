@@ -3,22 +3,17 @@
 namespace Tests\Doubles\M3_Catalogo;
 
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
-use App\Services\M1_Portal\Dobles\ErrorProveedorException;
+use DateTimeImmutable;
 
 class InventarioStub implements InventarioServiceInterface
 {
     private array $existencias = [
-        15201 => 5,
-        15202 => 0,
-        15203 => 2,
-        15211 => 0,
-        15221 => 40,
-        15222 => 30,
-        15231 => 8,
-        15241 => 3,
-        15242 => 6,
-        15251 => 0,
-        15261 => 10,
+        101 => 5,
+        102 => 0,
+        103 => 2,
+        104 => 0,
+        105 => 40,
+        106 => 8,
     ];
 
     private array $reservas = [];
@@ -63,13 +58,17 @@ class InventarioStub implements InventarioServiceInterface
 
         $this->existencias[$variacionId] -= $cantidad;
 
+        $expiraEn = (new DateTimeImmutable())
+            ->modify('+15 minutes')
+            ->format(DATE_ATOM);
+
         $this->reservas[$reservaId] = [
             'reserva_id' => $reservaId,
             'variacion_id' => $variacionId,
             'cantidad' => $cantidad,
             'pedido_id' => $pedidoId,
             'estado' => 'RESERVADO',
-            'expira_en' => now()->addMinutes(15)->toIso8601String(),
+            'expira_en' => $expiraEn,
         ];
 
         return $this->reservas[$reservaId];
