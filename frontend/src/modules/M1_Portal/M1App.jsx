@@ -5,6 +5,7 @@ import CrearCuentaView from './views/CrearCuentaView';
 import FichaComercioView from './views/FichaComercioView';
 import IniciarSesionView from './views/IniciarSesionView';
 import InicioView from './views/InicioView';
+import FichaProductoView from './views/FichaProductoView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
 
@@ -15,14 +16,33 @@ const titulos = {
   crear: 'Pacíficos Online · M1 Crear cuenta',
 };
 
-// Punto de entrada del módulo M1 para el prototipo.
-// `pantalla` elige la pantalla inicial: 'comercio' (por defecto), 'ingresar' o 'crear'.
-// `simular` fuerza las respuestas alternativas durante la validación:
-//   Ficha de comercio (CU-009): 'suspendido', 'vacio' o 'sininventario'.
-//   'correo'       → POST /api/m1/v1/clientes responde 409 ERR-M1-001 (correo ya registrado, RN-M1-14)
-//   'credenciales' → el ingreso responde que el correo o la contraseña no son correctos
+
 export default function M1App({ pantalla: pantallaInicial = 'comercio', simular = null }) {
   const [pantalla, setPantalla] = useState(pantallaInicial);
+
+  function navegar(destino) {
+    if (destino === pantalla) return;
+
+    window.history.pushState(
+      { pantallaM1: destino },
+      '',
+      window.location.href
+    );
+
+    setPantalla(destino);
+  }
+
+  useEffect(() => {
+    function manejarHistorial(evento) {
+      setPantalla(evento.state?.pantallaM1 || pantallaInicial);
+    }
+
+    window.addEventListener('popstate', manejarHistorial);
+
+    return () => {
+      window.removeEventListener('popstate', manejarHistorial);
+    };
+  }, [pantallaInicial]);
 
   useEffect(() => {
     if (titulos[pantalla]) document.title = titulos[pantalla];
@@ -41,20 +61,47 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
     if (simular === 'credenciales') return { ok: false, ...credencialesIncorrectas };
     return { ok: true };
   }
-   if (pantalla === 'inicio') {
-  return <InicioView onIr={setPantalla} />;
+  
+  if (pantalla === 'inicio') {
+    return <InicioView onIr={navegar} />;
+  }
 
-}
+  if (pantalla === 'producto') {
+    return <FichaProductoView />;
+  }
+
+  if (pantalla === 'comercio') {
+    return (
+      <FichaComercioView
+        idComercio={7}
+        simular={simular}
+        onVerProducto={() => navegar('producto')}
+      />
+    );
+  }
 
   if (pantalla !== 'ingresar' && pantalla !== 'crear') {
     return <FichaComercioView idComercio={7} simular={simular} />;
   }
 
+  
   return (
     <div className="min-h-screen overflow-x-hidden bg-brandLightBg font-sans font-normal text-gray-800">
-      <Encabezado pantalla={pantalla} onIr={setPantalla} />
-      {pantalla === 'ingresar' && <IniciarSesionView onIngresar={ingresar} onIrCrear={() => setPantalla('crear')} />}
-      {pantalla === 'crear' && <CrearCuentaView onRegistrar={registrar} onIrIngresar={() => setPantalla('ingresar')} />}
+      <Encabezado pantalla={pantalla} onIr={navegar} />
+
+      {pantalla === 'ingresar' && (
+        <IniciarSesionView
+          onIngresar={ingresar}
+          onIrCrear={() => navegar('crear')}
+        />
+      )}
+
+      {pantalla === 'crear' && (
+        <CrearCuentaView
+          onRegistrar={registrar}
+          onIrIngresar={() => navegar('ingresar')}
+        />
+      )}
     </div>
   );
 }
