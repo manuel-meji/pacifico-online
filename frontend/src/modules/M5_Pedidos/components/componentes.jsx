@@ -1,21 +1,36 @@
 import {
   ArrowLeft, Check, CircleAlert, CircleCheck, CircleX, Info, Lock, Minus, Package, Plus, Store, Trash2, TriangleAlert,
 } from 'lucide-react';
-import { colones } from './calculos';
+import { colones } from '../services/calculos';
+import logoImg from '../../../assets/Logo.jpeg';
 
-// ---------- Encabezado con isotipo "P" (sistema de diseño) ----------
+// ---------- Encabezado con isotipo y responsive (sistema de diseño) ----------
 export function Encabezado({ titulo, paso, onVolver }) {
   return (
-    <header className="sticky top-0 z-10 bg-white shadow-xs border-b border-gray-100 px-4 py-3 flex items-center gap-3">
-      {onVolver && (
-        <button onClick={onVolver} aria-label="Volver al carrito"
-          className="h-11 w-11 -ml-2 shrink-0 rounded-full flex items-center justify-center text-brandDarkBlue hover:bg-gray-100 transition">
-          <ArrowLeft className="w-5 h-5" aria-hidden="true" />
-        </button>
-      )}
-      <div aria-hidden="true" className="w-9 h-9 shrink-0 rounded-full bg-brandGreen flex items-center justify-center font-extrabold text-white text-xl shadow-xs">P</div>
-      <h1 className="min-w-0 flex-1 truncate text-lg font-extrabold text-brandDarkBlue tracking-tight">{titulo}</h1>
-      {paso && <span className="shrink-0 text-xs font-medium text-gray-500">{paso}</span>}
+    <header className="sticky top-0 z-20 bg-white shadow-xs border-b border-gray-100">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {onVolver && (
+            <button onClick={onVolver} aria-label="Volver al carrito"
+              className="h-10 w-10 -ml-2 shrink-0 rounded-full flex items-center justify-center text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
+              <ArrowLeft className="w-5 h-5" aria-hidden="true" />
+            </button>
+          )}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <img src={logoImg} alt="Pacíficos Online" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shadow-xs border border-blue-100" />
+            <span className="hidden sm:inline-block font-extrabold text-brandDarkBlue tracking-tight text-lg">
+              Pacíficos <span className="text-brandBlue font-semibold">Online</span>
+            </span>
+          </div>
+          <div className="h-5 w-px bg-gray-200 hidden sm:block mx-1" aria-hidden="true"></div>
+          <h1 className="min-w-0 truncate text-base sm:text-lg font-bold text-gray-800 tracking-tight">{titulo}</h1>
+        </div>
+        {paso && (
+          <span className="shrink-0 text-xs sm:text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
+            {paso}
+          </span>
+        )}
+      </div>
     </header>
   );
 }
@@ -79,13 +94,13 @@ export function SelectorCantidad({ nombre, valor, min = 1, deshabilitado, onMeno
 export function FilaItem({ item, deshabilitado, onCantidad, onQuitar }) {
   const enMaximo = item.cantidad >= item.stock;
   return (
-    <li className={`py-3 border-b border-gray-100 last:border-0 ${deshabilitado ? 'opacity-50' : ''}`}>
-      <div className="flex gap-3">
-        <div aria-hidden="true" className="h-16 w-16 shrink-0 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center">
-          <Package className="w-8 h-8 stroke-1 text-gray-400" />
+    <li className={`py-3.5 border-b border-gray-100 last:border-0 ${deshabilitado ? 'opacity-50' : ''}`}>
+      <div className="flex items-start sm:items-center gap-3">
+        <div aria-hidden="true" className="h-16 w-16 sm:h-20 sm:w-20 shrink-0 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center">
+          <Package className="w-8 h-8 sm:w-9 sm:h-9 stroke-1 text-gray-400" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-gray-900 break-words">{item.nombre}</p>
+          <p className="text-sm sm:text-base font-bold text-gray-900 break-words">{item.nombre}</p>
           <p className="text-xs text-gray-500 font-normal break-words">{item.variacion}</p>
           <p className="text-xs text-gray-600 font-medium mt-0.5">{colones(item.precio_unitario)} c/u</p>
           {!deshabilitado && !enMaximo && (
@@ -94,9 +109,9 @@ export function FilaItem({ item, deshabilitado, onCantidad, onQuitar }) {
             </span>
           )}
         </div>
-        <p className="shrink-0 text-sm font-extrabold text-brandDarkBlue">{colones(item.precio_unitario * item.cantidad)}</p>
+        <p className="shrink-0 text-sm sm:text-base font-extrabold text-brandDarkBlue">{colones(item.precio_unitario * item.cantidad)}</p>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2">
+      <div className="mt-2.5 flex items-center justify-between sm:justify-end gap-3">
         <SelectorCantidad nombre={item.nombre} valor={item.cantidad} deshabilitado={deshabilitado}
           onMenos={() => onCantidad(item.id_item_carrito, item.cantidad - 1)} onMas={() => onCantidad(item.id_item_carrito, item.cantidad + 1)} />
         <Boton variante="peligro" icono={Trash2} onClick={() => onQuitar(item.id_item_carrito)}>Quitar</Boton>
@@ -114,9 +129,9 @@ export function FilaItem({ item, deshabilitado, onCantidad, onQuitar }) {
 // ---------- Línea compacta de ítem (resumen del checkout) ----------
 export function FilaResumen({ item }) {
   return (
-    <li className="flex items-center justify-between gap-2 text-xs">
+    <li className="flex items-center justify-between gap-2 text-xs sm:text-sm">
       <div className="flex items-center gap-2 min-w-0">
-        <span className="min-w-5 h-5 px-1 bg-gray-100 rounded flex items-center justify-center font-bold text-gray-700">{item.cantidad}x</span>
+        <span className="min-w-5 h-5 px-1 bg-gray-100 rounded flex items-center justify-center font-bold text-gray-700 text-xs">{item.cantidad}x</span>
         <span className="text-gray-800 font-medium break-words">{item.nombre}</span>
       </div>
       <span className="shrink-0 font-bold text-gray-900">{colones(item.precio_unitario * item.cantidad)}</span>
@@ -127,13 +142,13 @@ export function FilaResumen({ item }) {
 // ---------- Tarjeta de subpedido (un comercio) ----------
 export function TarjetaComercio({ grupo, numero, editable, suspendido, onCantidad, onQuitar }) {
   return (
-    <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-5">
+    <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
         <div className="flex items-center gap-2 min-w-0">
           <Store className="w-4 h-4 shrink-0 text-brandDarkBlue" aria-hidden="true" />
-          <h2 className="text-sm font-bold text-gray-900 truncate">{grupo.comercio.nombre}</h2>
+          <h2 className="text-sm sm:text-base font-bold text-gray-900 truncate">{grupo.comercio.nombre}</h2>
         </div>
-        <span className="shrink-0 text-xs font-semibold text-brandGreen bg-green-50 px-2 py-0.5 rounded border border-green-200">Subpedido {numero}</span>
+        <span className="shrink-0 text-xs font-semibold text-brandGreen bg-green-50 px-2.5 py-0.5 rounded border border-green-200">Subpedido {numero}</span>
       </div>
       {suspendido && (
         <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
@@ -146,12 +161,12 @@ export function TarjetaComercio({ grupo, numero, editable, suspendido, onCantida
         <ul className="py-3 space-y-3">{grupo.items.map((i) => <FilaResumen key={i.id_item_carrito} item={i} />)}</ul>
       )}
       <dl className="pt-3 border-t border-gray-100 space-y-2">
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-sm sm:text-base">
           <dt className="font-bold text-gray-800">Subtotal Subpedido:</dt>
-          <dd className="font-extrabold text-brandDarkBlue text-base">{colones(grupo.subtotal)}</dd>
+          <dd className="font-extrabold text-brandDarkBlue text-base sm:text-lg">{colones(grupo.subtotal)}</dd>
         </div>
-        <div className="flex justify-between text-xs text-gray-500"><dt>Impuestos:</dt><dd className="font-medium">{colones(grupo.impuesto)}</dd></div>
-        <div className="flex justify-between text-xs text-gray-500"><dt>Costo de Envío:</dt><dd className="font-medium">{colones(grupo.costo_envio)}</dd></div>
+        <div className="flex justify-between text-xs sm:text-sm text-gray-500"><dt>Impuestos:</dt><dd className="font-medium">{colones(grupo.impuesto)}</dd></div>
+        <div className="flex justify-between text-xs sm:text-sm text-gray-500"><dt>Costo de Envío:</dt><dd className="font-medium">{colones(grupo.costo_envio)}</dd></div>
       </dl>
     </section>
   );

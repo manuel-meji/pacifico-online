@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { carritoInicial, comercios } from './datosMock';
-import { agruparPorComercio, totalGeneral } from './calculos';
-import CarritoPage from './CarritoPage';
-import CheckoutPage from './CheckoutPage';
-import PedidoPendientePage from './PedidoPendientePage';
+import { carritoInicial, comercios } from './services/datosMock';
+import { agruparPorComercio, totalGeneral } from './services/calculos';
+import CarritoPage from './views/CarritoView';
+import CheckoutPage from './views/CheckoutView';
+import PedidoPendientePage from './views/PedidoPendienteView';
 
 // Punto de entrada del módulo M5. `simular` fuerza las alternativas del CU-004 durante la validación:
 //   'stock'    → M4 no puede reservar (alternativa al paso 4, 409 STOCK_INSUFICIENTE)
@@ -48,13 +48,15 @@ export default function M5App({ simular = null }) {
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-brandLightBg text-gray-800 font-sans antialiased overflow-x-hidden">
-      {pantalla === 'carrito' && (
-        <CarritoPage items={items} comerciosSuspendidos={suspendidos} aviso={aviso}
-          onCantidad={cambiarCantidad} onQuitar={quitar} onContinuar={() => { setAviso(null); setPantalla('checkout'); }} />
-      )}
-      {pantalla === 'checkout' && <CheckoutPage items={items} onVolver={() => setPantalla('carrito')} onConfirmar={confirmar} />}
-      {pantalla === 'pedido' && <PedidoPendientePage pedido={pedido} />}
+    <div className="min-h-screen bg-brandLightBg text-gray-800 font-sans antialiased flex flex-col">
+      <div className="flex-1 w-full">
+        {pantalla === 'carrito' && (
+          <CarritoPage items={items} comerciosSuspendidos={suspendidos} aviso={aviso}
+            onCantidad={cambiarCantidad} onQuitar={quitar} onContinuar={() => { setAviso(null); setPantalla('checkout'); }} />
+        )}
+        {pantalla === 'checkout' && <CheckoutPage items={items} onVolver={() => setPantalla('carrito')} onConfirmar={confirmar} />}
+        {pantalla === 'pedido' && <PedidoPendientePage pedido={pedido} />}
+      </div>
     </div>
   );
 }
