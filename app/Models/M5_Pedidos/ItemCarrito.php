@@ -10,17 +10,21 @@ class ItemCarrito extends Model
 
     public function crearItemCarrito(int $idCarrito, int $variacionId, int $cantidad): self
     {
-        // Lógica pendiente
+        return self::create([
+            'id_carrito' => $idCarrito,
+            'id_variacion' => $variacionId,
+            'cantidad' => $cantidad
+        ]); //[cite: 12]
     }
 
     public function actualizarCantidad(int $cant): void
     {
-        // Lógica pendiente
+        $this->cantidad = $cant;
+        $this->save(); //[cite: 12]
     }
 
-    // Relación: Pertenece a Carrito (1)
     public function carrito()
     {
-        return $this->belongsTo(Carrito::class, 'id_carrito');
+        return $this->belongsTo(Carrito::class, 'id_carrito'); //[cite: 12]
     }
 }

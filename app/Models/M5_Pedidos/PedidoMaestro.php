@@ -2,35 +2,62 @@
 namespace App\Models\M5_Pedidos;
 use Illuminate\Database\Eloquent\Model;
 
-class PedidoMaestro extends Model
+class Subpedido extends Model
 {
-    protected $table = 'pedidos_maestros';
-    protected $primaryKey = 'id_pedido';
-    protected $fillable = ['id_cliente', 'monto_total', 'estado_pedido', 'cupon_descuento', 'tarjeta_regalo', 'fecha_creacion'];
+    protected $table = 'pedidos_subpedidos';
+    protected $primaryKey = 'id_subpedido';
+    protected $fillable = ['id_pedido', 'id_comercio', 'subtotal', 'costo_envio', 'impuesto', 'estado_subpedido'];
 
-    public function calcularMontoTotal(): float
+    // Aplicación del Patrón Composite: Nodo intermedio
+    public function calcularSubtotal(): float
     {
-        // Lógica pendiente
+        $subtotalLineas = 0;
+        $totalImpuestos = 0;
+        
+        foreach ($this->lineas as $linea) {
+            $subtotalLineas += $linea->calcularSubtotalLinea(); //[cite: 27]
+            $totalImpuestos += $linea->obtenerMontoImpuesto(); //[cite: 27]
+        }
+        
+        $this->subtotal = $subtotalLineas;
+        $this->impuesto = $totalImpuestos;
+        $this->save(); //[cite: 14]
+        
+        return $this->subtotal + $this->impuesto + $this->costo_envio; 
     }
 
-    public function actualizarEstado(string $nuevoEstado): void
+    public function cambiarEstado(string $nuevoEstado): void
     {
-        // Lógica pendiente
+        $this->estado_subpedido = $nuevoEstado;
+        $this->save(); //[cite: 14]
     }
 
-    public function agregarSubpedido(Subpedido $subpedido): void
+    public function cancelar(string $motivo): void
     {
-        // Lógica pendiente
+        $this->estado_subpedido = 'cancelado';
+        $this->save(); //[cite: 14]
     }
 
-    public function crearPedidoMaestro(float $montoTotal): int
+    public function crearSubpedidos(array $comerciosInvolucrados): array
     {
-        // Lógica pendiente
+        $creados = [];
+        foreach ($comerciosInvolucrados as $comercioId) {
+            $creados[] = self::create([
+                'id_pedido' => $this->id_pedido,
+                'id_comercio' => $comercioId,
+                'estado_subpedido' => 'pendiente'
+            ]); //[cite: 14]
+        }
+        return $creados;
     }
 
-    // Relación: Agrupa Subpedido (1..*)
-    public function subpedidos()
+    public function pedidoMaestro()
     {
-        return $this->hasMany(Subpedido::class, 'id_pedido');
+        return $this->belongsTo(PedidoMaestro::class, 'id_pedido'); //[cite: 13]
+    }
+
+    public function lineas()
+    {
+        return $this->hasMany(PedidoLinea::class, 'id_subpedido'); //[cite: 13]
     }
 }

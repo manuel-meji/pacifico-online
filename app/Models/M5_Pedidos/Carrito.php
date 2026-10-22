@@ -10,27 +10,33 @@ class Carrito extends Model
 
     public function obtenerOCrearCarrito(int $clienteId): self
     {
-        // Lógica pendiente
+        return self::firstOrCreate(
+            ['id_cliente' => $clienteId],
+            ['monto_estimado' => 0.00]
+        ); //[cite: 12]
     }
 
     public function recalcularTotales(): void
     {
-        // Lógica pendiente
+        // Se asume que el monto estimado es la suma de cantidades por precio (manejado en conjunto con M3)
+        $this->monto_estimado = $this->items()->sum('cantidad'); 
+        $this->save(); //[cite: 12]
     }
 
     public function vaciar(): void
     {
-        // Lógica pendiente
+        $this->items()->delete(); //[cite: 12]
+        $this->monto_estimado = 0.00;
+        $this->save();
     }
 
     public function actualizarTotales(): void
     {
-        // Lógica pendiente
+        $this->recalcularTotales(); //[cite: 12]
     }
 
-    // Relación: Contiene ItemCarrito (1..*)
     public function items()
     {
-        return $this->hasMany(ItemCarrito::class, 'id_carrito');
+        return $this->hasMany(ItemCarrito::class, 'id_carrito'); //[cite: 12]
     }
 }

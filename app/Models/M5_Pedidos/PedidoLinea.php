@@ -8,24 +8,32 @@ class PedidoLinea extends Model
     protected $primaryKey = 'id_linea';
     protected $fillable = ['id_subpedido', 'id_variacion', 'cantidad', 'precio_unitario', 'tarifa_impuesto'];
 
+    // Aplicación del Patrón Composite: Nodo hoja
     public function calcularSubtotalLinea(): float
     {
-        // Lógica pendiente
+        return $this->cantidad * $this->precio_unitario; //[cite: 27]
     }
 
     public function obtenerMontoImpuesto(): float
     {
-        // Lógica pendiente
+        return $this->calcularSubtotalLinea() * ($this->tarifa_impuesto / 100); //[cite: 27]
     }
 
     public function crearLinea(int $idSubpedido, int $idVariacion, int $cantidad, float $precio, float $tarifaIva): int
     {
-        // Lógica pendiente
+        $linea = self::create([
+            'id_subpedido' => $idSubpedido,
+            'id_variacion' => $idVariacion,
+            'cantidad' => $cantidad,
+            'precio_unitario' => $precio,
+            'tarifa_impuesto' => $tarifaIva
+        ]); //[cite: 14]
+        
+        return $linea->id_linea;
     }
 
-    // Relación: Pertenece a Subpedido (1)
     public function subpedido()
     {
-        return $this->belongsTo(Subpedido::class, 'id_subpedido');
+        return $this->belongsTo(Subpedido::class, 'id_subpedido'); //[cite: 14]
     }
 }
