@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -20,6 +21,8 @@ return new class extends Migration
             $table->text('descripcion')->nullable();
             $table->string('video_url', 500)->nullable();   // RN-M3-10: opcional
             $table->boolean('destacado')->default(false);   // RN-M3-14
+            // Contrato v1.2.1: solo los publicados se exponen en consultas publicas.
+            $table->string('estado_producto', 20)->default('borrador');
             $table->timestamps();
 
             // Habilita las FK compuestas (id_producto, id_comercio) de otras tablas.
@@ -27,6 +30,8 @@ return new class extends Migration
             $table->index('id_comercio', 'ix_productos_comercio');
             $table->index('id_categoria', 'ix_productos_categoria');
         });
+
+        DB::statement("ALTER TABLE productos ADD CONSTRAINT ck_productos_estado CHECK (estado_producto IN ('borrador', 'publicado', 'desactivado'))");
     }
 
     public function down(): void
