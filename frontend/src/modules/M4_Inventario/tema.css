@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/* Paleta oficial de Pacíficos Online (design.md, sección 2.1), con los mismos nombres y valores que
+   frontend/src/modules/M1_Portal/tema.css. Va dentro del módulo para no modificar frontend/src/index.css. */
+@theme {
+  --color-brandBlue: #3b82f6;
+  --color-brandDarkBlue: #1e3a8a;
+  --color-brandGreen: #a3be4d;
+  --color-brandLightBg: #f8fafc;
+}
+
+html, body { overflow-x: hidden; }
