@@ -50,5 +50,6 @@ class AppServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(database_path('migrations/M6_Pagos'));
         $this->loadMigrationsFrom(database_path('migrations/M5_Pedidos'));
         $this->loadMigrationsFrom(database_path('migrations/M4_Inventario'));
+        $this->loadMigrationsFrom(database_path('migrations/M2_Comercios'));
     }
 }
