@@ -47,8 +47,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->loadMigrationsFrom(database_path('migrations/M6_Pagos'));
-        $this->loadMigrationsFrom(database_path('migrations/M5_Pedidos'));
-        $this->loadMigrationsFrom(database_path('migrations/M4_Inventario'));
+         $this->loadMigrationsFrom(glob(database_path('migrations/*'), GLOB_ONLYDIR));
     }
 }
