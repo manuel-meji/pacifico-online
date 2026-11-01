@@ -47,7 +47,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-       
+       //Con esto las migraciones se detectan automaticamente en cada carpeta de cada submodulo.
         $this->loadMigrationsFrom([
             database_path('migrations/M1_Portal_y_busqueda'),
             database_path('migrations/M2_Comercios'),
