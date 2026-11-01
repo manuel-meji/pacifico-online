@@ -2,15 +2,25 @@
 -- Equivalente a: php artisan migrate --pretend --database=pgsql
 
 -- 2026_10_09_013223_create_pedidos_maestros_table
-create table "pedidos_maestros" ("id_pedido" bigserial not null primary key, "id_cliente" bigint not null, "fecha_creacion" timestamp(0) without time zone not null, "monto_total" decimal(10, 2) not null, "estado_pedido" varchar(50) not null, "cupon_descuento" varchar(50) null, "tarjeta_regalo" varchar(50) null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
-ALTER TABLE pedidos_maestros ADD CONSTRAINT monto_total_positivo CHECK (monto_total >= 0);
+create table "pedidos_maestros" ("id_pedido" bigserial not null primary key, "id_cliente" bigint not null, "fecha_creacion" timestamp(0) without time zone not null, "subtotal" decimal(10, 2) not null default '0', "costo_envio" decimal(10, 2) not null default '0', "impuesto" decimal(10, 2) not null default '0', "descuento" decimal(10, 2) not null default '0', "monto_total" decimal(10, 2) not null default '0', "estado_pedido" varchar(50) not null default 'pendiente', "cupon_descuento" varchar(50) null, "tarjeta_regalo" varchar(50) null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+ALTER TABLE pedidos_maestros ADD CONSTRAINT chk_pedidos_maestros_monto_total_positivo CHECK (monto_total >= 0);
+ALTER TABLE pedidos_maestros ADD CONSTRAINT chk_pedidos_maestros_subtotal_positivo CHECK (subtotal >= 0);
+ALTER TABLE pedidos_maestros ADD CONSTRAINT chk_pedidos_maestros_costo_envio_positivo CHECK (costo_envio >= 0);
+ALTER TABLE pedidos_maestros ADD CONSTRAINT chk_pedidos_maestros_impuesto_positivo CHECK (impuesto >= 0);
+ALTER TABLE pedidos_maestros ADD CONSTRAINT chk_pedidos_maestros_descuento_positivo CHECK (descuento >= 0);
+ALTER TABLE pedidos_maestros ADD CONSTRAINT chk_pedidos_maestros_cuadratura CHECK (monto_total = subtotal + costo_envio + impuesto - descuento);
+ALTER TABLE pedidos_maestros ADD CONSTRAINT chk_pedidos_maestros_estados CHECK (estado_pedido IN ('pendiente', 'confirmado', 'pagado', 'en_preparacion', 'despachado', 'entregado', 'cancelado'));
 
 -- 2026_10_09_013224_create_pedidos_subpedidos_table
-create table "pedidos_subpedidos" ("id_subpedido" bigserial not null primary key, "id_pedido" bigint not null, "id_comercio" bigint not null, "subtotal" decimal(10, 2) not null, "costo_envio" decimal(10, 2) not null, "impuesto" decimal(10, 2) not null, "estado_subpedido" varchar(50) not null, "guia_seguimiento" varchar(255) null, "fecha_despacho" timestamp(0) without time zone null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+create table "pedidos_subpedidos" ("id_subpedido" bigserial not null primary key, "id_pedido" bigint not null, "id_comercio" bigint not null, "subtotal" decimal(10, 2) not null default '0', "costo_envio" decimal(10, 2) not null default '0', "impuesto" decimal(10, 2) not null default '0', "descuento" decimal(10, 2) not null default '0', "total" decimal(10, 2) not null default '0', "estado_subpedido" varchar(50) not null default 'pendiente', "guia_seguimiento" varchar(255) null, "fecha_despacho" timestamp(0) without time zone null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
 alter table "pedidos_subpedidos" add constraint "pedidos_subpedidos_id_pedido_foreign" foreign key ("id_pedido") references "pedidos_maestros" ("id_pedido") on delete cascade;
-ALTER TABLE pedidos_subpedidos ADD CONSTRAINT subtotal_positivo CHECK (subtotal >= 0);
-ALTER TABLE pedidos_subpedidos ADD CONSTRAINT costo_envio_positivo CHECK (costo_envio >= 0);
-ALTER TABLE pedidos_subpedidos ADD CONSTRAINT impuesto_positivo CHECK (impuesto >= 0);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_subtotal_positivo CHECK (subtotal >= 0);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_costo_envio_positivo CHECK (costo_envio >= 0);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_impuesto_positivo CHECK (impuesto >= 0);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_descuento_positivo CHECK (descuento >= 0);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_total_positivo CHECK (total >= 0);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_cuadratura CHECK (total = subtotal + costo_envio + impuesto - descuento);
+ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_estados CHECK (estado_subpedido IN ('pendiente', 'en_preparacion', 'despachado', 'entregado', 'cancelado'));
 
 -- 2026_10_09_013225_create_pedidos_lineas_table
 create table "pedidos_lineas" ("id_linea" bigserial not null primary key, "id_subpedido" bigint not null, "id_variacion" bigint not null, "cantidad" integer not null, "precio_unitario" decimal(10, 2) not null, "tarifa_impuesto" decimal(5, 2) not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
@@ -31,10 +41,12 @@ create index "items_carrito_id_reserva_index" on "items_carrito" ("id_reserva");
 ALTER TABLE items_carrito ADD CONSTRAINT cantidad_positiva_carrito CHECK (cantidad > 0);
 
 -- 2026_10_09_013228_create_estados_pedido_table
-create table "estados_pedido" ("id_estado_pedido" bigserial not null primary key, "id_pedido" bigint not null, "id_subpedido" bigint null, "estado_anterior" varchar(50) null, "estado" varchar(50) not null, "usuario_id" bigint null, "motivo" text null, "fecha_estado" timestamp(0) without time zone not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
+create table "estados_pedido" ("id_estado_pedido" bigserial not null primary key, "id_pedido" bigint not null, "id_subpedido" bigint null, "id_evento" uuid null, "estado_anterior" varchar(50) null, "estado" varchar(50) not null, "usuario_id" bigint null, "motivo" text null, "fecha_estado" timestamp(0) without time zone not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);
 alter table "estados_pedido" add constraint "estados_pedido_id_pedido_foreign" foreign key ("id_pedido") references "pedidos_maestros" ("id_pedido") on delete cascade;
 alter table "estados_pedido" add constraint "estados_pedido_id_subpedido_foreign" foreign key ("id_subpedido") references "pedidos_subpedidos" ("id_subpedido") on delete cascade;
 alter table "estados_pedido" add constraint "estados_pedido_usuario_id_foreign" foreign key ("usuario_id") references "users" ("id");
+alter table "estados_pedido" add constraint "estados_pedido_id_evento_unique" unique ("id_evento");
+ALTER TABLE estados_pedido ADD CONSTRAINT chk_estados_pedido_validos CHECK (estado IN ('pendiente', 'confirmado', 'pagado', 'en_preparacion', 'despachado', 'entregado', 'cancelado'));
 
 -- 2026_10_09_013229_create_notas_cliente_pedido_table
 create table "notas_cliente_pedido" ("id_nota" bigserial not null primary key, "id_pedido" bigint not null, "nota" text not null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null);

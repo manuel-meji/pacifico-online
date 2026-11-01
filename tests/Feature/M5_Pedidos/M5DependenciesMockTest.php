@@ -2,132 +2,148 @@
 
 namespace Tests\Feature\M5_Pedidos;
 
-use App\Contracts\M2_Comercios\ComerciosServiceInterface;
-use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
-use App\Contracts\M4_Inventario\InventarioServiceInterface;
-use App\Contracts\M6_Pagos\PagosServiceInterface;
-use Exception;
+use App\Services\M5_Pedidos\Dobles\CatalogoStub;
+use App\Services\M5_Pedidos\Dobles\ComerciosStub;
+use App\Services\M5_Pedidos\Dobles\ErrorProveedorException;
+use App\Services\M5_Pedidos\Dobles\InventarioStub;
+use App\Services\M5_Pedidos\Dobles\PagosStub;
+use App\Services\M5_Pedidos\Dobles\PortalStub;
+use App\Services\M5_Pedidos\PedidosService;
 use Tests\TestCase;
 
 /**
- * Dobles de prueba (stubs) de las dependencias externas de M5.
+ * Pruebas de integración para los dobles de prueba formales (Stubs/Fakes) de M5.
  *
- * Cada doble implementa el contrato publicado por el módulo proveedor y se
- * registra en el contenedor para simular inyección de dependencias en escenarios
- * de éxito y error según la especificación del PC3 (Sección 9).
+ * Valida la interoperabilidad según los contratos oficiales publicados en OpenAPI
+ * y el mecanismo de inyección contextual mediante M5IntegracionesServiceProvider.
  */
 class M5DependenciesMockTest extends TestCase
 {
-    public function test_m2_comercios_mock_exito(): void
+    public function test_m1_portal_doble_exito(): void
     {
-        $stub = $this->createStub(ComerciosServiceInterface::class);
-        $stub->method('obtenerMicrositio')->willReturn([
-            'id_comercio' => 2,
-            'nombre' => 'Comercio de prueba',
-            'estado' => 'activo',
-        ]);
-        $this->app->instance(ComerciosServiceInterface::class, $stub);
+        $stub = new PortalStub;
+        $destacados = $stub->getDestacados();
 
-        $servicio = app(ComerciosServiceInterface::class);
-        $micrositio = $servicio->obtenerMicrositio(2);
+        $this->assertArrayHasKey('productos_destacados', $destacados);
+        $this->assertArrayHasKey('comercios_destacados', $destacados);
 
-        $this->assertSame('activo', $micrositio['estado']);
+        $busqueda = $stub->buscar('café');
+        $this->assertSame('café', $busqueda['query']);
+        $this->assertNotEmpty($busqueda['resultados']);
     }
 
-    public function test_m2_comercios_mock_error_suspendido(): void
+    public function test_m1_portal_doble_error_invalido(): void
     {
-        $stub = $this->createStub(ComerciosServiceInterface::class);
-        $stub->method('obtenerMicrositio')->willThrowException(new Exception('Comercio suspendido', 409));
-        $this->app->instance(ComerciosServiceInterface::class, $stub);
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionCode(409);
-
-        app(ComerciosServiceInterface::class)->obtenerMicrositio(3);
-    }
-
-    public function test_m3_catalogo_mock_exito(): void
-    {
-        $stub = $this->createStub(CatalogoServiceInterface::class);
-        $stub->method('obtenerVariacion')->willReturn([
-            'id_variacion' => 1,
-            'nombre' => 'Producto de prueba',
-            'precio' => 15000,
-            'tarifa_impuesto' => 13.00,
-            'id_comercio' => 2,
-        ]);
-        $this->app->instance(CatalogoServiceInterface::class, $stub);
-
-        $variacion = app(CatalogoServiceInterface::class)->obtenerVariacion(1);
-
-        $this->assertSame('Producto de prueba', $variacion['nombre']);
-        $this->assertSame(2, $variacion['id_comercio']);
-    }
-
-    public function test_m3_catalogo_mock_error_no_encontrado(): void
-    {
-        $stub = $this->createStub(CatalogoServiceInterface::class);
-        $stub->method('obtenerVariacion')->willThrowException(new Exception('Variación inexistente o no disponible', 422));
-        $this->app->instance(CatalogoServiceInterface::class, $stub);
-
-        $this->expectException(Exception::class);
+        $this->expectException(ErrorProveedorException::class);
         $this->expectExceptionCode(422);
 
-        app(CatalogoServiceInterface::class)->obtenerVariacion(999);
+        $stub = new PortalStub;
+        $stub->buscar('');
     }
 
-    public function test_m4_inventario_mock_exito(): void
+    public function test_m2_comercios_doble_exito(): void
     {
-        $stub = $this->createStub(InventarioServiceInterface::class);
-        $stub->method('consultarExistencias')->willReturn(10);
-        $stub->method('solicitarReserva')->willReturn([
-            'id_reserva' => '3f2b8a52-6c1e-4d0b-89a7-bbc5d8d53f99',
-            'expiracion' => now()->addMinutes(15),
-        ]);
-        $this->app->instance(InventarioServiceInterface::class, $stub);
+        $stub = new ComerciosStub;
+        $micrositio = $stub->obtenerMicrositio(ComerciosStub::COMERCIO_ACTIVO);
 
-        $servicio = app(InventarioServiceInterface::class);
-        $this->assertGreaterThanOrEqual(2, $servicio->consultarExistencias(1));
-
-        $reserva = $servicio->solicitarReserva(1, 2, 1);
-        $this->assertSame('3f2b8a52-6c1e-4d0b-89a7-bbc5d8d53f99', $reserva['id_reserva']);
+        $this->assertSame('activo', $micrositio['estado']);
+        $this->assertSame(2, $micrositio['id_comercio']);
+        $this->assertTrue($stub->registrarComision(101, 15000.00));
     }
 
-    public function test_m4_inventario_mock_error_sin_stock(): void
+    public function test_m2_comercios_doble_error_suspendido(): void
     {
-        $stub = $this->createStub(InventarioServiceInterface::class);
-        $stub->method('solicitarReserva')->willThrowException(new Exception('Existencia insuficiente para reserva', 409));
-        $this->app->instance(InventarioServiceInterface::class, $stub);
-
-        $this->expectException(Exception::class);
+        $this->expectException(ErrorProveedorException::class);
         $this->expectExceptionCode(409);
 
-        app(InventarioServiceInterface::class)->solicitarReserva(1, 100, 1);
+        $stub = new ComerciosStub;
+        $stub->obtenerMicrositio(ComerciosStub::COMERCIO_SUSPENDIDO);
     }
 
-    public function test_m6_pagos_mock_exito(): void
+    public function test_m3_catalogo_doble_exito(): void
     {
-        $stub = $this->createStub(PagosServiceInterface::class);
-        $stub->method('procesarPago')->willReturn([
-            'urlPasarelaPago' => 'https://pago.pacificos.com/checkout/123',
-            'transaccion_id' => 'TXN-12345',
-        ]);
-        $this->app->instance(PagosServiceInterface::class, $stub);
+        $stub = new CatalogoStub;
+        $variacion = $stub->obtenerVariacion(1);
 
-        $respuesta = app(PagosServiceInterface::class)->procesarPago(1, 15000, 'tarjeta', []);
+        $this->assertNotNull($variacion);
+        $this->assertSame('Producto de prueba', $variacion['nombre']);
+        $this->assertSame(2, $variacion['id_comercio']);
+        $this->assertSame(15000.00, $variacion['precio']);
+
+        $detalle = $stub->obtenerDetalleProducto(1);
+        $this->assertNotNull($detalle);
+        $this->assertSame('Producto de prueba', $detalle['nombre']);
+    }
+
+    public function test_m3_catalogo_doble_error_no_encontrado(): void
+    {
+        $this->expectException(ErrorProveedorException::class);
+        $this->expectExceptionCode(422);
+
+        $stub = new CatalogoStub;
+        $stub->obtenerVariacion(CatalogoStub::VARIACION_INEXISTENTE);
+    }
+
+    public function test_m4_inventario_doble_exito(): void
+    {
+        $stub = new InventarioStub;
+
+        $this->assertGreaterThanOrEqual(2, $stub->consultarExistencias(1));
+
+        $reserva = $stub->solicitarReserva(1, 2, 101);
+        $this->assertNotEmpty($reserva['id_reserva']);
+        $this->assertSame('activa', $reserva['estado']);
+
+        $disponibilidad = $stub->consultarStockDisponible(2, 1);
+        $this->assertSame('disponible', $disponibilidad['estado_disponibilidad']);
+        $this->assertTrue($stub->confirmarSalidaPorDespacho(1));
+    }
+
+    public function test_m4_inventario_doble_error_sin_stock(): void
+    {
+        $this->expectException(ErrorProveedorException::class);
+        $this->expectExceptionCode(409);
+
+        $stub = new InventarioStub;
+        $stub->solicitarReserva(1, InventarioStub::CANTIDAD_SIN_STOCK, 101);
+    }
+
+    public function test_m6_pagos_doble_exito(): void
+    {
+        $stub = new PagosStub;
+        $respuesta = $stub->procesarPago(101, 15000.00, 'tarjeta', []);
 
         $this->assertSame('TXN-12345', $respuesta['transaccion_id']);
+        $this->assertSame('aprobado', $respuesta['estado']);
+
+        $factura = $stub->generarFactura(101);
+        $this->assertStringStartsWith('FAC-', $factura['consecutivo']);
     }
 
-    public function test_m6_pagos_mock_error_pago_rechazado(): void
+    public function test_m6_pagos_doble_error_pago_rechazado(): void
     {
-        $stub = $this->createStub(PagosServiceInterface::class);
-        $stub->method('procesarPago')->willThrowException(new Exception('Pago rechazado por la pasarela', 402));
-        $this->app->instance(PagosServiceInterface::class, $stub);
-
-        $this->expectException(Exception::class);
+        $this->expectException(ErrorProveedorException::class);
         $this->expectExceptionCode(402);
 
-        app(PagosServiceInterface::class)->procesarPago(1, 15000, 'tarjeta', []);
+        $stub = new PagosStub;
+        $stub->procesarPago(101, 15000.00, 'rechazado', []);
+    }
+
+    public function test_resolucion_por_contenedor_m5_integraciones(): void
+    {
+        $servicio = $this->app->make(PedidosService::class);
+
+        $ref = new \ReflectionClass($servicio);
+        $propComercios = $ref->getProperty('comerciosService');
+        $propCatalogo = $ref->getProperty('catalogoService');
+        $propInventario = $ref->getProperty('inventarioService');
+        $propPagos = $ref->getProperty('pagosService');
+        $propPortal = $ref->getProperty('portalService');
+
+        $this->assertInstanceOf(ComerciosStub::class, $propComercios->getValue($servicio));
+        $this->assertInstanceOf(CatalogoStub::class, $propCatalogo->getValue($servicio));
+        $this->assertInstanceOf(InventarioStub::class, $propInventario->getValue($servicio));
+        $this->assertInstanceOf(PagosStub::class, $propPagos->getValue($servicio));
+        $this->assertInstanceOf(PortalStub::class, $propPortal->getValue($servicio));
     }
 }

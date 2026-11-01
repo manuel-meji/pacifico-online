@@ -10,6 +10,10 @@ use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Services\M5_Pedidos\Dobles\CatalogoStub;
+use App\Services\M5_Pedidos\Dobles\ComerciosStub;
+use App\Services\M5_Pedidos\Dobles\InventarioStub;
+use App\Services\M5_Pedidos\Dobles\PagosStub;
 use Tests\TestCase;
 
 class ControladoresM5Test extends TestCase
@@ -25,39 +29,16 @@ class ControladoresM5Test extends TestCase
 
     private function configurarMocks(?int $stock = 10, bool $comercioActivo = true): void
     {
-        $mockM3 = $this->createStub(CatalogoServiceInterface::class);
-        $mockM3->method('obtenerVariacion')->willReturnCallback(function ($id) {
-            return [
-                'id_variacion' => $id,
-                'nombre' => 'Producto Variación '.$id,
-                'precio' => 10000.00,
-                'tarifa_impuesto' => 13.00,
-                'id_comercio' => 1,
-            ];
-        });
+        $mockM3 = (new CatalogoStub)->setIdComercio(1);
         $this->app->instance(CatalogoServiceInterface::class, $mockM3);
 
-        $mockM4 = $this->createStub(InventarioServiceInterface::class);
-        $mockM4->method('consultarExistencias')->willReturn($stock);
-        $mockM4->method('solicitarReserva')->willReturn([
-            'id_reserva' => 'reserva-uuid-test',
-            'expiracion' => now()->addMinutes(15),
-        ]);
+        $mockM4 = (new InventarioStub)->setSinStock($stock === 0);
         $this->app->instance(InventarioServiceInterface::class, $mockM4);
 
-        $mockM2 = $this->createStub(ComerciosServiceInterface::class);
-        $mockM2->method('obtenerMicrositio')->willReturn([
-            'id_comercio' => 1,
-            'nombre' => 'Comercio Uno',
-            'estado' => $comercioActivo ? 'activo' : 'suspendido',
-        ]);
+        $mockM2 = (new ComerciosStub)->setComercioSuspendido(! $comercioActivo);
         $this->app->instance(ComerciosServiceInterface::class, $mockM2);
 
-        $mockM6 = $this->createStub(PagosServiceInterface::class);
-        $mockM6->method('procesarPago')->willReturn([
-            'urlPasarelaPago' => 'https://pago.pacificos.com/checkout/test',
-            'transaccion_id' => 'TXN-999',
-        ]);
+        $mockM6 = new PagosStub;
         $this->app->instance(PagosServiceInterface::class, $mockM6);
     }
 

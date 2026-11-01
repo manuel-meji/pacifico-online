@@ -2,12 +2,15 @@
 
 namespace App\Models\M5_Pedidos;
 
+use App\Models\M5_Pedidos\Concerns\BelongsToComercio;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Subpedido extends Model
 {
+    use BelongsToComercio;
+
     protected $table = 'pedidos_subpedidos';
 
     protected $primaryKey = 'id_subpedido';
@@ -18,6 +21,8 @@ class Subpedido extends Model
         'subtotal',
         'costo_envio',
         'impuesto',
+        'descuento',
+        'total',
         'estado_subpedido',
         'guia_seguimiento',
         'fecha_despacho',
@@ -29,8 +34,21 @@ class Subpedido extends Model
         'subtotal' => 'decimal:2',
         'costo_envio' => 'decimal:2',
         'impuesto' => 'decimal:2',
+        'descuento' => 'decimal:2',
+        'total' => 'decimal:2',
         'fecha_despacho' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Subpedido $subpedido) {
+            $subpedido->subtotal = $subpedido->subtotal ?? 0.00;
+            $subpedido->costo_envio = $subpedido->costo_envio ?? 0.00;
+            $subpedido->impuesto = $subpedido->impuesto ?? 0.00;
+            $subpedido->descuento = $subpedido->descuento ?? 0.00;
+            $subpedido->total = (float) ($subpedido->subtotal + $subpedido->costo_envio + $subpedido->impuesto - $subpedido->descuento);
+        });
+    }
 
     // Aplicación del Patrón Composite: Nodo intermedio
     public function calcularSubtotal(): float
@@ -88,6 +106,8 @@ class Subpedido extends Model
             $subtotal = is_array($comercio) ? ($comercio['subtotal'] ?? 0.00) : 0.00;
             $costoEnvio = is_array($comercio) ? ($comercio['costo_envio'] ?? 0.00) : 0.00;
             $impuesto = is_array($comercio) ? ($comercio['impuesto'] ?? 0.00) : 0.00;
+            $descuento = is_array($comercio) ? ($comercio['descuento'] ?? 0.00) : 0.00;
+            $total = (float) ($subtotal + $costoEnvio + $impuesto - $descuento);
 
             $creados[] = self::create([
                 'id_pedido' => $pedidoId,
@@ -95,6 +115,8 @@ class Subpedido extends Model
                 'subtotal' => $subtotal,
                 'costo_envio' => $costoEnvio,
                 'impuesto' => $impuesto,
+                'descuento' => $descuento,
+                'total' => $total,
                 'estado_subpedido' => 'pendiente',
             ]);
         }

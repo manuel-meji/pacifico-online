@@ -8,6 +8,7 @@ use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Events\PedidoConfirmado;
 use App\Events\PedidoPagado;
+use App\Events\SubpedidoDespachado;
 use App\Http\Controllers\Controller;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\PedidoLinea;
@@ -124,9 +125,15 @@ class ControladorPedido extends Controller
         if ($this->m4Inventario) {
             try {
                 if (method_exists($this->m4Inventario, 'reservarExistencias')) {
-                    $idReserva = $this->m4Inventario->reservarExistencias($idempotencyKey);
-                    if (! $idReserva) {
-                        return response()->json(['error' => 'Reserva fallida'], 409);
+                    foreach ($carrito->items as $it) {
+                        $reserva = $this->m4Inventario->reservarExistencias(
+                            1,
+                            (int) $it->id_variacion,
+                            (int) $it->cantidad,
+                            null,
+                            $idempotencyKey
+                        );
+                        $idReserva = is_array($reserva) ? ($reserva['id_reserva'] ?? $idempotencyKey) : $idempotencyKey;
                     }
                 } elseif (method_exists($this->m4Inventario, 'solicitarReserva')) {
                     foreach ($carrito->items as $it) {
@@ -311,12 +318,9 @@ class ControladorPedido extends Controller
         $subpedido = Subpedido::with('pedidoMaestro')->findOrFail($subpedidoId);
         $subpedido->despachar($guiaTransporte ?: null);
 
-        if ($this->m2Comercios && method_exists($this->m2Comercios, 'registrarComision')) {
-            try {
-                $this->m2Comercios->registrarComision($subpedido->id_pedido, (float) $subpedido->subtotal);
-            } catch (\Throwable $e) {
-                // Continuar
-            }
+        // La comisión en M2 se calcula de forma asíncrona al consumir el evento SubpedidoDespachado (ADR-005 / RN-010)
+        if (class_exists('App\Events\SubpedidoDespachado')) {
+            event(new SubpedidoDespachado($subpedido->id_subpedido, $subpedido->id_pedido, $subpedido->id_comercio));
         }
 
         return response()->json([
