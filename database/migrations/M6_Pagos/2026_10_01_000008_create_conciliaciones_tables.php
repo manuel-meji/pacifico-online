@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -13,7 +13,7 @@ return new class extends Migration
             $table->id('id_conciliacion');
 
             $table->foreignId('id_estado_conciliacion')
-                  ->constrained('estados_conciliacion', 'id_estado_conciliacion');
+                ->constrained('estados_conciliacion', 'id_estado_conciliacion');
 
             $table->date('fecha_inicio');
             $table->date('fecha_fin');
@@ -30,16 +30,16 @@ return new class extends Migration
             $table->id('id_diferencia');
 
             $table->foreignId('id_conciliacion')
-                  ->constrained('conciliaciones', 'id_conciliacion');
+                ->constrained('conciliaciones', 'id_conciliacion');
 
             $table->foreignId('id_pago')
-                  ->constrained('pagos', 'id_pago');
+                ->constrained('pagos', 'id_pago');
 
             $table->foreignId('id_tipo_diferencia')
-                  ->constrained('tipos_diferencia', 'id_tipo_diferencia');
+                ->constrained('tipos_diferencia', 'id_tipo_diferencia');
 
             $table->foreignId('id_estado_revision_diferencia')
-                  ->constrained('estados_revision_diferencia', 'id_estado_revision_diferencia');
+                ->constrained('estados_revision_diferencia', 'id_estado_revision_diferencia');
 
             $table->decimal('monto_diferencia', 12, 2);
         });

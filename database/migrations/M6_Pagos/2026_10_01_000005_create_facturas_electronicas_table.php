@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -15,12 +15,12 @@ return new class extends Migration
             $table->unsignedBigInteger('id_comercio');
 
             $table->foreignId('id_pago')
-                  ->constrained('pagos', 'id_pago');
+                ->constrained('pagos', 'id_pago');
 
             $table->unsignedBigInteger('id_cliente');
 
             $table->foreignId('id_estado_factura_hacienda')
-                  ->constrained('estados_factura_hacienda', 'id_estado_factura_hacienda');
+                ->constrained('estados_factura_hacienda', 'id_estado_factura_hacienda');
 
             $table->string('consecutivo', 20)->unique();
             $table->text('xml_documento');
@@ -33,7 +33,7 @@ return new class extends Migration
         });
 
         DB::statement('ALTER TABLE facturas_electronicas ADD CONSTRAINT facturas_electronicas_monto_check CHECK (monto_total > 0)');
-        DB::statement("ALTER TABLE facturas_electronicas ADD CONSTRAINT facturas_electronicas_xml_check CHECK (length(trim(xml_documento)) > 0)");
+        DB::statement('ALTER TABLE facturas_electronicas ADD CONSTRAINT facturas_electronicas_xml_check CHECK (length(trim(xml_documento)) > 0)');
     }
 
     public function down(): void

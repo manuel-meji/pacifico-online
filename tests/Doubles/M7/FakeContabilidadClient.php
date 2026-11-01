@@ -21,6 +21,7 @@ final class FakeContabilidadClient implements ContabilidadClient
         if (! $this->disponible) {
             throw new \RuntimeException('M7 no responde');
         }
+
         return in_array($idPago, array_column($this->eventos, 0), true);
     }
 }
