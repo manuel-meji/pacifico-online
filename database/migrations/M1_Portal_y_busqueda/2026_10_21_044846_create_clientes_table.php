@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::create('clientes', function (Blueprint $table) {
             $table->id('id_cliente');                          
             $table->foreignId('id_usuario')->unique()          
-                  ->constrained('usuarios', 'id');             
+                  ->constrained('users', 'id');             
             $table->string('cedula', 20)->unique();
             $table->string('nombre', 80);
             $table->string('apellidos', 120);
