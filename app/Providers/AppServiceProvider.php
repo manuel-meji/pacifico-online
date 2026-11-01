@@ -2,10 +2,8 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
-
-// Contratos (Interfaces)
 use App\Contracts\M1_Portal\PortalServiceInterface;
+// Contratos (Interfaces)
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
@@ -13,9 +11,8 @@ use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
 use App\Contracts\Nucleo\NucleoServiceInterface;
-
-// Implementaciones (Servicios)
 use App\Services\M1_Portal\PortalService;
+// Implementaciones (Servicios)
 use App\Services\M2_Comercios\ComerciosService;
 use App\Services\M3_Catalogo\CatalogoService;
 use App\Services\M4_Inventario\InventarioService;
@@ -23,6 +20,7 @@ use App\Services\M5_Pedidos\PedidosService;
 use App\Services\M6_Pagos\PagosService;
 use App\Services\M7_Contabilidad\ContabilidadService;
 use App\Services\Nucleo\NucleoService;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -47,15 +45,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-       
-        $this->loadMigrationsFrom([
-            database_path('migrations/M1_Portal_y_busqueda'),
-            database_path('migrations/M2_Comercios'),
-            database_path('migrations/M3_Catalogo'),
-            database_path('migrations/M4_Inventario'),
-            database_path('migrations/M5_Pedidos'),
-            database_path('migrations/M6_Pagos'),
-            database_path('migrations/M7_Contabilidad'),
-        ]);
+        $this->loadMigrationsFrom(glob(database_path('migrations/*'), GLOB_ONLYDIR));
     }
 }
