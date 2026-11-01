@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,17 +11,17 @@ return new class extends Migration
     {
         Schema::create('reembolsos', function (Blueprint $table) {
             $table->id('id_reembolso');
-            
+
             $table->foreignId('id_pago')
                   ->constrained('pagos', 'id_pago');
-                  
+
             $table->unsignedBigInteger('id_subpedido')->nullable();
-            
+
             $table->foreignId('id_nota_credito')
                   ->nullable()
                   ->unique()
                   ->constrained('notas_credito', 'id_nota_credito');
-                  
+
             $table->foreignId('id_estado_reembolso')
                   ->constrained('estados_reembolso', 'id_estado_reembolso');
 

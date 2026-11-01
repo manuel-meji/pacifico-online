@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,11 +11,11 @@ return new class extends Migration
     {
         Schema::create('comprobantes_pago', function (Blueprint $table) {
             $table->id('id_comprobante_pago');
-            
+
             $table->foreignId('id_pago')
                   ->unique()
                   ->constrained('pagos', 'id_pago');
-                  
+
             $table->text('documento');
             $table->timestamp('fecha_emision')->useCurrent();
         });

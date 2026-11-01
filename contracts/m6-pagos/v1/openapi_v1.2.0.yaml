@@ -116,7 +116,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 codigo: PEDIDO_NO_ENCONTRADO
-                mensaje: No se encontró el pedido indicado.
+                mensaje: No se encontró el pedido indicado
         '422':
           description: El medio de pago no está disponible
           content:
@@ -125,31 +125,31 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 codigo: MEDIO_PAGO_NO_DISPONIBLE
-                mensaje: El medio de pago solicitado no está habilitado.
+                mensaje: El medio de pago solicitado no está habilitado .
 
   /pagos/{id_pago}:
     get:
       tags: [Pagos]
       operationId: ConsultarEstadoPago
-      summary: Consultar el estado actual de un intento de pago
+      summary: Consultar el estado actual de un intento de pago 
       parameters:
         - $ref: '#/components/parameters/IdPago'
       responses:
         '200':
-          description: Estado del pago
+          description: Estado del pago 
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Pago'
         '404':
-          description: No existe un pago con ese identificador
+          description: No existe un pago con ese identificador 
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 codigo: PAGO_NO_ENCONTRADO
-                mensaje: No se encontró el pago indicado.
+                mensaje: No se encontró el pago indicado .
 
   /pagos/{id_pago}/confirmaciones:
     post:
@@ -160,18 +160,22 @@ paths:
         Recibe la notificación que la pasarela, SINPE o PayPal envían cuando
         resuelven una transacción. Es idempotente (RN-002): una notificación
         repetida con la misma referencia no genera un nuevo estado ni repite
-        la publicación del evento `PagoConfirmado`.
+        la publicación del evento correspondiente (`PagoConfirmado` o `PagoRechazado`) .
       x-rf: RF-002
       x-cu: CU-002
       x-rn: [RN-002]
       x-evento-publicado:
-        nombre: PagoConfirmado
-        consumidores: [M5, M7]
-        payload: '#/components/schemas/PagoConfirmadoEvent'
-        condicion: Se publica solo si el estado recibido es "aprobado" y el intento estaba en "pendiente".
-        idempotencia: >
-          El campo id_evento del payload es la clave de idempotencia que M7
-          debe usar para descartar procesamientos duplicados de este evento.
+        - nombre: PagoConfirmado
+          consumidores: [M5, M7]
+          payload: '#/components/schemas/PagoConfirmadoEvent'
+          condicion: Se publica solo si el estado recibido es "aprobado" y el intento estaba en "pendiente".
+          idempotencia: >
+            El campo id_evento del payload es la clave de idempotencia que M7
+            debe usar para descartar procesamientos duplicados de este evento .
+        - nombre: PagoRechazado
+          consumidores: [M5, M7]
+          payload: '#/components/schemas/PagoRechazadoEvent'
+          condicion: Se publica solo si el estado recibido es "rechazado" y el intento estaba en "pendiente".
       parameters:
         - $ref: '#/components/parameters/IdPago'
       requestBody:
@@ -189,7 +193,7 @@ paths:
                   enum: [aprobado, rechazado]
       responses:
         '200':
-          description: Confirmación registrada
+          description: Confirmación registrada 
           content:
             application/json:
               schema:
@@ -205,16 +209,16 @@ paths:
                     type: string
                     format: date-time
         '404':
-          description: No existe un intento de pago pendiente con ese identificador
+          description: No existe un intento de pago pendiente con ese identificador 
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 codigo: TRANSACCION_NO_ENCONTRADA
-                mensaje: No existe un intento de pago pendiente con ese identificador.
+                mensaje: No existe un intento de pago pendiente con ese identificador .
         '401':
-          description: La notificación no superó la verificación de autenticidad
+          description: La notificación no superó la verificación de autenticidad 
           content:
             application/json:
               schema:
@@ -231,7 +235,7 @@ paths:
       description: >
         Invocada por M5 ante una cancelación o devolución autorizada. Genera
         la nota de crédito correspondiente y publica el evento
-        `ReembolsoProcesado`.
+        `ReembolsoProcesado` .
       x-rf: RF-007
       x-cu: CU-007
       x-rn: [RN-006]
@@ -247,7 +251,7 @@ paths:
           reversión contable definitiva. Una cancelación que M5 notifique
           por su cuenta (sin pasar por GestionarReembolso) no debe disparar
           un asiento de reversión independiente, para evitar que la misma
-          operación se revierta dos veces.
+          operación se revierta dos veces 
       parameters:
         - name: id_pedido
           in: path
@@ -266,7 +270,7 @@ paths:
                 id_subpedido:
                   type: integer
                   format: int64
-                  description: Identificador del subpedido/comercio cuando el reembolso es parcial.
+                  description: Identificador del subpedido/comercio cuando el reembolso es parcial .
                 monto:
                   type: number
                   format: decimal
@@ -274,20 +278,20 @@ paths:
                   type: string
       responses:
         '201':
-          description: Reembolso aceptado y en proceso
+          description: Reembolso aceptado y en proceso 
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Reembolso'
         '409':
-          description: No existe un pago confirmado sobre el cual reembolsar
+          description: No existe un pago confirmado sobre el cual reembolsar 
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 codigo: PAGO_NO_CONFIRMADO
-                mensaje: No existe un pago confirmado asociado a este pedido.
+                mensaje: No existe un pago confirmado asociado a este pedido 
         '422':
           description: El monto solicitado excede el monto disponible para reembolso
           content:
@@ -296,7 +300,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 codigo: REEMBOLSO_EXCEDE_MONTO
-                mensaje: El monto solicitado supera el monto pagado menos lo ya reembolsado.
+                mensaje: El monto solicitado supera el monto pagado menos lo ya reembolsado
 
   /facturas:
     get:
@@ -306,7 +310,7 @@ paths:
       description: >
         Un pedido multicomercio genera una factura por cada subpedido/comercio
         (decisión 3.1 del Comité), por lo que esta consulta puede devolver más
-        de un documento.
+        de un documento[cite: 4].
       parameters:
         - name: id_pedido
           in: query
@@ -709,7 +713,7 @@ components:
       description: >
         Estructura provisional. El envelope de error único de toda la
         plataforma está pendiente de definición por el Comité de Arquitectura
-        e Integración (PC3).
+        e Integración (PC3)[cite: 4].
       properties:
         codigo:
           type: string
@@ -727,7 +731,7 @@ components:
             Identificador único de esta publicación del evento. Es la clave
             de idempotencia que M7 debe usar para no procesar dos veces la
             misma notificación (un mismo id_pago nunca genera más de un
-            id_evento con este nombre de evento).
+            id_evento con este nombre de evento)[cite: 4].
         id_pedido:
           type: integer
           format: int64
@@ -741,10 +745,33 @@ components:
           type: string
           format: date-time
 
+    PagoRechazadoEvent:
+      type: object
+      description: Payload del evento publicado hacia M5 y M7 al rechazarse un pago.
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+          description: Identificador único de esta publicación del evento de rechazo.
+        id_pedido:
+          type: integer
+          format: int64
+        id_pago:
+          type: integer
+          format: int64
+        motivo:
+          type: string
+        fecha:
+          type: string
+          format: date-time
     ReembolsoProcesadoEvent:
       type: object
       description: Payload del evento publicado hacia M5 y M7 al procesarse un reembolso.
       properties:
+        id_evento:
+          type: string
+          format: uuid
+          description: Identificador único del evento publicado para control de idempotencia en consumidores (M5, M7).
         id_pedido:
           type: integer
           format: int64
@@ -752,15 +779,12 @@ components:
           type: integer
           format: int64
           nullable: true
-          description: >
-            Subpedido/comercio afectado cuando el reembolso es parcial.
-            Permite a M7 identificar con precisión qué factura y qué
-            comercio debe revertir, sin tener que inferirlo del pedido completo.
+          description: Subpedido/comercio afectado cuando el reembolso es parcial.
         id_comercio:
           type: integer
           format: int64
           nullable: true
-          description: Comercio asociado al subpedido reembolsado (mismo criterio que id_subpedido).
+          description: Comercio asociado al subpedido reembolsado.
         id_reembolso:
           type: integer
           format: int64
@@ -773,28 +797,3 @@ components:
         fecha:
           type: string
           format: date-time
-
-# ---------------------------------------------------------------------------
-# Dependencias externas (no forman parte de las rutas de este contrato)
-# ---------------------------------------------------------------------------
-# M6 requiere las siguientes operaciones/eventos publicados por otros módulos.
-# Su contrato formal (nombres definitivos, tipos exactos) corresponde a cada
-# módulo proveedor y debe ser consistente con lo aquí esperado.
-#
-# De M5 (Carrito y gestión de pedidos):
-#   - ObtenerDatosPedido: id_pedido -> monto_total, desglose por subpedido/
-#     comercio (subtotal, impuesto por línea, envío), id_cliente
-#   - ConsultarEstadoPedido: id_pedido -> estado_pedido
-#   - Evento "pedido cumple condición de facturación": id_pedido, desglose
-#     por subpedido/comercio (dispara GenerarFacturaElectronica en M6)
-#
-# De M2 (Micrositios y comercios):
-#   - ObtenerDatosFiscalesComercio: id_comercio -> razón social, cédula
-#     jurídica, condición de contribuyente
-#
-# De M7 (ERP contable):
-#   - ConsultarRegistroContablePago: confirma que el asiento y la cuenta por
-#     pagar a la pasarela quedaron registrados (usado por ConciliarPagosPeriodo).
-#     Nombre homologado con la operación que M7 publica en su propio contrato
-#     (antes referenciada aquí como "ConfirmarRegistroContable").
-# ---------------------------------------------------------------------------
