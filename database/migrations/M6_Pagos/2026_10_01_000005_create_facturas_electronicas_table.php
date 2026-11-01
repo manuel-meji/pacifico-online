@@ -1,3 +1,5 @@
+<?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -9,14 +11,14 @@ return new class extends Migration
     {
         Schema::create('facturas_electronicas', function (Blueprint $table) {
             $table->id('id_factura_electronica');
-            $table->unsignedBigInteger('id_subpedido');
+            $table->unsignedBigInteger('id_subpedido')->unique(); // Restricción UNIQUE solicitada por la rúbrica
             $table->unsignedBigInteger('id_comercio');
-            
+
             $table->foreignId('id_pago')
                   ->constrained('pagos', 'id_pago');
-                  
+
             $table->unsignedBigInteger('id_cliente');
-            
+
             $table->foreignId('id_estado_factura_hacienda')
                   ->constrained('estados_factura_hacienda', 'id_estado_factura_hacienda');
 
@@ -26,7 +28,7 @@ return new class extends Migration
             $table->string('razon_social_emisor', 150);
             $table->string('cedula_juridica_emisor', 20);
             $table->string('identificacion_receptor', 20)->nullable();
-            
+
             $table->timestamp('fecha_emision')->useCurrent();
         });
 
