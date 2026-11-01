@@ -38,11 +38,7 @@ class ControladorCarrito extends Controller
             $carrito->recalcularTotales($totalGeneral);
         }
 
-        return response()->json([
-            'carrito' => $carrito->load('items'),
-            'grupos_comercio' => array_values($grupos),
-            'monto_estimado' => (float) ($carrito->monto_estimado ?? $totalGeneral),
-        ], 200);
+        return response()->json($this->formatearRespuestaCarrito($carrito, $grupos), 200);
     }
 
     public function agregarAlCarrito(Request $request, ?int $variacionId = null, ?int $cant = null): JsonResponse
@@ -52,9 +48,15 @@ class ControladorCarrito extends Controller
 
         $idVariacion = $variacionId ?? (int) $request->input('id_variacion');
         $cantidad = $cant ?? (int) $request->input('cantidad', 1);
+        $idReserva = $request->input('id_reserva');
 
         if ($idVariacion <= 0 || $cantidad <= 0) {
-            return response()->json(['error' => 'Parámetros inválidos'], 422);
+            return $this->errorRespuesta(
+                'ERR-005',
+                'Parámetros inválidos',
+                ['cantidad' => 'Debe ser un número entero mayor o igual a 1.'],
+                422
+            );
         }
 
         // 2. Consultar detalles de la variación al M3_Catalogo (Contrato M3 v1.2.1)
@@ -63,12 +65,12 @@ class ControladorCarrito extends Controller
             try {
                 $datosVariacion = $this->m3Catalogo->obtenerVariacion($idVariacion);
             } catch (\Throwable $e) {
-                return response()->json(['error' => 'Variación inexistente'], 422);
+                return $this->errorRespuesta('ERR-004', 'Variación inexistente', null, 422);
             }
         }
 
         if (! $datosVariacion) {
-            return response()->json(['error' => 'Variación inexistente'], 422);
+            return $this->errorRespuesta('ERR-004', 'Variación inexistente', null, 422);
         }
 
         // 3. Verificar existencias en M4_Inventario (Contrato M4 v1.1.0)
@@ -78,20 +80,32 @@ class ControladorCarrito extends Controller
         $stockDisponible = 0;
         if ($this->m4Inventario) {
             if (method_exists($this->m4Inventario, 'consultarStockDisponible')) {
-                $stockDisponible = (int) $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
+                $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
+                $stockDisponible = is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
             } elseif (method_exists($this->m4Inventario, 'consultarExistencias')) {
                 $stockDisponible = (int) $this->m4Inventario->consultarExistencias($idVariacion);
             }
+        } else {
+            $stockDisponible = 100;
         }
 
         // 4. Evaluar disponibilidad
         if (! $stockDisponible || $stockDisponible < $cantidad) {
-            return response()->json(['error' => 'Existencia insuficiente'], 422);
+            return $this->errorRespuesta(
+                'ERR-M5-001',
+                'Existencia insuficiente',
+                ['existencia_disponible' => $stockDisponible, 'cantidad_solicitada' => $cantidad],
+                409
+            );
         }
 
         // 5. Lógica interna de Entidades: Obtener o crear carrito y agregar ítem
         $carrito = (new Carrito)->obtenerOCrearCarrito($clienteId);
         $item = (new ItemCarrito)->crearItemCarrito($carrito->id_carrito, $idVariacion, $cantidad);
+        if ($idReserva !== null) {
+            $item->id_reserva = (string) $idReserva;
+            $item->save();
+        }
 
         // 6. Recalcular costos
         $grupos = $this->agruparItemPorComercio($carrito);
@@ -105,11 +119,8 @@ class ControladorCarrito extends Controller
         $totalEstimado = $this->calcularCostosPedidos($subtotales, $impuestos);
         $carrito->recalcularTotales($totalEstimado);
 
-        // 7. Retornar respuesta exitosa
-        return response()->json([
-            'mensaje' => 'Carrito actualizado',
-            'carrito' => $carrito->load('items'),
-        ], 201);
+        // 7. Retornar respuesta exitosa (formato Carrito según OpenAPI)
+        return response()->json($this->formatearRespuestaCarrito($carrito, $grupos, 'Carrito actualizado'), 201);
     }
 
     public function actualizarCantidad(Request $request, int $itemId): JsonResponse
@@ -117,12 +128,17 @@ class ControladorCarrito extends Controller
         $nuevaCantidad = (int) $request->input('cantidad', 1);
 
         if ($nuevaCantidad <= 0) {
-            return response()->json(['error' => 'La cantidad debe ser mayor a 0'], 422);
+            return $this->errorRespuesta(
+                'ERR-005',
+                'La cantidad debe ser mayor a 0',
+                ['cantidad' => 'Debe ser un entero mayor o igual a 1.'],
+                422
+            );
         }
 
         $item = ItemCarrito::find($itemId);
         if (! $item) {
-            return response()->json(['error' => 'Ítem no encontrado en el carrito'], 404);
+            return $this->errorRespuesta('ERR-004', 'Ítem no encontrado en el carrito', null, 404);
         }
 
         // Verificar disponibilidad en M4
@@ -131,12 +147,13 @@ class ControladorCarrito extends Controller
             $stock = (int) $this->m4Inventario->consultarExistencias($item->id_variacion);
         }
         if ($stock > 0 && $stock < $nuevaCantidad) {
-            return response()->json(['error' => 'Existencia insuficiente'], 422);
+            return $this->errorRespuesta('ERR-M5-001', 'Existencia insuficiente', null, 422);
         }
 
         $item->actualizarCantidad($nuevaCantidad);
 
         $carrito = Carrito::with('items')->find($item->id_carrito);
+        $grupos = [];
         if ($carrito) {
             $grupos = $this->agruparItemPorComercio($carrito);
             $subtotales = 0.0;
@@ -148,10 +165,7 @@ class ControladorCarrito extends Controller
             $carrito->recalcularTotales($this->calcularCostosPedidos($subtotales, $impuestos));
         }
 
-        return response()->json([
-            'mensaje' => 'Cantidad actualizada correctamente',
-            'carrito' => $carrito?->load('items'),
-        ], 200);
+        return response()->json($this->formatearRespuestaCarrito($carrito, $grupos, 'Cantidad actualizada correctamente'), 200);
     }
 
     public function eliminarItem(Request|int $requestOrId, ?int $itemId = null, ?int $id_item_carrito = null): JsonResponse
@@ -166,13 +180,14 @@ class ControladorCarrito extends Controller
 
         $item = ItemCarrito::find($targetItemId);
         if (! $item) {
-            return response()->json(['error' => 'Ítem no encontrado en el carrito'], 404);
+            return $this->errorRespuesta('ERR-004', 'Ítem no encontrado en el carrito', null, 404);
         }
 
         $carritoId = $item->id_carrito;
         $item->delete();
 
         $carrito = Carrito::with('items')->find($carritoId);
+        $grupos = [];
         if ($carrito) {
             $grupos = $this->agruparItemPorComercio($carrito);
             $subtotales = 0.0;
@@ -184,10 +199,7 @@ class ControladorCarrito extends Controller
             $carrito->recalcularTotales($this->calcularCostosPedidos($subtotales, $impuestos));
         }
 
-        return response()->json([
-            'mensaje' => 'Ítem eliminado correctamente',
-            'carrito' => $carrito?->load('items'),
-        ], 200);
+        return response()->json($this->formatearRespuestaCarrito($carrito, $grupos, 'Ítem eliminado correctamente'), 200);
     }
 
     public function vaciarCarrito(Request $request): JsonResponse
@@ -261,5 +273,62 @@ class ControladorCarrito extends Controller
         }
 
         return $grupos;
+    }
+
+    private function formatearRespuestaCarrito(?Carrito $carrito, array $grupos = [], ?string $mensaje = null): array
+    {
+        if (! $carrito) {
+            return [
+                'id_carrito' => 1,
+                'id_cliente' => 1,
+                'monto_estimado' => 0.0,
+                'created_at' => now()->toIso8601String(),
+                'updated_at' => now()->toIso8601String(),
+                'items' => [],
+                'grupos_comercio' => [],
+            ];
+        }
+
+        $carrito->loadMissing('items');
+        $itemsFormateados = $carrito->items->map(function ($item) {
+            return [
+                'id_item_carrito' => (int) $item->id_item_carrito,
+                'id_carrito' => (int) $item->id_carrito,
+                'id_variacion' => (int) $item->id_variacion,
+                'cantidad' => (int) $item->cantidad,
+                'id_reserva' => $item->id_reserva ? (string) $item->id_reserva : null,
+                'created_at' => $item->created_at?->toIso8601String() ?? now()->toIso8601String(),
+                'updated_at' => $item->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+            ];
+        })->values()->all();
+
+        $respuesta = [
+            'id_carrito' => (int) $carrito->id_carrito,
+            'id_cliente' => (int) $carrito->id_cliente,
+            'monto_estimado' => (float) ($carrito->monto_estimado ?? 0.0),
+            'created_at' => $carrito->created_at?->toIso8601String() ?? now()->toIso8601String(),
+            'updated_at' => $carrito->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+            'items' => $itemsFormateados,
+            'carrito' => $carrito,
+            'grupos_comercio' => array_values($grupos),
+        ];
+
+        if ($mensaje !== null) {
+            $respuesta['mensaje'] = $mensaje;
+        }
+
+        return $respuesta;
+    }
+
+    private function errorRespuesta(string $codigo, string $mensaje, ?array $detalles = null, int $status = 400): JsonResponse
+    {
+        return response()->json([
+            'error' => [
+                'codigo' => $codigo,
+                'mensaje' => $mensaje,
+                'detalles' => $detalles,
+            ],
+            'mensaje' => $mensaje,
+        ], $status);
     }
 }
