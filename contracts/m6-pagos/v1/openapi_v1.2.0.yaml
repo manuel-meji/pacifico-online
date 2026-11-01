@@ -17,7 +17,7 @@ info:
     plataforma) es una decisión transversal aún pendiente del Comité de
     Arquitectura e Integración. Mientras tanto, este contrato usa el esquema
     provisional `ErrorResponse` (ver components/schemas).
-  version: 1.0.0
+  version: 1.2.0
 servers:
   - url: /api/v1/m6-pagos
     description: Servidor local / integración
