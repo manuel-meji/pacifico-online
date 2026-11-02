@@ -78,7 +78,8 @@ class ControladorCarrito extends Controller
         $stockDisponible = 0;
         if ($this->m4Inventario) {
             if (method_exists($this->m4Inventario, 'consultarStockDisponible')) {
-                $stockDisponible = (int) $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
+                $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
+                $stockDisponible = is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
             } elseif (method_exists($this->m4Inventario, 'consultarExistencias')) {
                 $stockDisponible = (int) $this->m4Inventario->consultarExistencias($idVariacion);
             }

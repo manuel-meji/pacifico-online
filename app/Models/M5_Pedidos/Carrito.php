@@ -2,6 +2,7 @@
 
 namespace App\Models\M5_Pedidos;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Schema;
@@ -17,6 +18,17 @@ class Carrito extends Model
     protected $casts = [
         'id_cliente' => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        // Aislamiento multi-tenant por cliente (ADR-006)
+        static::addGlobalScope('cliente', function (Builder $builder) {
+            $idCliente = PedidoMaestro::obtenerClienteActivoId();
+            if ($idCliente !== null) {
+                $builder->where($builder->getModel()->getTable().'.id_cliente', $idCliente);
+            }
+        });
+    }
 
     public function obtenerOCrearCarrito(int $clienteId): self
     {
