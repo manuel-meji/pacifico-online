@@ -15,6 +15,7 @@ class PedidoMaestro extends Model
 
     protected $fillable = [
         'id_cliente',
+        'id_direccion_cliente',
         'fecha_creacion',
         'subtotal',
         'costo_envio',
@@ -28,6 +29,7 @@ class PedidoMaestro extends Model
 
     protected $casts = [
         'id_cliente' => 'integer',
+        'id_direccion_cliente' => 'integer',
         'fecha_creacion' => 'datetime',
         'subtotal' => 'decimal:2',
         'costo_envio' => 'decimal:2',

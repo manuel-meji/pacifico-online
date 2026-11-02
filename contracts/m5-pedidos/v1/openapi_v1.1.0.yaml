@@ -956,6 +956,66 @@ components:
           example: Operación realizada con éxito.
 
     # Esquemas de Eventos Publicados por M5 (100% alineados con los schemas de M2, M4, M6 y M7)
+    PedidoPagadoEvento:
+      type: object
+      description: |
+        Payload del evento canónico PedidoPagado emitido tras la confirmación exitosa de pago por M6.
+      required: [id_evento, timestamp, tipo_evento, version_contrato, datos]
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        tipo_evento:
+          type: string
+          example: PedidoPagado
+        version_contrato:
+          type: string
+          example: '1.1.0'
+        datos:
+          type: object
+          required: [pedido_id, cliente_id, monto_total, estado, subpedidos]
+          properties:
+            pedido_id:
+              type: integer
+              format: int64
+            cliente_id:
+              type: integer
+              format: int64
+            monto_total:
+              type: number
+              format: double
+            estado:
+              type: string
+              example: PAGADO
+            subpedidos:
+              type: array
+              items:
+                type: object
+                required: [subpedido_id, comercio_id, subtotal, iva, envio, lineas]
+                properties:
+                  subpedido_id:
+                    type: integer
+                    format: int64
+                  comercio_id:
+                    type: integer
+                    format: int64
+                  subtotal:
+                    type: number
+                    format: double
+                  iva:
+                    type: number
+                    format: double
+                  envio:
+                    type: number
+                    format: double
+                  lineas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PedidoLinea'
+
     PedidoConfirmadoEvento:
       type: object
       description: |
@@ -1383,6 +1443,12 @@ x-eventos:
       esquema:
         $ref: '#/components/schemas/PedidoConfirmadoEvento'
       disparador: Al confirmar el pedido maestro y sus subpedidos en checkout.
+    - nombre: PedidoPagado
+      version: 1.1.0
+      consumidores: [M2, M6, M7]
+      esquema:
+        $ref: '#/components/schemas/PedidoPagadoEvento'
+      disparador: Cuando M6 confirma el pago exitoso del pedido maestro y se transiciona a estado PAGADO.
     - nombre: SubpedidoDespachado
       alias_catalogo_pc2: PedidoDespachado
       version: 1.0.0

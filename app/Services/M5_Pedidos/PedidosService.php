@@ -10,6 +10,7 @@ use App\Contracts\M5_Pedidos\CarritoServiceInterface;
 use App\Contracts\M5_Pedidos\GestionPedidosServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
+use App\Events\M5_Pedidos\PedidoPagado;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
@@ -444,12 +445,19 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
 
     public function marcarComoPagado(int $pedidoId, string $comprobantePago): bool
     {
-        // Paso 6: Actualizar pedido a PAGADO y publicar evento
+        // Paso 6: Actualizar pedido a PAGADO y publicar evento canónico PedidoPagado
         if ($this->hasTable('pedidos_maestros')) {
-            $pedido = PedidoMaestro::find($pedidoId);
+            $pedido = PedidoMaestro::with('subpedidos.lineas')->find($pedidoId);
             if ($pedido) {
                 $pedido->estado_pedido = 'pagado';
                 $pedido->save();
+
+                foreach ($pedido->subpedidos as $subpedido) {
+                    $subpedido->estado_subpedido = 'pagado';
+                    $subpedido->save();
+                }
+
+                PedidoPagado::dispatch($pedido);
             }
         }
 

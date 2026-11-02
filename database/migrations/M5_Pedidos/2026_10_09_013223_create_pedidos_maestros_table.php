@@ -12,6 +12,7 @@ return new class extends Migration
         Schema::create('pedidos_maestros', function (Blueprint $table) {
             $table->id('id_pedido');
             $table->unsignedBigInteger('id_cliente');
+            $table->unsignedBigInteger('id_direccion_cliente')->nullable();
             $table->timestamp('fecha_creacion');
             $table->decimal('subtotal', 10, 2)->default(0.00);
             $table->decimal('costo_envio', 10, 2)->default(0.00);
