@@ -15,6 +15,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared(<<<'SQL'
 CREATE TABLE reservas (
     id_reserva         uuid          NOT NULL DEFAULT gen_random_uuid(),
@@ -57,6 +61,10 @@ SQL
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared('DROP TABLE IF EXISTS reservas');
     }
 };
