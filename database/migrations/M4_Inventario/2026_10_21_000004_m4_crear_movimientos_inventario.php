@@ -15,6 +15,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared(<<<'SQL'
 CREATE TABLE movimientos_inventario (
     id_movimiento      bigint GENERATED ALWAYS AS IDENTITY,
@@ -60,6 +64,10 @@ SQL
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared('DROP TABLE IF EXISTS movimientos_inventario');
     }
 };

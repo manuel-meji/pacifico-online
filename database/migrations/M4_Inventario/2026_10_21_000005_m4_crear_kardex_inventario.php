@@ -15,6 +15,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared(<<<'SQL'
 CREATE TABLE kardex_inventario (
     id_kardex        bigint GENERATED ALWAYS AS IDENTITY,
@@ -45,6 +49,10 @@ SQL
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared('DROP TABLE IF EXISTS kardex_inventario');
     }
 };
