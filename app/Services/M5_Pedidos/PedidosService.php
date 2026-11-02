@@ -2,12 +2,16 @@
 
 namespace App\Services\M5_Pedidos;
 
+use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
+use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
+use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M5_Pedidos\CarritoServiceInterface;
 use App\Contracts\M5_Pedidos\GestionPedidosServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
 use App\Events\M5_Pedidos\PedidoPagado;
+use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoMaestro;
@@ -17,7 +21,11 @@ use Illuminate\Support\Facades\Schema;
 class PedidosService implements CarritoServiceInterface, GestionPedidosServiceInterface, PedidosServiceInterface, SubpedidosServiceInterface
 {
     public function __construct(
-        protected ?ComerciosServiceInterface $comerciosService = null
+        protected ?ComerciosServiceInterface $comerciosService = null,
+        protected ?CatalogoServiceInterface $catalogoService = null,
+        protected ?InventarioServiceInterface $inventarioService = null,
+        protected ?PagosServiceInterface $pagosService = null,
+        protected ?PortalServiceInterface $portalService = null,
     ) {}
 
     // =========================================================================
