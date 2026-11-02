@@ -57,6 +57,16 @@ class PedidosContratoM5 implements PedidosServiceInterface
         throw new LogicException('Fuera del alcance del doble de M4.');
     }
 
+    public function obtenerCarrito(int $idCliente): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M4.');
+    }
+
+    public function agregarItemCarrito(int $idCliente, array $datos): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M4.');
+    }
+
     private function validarId(string $campo, int $id): void
     {
         if ($id < 1) {
