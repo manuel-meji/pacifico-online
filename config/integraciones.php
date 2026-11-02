@@ -7,6 +7,11 @@ use App\Services\M1_Portal\Dobles\InventarioStub;
 use App\Services\M4_Inventario\Dobles\CatalogoStub as M4CatalogoStub;
 use App\Services\M4_Inventario\Dobles\ComerciosStub as M4ComerciosStub;
 use App\Services\M4_Inventario\Dobles\NucleoStub as M4NucleoStub;
+use App\Services\M5_Pedidos\Dobles\CatalogoStub as M5CatalogoStub;
+use App\Services\M5_Pedidos\Dobles\ComerciosStub as M5ComerciosStub;
+use App\Services\M5_Pedidos\Dobles\InventarioStub as M5InventarioStub;
+use App\Services\M5_Pedidos\Dobles\PagosStub as M5PagosStub;
+use App\Services\M5_Pedidos\Dobles\PortalStub as M5PortalStub;
 
 return [
 
@@ -71,6 +76,40 @@ return [
 
         // Minutos de vigencia de una reserva si el solicitante no indica otro valor.
         'reserva_minutos' => (int) env('M4_RESERVA_MINUTOS', 15),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dependencias y proveedores de M5 Carrito y Pedidos
+    |--------------------------------------------------------------------------
+    |
+    | Para cada proveedor externo (M1, M2, M3, M4, M6), 'modo' elige entre el
+    | doble de prueba ('doble') y el servicio real ('real').
+    | Ver M5IntegracionesServiceProvider.
+    |
+    */
+
+    'm5' => [
+        'm1' => [
+            'modo' => env('M5_M1_MODO', 'doble'),
+            'doble' => M5PortalStub::class,
+        ],
+        'm2' => [
+            'modo' => env('M5_M2_MODO', 'doble'),
+            'doble' => M5ComerciosStub::class,
+        ],
+        'm3' => [
+            'modo' => env('M5_M3_MODO', 'doble'),
+            'doble' => M5CatalogoStub::class,
+        ],
+        'm4' => [
+            'modo' => env('M5_M4_MODO', 'doble'),
+            'doble' => M5InventarioStub::class,
+        ],
+        'm6' => [
+            'modo' => env('M5_M6_MODO', 'doble'),
+            'doble' => M5PagosStub::class,
+        ],
     ],
 
 ];

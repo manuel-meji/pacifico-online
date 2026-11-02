@@ -17,6 +17,7 @@ class PedidoLinea extends Model
         'cantidad',
         'precio_unitario',
         'tarifa_impuesto',
+        'id_reserva',
     ];
 
     protected $casts = [
@@ -43,7 +44,8 @@ class PedidoLinea extends Model
         int $idVariacion,
         int $cantidad,
         float $precio,
-        float $tarifaIva
+        float $tarifaIva,
+        ?string $idReserva = null
     ): int {
         $linea = self::create([
             'id_subpedido' => $idSubpedido,
@@ -51,6 +53,7 @@ class PedidoLinea extends Model
             'cantidad' => $cantidad,
             'precio_unitario' => $precio,
             'tarifa_impuesto' => $tarifaIva,
+            'id_reserva' => $idReserva,
         ]);
 
         return (int) $linea->id_linea;

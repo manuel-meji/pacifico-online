@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Nucleo\ManejadorErrores;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,4 +19,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        $exceptions->report(function (Throwable $e): void {
+            ManejadorErrores::registrarEnLogDiario($e, request());
+        });
+
+        $exceptions->render(function (Throwable $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return ManejadorErrores::renderizar($e, $request);
+            }
+        });
     })->create();
