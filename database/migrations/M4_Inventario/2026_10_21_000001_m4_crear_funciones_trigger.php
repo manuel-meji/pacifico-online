@@ -15,6 +15,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared(<<<'SQL'
 CREATE FUNCTION fn_m4_bloquear_modificacion() RETURNS trigger AS $$
 BEGIN
@@ -43,6 +47,10 @@ SQL
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared('DROP FUNCTION IF EXISTS fn_m4_reservas_transicion()');
         DB::unprepared('DROP FUNCTION IF EXISTS fn_m4_bloquear_modificacion()');
     }
