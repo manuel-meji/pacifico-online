@@ -8,9 +8,13 @@ use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
+use App\Events\M5_Pedidos\PedidoCancelado;
 use App\Events\M5_Pedidos\PedidoConfirmado;
 use App\Events\M5_Pedidos\PedidoCreado;
 use App\Events\M5_Pedidos\PedidoPagado;
+use App\Events\M5_Pedidos\SubpedidoCancelado;
+use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Events\M5_Pedidos\SubpedidoEntregado;
 use App\Http\Controllers\Controller;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\PedidoLinea;
@@ -319,12 +323,13 @@ class ControladorPedido extends Controller
 
     public function cancelarSubpedido(int|Request $subpedidoIdOrRequest, ?string $motivo = null): JsonResponse
     {
+        $req = request();
         if ($subpedidoIdOrRequest instanceof Request) {
             $subpedidoId = (int) ($subpedidoIdOrRequest->route('id_subpedido') ?? $subpedidoIdOrRequest->input('id_subpedido'));
             $motivoTexto = (string) ($subpedidoIdOrRequest->input('motivo') ?? $motivo ?? 'Cancelado');
         } else {
             $subpedidoId = (int) $subpedidoIdOrRequest;
-            $motivoTexto = (string) ($motivo ?? 'Cancelado');
+            $motivoTexto = (string) ($req->input('motivo') ?? $motivo ?? 'Cancelado');
         }
 
         $subpedido = Subpedido::with(['pedidoMaestro', 'lineas'])->find($subpedidoId);
@@ -344,10 +349,12 @@ class ControladorPedido extends Controller
             $subpedidosActivos = $pedidoMaestro->subpedidos()->where('estado_subpedido', '!=', 'cancelado')->count();
             if ($subpedidosActivos === 0) {
                 $pedidoMaestro->actualizarEstado('cancelado');
+                event(new PedidoCancelado($pedidoMaestro->fresh('subpedidos.lineas'), $motivoTexto));
             }
         }
 
         $subpedidoActualizado = $subpedido->fresh('lineas');
+        event(new SubpedidoCancelado($subpedidoActualizado, $motivoTexto));
         $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Subpedido cancelado correctamente',
             'subpedido' => $subpedidoActualizado,
@@ -358,12 +365,13 @@ class ControladorPedido extends Controller
 
     public function despacharSubpedido(int|Request $requestOrId, ?string $guia = null): JsonResponse
     {
+        $req = request();
         if ($requestOrId instanceof Request) {
             $subpedidoId = (int) ($requestOrId->route('id_subpedido') ?? $requestOrId->input('id_subpedido'));
             $guiaTransporte = (string) ($requestOrId->input('guia_seguimiento') ?? $requestOrId->input('guia_transporte') ?? $guia ?? '');
         } else {
             $subpedidoId = (int) $requestOrId;
-            $guiaTransporte = (string) ($guia ?? '');
+            $guiaTransporte = (string) ($req->input('guia_seguimiento') ?? $req->input('guia_transporte') ?? $guia ?? '');
         }
 
         $subpedido = Subpedido::with(['pedidoMaestro', 'lineas'])->find($subpedidoId);
@@ -380,8 +388,8 @@ class ControladorPedido extends Controller
         // NOTA DE ARQUITECTURA (FASE 1 - DESACOPLAMIENTO M2):
         // Se elimina la llamada directa a registrarComision de M2. M5 no gestiona comisiones.
         // M2 calcula su comisión en su propio módulo a partir del evento SubpedidoDespachado.
-
         $subpedidoActualizado = $subpedido->fresh('lineas');
+        event(new SubpedidoDespachado($subpedidoActualizado, $guiaTransporte ?: null));
         $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Subpedido despachado correctamente',
             'subpedido' => $subpedidoActualizado,
@@ -405,6 +413,7 @@ class ControladorPedido extends Controller
         $subpedido->entregar();
 
         $subpedidoActualizado = $subpedido->fresh('lineas');
+        event(new SubpedidoEntregado($subpedidoActualizado));
         $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Entrega confirmada',
             'subpedido' => $subpedidoActualizado,
@@ -415,12 +424,13 @@ class ControladorPedido extends Controller
 
     public function cancelarPedidoTotal(int|Request $requestOrId, ?string $motivo = null): JsonResponse
     {
+        $req = request();
         if ($requestOrId instanceof Request) {
             $pedidoId = (int) ($requestOrId->route('id_pedido') ?? $requestOrId->input('id_pedido'));
             $motivoTexto = (string) ($requestOrId->input('motivo') ?? $motivo ?? 'Cancelación total solicitada');
         } else {
             $pedidoId = (int) $requestOrId;
-            $motivoTexto = (string) ($motivo ?? 'Cancelación total');
+            $motivoTexto = (string) ($req->input('motivo') ?? $motivo ?? 'Cancelación total');
         }
 
         $pedido = PedidoMaestro::with('subpedidos.lineas')->find($pedidoId);
@@ -436,6 +446,7 @@ class ControladorPedido extends Controller
         $pedido->cancelar($motivoTexto);
 
         $pedidoActualizado = $pedido->fresh('subpedidos.lineas');
+        event(new PedidoCancelado($pedidoActualizado, $motivoTexto));
         $respuesta = array_merge($pedidoActualizado->toArray(), [
             'mensaje' => 'Pedido maestro y subpedidos cancelados correctamente',
             'pedido' => $pedidoActualizado,

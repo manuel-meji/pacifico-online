@@ -7,9 +7,13 @@ use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
+use App\Events\M5_Pedidos\PedidoCancelado;
 use App\Events\M5_Pedidos\PedidoConfirmado;
 use App\Events\M5_Pedidos\PedidoCreado;
 use App\Events\M5_Pedidos\PedidoPagado;
+use App\Events\M5_Pedidos\SubpedidoCancelado;
+use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Events\M5_Pedidos\SubpedidoEntregado;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
@@ -191,6 +195,118 @@ class M5_EventosTest extends TestCase
                 && $evento->tipo_evento === 'PedidoPagado'
                 && $evento->version_contrato === '1.1.0'
                 && Str::isUuid($evento->id_evento);
+        });
+    }
+
+    public function test_al_despachar_subpedido_se_emite_evento_subpedido_despachado_con_metadatos_canonicos(): void
+    {
+        Event::fake([SubpedidoDespachado::class]);
+
+        $pedido = new PedidoMaestro;
+        $pedidoId = $pedido->crearPedidoMaestro(20000.00, 1);
+        $sub = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 2, 'subtotal' => 20000.00, 'costo_envio' => 1500.00, 'impuesto' => 2600.00],
+        ], $pedidoId)[0];
+        (new PedidoLinea)->crearLinea($sub->id_subpedido, 101, 2, 10000.00, 13.00, '99999999-aaaa-bbbb-cccc-dddddddddddd');
+
+        $response = $this->postJson("{$this->prefix}/subpedidos/{$sub->id_subpedido}/despachar", [
+            'guia_seguimiento' => 'GUIA-TRACK-123',
+        ]);
+
+        $response->assertStatus(200);
+
+        Event::assertDispatched(SubpedidoDespachado::class, function (SubpedidoDespachado $evento) use ($sub, $pedidoId) {
+            return Str::isUuid($evento->id_evento)
+                && $evento->evento === 'SubpedidoDespachado'
+                && $evento->id_subpedido === $sub->id_subpedido
+                && $evento->id_pedido === $pedidoId
+                && $evento->id_comercio === 2
+                && $evento->estado_subpedido === 'despachado'
+                && $evento->guia_transporte === 'GUIA-TRACK-123'
+                && $evento->subtotal == 20000.00
+                && ! empty($evento->fecha_evento)
+                && ! empty($evento->fecha)
+                && ! empty($evento->fecha_despacho)
+                && count($evento->reservas) > 0;
+        });
+    }
+
+    public function test_al_entregar_subpedido_se_emite_evento_subpedido_entregado_con_fechas(): void
+    {
+        Event::fake([SubpedidoEntregado::class]);
+
+        $pedido = new PedidoMaestro;
+        $pedidoId = $pedido->crearPedidoMaestro(15000.00, 1);
+        $sub = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 2, 'subtotal' => 15000.00, 'costo_envio' => 0.00, 'impuesto' => 1950.00],
+        ], $pedidoId)[0];
+        $sub->despachar('GUIA-001');
+
+        $response = $this->postJson("{$this->prefix}/subpedidos/{$sub->id_subpedido}/entregar");
+
+        $response->assertStatus(200);
+
+        Event::assertDispatched(SubpedidoEntregado::class, function (SubpedidoEntregado $evento) use ($sub, $pedidoId) {
+            return Str::isUuid($evento->id_evento)
+                && $evento->id_subpedido === $sub->id_subpedido
+                && $evento->id_pedido === $pedidoId
+                && $evento->id_comercio === 2
+                && ! empty($evento->fecha)
+                && ! empty($evento->fecha_entrega);
+        });
+    }
+
+    public function test_al_cancelar_subpedido_parcial_sc02_se_emite_evento_subpedido_cancelado(): void
+    {
+        Event::fake([SubpedidoCancelado::class]);
+
+        $pedido = new PedidoMaestro;
+        $pedidoId = $pedido->crearPedidoMaestro(30000.00, 1);
+        $subpedidos = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 1, 'subtotal' => 15000.00, 'costo_envio' => 0.00, 'impuesto' => 1950.00],
+            ['id_comercio' => 2, 'subtotal' => 15000.00, 'costo_envio' => 0.00, 'impuesto' => 1950.00],
+        ], $pedidoId);
+
+        $response = $this->postJson("{$this->prefix}/subpedidos/{$subpedidos[0]->id_subpedido}/cancelar", [
+            'motivo' => 'Anulación solicitada por cliente comercio 1',
+        ]);
+
+        $response->assertStatus(200);
+
+        Event::assertDispatched(SubpedidoCancelado::class, function (SubpedidoCancelado $evento) use ($subpedidos, $pedidoId) {
+            return Str::isUuid($evento->id_evento)
+                && $evento->id_subpedido === $subpedidos[0]->id_subpedido
+                && $evento->id_pedido === $pedidoId
+                && $evento->id_comercio === 1
+                && $evento->motivo === 'Anulación solicitada por cliente comercio 1'
+                && $evento->requiere_reembolso === true
+                && $evento->monto_subpedido > 0
+                && count($evento->reservas) > 0;
+        });
+    }
+
+    public function test_al_cancelar_pedido_maestro_total_se_emite_evento_pedido_cancelado(): void
+    {
+        Event::fake([PedidoCancelado::class]);
+
+        $pedido = new PedidoMaestro;
+        $pedidoId = $pedido->crearPedidoMaestro(15000.00, 1);
+        $sub = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 1, 'subtotal' => 15000.00, 'costo_envio' => 0.00, 'impuesto' => 1950.00],
+        ], $pedidoId)[0];
+
+        $response = $this->postJson("{$this->prefix}/pedidos/{$pedidoId}/cancelar", [
+            'motivo' => 'Cancelación de pedido total',
+        ]);
+
+        $response->assertStatus(200);
+
+        Event::assertDispatched(PedidoCancelado::class, function (PedidoCancelado $evento) use ($pedidoId) {
+            return Str::isUuid($evento->id_evento)
+                && $evento->id_pedido === $pedidoId
+                && $evento->motivo === 'Cancelación de pedido total'
+                && $evento->requiere_reembolso === true
+                && count($evento->reservas) > 0;
         });
     }
 }
