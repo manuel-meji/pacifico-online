@@ -44,6 +44,20 @@ return [
             'modo' => env('M1_M5_MODO', 'doble'),
             'doble' => CarritoFake::class,
         ],
+
+        // Segundos de espera máxima por proveedor (RNF-M1-04).
+        'tiempo_maximo' => (float) env('M1_TIEMPO_MAXIMO', 3),
+
+        // Segundos de vida de la caché de respuestas de M2, M3 y M4; máximo 5 (RNF-M1-06).
+        'cache_segundos' => (int) env('M1_CACHE_SEGUNDOS', 5),
+
+        // Clases de los eventos de M2 que escucha M1 (EventosComercioListener).
+        // M2 todavía no los publica; si usa otros nombres, se cambian solo aquí.
+        'eventos_m2' => [
+            'comercio_aprobado' => 'App\\Events\\M2_Comercios\\ComercioAprobado',
+            'comercio_suspendido' => 'App\\Events\\M2_Comercios\\ComercioSuspendido',
+            'comercio_reactivado' => 'App\\Events\\M2_Comercios\\ComercioReactivado',
+        ],
     ],
 
     /*

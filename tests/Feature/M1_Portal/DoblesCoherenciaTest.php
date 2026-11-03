@@ -4,7 +4,8 @@ namespace Tests\Feature\M1_Portal;
 
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
-use App\Contracts\M4_Inventario\InventarioServiceInterface;
+use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Contracts\M5_Pedidos\CarritoServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use App\Providers\M1IntegracionesServiceProvider;
 use App\Services\M1_Portal\Dobles\CarritoFake;
@@ -32,7 +33,8 @@ class DoblesCoherenciaTest extends TestCase
     {
         $this->assertInstanceOf(ComerciosStub::class, $this->proveedorDeM1(ComerciosServiceInterface::class));
         $this->assertInstanceOf(CatalogoFake::class, $this->proveedorDeM1(CatalogoServiceInterface::class));
-        $this->assertInstanceOf(InventarioStub::class, $this->proveedorDeM1(InventarioServiceInterface::class));
+        $this->assertInstanceOf(InventarioStub::class, $this->proveedorDeM1(InventarioModuleInterface::class));
+        $this->assertInstanceOf(CarritoFake::class, $this->proveedorDeM1(CarritoServiceInterface::class));
         $this->assertInstanceOf(CarritoFake::class, $this->proveedorDeM1(PedidosServiceInterface::class));
     }
 

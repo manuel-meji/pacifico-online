@@ -2,21 +2,20 @@
 
 namespace App\Services\M1_Portal\Dobles;
 
-use App\Contracts\M4_Inventario\InventarioServiceInterface;
+use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use LogicException;
 
 /**
  * Stub de M4 Inventario multiempresa (contrato 1.1.0) para las operaciones que
  * consume M1: consultarDisponibilidadLote y consultarDisponibilidadProductoLote.
  *
- * Las firmas son las de x-interfaz-php del contrato de M4. Ese contrato las
- * ubica en InventarioModuleInterface, que aún no existe; mientras tanto el
- * doble implementa la interfaz publicada en app/Contracts/M4_Inventario.
+ * Las firmas son las de x-interfaz-php del contrato de M4, que las ubica en
+ * InventarioModuleInterface (la interfaz que usa InventarioClient).
  *
  * Son consultas públicas: no aplican el filtro por comercio de RN-12. Una
  * variación o producto sin existencia registrada se devuelve agotado, sin error.
  */
-class InventarioStub implements InventarioServiceInterface
+class InventarioStub implements InventarioModuleInterface
 {
     private const MAXIMO_LOTE = 100;
 
@@ -64,6 +63,32 @@ class InventarioStub implements InventarioServiceInterface
                 'estado_disponibilidad' => $unidades > 0 ? 'disponible' : 'agotado',
             ];
         }, $items);
+    }
+
+    public function consultarStockDisponible(int $idComercio, int $idVariacion, ?int $idUbicacion = null): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M1.');
+    }
+
+    public function consultarDisponibilidadProducto(int $idComercio, int $idProducto): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M1.');
+    }
+
+    public function reservarExistencias(
+        int $idComercio,
+        int $idVariacion,
+        int $cantidad,
+        ?int $idUbicacion = null,
+        ?string $claveIdempotencia = null,
+        ?int $expiracionMinutos = null,
+    ): array {
+        throw new LogicException('Fuera del alcance del doble de M1.');
+    }
+
+    public function liberarReserva(string $idReserva, ?string $motivo = null): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M1.');
     }
 
     public function consultarExistencias(int $variacionId): int
