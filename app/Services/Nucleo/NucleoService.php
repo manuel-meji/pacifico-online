@@ -22,7 +22,7 @@ class NucleoService implements NucleoServiceInterface
         */
 
         // Regla RN-12: Retornar ID del comercio de la sesión autenticada
-        return session('comercio_id', 1);
+        return session('comercio_id');
     }
 
     public function registrarAuditoria(string $accion, string $entidad, int $entidadId, array $detalles = []): void
