@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Middleware\EstablecerCliente;
+use App\Http\Middleware\EstablecerComercio;
 
 /*
 |--------------------------------------------------------------------------
