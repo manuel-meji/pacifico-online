@@ -31,7 +31,7 @@ return new class extends Migration
             DB::statement('ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_descuento_positivo CHECK (descuento >= 0)');
             DB::statement('ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_total_positivo CHECK (total >= 0)');
             DB::statement('ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_cuadratura CHECK (total = subtotal + costo_envio + impuesto - descuento)');
-            DB::statement("ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_estados CHECK (estado_subpedido IN ('pendiente', 'en_preparacion', 'despachado', 'entregado', 'cancelado'))");
+            DB::statement("ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_estados CHECK (estado_subpedido IN ('pendiente', 'confirmado', 'pagado', 'en_preparacion', 'despachado', 'entregado', 'cancelado'))");
         }
     }
 
