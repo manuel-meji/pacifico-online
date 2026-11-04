@@ -51,7 +51,7 @@ class ControladorPedido extends Controller
     public function procesarCheckout(Request $request): JsonResponse
     {
         $datos = $request->all();
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
         $direccionClienteId = (int) ($request->input('id_direccion_cliente', 1));
 
         // 1. Validar que el carrito no esté vacío
@@ -401,7 +401,7 @@ class ControladorPedido extends Controller
 
     public function listarPedidos(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
         $query = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->where('id_cliente', $clienteId);
 
         if ($request->filled('estado_pedido')) {

@@ -32,7 +32,7 @@ class ControladorCarrito extends Controller
 
     public function obtenerCarrito(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
         $carrito = (new Carrito)->obtenerOCrearCarrito($clienteId);
         $carrito->load('items');
 
@@ -49,7 +49,7 @@ class ControladorCarrito extends Controller
     public function agregarAlCarrito(Request $request, ?int $variacionId = null, ?int $cant = null): JsonResponse
     {
         // 1. Obtener clienteId del token autenticado o del request
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
 
         $idVariacion = $variacionId ?? (int) $request->input('id_variacion');
         $cantidad = $cant ?? (int) $request->input('cantidad', 1);
@@ -202,7 +202,7 @@ class ControladorCarrito extends Controller
 
     public function vaciarCarrito(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
         $carrito = Carrito::where('id_cliente', $clienteId)->first();
 
         if ($carrito) {

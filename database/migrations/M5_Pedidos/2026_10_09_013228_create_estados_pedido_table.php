@@ -16,8 +16,8 @@ return new class extends Migration
             $table->uuid('id_evento')->nullable()->unique();
             $table->string('estado_anterior', 50)->nullable();
             $table->string('estado', 50);
-            if (Schema::hasTable('users')) {
-                $table->foreignId('usuario_id')->nullable()->constrained('users');
+            if (Schema::hasTable('usuarios')) {
+                $table->foreignId('usuario_id')->nullable()->constrained('usuarios', 'id_usuario');
             } else {
                 $table->unsignedBigInteger('usuario_id')->nullable();
             }

@@ -88,7 +88,7 @@ class PedidoMaestro extends Model
 
         try {
             if (auth()->check() && ! isset(auth()->user()->id_comercio)) {
-                return (int) auth()->id();
+                return (int) (auth()->user()?->id_usuario ?? auth()->id());
             }
         } catch (\Throwable) {
         }

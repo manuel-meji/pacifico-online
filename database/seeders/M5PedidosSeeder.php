@@ -9,6 +9,7 @@ use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class M5PedidosSeeder extends Seeder
 {
@@ -25,6 +26,10 @@ class M5PedidosSeeder extends Seeder
         if (DB::connection()->getDriverName() === 'pgsql') {
             DB::statement('ALTER TABLE pedidos_subpedidos DROP CONSTRAINT IF EXISTS chk_pedidos_subpedidos_estados');
             DB::statement("ALTER TABLE pedidos_subpedidos ADD CONSTRAINT chk_pedidos_subpedidos_estados CHECK (estado_subpedido IN ('pendiente', 'confirmado', 'pagado', 'en_preparacion', 'despachado', 'entregado', 'cancelado'))");
+            DB::statement('ALTER TABLE estados_pedido DROP CONSTRAINT IF EXISTS estados_pedido_usuario_id_foreign');
+            if (Schema::hasTable('usuarios')) {
+                DB::statement('ALTER TABLE estados_pedido ADD CONSTRAINT estados_pedido_usuario_id_foreign FOREIGN KEY (usuario_id) REFERENCES usuarios(id_usuario) ON DELETE SET NULL');
+            }
         }
 
         DB::transaction(function (): void {
