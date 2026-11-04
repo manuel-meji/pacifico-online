@@ -14,7 +14,7 @@ class SesionTest extends TestCase
     /**
      * Estas pruebas usan el esquema de identidad existente, sin ejecutar
      * las migraciones PostgreSQL de los otros módulos sobre SQLite.
-     *
+     *.
      * @return array<string, mixed>
      */
     protected function migrateFreshUsing(): array
