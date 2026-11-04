@@ -2,10 +2,13 @@
 
 namespace App\Models\M5_Pedidos;
 
+use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class PedidoMaestro extends Model
 {
@@ -55,14 +58,14 @@ class PedidoMaestro extends Model
             $pedido->descuento = $pedido->descuento ?? 0.00;
 
             if ($pedido->subtotal === null && $pedido->monto_total !== null) {
-                $pedido->subtotal = (float) ($pedido->monto_total - $pedido->costo_envio - $pedido->impuesto + $pedido->descuento);
+                $pedido->subtotal = round((float) ($pedido->monto_total - $pedido->costo_envio - $pedido->impuesto + $pedido->descuento), 2);
             } elseif ($pedido->monto_total === null && $pedido->subtotal !== null) {
-                $pedido->monto_total = (float) ($pedido->subtotal + $pedido->costo_envio + $pedido->impuesto - $pedido->descuento);
+                $pedido->monto_total = round((float) ($pedido->subtotal + $pedido->costo_envio + $pedido->impuesto - $pedido->descuento), 2);
             } elseif ($pedido->subtotal === null && $pedido->monto_total === null) {
                 $pedido->subtotal = 0.00;
                 $pedido->monto_total = 0.00;
             } else {
-                $pedido->monto_total = (float) ($pedido->subtotal + $pedido->costo_envio + $pedido->impuesto - $pedido->descuento);
+                $pedido->monto_total = round((float) ($pedido->subtotal + $pedido->costo_envio + $pedido->impuesto - $pedido->descuento), 2);
             }
         });
     }
@@ -116,11 +119,11 @@ class PedidoMaestro extends Model
             $descuento += (float) ($subpedido->descuento ?? 0.0);
         }
 
-        $this->subtotal = $subtotal;
-        $this->costo_envio = $costoEnvio;
-        $this->impuesto = $impuesto;
-        $this->descuento = $descuento;
-        $this->monto_total = (float) ($subtotal + $costoEnvio + $impuesto - $descuento);
+        $this->subtotal = round($subtotal, 2);
+        $this->costo_envio = round($costoEnvio, 2);
+        $this->impuesto = round($impuesto, 2);
+        $this->descuento = round($descuento, 2);
+        $this->monto_total = round((float) ($this->subtotal + $this->costo_envio + $this->impuesto - $this->descuento), 2);
         $this->save();
 
         return (float) $this->monto_total;
@@ -141,42 +144,128 @@ class PedidoMaestro extends Model
         float $montoTotal,
         int $idCliente = 1,
         ?string $cupon = null,
-        ?string $tarjetaRegalo = null
+        ?string $tarjetaRegalo = null,
+        ?int $idDireccionCliente = null,
+        ?float $subtotal = null,
+        float $impuesto = 0.00,
+        float $costoEnvio = 0.00,
+        float $descuento = 0.00,
+        string $estadoInicial = 'pendiente'
     ): int {
         $this->id_cliente = $idCliente;
+        if ($idDireccionCliente !== null && Schema::hasColumn('pedidos_maestros', 'id_direccion_cliente')) {
+            $this->id_direccion_cliente = $idDireccionCliente;
+        }
         $this->fecha_creacion = now();
-        $this->costo_envio = 0.00;
-        $this->impuesto = 0.00;
-        $this->descuento = 0.00;
-        $this->subtotal = $montoTotal;
-        $this->monto_total = $montoTotal;
-        $this->estado_pedido = 'confirmado';
+        $this->costo_envio = round($costoEnvio, 2);
+        $this->impuesto = round($impuesto, 2);
+        $this->descuento = round($descuento, 2);
+
+        if ($subtotal !== null) {
+            $this->subtotal = round($subtotal, 2);
+            $this->monto_total = round($this->subtotal + $this->costo_envio + $this->impuesto - $this->descuento, 2);
+        } else {
+            $this->subtotal = round($montoTotal - $this->costo_envio - $this->impuesto + $this->descuento, 2);
+            $this->monto_total = round($montoTotal, 2);
+        }
+
+        $this->estado_pedido = $estadoInicial;
         $this->cupon_descuento = $cupon;
         $this->tarjeta_regalo = $tarjetaRegalo;
         $this->save();
 
+        $this->registrarHistorialEstado(null, $this->estado_pedido, 'Creación de pedido maestro');
+
         return (int) $this->id_pedido;
     }
 
-    public function actualizarEstado(string $nuevoEstado): void
+    public function actualizarEstado(string $nuevoEstado, ?string $motivo = null, ?int $usuarioId = null): void
     {
-        $this->estado_pedido = $nuevoEstado;
+        $estadoAnterior = $this->estado_pedido ? strtolower((string) $this->estado_pedido) : null;
+        $destino = strtolower(trim($nuevoEstado));
+
+        if ($estadoAnterior === $destino) {
+            return;
+        }
+
+        $this->estado_pedido = $destino;
         $this->save();
+
+        $this->registrarHistorialEstado($estadoAnterior, $destino, $motivo, $usuarioId);
     }
 
     public function cancelar(string $motivo = ''): void
     {
-        $this->estado_pedido = 'cancelado';
-        $this->save();
+        $this->loadMissing('subpedidos');
+
+        $noCancelables = ['en_preparacion', 'despachado', 'entregado'];
+        foreach ($this->subpedidos as $sub) {
+            if (in_array(strtolower((string) $sub->estado_subpedido), $noCancelables, true)) {
+                throw new DomainException(
+                    "No se puede cancelar el pedido porque el subpedido #{$sub->id_subpedido} ya está en estado '{$sub->estado_subpedido}'.",
+                    409
+                );
+            }
+        }
+
+        $estadoPrevio = strtolower((string) $this->estado_pedido);
+        $requiereReembolso = ($estadoPrevio === 'pagado');
+        $motivoFinal = $motivo !== '' ? $motivo : 'Cancelación total solicitada';
+
+        $this->actualizarEstado('cancelado', $motivoFinal);
+
+        if (Schema::hasTable('cancelaciones_pedido')) {
+            CancelacionPedido::create([
+                'id_pedido' => $this->id_pedido,
+                'id_subpedido' => null,
+                'motivo' => $motivoFinal,
+                'requiere_reembolso' => $requiereReembolso,
+                'fecha_cancelacion' => now(),
+            ]);
+        }
 
         foreach ($this->subpedidos as $subpedido) {
-            $subpedido->cancelar($motivo);
+            if (strtolower((string) $subpedido->estado_subpedido) !== 'cancelado') {
+                $subpedido->cancelar($motivoFinal, false);
+            }
         }
+    }
+
+    public function registrarHistorialEstado(
+        ?string $estadoAnterior,
+        string $nuevoEstado,
+        ?string $motivo = null,
+        ?int $usuarioId = null
+    ): void {
+        if (! $this->id_pedido || ! Schema::hasTable('estados_pedido')) {
+            return;
+        }
+
+        EstadoPedido::create([
+            'id_pedido' => $this->id_pedido,
+            'id_subpedido' => null,
+            'id_evento' => (string) Str::uuid(),
+            'estado_anterior' => $estadoAnterior,
+            'estado' => $nuevoEstado,
+            'usuario_id' => $usuarioId,
+            'motivo' => $motivo,
+            'fecha_estado' => now(),
+        ]);
     }
 
     public function subpedidos(): HasMany
     {
         return $this->hasMany(Subpedido::class, 'id_pedido');
+    }
+
+    public function estados(): HasMany
+    {
+        return $this->hasMany(EstadoPedido::class, 'id_pedido');
+    }
+
+    public function cancelaciones(): HasMany
+    {
+        return $this->hasMany(CancelacionPedido::class, 'id_pedido');
     }
 
     public function lineas(): HasManyThrough
