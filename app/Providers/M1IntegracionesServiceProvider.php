@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
@@ -15,6 +16,7 @@ use App\Services\M1_Portal\Integraciones\CarritoClient;
 use App\Services\M1_Portal\Integraciones\CatalogoClient;
 use App\Services\M1_Portal\Integraciones\ComercioClient;
 use App\Services\M1_Portal\Integraciones\InventarioClient;
+use App\Services\M1_Portal\PortalPublicoService;
 use App\Services\M1_Portal\PortalService;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Event;
@@ -73,6 +75,10 @@ class M1IntegracionesServiceProvider extends ServiceProvider
 
     public function register(): void
     {
+        // Fachada de M1: lo que reciben M5, M6, el núcleo y los controladores
+        // de M1 cuando piden PortalPublicoContract.
+        $this->app->bind(PortalPublicoContract::class, PortalPublicoService::class);
+
         foreach (self::INTERFACES as $proveedor => $interfaz) {
             $this->app->when(self::CONSUMIDORES_M1)
                 ->needs($interfaz)
