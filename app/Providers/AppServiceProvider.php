@@ -2,35 +2,35 @@
 
 namespace App\Providers;
 
+use App\Contracts\M1_Portal\PortalServiceInterface;
+use App\Contracts\M2_Comercios\ComerciosServiceInterface;
+use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
+use App\Contracts\M4_Inventario\InventarioServiceInterface;
+use App\Contracts\M5_Pedidos\PedidosServiceInterface;
+// Contratos (Interfaces)
+use App\Contracts\M6_Pagos\PagosServiceInterface;
+// Contratos (Interfaces)
+use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
+use App\Contracts\Nucleo\NucleoServiceInterface;
+use App\Contracts\Nucleo\ServicioIdentidadInterface;
+use App\Services\M1_Portal\PortalService;
+use App\Services\M2_Comercios\ComerciosService;
+use App\Services\M3_Catalogo\CatalogoService;
+use App\Services\M4_Inventario\InventarioService;
+use App\Services\M5_Pedidos\PedidosService;
+// Implementaciones (Servicios)
+use App\Services\M6_Pagos\PagosService;
+// Implementaciones (Servicios)
+use App\Services\M7_Contabilidad\ContabilidadService;
+use App\Services\Nucleo\ContextoCliente;
+use App\Services\Nucleo\ContextoComercio;
+use App\Services\Nucleo\NucleoService;
+use App\Services\Nucleo\ServicioIdentidad;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
-
-// Contratos (Interfaces)
-use App\Contracts\M1_Portal\PortalServiceInterface;
-// Contratos (Interfaces)
-use App\Contracts\M2_Comercios\ComerciosServiceInterface;
-use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
-use App\Contracts\M4_Inventario\InventarioServiceInterface;
-use App\Contracts\M5_Pedidos\PedidosServiceInterface;
-use App\Contracts\M6_Pagos\PagosServiceInterface;
-use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
-use App\Contracts\Nucleo\NucleoServiceInterface;
-use App\Contracts\Nucleo\ServicioIdentidadInterface;
-
-// Implementaciones (Servicios)
-use App\Services\M1_Portal\PortalService;
-// Implementaciones (Servicios)
-use App\Services\M2_Comercios\ComerciosService;
-use App\Services\M3_Catalogo\CatalogoService;
-use App\Services\M4_Inventario\InventarioService;
-use App\Services\M5_Pedidos\PedidosService;
-use App\Services\M6_Pagos\PagosService;
-use App\Services\M7_Contabilidad\ContabilidadService;
-use App\Services\Nucleo\NucleoService;
-use App\Services\Nucleo\ServicioIdentidad;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -49,6 +49,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ContabilidadServiceInterface::class, ContabilidadService::class);
         $this->app->bind(NucleoServiceInterface::class, NucleoService::class);
         $this->app->bind(ServicioIdentidadInterface::class, ServicioIdentidad::class);
+
+        // Una instancia por petición (RN-12, ADR-006): si no son scoped,
+        // cada app(ContextoComercio::class) crea un ámbito nuevo y vacío.
+        $this->app->scoped(ContextoComercio::class);
+        $this->app->scoped(ContextoCliente::class);
     }
 
     /**
