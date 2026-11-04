@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Nucleo\SesionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\EstablecerCliente;
 use App\Http\Middleware\EstablecerComercio;
@@ -18,6 +19,14 @@ use App\Http\Middleware\EstablecerComercio;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::post('/login', [SesionController::class, 'login'])
+    ->middleware('throttle:login')
+    ->name('login');
+
+Route::post('/logout', [SesionController::class, 'logout'])
+    ->middleware('auth:sanctum')
+    ->name('logout');
 
 // M1: Portal Público y Búsqueda
 Route::prefix('m1')
