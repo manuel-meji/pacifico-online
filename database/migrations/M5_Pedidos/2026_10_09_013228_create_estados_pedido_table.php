@@ -16,7 +16,11 @@ return new class extends Migration
             $table->uuid('id_evento')->nullable()->unique();
             $table->string('estado_anterior', 50)->nullable();
             $table->string('estado', 50);
-            $table->foreignId('usuario_id')->nullable()->constrained('users');
+            if (Schema::hasTable('users')) {
+                $table->foreignId('usuario_id')->nullable()->constrained('users');
+            } else {
+                $table->unsignedBigInteger('usuario_id')->nullable();
+            }
             $table->text('motivo')->nullable();
             $table->timestamp('fecha_estado');
             $table->timestamps();
