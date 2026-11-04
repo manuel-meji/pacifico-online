@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Nucleo\SesionController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Middleware\EstablecerCliente;
+use App\Http\Middleware\EstablecerComercio;
 
 /*
 |--------------------------------------------------------------------------
@@ -46,7 +48,17 @@ Route::prefix('m4')
     ->name('m4.')
     ->group(base_path('routes/modules/m4_inventario.php'));
 
-// M5: Carrito y Gestión de Pedidos
+// M5: Carrito y Gestión de Pedidos - Rutas contractuales OpenAPI v1.1.0
+Route::prefix('api/m5/v1')
+    ->name('api.m5.v1.')
+    ->group(base_path('routes/modules/m5_pedidos.php'));
+
+// M5: Alias para compatibilidad con prefijo general /api/v1
+Route::prefix('api/v1')
+    ->name('api.v1.')
+    ->group(base_path('routes/modules/m5_pedidos.php'));
+
+// M5: Carrito y Gestión de Pedidos (Compatibilidad frontend y tests previos)
 Route::prefix('m5')
     ->name('m5.')
     ->group(base_path('routes/modules/m5_pedidos.php'));

@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 
 // Contratos (Interfaces)
 use App\Contracts\M1_Portal\PortalServiceInterface;
+// Contratos (Interfaces)
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
@@ -21,6 +22,7 @@ use App\Contracts\Nucleo\ServicioIdentidadInterface;
 
 // Implementaciones (Servicios)
 use App\Services\M1_Portal\PortalService;
+// Implementaciones (Servicios)
 use App\Services\M2_Comercios\ComerciosService;
 use App\Services\M3_Catalogo\CatalogoService;
 use App\Services\M4_Inventario\InventarioService;

@@ -39,7 +39,7 @@ info:
 
     Integración con otros módulos. Por decisión del Comité de Arquitectura e
     Integración, los módulos se comunican de forma sincrónica por la interfaz PHP
-    App\Contracts\M1\PortalPublicoContract, dentro de la misma aplicación Laravel.
+    App\Contracts\M1_Portal\PortalPublicoContract, dentro de la misma aplicación Laravel.
     Las rutas HTTP de este documento son para el frontend (Inertia con React,
     decisión del PC2). Las llamadas por la interfaz PHP no llevan sesión de
     usuario, por lo que pueden hacerse desde procesos en segundo plano. La
@@ -1151,14 +1151,14 @@ components:
                 correo_electronico: No tiene un formato de correo válido.
 
 # ---------------------------------------------------------------
-# Interfaz PHP App\Contracts\M1\PortalPublicoContract
+# Interfaz PHP App\Contracts\M1_Portal\PortalPublicoContract
 # Es el contrato que usan M5 y M6 dentro de la misma aplicación Laravel.
 # ---------------------------------------------------------------
 x-interfaz-php:
-  interfaz: App\Contracts\M1\PortalPublicoContract
-  ubicacion: app/Contracts/M1/PortalPublicoContract.php
+  interfaz: App\Contracts\M1_Portal\PortalPublicoContract
+  ubicacion: app/Contracts/M1_Portal/PortalPublicoContract.php
   excepciones:
-    ubicacion: app/Contracts/M1/Exceptions/
+    ubicacion: app/Contracts/M1_Portal/Exceptions/
     base: PortalPublicoException (extiende RuntimeException y expone codigo() con el código de error de la ruta web equivalente)
     lista:
       - ClienteNoEncontradoException (ERR-004)

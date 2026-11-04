@@ -2,12 +2,19 @@
 
 namespace App\Http\Controllers\M5_Pedidos;
 
+use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
+use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
-use App\Events\PedidoConfirmado;
-use App\Events\PedidoPagado;
+use App\Events\M5_Pedidos\PedidoCancelado;
+use App\Events\M5_Pedidos\PedidoConfirmado;
+use App\Events\M5_Pedidos\PedidoCreado;
+use App\Events\M5_Pedidos\PedidoPagado;
+use App\Events\M5_Pedidos\SubpedidoCancelado;
+use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Events\M5_Pedidos\SubpedidoEntregado;
 use App\Http\Controllers\Controller;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\PedidoLinea;
@@ -15,6 +22,7 @@ use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class ControladorPedido extends Controller
@@ -36,13 +44,35 @@ class ControladorPedido extends Controller
     {
         $datos = $request->all();
         $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $direccionClienteId = (int) ($request->input('id_direccion_cliente', 1));
 
         // 1. Validar que el carrito no esté vacío
         $carrito = Carrito::with('items')->where('id_cliente', $clienteId)->first();
         $carritoTieneItems = $carrito && $carrito->items->isNotEmpty();
 
         if (! $carritoTieneItems) {
-            return response()->json(['error' => 'Carrito vacío o inexistente'], 400);
+            return $this->errorRespuesta('ERR-M5-001', 'Carrito vacío o inexistente', null, 400);
+        }
+
+        // Validar cliente y dirección con M1_Portal (Contrato M1 v1.1.0)
+        $portalService = app()->bound(PortalServiceInterface::class)
+            ? app(PortalServiceInterface::class)
+            : null;
+
+        $datosComprador = null;
+        $datosDireccionEnvio = null;
+
+        if ($portalService) {
+            try {
+                if (method_exists($portalService, 'obtenerCliente')) {
+                    $datosComprador = $portalService->obtenerCliente($clienteId);
+                }
+                if ($direccionClienteId && method_exists($portalService, 'obtenerDireccionCliente')) {
+                    $datosDireccionEnvio = $portalService->obtenerDireccionCliente($clienteId, $direccionClienteId);
+                }
+            } catch (\Throwable $e) {
+                // Manejo de error o continuar
+            }
         }
 
         // Obtener detalles de variación para cada ítem y agrupar por comercio
@@ -86,6 +116,7 @@ class ControladorPedido extends Controller
                 'tarifa_impuesto' => $tarifaIva,
                 'subtotal' => $subtotalLinea,
                 'impuesto' => $impuestoLinea,
+                'id_reserva' => $item->id_reserva,
             ];
 
             $itemsAgrupados[$comercioId]['subtotal'] += $subtotalLinea;
@@ -114,19 +145,28 @@ class ControladorPedido extends Controller
         }
 
         if (! $comerciosActivos) {
-            return response()->json(['error' => 'Comercio no disponible'], 409);
+            return $this->errorRespuesta('ERR-003', 'Comercio no disponible', null, 409);
         }
 
-        // 3. Reservar existencias en M4_Inventario (Contrato M4 v1.1.0)
+        // 3. Reservar existencias en M4_Inventario (Contrato M4 v1.1.0 / v1.2.1)
         $idempotencyKey = Str::uuid()->toString();
         $idReserva = null;
 
         if ($this->m4Inventario) {
             try {
-                if (method_exists($this->m4Inventario, 'reservarExistencias')) {
-                    $idReserva = $this->m4Inventario->reservarExistencias($idempotencyKey);
+                if ($this->m4Inventario instanceof InventarioModuleInterface) {
+                    foreach ($carrito->items as $it) {
+                        $resReserva = $this->m4Inventario->reservarExistencias(1, $it->id_variacion, $it->cantidad, null, $idempotencyKey);
+                        $idReserva = is_array($resReserva) ? ($resReserva['id_reserva'] ?? $resReserva['reserva_id'] ?? null) : $resReserva;
+                        if (! $idReserva) {
+                            return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
+                        }
+                    }
+                } elseif (method_exists($this->m4Inventario, 'reservarExistencias')) {
+                    $resReserva = $this->m4Inventario->reservarExistencias($idempotencyKey);
+                    $idReserva = is_array($resReserva) ? ($resReserva['id_reserva'] ?? $resReserva['reserva_id'] ?? null) : $resReserva;
                     if (! $idReserva) {
-                        return response()->json(['error' => 'Reserva fallida'], 409);
+                        return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
                     }
                 } elseif (method_exists($this->m4Inventario, 'solicitarReserva')) {
                     foreach ($carrito->items as $it) {
@@ -135,7 +175,7 @@ class ControladorPedido extends Controller
                     $idReserva = $idempotencyKey;
                 }
             } catch (\Throwable $e) {
-                return response()->json(['error' => 'Reserva fallida'], 409);
+                return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
             }
         } else {
             $idReserva = $idempotencyKey;
@@ -159,6 +199,11 @@ class ControladorPedido extends Controller
             $request->input('tarjeta_regalo')
         );
 
+        if ($direccionClienteId && Schema::hasColumn('pedidos_maestros', 'id_direccion_cliente')) {
+            $pedidoMaestro->id_direccion_cliente = $direccionClienteId;
+            $pedidoMaestro->save();
+        }
+
         // 5. Bucle de creación de subpedidos y líneas
         $subpedidoObj = new Subpedido;
         foreach ($itemsAgrupados as $grupo) {
@@ -174,12 +219,14 @@ class ControladorPedido extends Controller
             $subpedido = $subpedidosCreados[0];
 
             foreach ($grupo['items'] as $itemData) {
-                (new PedidoLinea)->crearLinea(
+                $lineaReserva = (string) ($itemData['id_reserva'] ?? $idReserva ?? '');
+                $lineaId = (new PedidoLinea)->crearLinea(
                     $subpedido->id_subpedido,
                     $itemData['id_variacion'],
                     $itemData['cantidad'],
                     $itemData['precio_unitario'],
-                    $itemData['tarifa_impuesto']
+                    $itemData['tarifa_impuesto'],
+                    $lineaReserva ?: null
                 );
             }
         }
@@ -187,12 +234,12 @@ class ControladorPedido extends Controller
         // Vaciar el carrito
         $carrito->vaciar();
 
-        // 6. Publicar evento en el Bus de Eventos si la clase existe
-        if (class_exists('App\Events\PedidoConfirmado')) {
-            event(new PedidoConfirmado($idPedido, $montoTotal));
-        }
+        // 6. Publicar eventos canónicos
+        $pedidoMaestro->load('subpedidos.lineas');
+        event(new PedidoConfirmado($pedidoMaestro));
+        event(new PedidoCreado($pedidoMaestro));
 
-        // 7. Procesar pago con M6_Pagos (Contrato M6 v1.0.0)
+        // 7. Procesar pago con M6_Pagos (Contrato M6 v1.0.0 / v1.1.1)
         $urlPasarelaPago = 'https://pago.pacificos.com/checkout/'.$idPedido;
         if ($this->m6Pagos) {
             try {
@@ -219,29 +266,39 @@ class ControladorPedido extends Controller
             }
         }
 
-        // 8. Retornar URL de la pasarela para redirigir al cliente
-        return response()->json([
-            'pedido' => $pedidoMaestro->load('subpedidos.lineas'),
+        // 8. Retornar respuesta canónica alineada con esquema PedidoMaestro
+        $pedidoArray = $pedidoMaestro->toArray();
+        $respuesta = array_merge($pedidoArray, [
+            'pedido' => $pedidoMaestro,
             'urlPasarelaPago' => $urlPasarelaPago,
-        ], 201);
+        ]);
+
+        return response()->json($respuesta, 201);
     }
 
     public function registrarPagoConfirmado(int|Request $pedidoIdOrRequest, ?string $refPago = null): JsonResponse
     {
         if ($pedidoIdOrRequest instanceof Request) {
             $pedidoId = (int) ($pedidoIdOrRequest->route('id_pedido') ?? $pedidoIdOrRequest->input('id_pedido'));
-            $referencia = (string) ($pedidoIdOrRequest->input('refPago') ?? $refPago ?? 'REF-'.uniqid());
+            $referencia = (string) ($pedidoIdOrRequest->input('refPago') ?? $pedidoIdOrRequest->input('referencia_pago') ?? $refPago ?? 'REF-'.uniqid());
         } else {
             $pedidoId = (int) $pedidoIdOrRequest;
             $referencia = (string) ($refPago ?? 'REF-'.uniqid());
         }
 
         // 1. Consultar estado actual del pedido
-        $pedido = PedidoMaestro::findOrFail($pedidoId);
+        $pedido = PedidoMaestro::with('subpedidos.lineas')->find($pedidoId);
+        if (! $pedido) {
+            return $this->errorRespuesta('ERR-004', 'Pedido no encontrado', null, 404);
+        }
 
         // 2. Operación Idempotente: Si ya está pagado, ignorar sin cambios
-        if ($pedido->estado_pedido === 'pagado') {
-            return response()->json(['mensaje' => 'Operación idempotente, pedido ya pagado'], 200);
+        if (strtolower((string) $pedido->estado_pedido) === 'pagado') {
+            return response()->json([
+                'mensaje' => 'Operación idempotente, pedido ya pagado',
+                'estado' => 'PAGADO',
+                'pedido' => $pedido,
+            ], 200);
         }
 
         // 3. Actualizar estado del Pedido Maestro a "pagado"
@@ -252,28 +309,36 @@ class ControladorPedido extends Controller
             $subpedido->cambiarEstado('pagado');
         }
 
-        // 5. Publicar evento PedidoPagado si la clase existe
-        if (class_exists('App\Events\PedidoPagado')) {
-            event(new PedidoPagado($pedidoId, $referencia));
-        }
+        // 5. Publicar evento canónico PedidoPagado
+        $pedidoActualizado = $pedido->fresh(['subpedidos.lineas']);
+        event(new PedidoPagado($pedidoActualizado));
 
-        return response()->json(['mensaje' => 'Pago registrado correctamente'], 200);
+        return response()->json([
+            'mensaje' => 'Pago registrado correctamente',
+            'referencia' => $referencia,
+            'estado' => 'PAGADO',
+            'pedido' => $pedidoActualizado,
+        ], 200);
     }
 
     public function cancelarSubpedido(int|Request $subpedidoIdOrRequest, ?string $motivo = null): JsonResponse
     {
+        $req = request();
         if ($subpedidoIdOrRequest instanceof Request) {
             $subpedidoId = (int) ($subpedidoIdOrRequest->route('id_subpedido') ?? $subpedidoIdOrRequest->input('id_subpedido'));
             $motivoTexto = (string) ($subpedidoIdOrRequest->input('motivo') ?? $motivo ?? 'Cancelado');
         } else {
             $subpedidoId = (int) $subpedidoIdOrRequest;
-            $motivoTexto = (string) ($motivo ?? 'Cancelado');
+            $motivoTexto = (string) ($req->input('motivo') ?? $motivo ?? 'Cancelado');
         }
 
-        $subpedido = Subpedido::with('pedidoMaestro')->findOrFail($subpedidoId);
+        $subpedido = Subpedido::with(['pedidoMaestro', 'lineas'])->find($subpedidoId);
+        if (! $subpedido) {
+            return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
+        }
 
-        if (in_array($subpedido->estado_subpedido, ['despachado', 'entregado'])) {
-            return response()->json(['error' => 'No se puede cancelar un subpedido ya despachado o entregado'], 409);
+        if (in_array(strtolower((string) $subpedido->estado_subpedido), ['despachado', 'entregado'])) {
+            return $this->errorRespuesta('ERR-M5-003', 'No se puede cancelar un subpedido ya despachado o entregado', null, 409);
         }
 
         $subpedido->cancelar($motivoTexto);
@@ -284,88 +349,120 @@ class ControladorPedido extends Controller
             $subpedidosActivos = $pedidoMaestro->subpedidos()->where('estado_subpedido', '!=', 'cancelado')->count();
             if ($subpedidosActivos === 0) {
                 $pedidoMaestro->actualizarEstado('cancelado');
+                event(new PedidoCancelado($pedidoMaestro->fresh('subpedidos.lineas'), $motivoTexto));
             }
         }
 
-        return response()->json([
+        $subpedidoActualizado = $subpedido->fresh('lineas');
+        event(new SubpedidoCancelado($subpedidoActualizado, $motivoTexto));
+        $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Subpedido cancelado correctamente',
-            'subpedido' => $subpedido,
-        ], 200);
-    }
+            'subpedido' => $subpedidoActualizado,
+        ]);
 
-    public function calcularCostos(float $subtotal, float $impuestos, float $envio): float
-    {
-        return $subtotal + $impuestos + $envio;
+        return response()->json($respuesta, 200);
     }
 
     public function despacharSubpedido(int|Request $requestOrId, ?string $guia = null): JsonResponse
     {
+        $req = request();
         if ($requestOrId instanceof Request) {
             $subpedidoId = (int) ($requestOrId->route('id_subpedido') ?? $requestOrId->input('id_subpedido'));
             $guiaTransporte = (string) ($requestOrId->input('guia_seguimiento') ?? $requestOrId->input('guia_transporte') ?? $guia ?? '');
         } else {
             $subpedidoId = (int) $requestOrId;
-            $guiaTransporte = (string) ($guia ?? '');
+            $guiaTransporte = (string) ($req->input('guia_seguimiento') ?? $req->input('guia_transporte') ?? $guia ?? '');
         }
 
-        $subpedido = Subpedido::with('pedidoMaestro')->findOrFail($subpedidoId);
+        $subpedido = Subpedido::with(['pedidoMaestro', 'lineas'])->find($subpedidoId);
+        if (! $subpedido) {
+            return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
+        }
+
+        if (in_array(strtolower((string) $subpedido->estado_subpedido), ['despachado', 'entregado', 'cancelado'])) {
+            return $this->errorRespuesta('ERR-M5-002', 'El subpedido ya fue despachado o cancelado previamente', null, 409);
+        }
+
         $subpedido->despachar($guiaTransporte ?: null);
 
-        if ($this->m2Comercios && method_exists($this->m2Comercios, 'registrarComision')) {
-            try {
-                $this->m2Comercios->registrarComision($subpedido->id_pedido, (float) $subpedido->subtotal);
-            } catch (\Throwable $e) {
-                // Continuar
-            }
-        }
-
-        return response()->json([
+        // NOTA DE ARQUITECTURA (FASE 1 - DESACOPLAMIENTO M2):
+        // Se elimina la llamada directa a registrarComision de M2. M5 no gestiona comisiones.
+        // M2 calcula su comisión en su propio módulo a partir del evento SubpedidoDespachado.
+        $subpedidoActualizado = $subpedido->fresh('lineas');
+        event(new SubpedidoDespachado($subpedidoActualizado, $guiaTransporte ?: null));
+        $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Subpedido despachado correctamente',
-            'subpedido' => $subpedido,
-        ], 200);
+            'subpedido' => $subpedidoActualizado,
+        ]);
+
+        return response()->json($respuesta, 200);
     }
 
     public function confirmarEntregaSubpedido(int|Request $requestOrId): JsonResponse
     {
         $subpedidoId = $requestOrId instanceof Request ? (int) ($requestOrId->route('id_subpedido') ?? $requestOrId->input('id_subpedido')) : (int) $requestOrId;
-        $subpedido = Subpedido::findOrFail($subpedidoId);
+        $subpedido = Subpedido::with('lineas')->find($subpedidoId);
+        if (! $subpedido) {
+            return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
+        }
+
+        if (in_array(strtolower((string) $subpedido->estado_subpedido), ['entregado', 'cancelado'])) {
+            return $this->errorRespuesta('ERR-M5-002', 'El subpedido ya fue entregado o cancelado', null, 409);
+        }
+
         $subpedido->entregar();
 
-        return response()->json([
+        $subpedidoActualizado = $subpedido->fresh('lineas');
+        event(new SubpedidoEntregado($subpedidoActualizado));
+        $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Entrega confirmada',
-            'subpedido' => $subpedido,
-        ], 200);
+            'subpedido' => $subpedidoActualizado,
+        ]);
+
+        return response()->json($respuesta, 200);
     }
 
     public function cancelarPedidoTotal(int|Request $requestOrId, ?string $motivo = null): JsonResponse
     {
+        $req = request();
         if ($requestOrId instanceof Request) {
             $pedidoId = (int) ($requestOrId->route('id_pedido') ?? $requestOrId->input('id_pedido'));
             $motivoTexto = (string) ($requestOrId->input('motivo') ?? $motivo ?? 'Cancelación total solicitada');
         } else {
             $pedidoId = (int) $requestOrId;
-            $motivoTexto = (string) ($motivo ?? 'Cancelación total');
+            $motivoTexto = (string) ($req->input('motivo') ?? $motivo ?? 'Cancelación total');
         }
 
-        $pedido = PedidoMaestro::with('subpedidos')->findOrFail($pedidoId);
+        $pedido = PedidoMaestro::with('subpedidos.lineas')->find($pedidoId);
+        if (! $pedido) {
+            return $this->errorRespuesta('ERR-004', 'Pedido no encontrado', null, 404);
+        }
 
-        $hayDespachados = $pedido->subpedidos->contains(fn ($s) => in_array($s->estado_subpedido, ['despachado', 'entregado']));
+        $hayDespachados = $pedido->subpedidos->contains(fn ($s) => in_array(strtolower((string) $s->estado_subpedido), ['despachado', 'entregado']));
         if ($hayDespachados) {
-            return response()->json(['error' => 'No se puede cancelar el pedido completo porque contiene subpedidos ya despachados'], 409);
+            return $this->errorRespuesta('ERR-M5-003', 'No se puede cancelar el pedido completo porque contiene subpedidos ya despachados', null, 409);
         }
 
         $pedido->cancelar($motivoTexto);
 
-        return response()->json([
+        $pedidoActualizado = $pedido->fresh('subpedidos.lineas');
+        event(new PedidoCancelado($pedidoActualizado, $motivoTexto));
+        $respuesta = array_merge($pedidoActualizado->toArray(), [
             'mensaje' => 'Pedido maestro y subpedidos cancelados correctamente',
-            'pedido' => $pedido->load('subpedidos'),
-        ], 200);
+            'pedido' => $pedidoActualizado,
+        ]);
+
+        return response()->json($respuesta, 200);
     }
 
     public function obtenerPedido(int|Request $requestOrId): JsonResponse
     {
         $pedidoId = $requestOrId instanceof Request ? (int) ($requestOrId->route('id_pedido') ?? $requestOrId->input('id_pedido')) : (int) $requestOrId;
-        $pedido = PedidoMaestro::with(['subpedidos.lineas'])->findOrFail($pedidoId);
+        $pedido = PedidoMaestro::with(['subpedidos.lineas'])->find($pedidoId);
+
+        if (! $pedido) {
+            return $this->errorRespuesta('ERR-004', 'Pedido no encontrado', null, 404);
+        }
 
         return response()->json($pedido, 200);
     }
@@ -373,7 +470,11 @@ class ControladorPedido extends Controller
     public function obtenerSubpedido(int|Request $requestOrId): JsonResponse
     {
         $subpedidoId = $requestOrId instanceof Request ? (int) ($requestOrId->route('id_subpedido') ?? $requestOrId->input('id_subpedido')) : (int) $requestOrId;
-        $subpedido = Subpedido::with('lineas')->findOrFail($subpedidoId);
+        $subpedido = Subpedido::with('lineas')->find($subpedidoId);
+
+        if (! $subpedido) {
+            return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
+        }
 
         return response()->json($subpedido, 200);
     }
@@ -389,6 +490,28 @@ class ControladorPedido extends Controller
 
         $pedidos = $query->orderByDesc('fecha_creacion')->get();
 
-        return response()->json($pedidos, 200);
+        return response()->json([
+            'pagina' => (int) $request->input('pagina', 1),
+            'por_pagina' => (int) $request->input('por_pagina', 15),
+            'total_resultados' => $pedidos->count(),
+            'pedidos' => $pedidos,
+        ], 200);
+    }
+
+    public function calcularCostos(float $subtotal, float $impuestos, float $envio): float
+    {
+        return $subtotal + $impuestos + $envio;
+    }
+
+    private function errorRespuesta(string $codigo, string $mensaje, ?array $detalles = null, int $status = 400): JsonResponse
+    {
+        return response()->json([
+            'error' => [
+                'codigo' => $codigo,
+                'mensaje' => $mensaje,
+                'detalles' => $detalles,
+            ],
+            'mensaje' => $mensaje,
+        ], $status);
     }
 }

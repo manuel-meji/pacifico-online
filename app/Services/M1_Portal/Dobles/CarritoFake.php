@@ -2,6 +2,7 @@
 
 namespace App\Services\M1_Portal\Dobles;
 
+use App\Contracts\M5_Pedidos\CarritoServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use Illuminate\Support\Str;
 use LogicException;
@@ -10,12 +11,14 @@ use LogicException;
  * Fake de M5 Carrito y pedidos (contrato 1.1.0) para las operaciones que
  * consume M1: obtenerCarrito y agregarItemCarrito.
  *
- * Las firmas son las de x-interfaz-php del contrato de M5. Guarda el carrito
+ * Las firmas son las de x-interfaz-php del contrato de M5. Implementa
+ * CarritoServiceInterface, que es la que usa CarritoClient, y sigue
+ * implementando PedidosServiceInterface para no romper a quien la pedía. Guarda el carrito
  * en memoria: lo agregado se ve en obtenerCarrito mientras viva la instancia
  * (una petición o una prueba). Valida contra el catálogo y las existencias de
  * DatosPrueba, como M5 lo hace con M3.obtenerVariacion y M4.consultarStockDisponible.
  */
-class CarritoFake implements PedidosServiceInterface
+class CarritoFake implements CarritoServiceInterface, PedidosServiceInterface
 {
     /**
      * @var array<int, array{id_carrito: int, id_cliente: int, created_at: string, updated_at: string, items: list<array<string, mixed>>}>
@@ -86,6 +89,21 @@ class CarritoFake implements PedidosServiceInterface
         $this->carritos[$idCliente] = $carrito;
 
         return $this->conMontoEstimado($carrito);
+    }
+
+    public function vaciarCarrito(int $idCliente): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M1.');
+    }
+
+    public function actualizarCantidadItemCarrito(int $idItemCarrito, int $cantidad, ?int $idCliente = null): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M1.');
+    }
+
+    public function eliminarItemCarrito(int $idItemCarrito, ?int $idCliente = null): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M1.');
     }
 
     public function crearPedido(array $datosCompra): array

@@ -3,7 +3,8 @@
 namespace Tests\Doubles\M2;
 
 use App\Exceptions\M6_Pagos\ErrorContratoException;
-use App\Services\M6_Pagos\Clients\{ComercioClient, DatosFiscalesDTO};
+use App\Services\M6_Pagos\Clients\ComercioClient;
+use App\Services\M6_Pagos\Clients\DatosFiscalesDTO;
 
 /** Fake de M2. 11 y 12 válidos; 13 = datos fiscales incompletos; otro = no existe. */
 final class FakeComercioClient implements ComercioClient

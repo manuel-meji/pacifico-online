@@ -7,6 +7,11 @@ use App\Services\M1_Portal\Dobles\InventarioStub;
 use App\Services\M4_Inventario\Dobles\CatalogoStub as M4CatalogoStub;
 use App\Services\M4_Inventario\Dobles\ComerciosStub as M4ComerciosStub;
 use App\Services\M4_Inventario\Dobles\NucleoStub as M4NucleoStub;
+use App\Services\M5_Pedidos\Dobles\CatalogoStub as M5CatalogoStub;
+use App\Services\M5_Pedidos\Dobles\ComerciosStub as M5ComerciosStub;
+use App\Services\M5_Pedidos\Dobles\InventarioStub as M5InventarioStub;
+use App\Services\M5_Pedidos\Dobles\PagosStub as M5PagosStub;
+use App\Services\M5_Pedidos\Dobles\PortalStub as M5PortalStub;
 
 return [
 
@@ -38,6 +43,20 @@ return [
         'm5' => [
             'modo' => env('M1_M5_MODO', 'doble'),
             'doble' => CarritoFake::class,
+        ],
+
+        // Segundos de espera máxima por proveedor (RNF-M1-04).
+        'tiempo_maximo' => (float) env('M1_TIEMPO_MAXIMO', 3),
+
+        // Segundos de vida de la caché de respuestas de M2, M3 y M4; máximo 5 (RNF-M1-06).
+        'cache_segundos' => (int) env('M1_CACHE_SEGUNDOS', 5),
+
+        // Clases de los eventos de M2 que escucha M1 (EventosComercioListener).
+        // M2 todavía no los publica; si usa otros nombres, se cambian solo aquí.
+        'eventos_m2' => [
+            'comercio_aprobado' => 'App\\Events\\M2_Comercios\\ComercioAprobado',
+            'comercio_suspendido' => 'App\\Events\\M2_Comercios\\ComercioSuspendido',
+            'comercio_reactivado' => 'App\\Events\\M2_Comercios\\ComercioReactivado',
         ],
     ],
 
@@ -71,6 +90,40 @@ return [
 
         // Minutos de vigencia de una reserva si el solicitante no indica otro valor.
         'reserva_minutos' => (int) env('M4_RESERVA_MINUTOS', 15),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dependencias y proveedores de M5 Carrito y Pedidos
+    |--------------------------------------------------------------------------
+    |
+    | Para cada proveedor externo (M1, M2, M3, M4, M6), 'modo' elige entre el
+    | doble de prueba ('doble') y el servicio real ('real').
+    | Ver M5IntegracionesServiceProvider.
+    |
+    */
+
+    'm5' => [
+        'm1' => [
+            'modo' => env('M5_M1_MODO', 'doble'),
+            'doble' => M5PortalStub::class,
+        ],
+        'm2' => [
+            'modo' => env('M5_M2_MODO', 'doble'),
+            'doble' => M5ComerciosStub::class,
+        ],
+        'm3' => [
+            'modo' => env('M5_M3_MODO', 'doble'),
+            'doble' => M5CatalogoStub::class,
+        ],
+        'm4' => [
+            'modo' => env('M5_M4_MODO', 'doble'),
+            'doble' => M5InventarioStub::class,
+        ],
+        'm6' => [
+            'modo' => env('M5_M6_MODO', 'doble'),
+            'doble' => M5PagosStub::class,
+        ],
     ],
 
 ];

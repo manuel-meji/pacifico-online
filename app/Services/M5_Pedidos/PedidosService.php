@@ -2,11 +2,16 @@
 
 namespace App\Services\M5_Pedidos;
 
+use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
+use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
+use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M5_Pedidos\CarritoServiceInterface;
 use App\Contracts\M5_Pedidos\GestionPedidosServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
+use App\Events\M5_Pedidos\PedidoPagado;
+use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoMaestro;
@@ -16,7 +21,11 @@ use Illuminate\Support\Facades\Schema;
 class PedidosService implements CarritoServiceInterface, GestionPedidosServiceInterface, PedidosServiceInterface, SubpedidosServiceInterface
 {
     public function __construct(
-        protected ?ComerciosServiceInterface $comerciosService = null
+        protected ?ComerciosServiceInterface $comerciosService = null,
+        protected ?CatalogoServiceInterface $catalogoService = null,
+        protected ?InventarioServiceInterface $inventarioService = null,
+        protected ?PagosServiceInterface $pagosService = null,
+        protected ?PortalServiceInterface $portalService = null,
     ) {}
 
     // =========================================================================
@@ -436,12 +445,19 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
 
     public function marcarComoPagado(int $pedidoId, string $comprobantePago): bool
     {
-        // Paso 6: Actualizar pedido a PAGADO y publicar evento
+        // Paso 6: Actualizar pedido a PAGADO y publicar evento canónico PedidoPagado
         if ($this->hasTable('pedidos_maestros')) {
-            $pedido = PedidoMaestro::find($pedidoId);
+            $pedido = PedidoMaestro::with('subpedidos.lineas')->find($pedidoId);
             if ($pedido) {
                 $pedido->estado_pedido = 'pagado';
                 $pedido->save();
+
+                foreach ($pedido->subpedidos as $subpedido) {
+                    $subpedido->estado_subpedido = 'pagado';
+                    $subpedido->save();
+                }
+
+                PedidoPagado::dispatch($pedido);
             }
         }
 
