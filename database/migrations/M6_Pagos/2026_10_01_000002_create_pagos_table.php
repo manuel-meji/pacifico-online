@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -15,10 +15,10 @@ return new class extends Migration
             $table->unsignedBigInteger('id_cliente');
 
             $table->foreignId('id_medio_pago')
-                  ->constrained('medios_pago', 'id_medio_pago');
+                ->constrained('medios_pago', 'id_medio_pago');
 
             $table->foreignId('id_estado_pago')
-                  ->constrained('estados_pago', 'id_estado_pago');
+                ->constrained('estados_pago', 'id_estado_pago');
 
             $table->decimal('monto', 12, 2);
             $table->string('clave_idempotencia', 100)->unique();

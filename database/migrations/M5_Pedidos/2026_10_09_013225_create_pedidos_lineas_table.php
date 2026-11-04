@@ -16,6 +16,7 @@ return new class extends Migration
             $table->integer('cantidad');
             $table->decimal('precio_unitario', 10, 2);
             $table->decimal('tarifa_impuesto', 5, 2);
+            $table->uuid('id_reserva')->nullable()->index();
             $table->timestamps();
         });
 

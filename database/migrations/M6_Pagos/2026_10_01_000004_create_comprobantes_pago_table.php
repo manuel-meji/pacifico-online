@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -13,14 +13,14 @@ return new class extends Migration
             $table->id('id_comprobante_pago');
 
             $table->foreignId('id_pago')
-                  ->unique()
-                  ->constrained('pagos', 'id_pago');
+                ->unique()
+                ->constrained('pagos', 'id_pago');
 
             $table->text('documento');
             $table->timestamp('fecha_emision')->useCurrent();
         });
 
-        DB::statement("ALTER TABLE comprobantes_pago ADD CONSTRAINT comprobantes_pago_documento_check CHECK (length(trim(documento)) > 0)");
+        DB::statement('ALTER TABLE comprobantes_pago ADD CONSTRAINT comprobantes_pago_documento_check CHECK (length(trim(documento)) > 0)');
     }
 
     public function down(): void

@@ -15,6 +15,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared(<<<'SQL'
 CREATE TABLE estados_reserva (
     id_estado_reserva smallint     NOT NULL,
@@ -54,6 +58,10 @@ SQL
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared('DROP TABLE IF EXISTS motivos_ajuste');
         DB::unprepared('DROP TABLE IF EXISTS estados_reserva');
     }

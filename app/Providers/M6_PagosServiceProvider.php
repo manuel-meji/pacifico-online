@@ -2,7 +2,14 @@
 
 namespace App\Providers;
 
-use App\Services\M6_Pagos\Clients\{ClienteClient, ComercioClient, ContabilidadClient, PedidoClient};
+use App\Services\M6_Pagos\Adaptadores\AdaptadorM1;
+use App\Services\M6_Pagos\Adaptadores\AdaptadorM2;
+use App\Services\M6_Pagos\Adaptadores\AdaptadorM5;
+use App\Services\M6_Pagos\Adaptadores\AdaptadorM7;
+use App\Services\M6_Pagos\Clients\ClienteClient;
+use App\Services\M6_Pagos\Clients\ComercioClient;
+use App\Services\M6_Pagos\Clients\ContabilidadClient;
+use App\Services\M6_Pagos\Clients\PedidoClient;
 use Illuminate\Support\ServiceProvider;
 use Tests\Doubles\M1\FakeClienteClient;
 use Tests\Doubles\M2\FakeComercioClient;
@@ -22,11 +29,12 @@ class M6_PagosServiceProvider extends ServiceProvider
             $this->app->bind(ClienteClient::class, FakeClienteClient::class);
             $this->app->bind(ComercioClient::class, FakeComercioClient::class);
             $this->app->bind(ContabilidadClient::class, FakeContabilidadClient::class);
+
             return;
         }
-        $this->app->bind(PedidoClient::class, \App\Services\M6_Pagos\Adaptadores\AdaptadorM5::class);
-        $this->app->bind(ClienteClient::class, \App\Services\M6_Pagos\Adaptadores\AdaptadorM1::class);
-        $this->app->bind(ComercioClient::class, \App\Services\M6_Pagos\Adaptadores\AdaptadorM2::class);
-        $this->app->bind(ContabilidadClient::class, \App\Services\M6_Pagos\Adaptadores\AdaptadorM7::class);
+        $this->app->bind(PedidoClient::class, AdaptadorM5::class);
+        $this->app->bind(ClienteClient::class, AdaptadorM1::class);
+        $this->app->bind(ComercioClient::class, AdaptadorM2::class);
+        $this->app->bind(ContabilidadClient::class, AdaptadorM7::class);
     }
 }
