@@ -16,9 +16,18 @@ class ComerciosStub implements ComerciosServiceInterface
 
     private ?bool $forzarSuspendido = null;
 
+    private float $costoEnvio = 0.00;
+
     public function setComercioSuspendido(bool $suspendido = true): self
     {
         $this->forzarSuspendido = $suspendido;
+
+        return $this;
+    }
+
+    public function setCostoEnvio(float $costoEnvio): self
+    {
+        $this->costoEnvio = $costoEnvio;
 
         return $this;
     }
@@ -38,14 +47,35 @@ class ComerciosStub implements ComerciosServiceInterface
             throw ErrorProveedorException::comercioSuspendido('Comercio suspendido');
         }
 
-        return [
-            'id_comercio' => $comercioId,
-            'nombre' => 'Comercio de prueba',
-            'nombre_comercial' => 'Comercio de prueba S.A.',
-            'estado' => 'activo',
-            'activo' => true,
-            'logo_url' => "https://pacifico.test/storage/comercios/{$comercioId}/logo.png",
-        ];
+        return match ($comercioId) {
+            1 => [
+                'id_comercio' => 1,
+                'nombre' => 'Café Don Manuel',
+                'nombre_comercial' => 'Café Don Manuel S.A.',
+                'estado' => 'activo',
+                'activo' => true,
+                'costo_envio' => $this->costoEnvio > 0 ? $this->costoEnvio : 1500.00,
+                'logo_url' => 'https://pacifico.test/storage/comercios/1/logo.png',
+            ],
+            4 => [
+                'id_comercio' => 4,
+                'nombre' => 'Mercado Artesanal Pacífico',
+                'nombre_comercial' => 'Mercado Artesanal Pacífico S.A.',
+                'estado' => 'activo',
+                'activo' => true,
+                'costo_envio' => $this->costoEnvio > 0 ? $this->costoEnvio : 1200.00,
+                'logo_url' => 'https://pacifico.test/storage/comercios/4/logo.png',
+            ],
+            default => [
+                'id_comercio' => $comercioId,
+                'nombre' => 'Comercio de prueba',
+                'nombre_comercial' => 'Comercio de prueba S.A.',
+                'estado' => 'activo',
+                'activo' => true,
+                'costo_envio' => $this->costoEnvio,
+                'logo_url' => "https://pacifico.test/storage/comercios/{$comercioId}/logo.png",
+            ],
+        };
     }
 
     /**

@@ -49,6 +49,11 @@ class ItemCarrito extends Model
         $this->save();
     }
 
+    public function calcularSubtotal(float $precioUnitario = 0.0): float
+    {
+        return round((int) $this->cantidad * $precioUnitario, 2);
+    }
+
     public function carrito(): BelongsTo
     {
         return $this->belongsTo(Carrito::class, 'id_carrito');

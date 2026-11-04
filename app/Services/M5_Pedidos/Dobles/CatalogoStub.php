@@ -16,11 +16,20 @@ class CatalogoStub implements CatalogoServiceInterface
 
     private ?bool $forzarInexistente = null;
 
-    private int $idComercio = 2;
+    private ?int $idComercio = null;
+
+    private string $imagen = '';
 
     public function setIdComercio(int $idComercio): self
     {
         $this->idComercio = $idComercio;
+
+        return $this;
+    }
+
+    public function setImagen(string $imagen): self
+    {
+        $this->imagen = $imagen;
 
         return $this;
     }
@@ -48,7 +57,7 @@ class CatalogoStub implements CatalogoServiceInterface
             'id_producto' => $productoId,
             'nombre' => 'Producto de prueba',
             'descripcion' => 'Descripción del producto de prueba',
-            'id_comercio' => $this->idComercio,
+            'id_comercio' => $this->idComercio ?? 2,
             'activo' => true,
             'variaciones' => [
                 [
@@ -57,6 +66,7 @@ class CatalogoStub implements CatalogoServiceInterface
                     'precio' => 15000.00,
                     'tarifa_impuesto' => 13.00,
                     'sku' => 'SKU-001',
+                    'imagen' => $this->imagen,
                 ],
             ],
         ];
@@ -77,14 +87,41 @@ class CatalogoStub implements CatalogoServiceInterface
             throw ErrorProveedorException::noEncontrado('Variación inexistente o no disponible');
         }
 
+        if ($this->idComercio === null && $variacionId === 2) {
+            return [
+                'id_variacion' => 2,
+                'id_producto' => 2,
+                'nombre' => 'Café Tarrazú Reserva Especial',
+                'sku' => 'SKU-CAFE-002',
+                'imagen' => $this->imagen ?: 'https://pacifico.test/storage/productos/cafe-tarrazu.png',
+                'precio' => 10000.00,
+                'tarifa_impuesto' => 13.00,
+                'id_comercio' => 1,
+            ];
+        }
+
+        if ($this->idComercio === null && $variacionId === 3) {
+            return [
+                'id_variacion' => 3,
+                'id_producto' => 3,
+                'nombre' => 'Miel Orgánica del Pacífico',
+                'sku' => 'SKU-MIEL-003',
+                'imagen' => $this->imagen ?: 'https://pacifico.test/storage/productos/miel-pacifico.png',
+                'precio' => 8500.00,
+                'tarifa_impuesto' => 13.00,
+                'id_comercio' => 4,
+            ];
+        }
+
         return [
             'id_variacion' => $variacionId,
             'id_producto' => 1,
             'nombre' => 'Producto de prueba',
             'sku' => 'SKU-VAR-'.$variacionId,
+            'imagen' => $this->imagen,
             'precio' => 15000.00,
             'tarifa_impuesto' => 13.00,
-            'id_comercio' => $this->idComercio,
+            'id_comercio' => $this->idComercio ?? 2,
         ];
     }
 }
