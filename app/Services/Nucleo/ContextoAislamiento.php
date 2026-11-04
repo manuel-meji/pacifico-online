@@ -46,4 +46,17 @@ abstract class ContextoAislamiento
             $this->modoSistema = $anterior;
         }
     }
+
+    /**
+     * Permiso especial auditado del Encargado de la plataforma (PC3, sección 5.3):
+     * desactiva el filtro de aislamiento para el resto de la petición.
+     *
+     * Quien invoque este método es responsable de registrar la concesión en la
+     * bitácora de auditoría (ver EstablecerComercio). No debe activarse de forma
+     * implícita para ningún otro rol.
+     */
+    public function concederAccesoAuditado(): void
+    {
+        $this->modoSistema = true;
+    }
 }

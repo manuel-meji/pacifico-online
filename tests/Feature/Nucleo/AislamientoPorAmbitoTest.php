@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Nucleo;
 
+use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Contracts\Nucleo\ResuelveClienteInterface;
+use App\Enums\Nucleo\RolUsuario;
 use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Http\Middleware\EstablecerCliente;
 use App\Http\Middleware\EstablecerComercio;
@@ -162,6 +164,52 @@ class AislamientoPorAmbitoTest extends TestCase
 
         (new EstablecerComercio)->handle($request, fn () => response('ok'));
 
+        $this->assertNull($this->contextoComercio()->idActual());
+    }
+
+    public function test_encargado_plataforma_sin_comercio_obtiene_acceso_auditado(): void
+    {
+        $auditoria = new class implements NucleoServiceInterface
+        {
+            /** @var list<array{accion: string, entidad: string, entidadId: int, detalles: array<string, mixed>}> */
+            public array $llamadas = [];
+
+            public function getComercioActualId(): ?int
+            {
+                return null;
+            }
+
+            public function registrarAuditoria(string $accion, string $entidad, int $entidadId, array $detalles = []): void
+            {
+                $this->llamadas[] = compact('accion', 'entidad', 'entidadId', 'detalles');
+            }
+        };
+        $this->app->instance(NucleoServiceInterface::class, $auditoria);
+
+        $request = Request::create('/prueba');
+        $usuario = new Usuario(['rol' => RolUsuario::EncargadoPlataforma, 'activo' => true]);
+        $usuario->id_usuario = 9;
+        $request->setUserResolver(fn () => $usuario);
+
+        (new EstablecerComercio)->handle($request, fn () => response('ok'));
+
+        $this->assertTrue($this->contextoComercio()->esModoSistema());
+        $this->assertSame(2, $this->modeloComercio()->newQuery()->count());
+        $this->assertCount(1, $auditoria->llamadas);
+        $this->assertSame('acceso_total_comercios', $auditoria->llamadas[0]['accion']);
+        $this->assertSame(9, $auditoria->llamadas[0]['entidadId']);
+    }
+
+    public function test_usuario_sin_comercio_ni_rol_de_plataforma_no_obtiene_acceso(): void
+    {
+        $request = Request::create('/prueba');
+        $usuario = new Usuario(['rol' => RolUsuario::Cliente, 'id_comercio' => null, 'activo' => true]);
+        $usuario->id_usuario = 10;
+        $request->setUserResolver(fn () => $usuario);
+
+        (new EstablecerComercio)->handle($request, fn () => response('ok'));
+
+        $this->assertFalse($this->contextoComercio()->esModoSistema());
         $this->assertNull($this->contextoComercio()->idActual());
     }
 
