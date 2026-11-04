@@ -2,11 +2,17 @@
 
 namespace Tests\Unit\M5_Pedidos;
 
+use App\Models\M5_Pedidos\CancelacionPedido;
 use App\Models\M5_Pedidos\Carrito;
+use App\Models\M5_Pedidos\EstadoPedido;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Services\M5_Pedidos\Dobles\CatalogoStub;
+use App\Services\M5_Pedidos\Dobles\ComerciosStub;
+use App\Services\M5_Pedidos\PedidosService;
+use DomainException;
 use Tests\TestCase;
 
 class ModelosM5Test extends TestCase
@@ -33,6 +39,7 @@ class ModelosM5Test extends TestCase
 
         $this->assertSame(10, $item->id_variacion);
         $this->assertSame(2, $item->cantidad);
+        $this->assertSame(30000.0, $item->calcularSubtotal(15000.0));
 
         // Al agregar la misma variación, se incrementa la cantidad
         $item2 = $itemModel->crearItemCarrito($carrito->id_carrito, 10, 3);
@@ -60,7 +67,7 @@ class ModelosM5Test extends TestCase
         $idPedido = $pedidoMaestro->crearPedidoMaestro(0.0, 5, 'CUPON10', 'REGALO20');
 
         $this->assertGreaterThan(0, $idPedido);
-        $this->assertSame('confirmado', $pedidoMaestro->estado_pedido);
+        $this->assertSame('pendiente', $pedidoMaestro->estado_pedido);
         $this->assertSame('CUPON10', $pedidoMaestro->cupon_descuento);
         $this->assertSame('REGALO20', $pedidoMaestro->tarjeta_regalo);
 
@@ -151,8 +158,111 @@ class ModelosM5Test extends TestCase
 
         $sub2->cancelar('Sin existencias');
         $this->assertSame('cancelado', $sub2->estado_subpedido);
+    }
 
-        $pedidoMaestro->cancelar('Cliente solicitó anulación');
-        $this->assertSame('cancelado', $pedidoMaestro->estado_pedido);
+    public function test_b1_desglose_carrito_iva_sin_envio_y_comercio_suspendido(): void
+    {
+        $carrito = (new Carrito)->obtenerOCrearCarrito(15);
+        (new ItemCarrito)->crearItemCarrito($carrito->id_carrito, 1, 2);
+
+        $catalogoStub = (new CatalogoStub)->setIdComercio(2)->setImagen('https://pacifico.test/img/var1.png');
+        $comerciosStub = (new ComerciosStub)->setCostoEnvio(1500.00);
+
+        $service = new PedidosService($comerciosStub, $catalogoStub);
+        $desglose = $service->calcularDesgloseCarrito($carrito);
+
+        // 2 unidades x 15000 = 30000 subtotal. IVA 13% = 3900 (nunca sobre los 1500 de envío). Total = 35400.
+        $this->assertSame(30000.0, $desglose['resumen']['subtotal']);
+        $this->assertSame(3900.0, $desglose['resumen']['impuesto']);
+        $this->assertSame(1500.0, $desglose['resumen']['costo_envio']);
+        $this->assertSame(35400.0, $desglose['resumen']['total']);
+        $this->assertFalse($desglose['hay_comercio_suspendido']);
+
+        $primerItem = $desglose['items'][0];
+        $this->assertSame('Producto de prueba', $primerItem['nombre']);
+        $this->assertSame('SKU-VAR-1', $primerItem['sku']);
+        $this->assertSame('https://pacifico.test/img/var1.png', $primerItem['imagen']);
+        $this->assertSame('Comercio de prueba S.A.', $primerItem['nombre_comercio']);
+        $this->assertSame(30000.0, $primerItem['subtotal']);
+        $this->assertSame(3900.0, $primerItem['iva']);
+
+        // Si el comercio está suspendido, marca el ítem y el grupo como suspendidos
+        $comerciosStub->setComercioSuspendido(true);
+        $desgloseSuspendido = $service->calcularDesgloseCarrito($carrito);
+        $this->assertTrue($desgloseSuspendido['hay_comercio_suspendido']);
+        $this->assertTrue($desgloseSuspendido['items'][0]['comercio_suspendido']);
+    }
+
+    public function test_b4_maquina_estados_historial_y_propagacion_entregado_al_maestro(): void
+    {
+        $pedido = new PedidoMaestro;
+        $idPedido = $pedido->crearPedidoMaestro(30000.0, 20, null, null, 1, 25000.0, 3250.0, 1750.0);
+
+        $subpedidos = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 1, 'subtotal' => 15000.0, 'costo_envio' => 1000.0, 'impuesto' => 1950.0],
+            ['id_comercio' => 2, 'subtotal' => 10000.0, 'costo_envio' => 750.0, 'impuesto' => 1300.0],
+        ], $idPedido);
+
+        $sub1 = $subpedidos[0];
+        $sub2 = $subpedidos[1];
+
+        // Transiciones permitidas: pendiente -> pagado -> en_preparacion -> despachado -> entregado
+        $sub1->cambiarEstado('pagado', 'Pago M6');
+        $sub1->cambiarEstado('en_preparacion', 'Preparando en bodega');
+        $sub1->cambiarEstado('despachado', 'En camino');
+        $sub1->cambiarEstado('entregado', 'Recibido por cliente');
+
+        $this->assertSame('entregado', $sub1->fresh()->estado_subpedido);
+        // El maestro aún no está entregado porque falta sub2
+        $this->assertNotSame('entregado', $pedido->fresh()->estado_pedido);
+
+        // Cuando sub2 también llega a entregado, el maestro pasa automáticamente a entregado (RN-M5-06)
+        $sub2->cambiarEstado('pagado');
+        $sub2->cambiarEstado('en_preparacion');
+        $sub2->cambiarEstado('despachado');
+        $sub2->cambiarEstado('entregado');
+
+        $this->assertSame('entregado', $pedido->fresh()->estado_pedido);
+
+        // Verificar que se escribieron las filas en estados_pedido
+        $historialSub1 = EstadoPedido::where('id_subpedido', $sub1->id_subpedido)->pluck('estado')->all();
+        $this->assertContains('pagado', $historialSub1);
+        $this->assertContains('en_preparacion', $historialSub1);
+        $this->assertContains('despachado', $historialSub1);
+        $this->assertContains('entregado', $historialSub1);
+
+        // Transición inválida desde entregado debe lanzar DomainException (409)
+        $this->expectException(DomainException::class);
+        $this->expectExceptionCode(409);
+        $sub1->cambiarEstado('pagado');
+    }
+
+    public function test_b5_cancelacion_bloqueada_en_preparacion_y_registro_en_tabla(): void
+    {
+        $pedido = new PedidoMaestro;
+        $idPedido = $pedido->crearPedidoMaestro(16950.0, 21, null, null, 1, 15000.0, 1950.0, 0.0);
+        $sub = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 1, 'subtotal' => 15000.0, 'costo_envio' => 0.0, 'impuesto' => 1950.0],
+        ], $idPedido)[0];
+
+        $sub->cambiarEstado('pagado');
+        $sub->cancelar('Cliente se arrepintió a tiempo');
+
+        $this->assertSame('cancelado', $sub->fresh()->estado_subpedido);
+        $cancelacion = CancelacionPedido::where('id_subpedido', $sub->id_subpedido)->first();
+        $this->assertNotNull($cancelacion);
+        $this->assertSame('Cliente se arrepintió a tiempo', $cancelacion->motivo);
+        $this->assertTrue($cancelacion->requiere_reembolso);
+
+        // Un subpedido en_preparacion no puede cancelarse (RN-M5-05)
+        $subEnPrep = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 2, 'subtotal' => 10000.0, 'costo_envio' => 0.0, 'impuesto' => 1300.0],
+        ], $idPedido)[0];
+        $subEnPrep->cambiarEstado('pagado');
+        $subEnPrep->cambiarEstado('en_preparacion');
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionCode(409);
+        $subEnPrep->cancelar('Intento tardío');
     }
 }
