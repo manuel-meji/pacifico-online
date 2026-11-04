@@ -63,4 +63,21 @@ class PagosStub implements PagosServiceInterface
             'xml_firmado_url' => "https://pacifico.test/facturas/{$pedidoId}.xml",
         ];
     }
+
+    /**
+     * Solicitar reembolso total o parcial a la pasarela de pagos (RN-M5-10 / B5).
+     *
+     * @return array<string, mixed>
+     */
+    public function solicitarReembolso(int $pedidoId, float $monto, string $motivo = 'Cancelación de pedido'): array
+    {
+        return [
+            'id_reembolso' => 'REEMB-'.$pedidoId,
+            'id_pedido' => $pedidoId,
+            'monto_reembolsado' => $monto,
+            'motivo' => $motivo,
+            'estado' => 'reembolsado',
+            'fecha_reembolso' => now()->toIso8601String(),
+        ];
+    }
 }
