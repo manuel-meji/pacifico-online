@@ -22,9 +22,12 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_politicas_comercio_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE politicas_comercio ADD CONSTRAINT chk_politicas_tipo CHECK (tipo IN ('envio', 'devolucion', 'garantia', 'privacidad', 'otra'))"); // Tipos de política
-        DB::statement("ALTER TABLE politicas_comercio ADD CONSTRAINT chk_politicas_configuracion_envio CHECK (tipo = 'envio' OR configuracion_envio IS NULL)"); // Solo las políticas de envío tienen tarifas
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE politicas_comercio ADD CONSTRAINT chk_politicas_tipo CHECK (tipo IN ('envio', 'devolucion', 'garantia', 'privacidad', 'otra'))"); // Tipos de política
+            DB::statement("ALTER TABLE politicas_comercio ADD CONSTRAINT chk_politicas_configuracion_envio CHECK (tipo = 'envio' OR configuracion_envio IS NULL)"); // Solo las políticas de envío tienen tarifas
+        }
     }
 
     public function down(): void

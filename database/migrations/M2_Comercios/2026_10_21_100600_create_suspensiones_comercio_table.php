@@ -23,10 +23,13 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_suspensiones_comercio_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE suspensiones_comercio ADD CONSTRAINT chk_suspensiones_motivo CHECK (length(trim(motivo)) > 0)"); // RN-005
-        DB::statement("ALTER TABLE suspensiones_comercio ADD CONSTRAINT chk_suspensiones_fechas CHECK (fecha_reactivacion IS NULL OR fecha_reactivacion >= fecha_suspension)"); // Reactivación posterior a la suspensión
-        DB::statement("CREATE UNIQUE INDEX uq_suspension_abierta_comercio ON suspensiones_comercio (id_comercio) WHERE fecha_reactivacion IS NULL");
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE suspensiones_comercio ADD CONSTRAINT chk_suspensiones_motivo CHECK (length(trim(motivo)) > 0)"); // RN-005
+            DB::statement("ALTER TABLE suspensiones_comercio ADD CONSTRAINT chk_suspensiones_fechas CHECK (fecha_reactivacion IS NULL OR fecha_reactivacion >= fecha_suspension)"); // Reactivación posterior a la suspensión
+            DB::statement("CREATE UNIQUE INDEX uq_suspension_abierta_comercio ON suspensiones_comercio (id_comercio) WHERE fecha_reactivacion IS NULL");
+        }
     }
 
     public function down(): void

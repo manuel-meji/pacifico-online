@@ -24,9 +24,12 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_comisiones_subpedido_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE comisiones_subpedido ADD CONSTRAINT chk_comision_subpedido_subtotal CHECK (subtotal_base >= 0)"); // RN-010
-        DB::statement("ALTER TABLE comisiones_subpedido ADD CONSTRAINT chk_comision_subpedido_monto CHECK (monto >= 0)"); // RN-010
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE comisiones_subpedido ADD CONSTRAINT chk_comision_subpedido_subtotal CHECK (subtotal_base >= 0)"); // RN-010
+            DB::statement("ALTER TABLE comisiones_subpedido ADD CONSTRAINT chk_comision_subpedido_monto CHECK (monto >= 0)"); // RN-010
+        }
     }
 
     public function down(): void

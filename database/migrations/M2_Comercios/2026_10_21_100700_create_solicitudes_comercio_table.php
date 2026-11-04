@@ -26,10 +26,13 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_solicitudes_comercio_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE solicitudes_comercio ADD CONSTRAINT chk_solicitudes_estado CHECK (estado IN ('Pendiente', 'Aprobada', 'Rechazada'))"); // Estados de la solicitud
-        DB::statement("ALTER TABLE solicitudes_comercio ADD CONSTRAINT chk_solicitud_motivo_rechazo CHECK (estado <> 'Rechazada' OR (motivo_rechazo IS NOT NULL AND length(trim(motivo_rechazo)) > 0))"); // RN-016
-        DB::statement("CREATE UNIQUE INDEX uq_solicitud_pendiente_comercio ON solicitudes_comercio (id_comercio) WHERE estado = 'Pendiente'");
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE solicitudes_comercio ADD CONSTRAINT chk_solicitudes_estado CHECK (estado IN ('Pendiente', 'Aprobada', 'Rechazada'))"); // Estados de la solicitud
+            DB::statement("ALTER TABLE solicitudes_comercio ADD CONSTRAINT chk_solicitud_motivo_rechazo CHECK (estado <> 'Rechazada' OR (motivo_rechazo IS NOT NULL AND length(trim(motivo_rechazo)) > 0))"); // RN-016
+            DB::statement("CREATE UNIQUE INDEX uq_solicitud_pendiente_comercio ON solicitudes_comercio (id_comercio) WHERE estado = 'Pendiente'");
+        }
     }
 
     public function down(): void
