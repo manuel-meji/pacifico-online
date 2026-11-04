@@ -9,24 +9,33 @@ use Illuminate\Http\Request;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            fn (Request $request) =>
+                $request->is('api/*', 'login', 'logout', 'sanctum/*')
+                || $request->expectsJson(),
         );
 
         $exceptions->report(function (Throwable $e): void {
-            ManejadorErrores::registrarEnLogDiario($e, request());
+            // Al arrancar por consola todavía no existe la petición: no ocultar el error original.
+            ManejadorErrores::registrarEnLogDiario($e, app()->bound('request') ? request() : null);
         });
 
         $exceptions->render(function (Throwable $e, Request $request) {
-            if ($request->is('api/*') || $request->expectsJson()) {
+            if (
+                $request->is('api/*', 'login', 'logout', 'sanctum/*')
+                || $request->expectsJson()
+            ) {
                 return ManejadorErrores::renderizar($e, $request);
             }
+
+            return null;
         });
     })->create();

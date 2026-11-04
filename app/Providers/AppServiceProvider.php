@@ -2,6 +2,13 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
+
+// Contratos (Interfaces)
 use App\Contracts\M1_Portal\PortalServiceInterface;
 // Contratos (Interfaces)
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
@@ -23,7 +30,6 @@ use App\Services\M5_Pedidos\PedidosService;
 use App\Services\M6_Pagos\PagosService;
 use App\Services\M7_Contabilidad\ContabilidadService;
 use App\Services\Nucleo\NucleoService;
-use Illuminate\Support\ServiceProvider;
 use App\Services\Nucleo\ServicioIdentidad;
 
 class AppServiceProvider extends ServiceProvider
@@ -50,6 +56,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('login', function (Request $request): Limit {
+            return Limit::perMinute(5)->by(hash('sha256',
+                Str::lower($request->string('email')->toString()).'|'.$request->ip()
+            ));
+        });
+
         $this->loadMigrationsFrom(glob(database_path('migrations/*'), GLOB_ONLYDIR));
     }
 }

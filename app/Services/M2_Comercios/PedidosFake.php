@@ -11,7 +11,6 @@ use RuntimeException;
  *
  * Imita el contrato M5 v1.1.0 consumido por M2.
  */
-
 class PedidosFake implements PedidosServiceInterface
 {
     public const SUBPEDIDO_EXISTENTE = 1001;
@@ -89,6 +88,16 @@ class PedidosFake implements PedidosServiceInterface
         int $subpedidoId,
         ?string $guiaTransporte = null
     ): array {
+        throw new LogicException('Fuera del alcance del doble de M2.');
+    }
+
+    public function obtenerCarrito(int $idCliente): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M2.');
+    }
+
+    public function agregarItemCarrito(int $idCliente, array $datos): array
+    {
         throw new LogicException('Fuera del alcance del doble de M2.');
     }
 }
