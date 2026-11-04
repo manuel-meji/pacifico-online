@@ -21,8 +21,11 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_contacto_comercio_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE contacto_comercio ADD CONSTRAINT chk_contacto_tipo CHECK (tipo IN ('telefono', 'correo', 'direccion', 'facebook', 'instagram', 'whatsapp', 'tiktok', 'sitio_web'))"); // Tipos de contacto
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE contacto_comercio ADD CONSTRAINT chk_contacto_tipo CHECK (tipo IN ('telefono', 'correo', 'direccion', 'facebook', 'instagram', 'whatsapp', 'tiktok', 'sitio_web'))"); // Tipos de contacto
+        }
     }
 
     public function down(): void

@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models\M2_Comercios;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * Política del comercio; las de tipo envio incluyen sus tarifas en configuracion_envio (JSONB).
+ *
+ * Propietario: M2. Pendiente: aplicar el trait PerteneceAComercio del núcleo
+ * cuando ContextoComercio quede registrado como servicio compartido (ver DEF del 4/11).
+ */
+class PoliticaComercio extends Model
+{
+    protected $table = 'politicas_comercio';
+
+    protected $primaryKey = 'id_politica';
+
+    protected $guarded = ['id_politica'];
+
+    protected $casts = ['configuracion_envio' => 'array'];
+
+    public function comercio(): BelongsTo
+    {
+        return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');
+    }
+}

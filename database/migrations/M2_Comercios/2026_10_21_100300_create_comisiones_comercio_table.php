@@ -26,10 +26,13 @@ return new class extends Migration
             $table->foreign('id_membresia_comercio', 'fk_comision_membresia')->references('id_membresia_comercio')->on('membresias_comercio')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE comisiones_comercio ADD CONSTRAINT chk_comisiones_tipo CHECK (tipo IN ('porcentaje', 'monto_fijo'))"); // RN-007
-        DB::statement("ALTER TABLE comisiones_comercio ADD CONSTRAINT chk_comisiones_valor CHECK (valor >= 0 AND (tipo <> 'porcentaje' OR valor <= 100))"); // RN-006
-        DB::statement("ALTER TABLE comisiones_comercio ADD CONSTRAINT chk_comisiones_moneda CHECK (tipo <> 'monto_fijo' OR moneda IS NOT NULL)"); // Monto fijo requiere moneda
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE comisiones_comercio ADD CONSTRAINT chk_comisiones_tipo CHECK (tipo IN ('porcentaje', 'monto_fijo'))"); // RN-007
+            DB::statement("ALTER TABLE comisiones_comercio ADD CONSTRAINT chk_comisiones_valor CHECK (valor >= 0 AND (tipo <> 'porcentaje' OR valor <= 100))"); // RN-006
+            DB::statement("ALTER TABLE comisiones_comercio ADD CONSTRAINT chk_comisiones_moneda CHECK (tipo <> 'monto_fijo' OR moneda IS NOT NULL)"); // Monto fijo requiere moneda
+        }
     }
 
     public function down(): void
