@@ -11,18 +11,17 @@ use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Events\M5_Pedidos\PedidoCancelado;
 use App\Events\M5_Pedidos\PedidoConfirmado;
 use App\Events\M5_Pedidos\PedidoCreado;
-use App\Events\M5_Pedidos\PedidoPagado;
 use App\Events\M5_Pedidos\SubpedidoCancelado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Events\M5_Pedidos\SubpedidoEntregado;
 use App\Http\Controllers\Controller;
 use App\Models\M5_Pedidos\Carrito;
-use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Services\M5_Pedidos\PedidosService;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class ControladorPedido extends Controller
@@ -33,17 +32,26 @@ class ControladorPedido extends Controller
 
     private $m6Pagos;
 
-    public function __construct($comercioService = null, $inventarioService = null, $pagosService = null)
+    private PedidosService $pedidosService;
+
+    public function __construct($comercioService = null, $inventarioService = null, $pagosService = null, ?PedidosService $pedidosService = null)
     {
         $this->m2Comercios = $comercioService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
         $this->m4Inventario = $inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
         $this->m6Pagos = $pagosService ?? (app()->bound(PagosServiceInterface::class) ? app(PagosServiceInterface::class) : null);
+        $this->pedidosService = $pedidosService ?? new PedidosService(
+            $this->m2Comercios instanceof ComerciosServiceInterface ? $this->m2Comercios : null,
+            app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null,
+            $this->m4Inventario instanceof InventarioServiceInterface ? $this->m4Inventario : null,
+            $this->m6Pagos instanceof PagosServiceInterface ? $this->m6Pagos : null,
+            app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null,
+        );
     }
 
     public function procesarCheckout(Request $request): JsonResponse
     {
         $datos = $request->all();
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
         $direccionClienteId = (int) ($request->input('id_direccion_cliente', 1));
 
         // 1. Validar que el carrito no esté vacío
@@ -59,96 +67,36 @@ class ControladorPedido extends Controller
             ? app(PortalServiceInterface::class)
             : null;
 
-        $datosComprador = null;
-        $datosDireccionEnvio = null;
-
         if ($portalService) {
             try {
                 if (method_exists($portalService, 'obtenerCliente')) {
-                    $datosComprador = $portalService->obtenerCliente($clienteId);
+                    $portalService->obtenerCliente($clienteId);
                 }
                 if ($direccionClienteId && method_exists($portalService, 'obtenerDireccionCliente')) {
-                    $datosDireccionEnvio = $portalService->obtenerDireccionCliente($clienteId, $direccionClienteId);
+                    $portalService->obtenerDireccionCliente($clienteId, $direccionClienteId);
                 }
-            } catch (\Throwable $e) {
-                // Manejo de error o continuar
+            } catch (\Throwable) {
+                // Continuar flujo resiliente
             }
         }
 
-        // Obtener detalles de variación para cada ítem y agrupar por comercio
+        // B1: Calcular desglose unificado del carrito con M3 y M2
         $catalogoService = app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null;
-        $comerciosInvolucrados = [];
-        $itemsAgrupados = [];
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $catalogoService, $this->m2Comercios);
+        $itemsAgrupados = $desglose['grupos_comercio'];
+        $comerciosInvolucrados = array_keys($itemsAgrupados);
 
-        foreach ($carrito->items as $item) {
-            $variacion = null;
-            if ($catalogoService) {
-                try {
-                    $variacion = $catalogoService->obtenerVariacion($item->id_variacion);
-                } catch (\Throwable $e) {
-                    $variacion = null;
-                }
-            }
-
-            $comercioId = (int) ($variacion['id_comercio'] ?? $variacion['producto']['id_comercio'] ?? 1);
-            $precio = (float) ($variacion['precio'] ?? 10000.00);
-            $tarifaIva = (float) ($variacion['tarifa_impuesto'] ?? 13.00);
-
-            $comerciosInvolucrados[$comercioId] = $comercioId;
-
-            if (! isset($itemsAgrupados[$comercioId])) {
-                $itemsAgrupados[$comercioId] = [
-                    'id_comercio' => $comercioId,
-                    'items' => [],
-                    'subtotal' => 0.0,
-                    'impuesto' => 0.0,
-                    'costo_envio' => 0.0,
-                ];
-            }
-
-            $subtotalLinea = $item->cantidad * $precio;
-            $impuestoLinea = $subtotalLinea * ($tarifaIva / 100);
-
-            $itemsAgrupados[$comercioId]['items'][] = [
-                'id_variacion' => $item->id_variacion,
-                'cantidad' => $item->cantidad,
-                'precio_unitario' => $precio,
-                'tarifa_impuesto' => $tarifaIva,
-                'subtotal' => $subtotalLinea,
-                'impuesto' => $impuestoLinea,
-                'id_reserva' => $item->id_reserva,
-            ];
-
-            $itemsAgrupados[$comercioId]['subtotal'] += $subtotalLinea;
-            $itemsAgrupados[$comercioId]['impuesto'] += $impuestoLinea;
-        }
-
-        // 2. Validar estado de los comercios con M2_Comercios (Contrato M2 v1.2.1)
-        $comerciosActivos = true;
-        if ($this->m2Comercios) {
-            if (method_exists($this->m2Comercios, 'ObtenerResumenComerciosLote')) {
-                $comerciosActivos = $this->m2Comercios->ObtenerResumenComerciosLote(array_values($comerciosInvolucrados));
-            } elseif (method_exists($this->m2Comercios, 'obtenerMicrositio')) {
-                foreach ($comerciosInvolucrados as $comercioId) {
-                    try {
-                        $info = $this->m2Comercios->obtenerMicrositio($comercioId);
-                        if (isset($info['estado']) && strtolower((string) $info['estado']) !== 'activo') {
-                            $comerciosActivos = false;
-                            break;
-                        }
-                    } catch (\Throwable $e) {
-                        $comerciosActivos = false;
-                        break;
-                    }
-                }
-            }
+        // 2. Validar estado de los comercios con M2_Comercios (Contrato M2 v1.2.1 / RF-008)
+        $comerciosActivos = ! $desglose['hay_comercio_suspendido'];
+        if ($comerciosActivos && $this->m2Comercios && method_exists($this->m2Comercios, 'ObtenerResumenComerciosLote')) {
+            $comerciosActivos = (bool) $this->m2Comercios->ObtenerResumenComerciosLote(array_values($comerciosInvolucrados));
         }
 
         if (! $comerciosActivos) {
-            return $this->errorRespuesta('ERR-003', 'Comercio no disponible', null, 409);
+            return $this->errorRespuesta('ERR-003', 'Comercio no disponible o suspendido', null, 409);
         }
 
-        // 3. Reservar existencias en M4_Inventario (Contrato M4 v1.1.0 / v1.2.1)
+        // 3. Reservar existencias en M4_Inventario (Contrato M4 v1.1.0 / v1.2.1 / RF-010)
         $idempotencyKey = Str::uuid()->toString();
         $idReserva = null;
 
@@ -170,74 +118,41 @@ class ControladorPedido extends Controller
                     }
                 } elseif (method_exists($this->m4Inventario, 'solicitarReserva')) {
                     foreach ($carrito->items as $it) {
-                        $this->m4Inventario->solicitarReserva($it->id_variacion, $it->cantidad, 0);
+                        $res = $this->m4Inventario->solicitarReserva($it->id_variacion, $it->cantidad, 0);
+                        if (is_array($res) && isset($res['id_reserva'])) {
+                            $idReserva = $res['id_reserva'];
+                        }
                     }
-                    $idReserva = $idempotencyKey;
+                    $idReserva = $idReserva ?? $idempotencyKey;
                 }
-            } catch (\Throwable $e) {
+            } catch (\Throwable) {
                 return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
             }
         } else {
             $idReserva = $idempotencyKey;
         }
 
-        // 4. Calcular costos y crear jerarquía del pedido (Patrón Composite)
-        $montoTotal = 0.0;
-        foreach ($itemsAgrupados as $grupo) {
-            $montoTotal += $this->calcularCostos(
-                (float) $grupo['subtotal'],
-                (float) $grupo['impuesto'],
-                (float) $grupo['costo_envio']
-            );
+        // 4 y 5. B3 + D4: Delegar creación de maestro, subpedidos y líneas en PedidosService (DB::transaction)
+        $pedidoData = $this->pedidosService->crearPedidoCheckout([
+            'id_cliente' => $clienteId,
+            'id_direccion_cliente' => $direccionClienteId,
+            'cupon_descuento' => $request->input('cupon_descuento'),
+            'tarjeta_regalo' => $request->input('tarjeta_regalo'),
+            'id_reserva' => $idReserva,
+            'carrito' => $carrito,
+            'grupos_comercio' => $itemsAgrupados,
+            'resumen' => $desglose['resumen'],
+        ]);
+
+        $idPedido = (int) $pedidoData['id_pedido'];
+        $montoTotal = (float) $pedidoData['monto_total'];
+        $pedidoMaestro = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->find($idPedido);
+
+        // 6. Publicar eventos canónicos (D3: PedidoConfirmado se emite al confirmar el checkout)
+        if ($pedidoMaestro) {
+            event(new PedidoConfirmado($pedidoMaestro));
+            event(new PedidoCreado($pedidoMaestro));
         }
-
-        $pedidoMaestro = new PedidoMaestro;
-        $idPedido = $pedidoMaestro->crearPedidoMaestro(
-            $montoTotal,
-            $clienteId,
-            $request->input('cupon_descuento'),
-            $request->input('tarjeta_regalo')
-        );
-
-        if ($direccionClienteId && Schema::hasColumn('pedidos_maestros', 'id_direccion_cliente')) {
-            $pedidoMaestro->id_direccion_cliente = $direccionClienteId;
-            $pedidoMaestro->save();
-        }
-
-        // 5. Bucle de creación de subpedidos y líneas
-        $subpedidoObj = new Subpedido;
-        foreach ($itemsAgrupados as $grupo) {
-            $subpedidosCreados = $subpedidoObj->crearSubpedidos([
-                [
-                    'id_comercio' => $grupo['id_comercio'],
-                    'subtotal' => $grupo['subtotal'],
-                    'costo_envio' => $grupo['costo_envio'],
-                    'impuesto' => $grupo['impuesto'],
-                ],
-            ], $idPedido);
-
-            $subpedido = $subpedidosCreados[0];
-
-            foreach ($grupo['items'] as $itemData) {
-                $lineaReserva = (string) ($itemData['id_reserva'] ?? $idReserva ?? '');
-                $lineaId = (new PedidoLinea)->crearLinea(
-                    $subpedido->id_subpedido,
-                    $itemData['id_variacion'],
-                    $itemData['cantidad'],
-                    $itemData['precio_unitario'],
-                    $itemData['tarifa_impuesto'],
-                    $lineaReserva ?: null
-                );
-            }
-        }
-
-        // Vaciar el carrito
-        $carrito->vaciar();
-
-        // 6. Publicar eventos canónicos
-        $pedidoMaestro->load('subpedidos.lineas');
-        event(new PedidoConfirmado($pedidoMaestro));
-        event(new PedidoCreado($pedidoMaestro));
 
         // 7. Procesar pago con M6_Pagos (Contrato M6 v1.0.0 / v1.1.1)
         $urlPasarelaPago = 'https://pago.pacificos.com/checkout/'.$idPedido;
@@ -261,15 +176,15 @@ class ControladorPedido extends Controller
                         $urlPasarelaPago = $resPago['urlPasarelaPago'];
                     }
                 }
-            } catch (\Throwable $e) {
+            } catch (\Throwable) {
                 // Conservar URL por defecto
             }
         }
 
         // 8. Retornar respuesta canónica alineada con esquema PedidoMaestro
-        $pedidoArray = $pedidoMaestro->toArray();
+        $pedidoArray = $pedidoMaestro ? $pedidoMaestro->toArray() : $pedidoData;
         $respuesta = array_merge($pedidoArray, [
-            'pedido' => $pedidoMaestro,
+            'pedido' => $pedidoMaestro ?? $pedidoData,
             'urlPasarelaPago' => $urlPasarelaPago,
         ]);
 
@@ -292,7 +207,7 @@ class ControladorPedido extends Controller
             return $this->errorRespuesta('ERR-004', 'Pedido no encontrado', null, 404);
         }
 
-        // 2. Operación Idempotente: Si ya está pagado, ignorar sin cambios
+        // 2. B6: Operación Idempotente: Si ya está pagado, responder 200 sin crear nada ni reemitir eventos
         if (strtolower((string) $pedido->estado_pedido) === 'pagado') {
             return response()->json([
                 'mensaje' => 'Operación idempotente, pedido ya pagado',
@@ -301,17 +216,10 @@ class ControladorPedido extends Controller
             ], 200);
         }
 
-        // 3. Actualizar estado del Pedido Maestro a "pagado"
-        $pedido->actualizarEstado('pagado');
+        // 3. Delegar en PedidosService::marcarComoPagado (actualiza maestro/subpedidos, confirma reserva en M4 y emite PedidoPagado)
+        $this->pedidosService->marcarComoPagado($pedidoId, $referencia);
 
-        // 4. Actualizar estado de todos los subpedidos a "pagado"
-        foreach ($pedido->subpedidos as $subpedido) {
-            $subpedido->cambiarEstado('pagado');
-        }
-
-        // 5. Publicar evento canónico PedidoPagado
-        $pedidoActualizado = $pedido->fresh(['subpedidos.lineas']);
-        event(new PedidoPagado($pedidoActualizado));
+        $pedidoActualizado = $pedido->fresh(['subpedidos.lineas', 'estados']);
 
         return response()->json([
             'mensaje' => 'Pago registrado correctamente',
@@ -337,23 +245,30 @@ class ControladorPedido extends Controller
             return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
         }
 
-        if (in_array(strtolower((string) $subpedido->estado_subpedido), ['despachado', 'entregado'])) {
-            return $this->errorRespuesta('ERR-M5-003', 'No se puede cancelar un subpedido ya despachado o entregado', null, 409);
+        // B5 / RN-M5-05: Rechazar también si ya está en_preparacion, despachado o entregado
+        $estadoActual = strtolower((string) $subpedido->estado_subpedido);
+        if (in_array($estadoActual, ['en_preparacion', 'despachado', 'entregado'], true)) {
+            return $this->errorRespuesta(
+                'ERR-M5-003',
+                "No se puede cancelar el subpedido porque ya se encuentra en estado '{$estadoActual}'",
+                ['estado_actual' => $estadoActual],
+                409
+            );
         }
 
-        $subpedido->cancelar($motivoTexto);
-
-        // Si todos los subpedidos están cancelados, cancelar el maestro
         $pedidoMaestro = $subpedido->pedidoMaestro;
+        $estabaMaestroCancelado = $pedidoMaestro && strtolower((string) $pedidoMaestro->estado_pedido) === 'cancelado';
+
+        $this->pedidosService->cancelarSubpedidoParcial($subpedidoId, ['motivo' => $motivoTexto]);
+
         if ($pedidoMaestro) {
-            $subpedidosActivos = $pedidoMaestro->subpedidos()->where('estado_subpedido', '!=', 'cancelado')->count();
-            if ($subpedidosActivos === 0) {
-                $pedidoMaestro->actualizarEstado('cancelado');
+            $pedidoMaestro->refresh();
+            if (! $estabaMaestroCancelado && strtolower((string) $pedidoMaestro->estado_pedido) === 'cancelado') {
                 event(new PedidoCancelado($pedidoMaestro->fresh('subpedidos.lineas'), $motivoTexto));
             }
         }
 
-        $subpedidoActualizado = $subpedido->fresh('lineas');
+        $subpedidoActualizado = $subpedido->fresh(['lineas', 'estados', 'cancelaciones']);
         event(new SubpedidoCancelado($subpedidoActualizado, $motivoTexto));
         $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Subpedido cancelado correctamente',
@@ -379,16 +294,13 @@ class ControladorPedido extends Controller
             return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
         }
 
-        if (in_array(strtolower((string) $subpedido->estado_subpedido), ['despachado', 'entregado', 'cancelado'])) {
-            return $this->errorRespuesta('ERR-M5-002', 'El subpedido ya fue despachado o cancelado previamente', null, 409);
+        try {
+            $subpedido->despachar($guiaTransporte ?: null);
+        } catch (DomainException $e) {
+            return $this->errorRespuesta('ERR-M5-002', $e->getMessage(), null, 409);
         }
 
-        $subpedido->despachar($guiaTransporte ?: null);
-
-        // NOTA DE ARQUITECTURA (FASE 1 - DESACOPLAMIENTO M2):
-        // Se elimina la llamada directa a registrarComision de M2. M5 no gestiona comisiones.
-        // M2 calcula su comisión en su propio módulo a partir del evento SubpedidoDespachado.
-        $subpedidoActualizado = $subpedido->fresh('lineas');
+        $subpedidoActualizado = $subpedido->fresh(['lineas', 'estados']);
         event(new SubpedidoDespachado($subpedidoActualizado, $guiaTransporte ?: null));
         $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Subpedido despachado correctamente',
@@ -401,18 +313,18 @@ class ControladorPedido extends Controller
     public function confirmarEntregaSubpedido(int|Request $requestOrId): JsonResponse
     {
         $subpedidoId = $requestOrId instanceof Request ? (int) ($requestOrId->route('id_subpedido') ?? $requestOrId->input('id_subpedido')) : (int) $requestOrId;
-        $subpedido = Subpedido::with('lineas')->find($subpedidoId);
+        $subpedido = Subpedido::with(['pedidoMaestro', 'lineas'])->find($subpedidoId);
         if (! $subpedido) {
             return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
         }
 
-        if (in_array(strtolower((string) $subpedido->estado_subpedido), ['entregado', 'cancelado'])) {
-            return $this->errorRespuesta('ERR-M5-002', 'El subpedido ya fue entregado o cancelado', null, 409);
+        try {
+            $subpedido->entregar();
+        } catch (DomainException $e) {
+            return $this->errorRespuesta('ERR-M5-002', $e->getMessage(), null, 409);
         }
 
-        $subpedido->entregar();
-
-        $subpedidoActualizado = $subpedido->fresh('lineas');
+        $subpedidoActualizado = $subpedido->fresh(['lineas', 'estados']);
         event(new SubpedidoEntregado($subpedidoActualizado));
         $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Entrega confirmada',
@@ -438,14 +350,22 @@ class ControladorPedido extends Controller
             return $this->errorRespuesta('ERR-004', 'Pedido no encontrado', null, 404);
         }
 
-        $hayDespachados = $pedido->subpedidos->contains(fn ($s) => in_array(strtolower((string) $s->estado_subpedido), ['despachado', 'entregado']));
-        if ($hayDespachados) {
-            return $this->errorRespuesta('ERR-M5-003', 'No se puede cancelar el pedido completo porque contiene subpedidos ya despachados', null, 409);
+        // B5 / RN-M5-05: Rechazar si algún subpedido está en en_preparacion, despachado o entregado
+        $subpedidoNoCancelable = $pedido->subpedidos->first(
+            fn ($s) => in_array(strtolower((string) $s->estado_subpedido), ['en_preparacion', 'despachado', 'entregado'], true)
+        );
+        if ($subpedidoNoCancelable) {
+            return $this->errorRespuesta(
+                'ERR-M5-003',
+                "No se puede cancelar el pedido completo porque el subpedido #{$subpedidoNoCancelable->id_subpedido} ya está en estado '{$subpedidoNoCancelable->estado_subpedido}'",
+                ['estado_subpedido' => $subpedidoNoCancelable->estado_subpedido],
+                409
+            );
         }
 
-        $pedido->cancelar($motivoTexto);
+        $this->pedidosService->cancelarPedidoTotal($pedidoId, ['motivo' => $motivoTexto]);
 
-        $pedidoActualizado = $pedido->fresh('subpedidos.lineas');
+        $pedidoActualizado = $pedido->fresh(['subpedidos.lineas', 'estados', 'cancelaciones']);
         event(new PedidoCancelado($pedidoActualizado, $motivoTexto));
         $respuesta = array_merge($pedidoActualizado->toArray(), [
             'mensaje' => 'Pedido maestro y subpedidos cancelados correctamente',
@@ -458,7 +378,7 @@ class ControladorPedido extends Controller
     public function obtenerPedido(int|Request $requestOrId): JsonResponse
     {
         $pedidoId = $requestOrId instanceof Request ? (int) ($requestOrId->route('id_pedido') ?? $requestOrId->input('id_pedido')) : (int) $requestOrId;
-        $pedido = PedidoMaestro::with(['subpedidos.lineas'])->find($pedidoId);
+        $pedido = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->find($pedidoId);
 
         if (! $pedido) {
             return $this->errorRespuesta('ERR-004', 'Pedido no encontrado', null, 404);
@@ -470,7 +390,7 @@ class ControladorPedido extends Controller
     public function obtenerSubpedido(int|Request $requestOrId): JsonResponse
     {
         $subpedidoId = $requestOrId instanceof Request ? (int) ($requestOrId->route('id_subpedido') ?? $requestOrId->input('id_subpedido')) : (int) $requestOrId;
-        $subpedido = Subpedido::with('lineas')->find($subpedidoId);
+        $subpedido = Subpedido::with(['lineas', 'estados', 'cancelaciones'])->find($subpedidoId);
 
         if (! $subpedido) {
             return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
@@ -481,8 +401,8 @@ class ControladorPedido extends Controller
 
     public function listarPedidos(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
-        $query = PedidoMaestro::with('subpedidos.lineas')->where('id_cliente', $clienteId);
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
+        $query = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->where('id_cliente', $clienteId);
 
         if ($request->filled('estado_pedido')) {
             $query->where('estado_pedido', $request->input('estado_pedido'));
@@ -500,7 +420,7 @@ class ControladorPedido extends Controller
 
     public function calcularCostos(float $subtotal, float $impuestos, float $envio): float
     {
-        return $subtotal + $impuestos + $envio;
+        return round($subtotal + $impuestos + $envio, 2);
     }
 
     private function errorRespuesta(string $codigo, string $mensaje, ?array $detalles = null, int $status = 400): JsonResponse

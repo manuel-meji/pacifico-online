@@ -14,6 +14,7 @@ use App\Services\M5_Pedidos\Dobles\CatalogoStub;
 use App\Services\M5_Pedidos\Dobles\ComerciosStub;
 use App\Services\M5_Pedidos\Dobles\InventarioStub;
 use App\Services\M5_Pedidos\Dobles\PagosStub;
+use Database\Seeders\M5PedidosSeeder;
 use Tests\TestCase;
 
 class ControladoresM5Test extends TestCase
@@ -60,13 +61,27 @@ class ControladoresM5Test extends TestCase
 
         $itemId = ItemCarrito::where('id_variacion', 101)->first()->id_item_carrito;
 
-        // 2. Obtener carrito
+        // 2. Obtener carrito (B2: incluye resumen, nombre, sku, imagen, nombre_comercio)
         $response = $this->getJson('/m5/carrito?id_cliente=1');
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'carrito',
             'grupos_comercio',
             'monto_estimado',
+            'resumen' => ['subtotal', 'impuesto', 'costo_envio', 'total'],
+            'items' => [
+                '*' => [
+                    'id_item_carrito',
+                    'id_variacion',
+                    'nombre',
+                    'sku',
+                    'imagen',
+                    'precio',
+                    'nombre_comercio',
+                    'subtotal',
+                    'iva',
+                ],
+            ],
         ]);
 
         // 3. Modificar cantidad
@@ -190,5 +205,63 @@ class ControladoresM5Test extends TestCase
         $this->assertSame('cancelado', Subpedido::find($idSubpedido)->estado_subpedido);
         // Como todos los subpedidos se cancelaron, el pedido maestro también se cancela
         $this->assertSame('cancelado', PedidoMaestro::find($idPedido)->estado_pedido);
+        $this->assertDatabaseHas('cancelaciones_pedido', [
+            'id_pedido' => $idPedido,
+            'id_subpedido' => $idSubpedido,
+            'motivo' => 'Sin stock',
+        ]);
+    }
+
+    public function test_rechaza_cancelar_subpedido_o_pedido_en_preparacion_rn_m5_05(): void
+    {
+        $this->configurarMocks();
+
+        $this->postJson('/m5/carrito/items', [
+            'id_cliente' => 3,
+            'id_variacion' => 401,
+            'cantidad' => 1,
+        ]);
+
+        $checkoutResponse = $this->postJson('/m5/pedidos', [
+            'id_cliente' => 3,
+        ])->assertStatus(201);
+
+        $idPedido = $checkoutResponse->json('pedido.id_pedido');
+        $idSubpedido = $checkoutResponse->json('pedido.subpedidos.0.id_subpedido');
+
+        // Confirmar pago y pasar el subpedido a en_preparacion
+        $this->postJson('/m5/pedidos/'.$idPedido.'/pago-confirmado', ['refPago' => 'REF-PREP-1'])
+            ->assertStatus(200);
+
+        $sub = Subpedido::find($idSubpedido);
+        $sub->cambiarEstado('en_preparacion', 'Comercio preparando paquete');
+
+        // Intentar cancelar subpedido en preparación -> 409 ERR-M5-003
+        $this->postJson('/m5/subpedidos/'.$idSubpedido.'/cancelar', ['motivo' => 'Quiero cancelar'])
+            ->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M5-003');
+
+        // Intentar cancelar pedido maestro con subpedido en preparación -> 409 ERR-M5-003
+        $this->postJson('/m5/pedidos/'.$idPedido.'/cancelar', ['motivo' => 'Quiero cancelar todo'])
+            ->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M5-003');
+    }
+
+    public function test_b7_seeder_m5_pedidos_es_idempotente_y_crea_datos_demo(): void
+    {
+        $this->seed(M5PedidosSeeder::class);
+        $this->seed(M5PedidosSeeder::class);
+
+        $this->assertDatabaseHas('pedidos_maestros', [
+            'cupon_descuento' => 'DEMO-MULTI-PC4',
+        ]);
+        $this->assertDatabaseHas('pedidos_maestros', [
+            'cupon_descuento' => 'DEMO-CANCEL-PC4',
+            'estado_pedido' => 'cancelado',
+        ]);
+        $this->assertDatabaseHas('cancelaciones_pedido', [
+            'motivo' => 'Cliente solicitó cancelación antes de entrar en preparación',
+            'requiere_reembolso' => 1,
+        ]);
     }
 }

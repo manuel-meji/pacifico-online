@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\M5_Pedidos;
 
+use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Http\Controllers\Controller;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
+use App\Services\M5_Pedidos\PedidosService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,35 +18,38 @@ class ControladorCarrito extends Controller
 
     private $m4Inventario;
 
-    public function __construct($catalogoService = null, $inventarioService = null)
+    private $m2Comercios;
+
+    private PedidosService $pedidosService;
+
+    public function __construct($catalogoService = null, $inventarioService = null, $comerciosService = null, ?PedidosService $pedidosService = null)
     {
         $this->m3Catalogo = $catalogoService ?? (app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null);
         $this->m4Inventario = $inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
+        $this->m2Comercios = $comerciosService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
+        $this->pedidosService = $pedidosService ?? app(PedidosService::class);
     }
 
     public function obtenerCarrito(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
         $carrito = (new Carrito)->obtenerOCrearCarrito($clienteId);
         $carrito->load('items');
 
-        $grupos = $this->agruparItemPorComercio($carrito);
-        $totalGeneral = 0.0;
-        foreach ($grupos as $g) {
-            $totalGeneral += (float) ($g['total'] ?? 0.0);
-        }
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+        $totalGeneral = (float) ($desglose['resumen']['total'] ?? 0.0);
 
         if ($totalGeneral > 0.0) {
             $carrito->recalcularTotales($totalGeneral);
         }
 
-        return response()->json($this->formatearRespuestaCarrito($carrito, $grupos), 200);
+        return response()->json($this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], null, $desglose), 200);
     }
 
     public function agregarAlCarrito(Request $request, ?int $variacionId = null, ?int $cant = null): JsonResponse
     {
         // 1. Obtener clienteId del token autenticado o del request
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
 
         $idVariacion = $variacionId ?? (int) $request->input('id_variacion');
         $cantidad = $cant ?? (int) $request->input('cantidad', 1);
@@ -64,7 +69,7 @@ class ControladorCarrito extends Controller
         if ($this->m3Catalogo) {
             try {
                 $datosVariacion = $this->m3Catalogo->obtenerVariacion($idVariacion);
-            } catch (\Throwable $e) {
+            } catch (\Throwable) {
                 return $this->errorRespuesta('ERR-004', 'Variación inexistente', null, 422);
             }
         }
@@ -77,50 +82,42 @@ class ControladorCarrito extends Controller
         $comercioId = (int) ($datosVariacion['id_comercio'] ?? $datosVariacion['producto']['id_comercio'] ?? 1);
         $ubicacionId = (int) ($datosVariacion['id_ubicacion'] ?? 1);
 
-        $stockDisponible = 0;
-        if ($this->m4Inventario) {
-            if (method_exists($this->m4Inventario, 'consultarStockDisponible')) {
-                $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
-                $stockDisponible = is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
-            } elseif (method_exists($this->m4Inventario, 'consultarExistencias')) {
-                $stockDisponible = (int) $this->m4Inventario->consultarExistencias($idVariacion);
-            }
-        } else {
-            $stockDisponible = 100;
-        }
+        $stockDisponible = $this->consultarStockVariacion($comercioId, $idVariacion, $ubicacionId);
+
+        // Evaluar cantidad acumulada si el ítem ya está en el carrito
+        $carrito = (new Carrito)->obtenerOCrearCarrito($clienteId);
+        $itemPrevio = ItemCarrito::where('id_carrito', $carrito->id_carrito)
+            ->where('id_variacion', $idVariacion)
+            ->first();
+        $cantidadFinal = $cantidad + ($itemPrevio ? (int) $itemPrevio->cantidad : 0);
 
         // 4. Evaluar disponibilidad
-        if (! $stockDisponible || $stockDisponible < $cantidad) {
+        if (! $stockDisponible || $stockDisponible < $cantidadFinal) {
             return $this->errorRespuesta(
                 'ERR-M5-001',
                 'Existencia insuficiente',
-                ['existencia_disponible' => $stockDisponible, 'cantidad_solicitada' => $cantidad],
+                ['existencia_disponible' => $stockDisponible, 'cantidad_solicitada' => $cantidadFinal],
                 409
             );
         }
 
         // 5. Lógica interna de Entidades: Obtener o crear carrito y agregar ítem
-        $carrito = (new Carrito)->obtenerOCrearCarrito($clienteId);
         $item = (new ItemCarrito)->crearItemCarrito($carrito->id_carrito, $idVariacion, $cantidad);
         if ($idReserva !== null) {
             $item->id_reserva = (string) $idReserva;
             $item->save();
         }
 
-        // 6. Recalcular costos
-        $grupos = $this->agruparItemPorComercio($carrito);
-        $subtotales = 0.0;
-        $impuestos = 0.0;
-        foreach ($grupos as $grupo) {
-            $subtotales += (float) ($grupo['subtotal'] ?? 0.0);
-            $impuestos += (float) ($grupo['impuesto'] ?? 0.0);
-        }
+        // 6. Recalcular costos mediante el servicio centralizado (B1)
+        $carrito->load('items');
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+        $carrito->recalcularTotales((float) $desglose['resumen']['total']);
 
-        $totalEstimado = $this->calcularCostosPedidos($subtotales, $impuestos);
-        $carrito->recalcularTotales($totalEstimado);
-
-        // 7. Retornar respuesta exitosa (formato Carrito según OpenAPI)
-        return response()->json($this->formatearRespuestaCarrito($carrito, $grupos, 'Carrito actualizado'), 201);
+        // 7. Retornar respuesta exitosa (formato Carrito según OpenAPI + campos aditivos B2)
+        return response()->json(
+            $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Carrito actualizado', $desglose),
+            201
+        );
     }
 
     public function actualizarCantidad(Request $request, int $itemId): JsonResponse
@@ -142,40 +139,45 @@ class ControladorCarrito extends Controller
         }
 
         // Verificar disponibilidad en M4
-        $stock = 0;
-        if ($this->m4Inventario && method_exists($this->m4Inventario, 'consultarExistencias')) {
-            $stock = (int) $this->m4Inventario->consultarExistencias($item->id_variacion);
+        $comercioId = 1;
+        if ($this->m3Catalogo) {
+            try {
+                $variacion = $this->m3Catalogo->obtenerVariacion((int) $item->id_variacion);
+                $comercioId = (int) ($variacion['id_comercio'] ?? 1);
+            } catch (\Throwable) {
+            }
         }
-        if ($stock > 0 && $stock < $nuevaCantidad) {
-            return $this->errorRespuesta('ERR-M5-001', 'Existencia insuficiente', null, 422);
+
+        $stock = $this->consultarStockVariacion($comercioId, (int) $item->id_variacion, 1);
+        if ($stock >= 0 && $this->m4Inventario && $stock < $nuevaCantidad) {
+            return $this->errorRespuesta(
+                'ERR-M5-001',
+                'Existencia insuficiente',
+                ['existencia_disponible' => $stock, 'cantidad_solicitada' => $nuevaCantidad],
+                409
+            );
         }
 
         $item->actualizarCantidad($nuevaCantidad);
 
         $carrito = Carrito::with('items')->find($item->id_carrito);
-        $grupos = [];
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
         if ($carrito) {
-            $grupos = $this->agruparItemPorComercio($carrito);
-            $subtotales = 0.0;
-            $impuestos = 0.0;
-            foreach ($grupos as $grupo) {
-                $subtotales += (float) ($grupo['subtotal'] ?? 0.0);
-                $impuestos += (float) ($grupo['impuesto'] ?? 0.0);
-            }
-            $carrito->recalcularTotales($this->calcularCostosPedidos($subtotales, $impuestos));
+            $carrito->recalcularTotales((float) $desglose['resumen']['total']);
         }
 
-        return response()->json($this->formatearRespuestaCarrito($carrito, $grupos, 'Cantidad actualizada correctamente'), 200);
+        return response()->json(
+            $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Cantidad actualizada correctamente', $desglose),
+            200
+        );
     }
 
     public function eliminarItem(Request|int $requestOrId, ?int $itemId = null, ?int $id_item_carrito = null): JsonResponse
     {
         if ($requestOrId instanceof Request) {
             $targetItemId = (int) ($id_item_carrito ?? $itemId ?? $requestOrId->route('id_item_carrito') ?? $requestOrId->route('itemId') ?? $requestOrId->input('id_item_carrito') ?? $requestOrId->input('itemId'));
-            $clienteId = (int) ($requestOrId->user()?->id ?? $requestOrId->input('id_cliente', 1));
         } else {
             $targetItemId = $itemId !== null ? (int) $itemId : (int) ($id_item_carrito ?? $requestOrId);
-            $clienteId = $itemId !== null ? (int) $requestOrId : 1;
         }
 
         $item = ItemCarrito::find($targetItemId);
@@ -187,24 +189,20 @@ class ControladorCarrito extends Controller
         $item->delete();
 
         $carrito = Carrito::with('items')->find($carritoId);
-        $grupos = [];
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
         if ($carrito) {
-            $grupos = $this->agruparItemPorComercio($carrito);
-            $subtotales = 0.0;
-            $impuestos = 0.0;
-            foreach ($grupos as $grupo) {
-                $subtotales += (float) ($grupo['subtotal'] ?? 0.0);
-                $impuestos += (float) ($grupo['impuesto'] ?? 0.0);
-            }
-            $carrito->recalcularTotales($this->calcularCostosPedidos($subtotales, $impuestos));
+            $carrito->recalcularTotales((float) $desglose['resumen']['total']);
         }
 
-        return response()->json($this->formatearRespuestaCarrito($carrito, $grupos, 'Ítem eliminado correctamente'), 200);
+        return response()->json(
+            $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Ítem eliminado correctamente', $desglose),
+            200
+        );
     }
 
     public function vaciarCarrito(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
         $carrito = Carrito::where('id_cliente', $clienteId)->first();
 
         if ($carrito) {
@@ -216,66 +214,28 @@ class ControladorCarrito extends Controller
         ], 200);
     }
 
-    public function calcularCostosPedidos(float $subtotales, float $impuestos): float
+    public function calcularCostosPedidos(float $subtotales, float $impuestos, float $costoEnvio = 0.0): float
     {
-        return $subtotales + $impuestos;
+        return round($subtotales + $impuestos + $costoEnvio, 2);
     }
 
     public function agruparItemPorComercio(?Carrito $carrito = null): array
     {
-        if (! $carrito) {
-            return [];
-        }
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
 
-        $carrito->loadMissing('items');
-        $grupos = [];
-
-        foreach ($carrito->items as $item) {
-            $variacion = null;
-            if ($this->m3Catalogo) {
-                try {
-                    $variacion = $this->m3Catalogo->obtenerVariacion($item->id_variacion);
-                } catch (\Throwable $e) {
-                    $variacion = null;
-                }
-            }
-
-            $comercioId = (int) ($variacion['id_comercio'] ?? $variacion['producto']['id_comercio'] ?? 1);
-            $precio = (float) ($variacion['precio'] ?? 10000.00);
-            $tarifaIva = (float) ($variacion['tarifa_impuesto'] ?? 13.00);
-            $subtotalLinea = $item->cantidad * $precio;
-            $impuestoLinea = $subtotalLinea * ($tarifaIva / 100);
-
-            if (! isset($grupos[$comercioId])) {
-                $grupos[$comercioId] = [
-                    'id_comercio' => $comercioId,
-                    'items' => [],
-                    'subtotal' => 0.0,
-                    'impuesto' => 0.0,
-                    'costo_envio' => 0.0,
-                    'total' => 0.0,
-                ];
-            }
-
-            $grupos[$comercioId]['items'][] = [
-                'id_item_carrito' => $item->id_item_carrito,
-                'id_variacion' => $item->id_variacion,
-                'cantidad' => $item->cantidad,
-                'precio_unitario' => $precio,
-                'tarifa_impuesto' => $tarifaIva,
-                'subtotal' => $subtotalLinea,
-                'impuesto' => $impuestoLinea,
-            ];
-
-            $grupos[$comercioId]['subtotal'] += $subtotalLinea;
-            $grupos[$comercioId]['impuesto'] += $impuestoLinea;
-            $grupos[$comercioId]['total'] = $grupos[$comercioId]['subtotal'] + $grupos[$comercioId]['impuesto'] + $grupos[$comercioId]['costo_envio'];
-        }
-
-        return $grupos;
+        return $desglose['grupos_comercio'];
     }
 
-    private function formatearRespuestaCarrito(?Carrito $carrito, array $grupos = [], ?string $mensaje = null): array
+    /**
+     * B2: Respuesta del carrito para la pantalla con todos los campos aditivos
+     * (nombre, sku, imagen, precio, nombre_comercio, subtotal, iva/impuesto,
+     * costo_envio por grupo y resumen {subtotal, impuesto, costo_envio, total}).
+     *
+     * @param  array<int, array<string, mixed>>  $grupos
+     * @param  array<string, mixed>|null  $desglose
+     * @return array<string, mixed>
+     */
+    public function formatearRespuestaCarrito(?Carrito $carrito, array $grupos = [], ?string $mensaje = null, ?array $desglose = null): array
     {
         if (! $carrito) {
             return [
@@ -286,31 +246,41 @@ class ControladorCarrito extends Controller
                 'updated_at' => now()->toIso8601String(),
                 'items' => [],
                 'grupos_comercio' => [],
+                'resumen' => [
+                    'subtotal' => 0.0,
+                    'impuesto' => 0.0,
+                    'costo_envio' => 0.0,
+                    'total' => 0.0,
+                ],
             ];
         }
 
-        $carrito->loadMissing('items');
-        $itemsFormateados = $carrito->items->map(function ($item) {
-            return [
-                'id_item_carrito' => (int) $item->id_item_carrito,
-                'id_carrito' => (int) $item->id_carrito,
-                'id_variacion' => (int) $item->id_variacion,
-                'cantidad' => (int) $item->cantidad,
-                'id_reserva' => $item->id_reserva ? (string) $item->id_reserva : null,
-                'created_at' => $item->created_at?->toIso8601String() ?? now()->toIso8601String(),
-                'updated_at' => $item->updated_at?->toIso8601String() ?? now()->toIso8601String(),
-            ];
-        })->values()->all();
+        if ($desglose === null) {
+            $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+            if (empty($grupos)) {
+                $grupos = $desglose['grupos_comercio'];
+            }
+        }
+
+        $itemsFormateados = $desglose['items'] ?? [];
+        $resumen = $desglose['resumen'] ?? [
+            'subtotal' => 0.0,
+            'impuesto' => 0.0,
+            'costo_envio' => 0.0,
+            'total' => 0.0,
+        ];
 
         $respuesta = [
             'id_carrito' => (int) $carrito->id_carrito,
             'id_cliente' => (int) $carrito->id_cliente,
-            'monto_estimado' => (float) ($carrito->monto_estimado ?? 0.0),
+            'monto_estimado' => (float) ($carrito->monto_estimado ?? $resumen['total'] ?? 0.0),
             'created_at' => $carrito->created_at?->toIso8601String() ?? now()->toIso8601String(),
             'updated_at' => $carrito->updated_at?->toIso8601String() ?? now()->toIso8601String(),
             'items' => $itemsFormateados,
             'carrito' => $carrito,
             'grupos_comercio' => array_values($grupos),
+            'resumen' => $resumen,
+            'hay_comercio_suspendido' => (bool) ($desglose['hay_comercio_suspendido'] ?? false),
         ];
 
         if ($mensaje !== null) {
@@ -318,6 +288,25 @@ class ControladorCarrito extends Controller
         }
 
         return $respuesta;
+    }
+
+    private function consultarStockVariacion(int $comercioId, int $idVariacion, int $ubicacionId = 1): int
+    {
+        if (! $this->m4Inventario) {
+            return 100;
+        }
+
+        if (method_exists($this->m4Inventario, 'consultarStockDisponible')) {
+            $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
+
+            return is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
+        }
+
+        if (method_exists($this->m4Inventario, 'consultarExistencias')) {
+            return (int) $this->m4Inventario->consultarExistencias($idVariacion);
+        }
+
+        return 100;
     }
 
     private function errorRespuesta(string $codigo, string $mensaje, ?array $detalles = null, int $status = 400): JsonResponse

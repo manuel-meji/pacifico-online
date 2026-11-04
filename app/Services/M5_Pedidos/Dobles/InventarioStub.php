@@ -185,4 +185,18 @@ class InventarioStub implements InventarioModuleInterface
             'fecha_liberacion' => now()->toIso8601String(),
         ];
     }
+
+    /**
+     * Confirmar reserva tras pago exitoso del pedido (B6).
+     *
+     * @return array<string, mixed>
+     */
+    public function confirmarReserva(string $idReserva): array
+    {
+        return [
+            'id_reserva' => $idReserva,
+            'estado' => 'confirmada',
+            'fecha_confirmacion' => now()->toIso8601String(),
+        ];
+    }
 }
