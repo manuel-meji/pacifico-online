@@ -30,7 +30,6 @@ use App\Services\M5_Pedidos\PedidosService;
 use App\Services\M6_Pagos\PagosService;
 use App\Services\M7_Contabilidad\ContabilidadService;
 use App\Services\Nucleo\NucleoService;
-use Illuminate\Support\ServiceProvider;
 use App\Services\Nucleo\ServicioIdentidad;
 
 class AppServiceProvider extends ServiceProvider
@@ -63,6 +62,6 @@ class AppServiceProvider extends ServiceProvider
             ));
         });
 
-        $this->loadMigrationsFrom(database_path('migrations/M5_Pedidos'));
+        $this->loadMigrationsFrom(glob(database_path('migrations/*'), GLOB_ONLYDIR));
     }
 }

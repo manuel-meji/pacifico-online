@@ -24,7 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $exceptions->report(function (Throwable $e): void {
-            ManejadorErrores::registrarEnLogDiario($e, request());
+            // Al arrancar por consola todavía no existe la petición: no ocultar el error original.
+            ManejadorErrores::registrarEnLogDiario($e, app()->bound('request') ? request() : null);
         });
 
         $exceptions->render(function (Throwable $e, Request $request) {
