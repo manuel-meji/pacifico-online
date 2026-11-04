@@ -24,6 +24,11 @@ Route::prefix('m1')
     ->name('m1.')
     ->group(base_path('routes/modules/m1_portal.php'));
 
+// M1: Rutas contractuales OpenAPI v1.1.0
+Route::prefix('api/m1/v1')
+    ->name('api.m1.v1.')
+    ->group(base_path('routes/modules/m1_api.php'));
+
 // M2: Micrositios y Administración de Comercios
 Route::prefix('m2')
     ->name('m2.')

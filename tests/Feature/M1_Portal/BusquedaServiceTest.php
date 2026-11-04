@@ -6,6 +6,7 @@ use App\Contracts\M1_Portal\Exceptions\CriterioInvalidoException;
 use App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException;
 use App\Services\M1_Portal\BusquedaService;
 use App\Services\M1_Portal\ConfiguracionMenuCategorias;
+use App\Services\M1_Portal\Dobles\CatalogoFake;
 use App\Services\M1_Portal\Dobles\DatosPrueba;
 use App\Services\M1_Portal\DTO\CategoriaDTO;
 use App\Services\M1_Portal\DTO\CriterioBusquedaDTO;
@@ -328,6 +329,30 @@ class BusquedaServiceTest extends TestCase
     public function test_una_subcategoria_lleva_el_id_de_su_principal(): void
     {
         $this->assertSame(DatosPrueba::CATEGORIA_ROPA, $this->menuPorId()[DatosPrueba::CATEGORIA_CAMISAS]->idCategoriaPadre);
+    }
+
+    public function test_el_menu_se_guarda_en_la_cache_y_no_vuelve_a_consultar_a_m3_rnf_m1_06(): void
+    {
+        $contador = new class extends CatalogoFake
+        {
+            public int $llamadasBusqueda = 0;
+
+            public function buscarProductos(array $filtros = []): array
+            {
+                $this->llamadasBusqueda++;
+
+                return parent::buscarProductos($filtros);
+            }
+        };
+        $this->app->instance(CatalogoFake::class, $contador);
+
+        $primero = $this->idsMenu();
+        $llamadas = $contador->llamadasBusqueda;
+        $segundo = $this->idsMenu();
+
+        $this->assertGreaterThan(0, $llamadas);
+        $this->assertSame($llamadas, $contador->llamadasBusqueda);
+        $this->assertSame($primero, $segundo);
     }
 
     public function test_el_menu_lanza_err_006_si_m3_no_responde(): void

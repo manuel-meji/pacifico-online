@@ -7,6 +7,7 @@ use App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException;
 use App\Services\M1_Portal\DTO\CategoriaDTO;
 use App\Services\M1_Portal\DTO\CriterioBusquedaDTO;
 use App\Services\M1_Portal\DTO\ResultadoBusquedaDTO;
+use App\Services\M1_Portal\Integraciones\CachePortal;
 use App\Services\M1_Portal\Integraciones\CatalogoClient;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -20,11 +21,15 @@ class BusquedaService
 {
     public const LARGO_MINIMO_TERMINO = 2;
 
+    /** Menú ya armado (RNF-M1-06). */
+    private const CLAVE_MENU = 'menu.categorias';
+
     public function __construct(
         private CatalogoClient $catalogo,
         private CompletadorProductos $completador,
         private RegistroBusquedas $registro,
         private ConfiguracionMenuCategorias $configuracionMenu,
+        private CachePortal $cache,
     ) {}
 
     /**
@@ -68,6 +73,7 @@ class BusquedaService
      *   oculta solo con fila visible en falso. Primero las de fila, por orden;
      *   después las demás, por nombre (ordenVisualizacion null).
      * - Ícono: el de categorias_portal o, si no hay, el de M3.
+     * El menú armado se guarda en CachePortal.
      *
      * @return list<CategoriaDTO>
      *
@@ -75,6 +81,12 @@ class BusquedaService
      */
     public function listarCategoriasPortal(): array
     {
+        $guardado = $this->cache->obtener(self::CLAVE_MENU);
+
+        if ($guardado !== null) {
+            return $guardado;
+        }
+
         $categorias = $this->catalogo->listarCategorias();
         $filas = $this->configuracionMenu->filas();
 
@@ -105,6 +117,8 @@ class BusquedaService
                 }
             }
         }
+
+        $this->cache->guardar(self::CLAVE_MENU, $menu);
 
         return $menu;
     }
