@@ -5,7 +5,9 @@ namespace Tests\Feature\M1_Portal;
 use App\Contracts\M1_Portal\Exceptions\CriterioInvalidoException;
 use App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException;
 use App\Services\M1_Portal\BusquedaService;
+use App\Services\M1_Portal\ConfiguracionMenuCategorias;
 use App\Services\M1_Portal\Dobles\DatosPrueba;
+use App\Services\M1_Portal\DTO\CategoriaDTO;
 use App\Services\M1_Portal\DTO\CriterioBusquedaDTO;
 use App\Services\M1_Portal\DTO\Disponibilidad;
 use App\Services\M1_Portal\DTO\ProductoResumenDTO;
@@ -17,14 +19,15 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Doubles\M1\CatalogoConComercioSuspendido;
 use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\ComerciosNoDisponible;
+use Tests\Doubles\M1\ConfiguracionMenuEnMemoria;
 use Tests\Doubles\M1\InventarioNoDisponible;
 use Tests\Doubles\M1\RegistroBusquedasEnMemoria;
 use Tests\Doubles\M1\RegistroBusquedasQueFalla;
 use Tests\TestCase;
 
 /**
- * CU-002 Buscar productos (BusquedaService) contra los dobles de M2, M3 y M4,
- * con el registro de búsquedas en memoria.
+ * CU-002 Buscar productos y menú de categorías (BusquedaService) contra los
+ * dobles de M2, M3 y M4, con el registro de búsquedas y categorias_portal en memoria.
  */
 class BusquedaServiceTest extends TestCase
 {
@@ -36,6 +39,7 @@ class BusquedaServiceTest extends TestCase
 
         $this->registro = new RegistroBusquedasEnMemoria;
         $this->app->instance(RegistroBusquedas::class, $this->registro);
+        $this->usarFilas($this->filasBase());
     }
 
     // ---------------------------------------------------------------
@@ -230,6 +234,163 @@ class BusquedaServiceTest extends TestCase
 
         $this->assertSame([DatosPrueba::PRODUCTO_CAMISA_LINO], $this->ids($resultado));
         Log::shouldHaveReceived('warning')->once();
+    }
+
+    // ---------------------------------------------------------------
+    // Menú de categorías (RN-M1-09)
+    // ---------------------------------------------------------------
+
+    public function test_el_menu_pone_cada_principal_seguida_de_sus_subcategorias_en_orden(): void
+    {
+        $this->assertSame([
+            DatosPrueba::CATEGORIA_ALIMENTOS,
+            DatosPrueba::CATEGORIA_CAFE,
+            DatosPrueba::CATEGORIA_ROPA,
+            DatosPrueba::CATEGORIA_CAMISAS,
+            DatosPrueba::CATEGORIA_SOMBREROS,
+            DatosPrueba::CATEGORIA_ARTESANIA,
+            DatosPrueba::CATEGORIA_CERAMICA,
+        ], $this->idsMenu());
+    }
+
+    public function test_el_menu_omite_las_categorias_sin_productos_visibles_rn_m1_09(): void
+    {
+        $ids = $this->idsMenu();
+
+        $this->assertNotContains(DatosPrueba::CATEGORIA_VACIA, $ids);
+        $this->assertNotContains(DatosPrueba::CATEGORIA_SOLO_SUSPENDIDO, $ids);
+    }
+
+    public function test_una_principal_sin_productos_propios_aparece_si_sus_subcategorias_tienen(): void
+    {
+        $this->assertContains(DatosPrueba::CATEGORIA_ROPA, $this->idsMenu());
+    }
+
+    public function test_una_principal_sin_fila_o_oculta_no_sale_ni_con_sus_subcategorias(): void
+    {
+        $filas = $this->filasBase();
+        unset($filas[DatosPrueba::CATEGORIA_ALIMENTOS]);
+        $filas[DatosPrueba::CATEGORIA_ARTESANIA]['visible'] = false;
+        $this->usarFilas($filas);
+
+        $this->assertSame([
+            DatosPrueba::CATEGORIA_ROPA,
+            DatosPrueba::CATEGORIA_CAMISAS,
+            DatosPrueba::CATEGORIA_SOMBREROS,
+        ], $this->idsMenu());
+    }
+
+    public function test_las_subcategorias_con_fila_van_antes_que_las_ordenadas_por_nombre(): void
+    {
+        $this->usarFilas($this->filasBase() + [DatosPrueba::CATEGORIA_SOMBREROS => $this->fila(1)]);
+
+        $menu = $this->menuPorId();
+
+        $this->assertSame(
+            [DatosPrueba::CATEGORIA_SOMBREROS, DatosPrueba::CATEGORIA_CAMISAS],
+            array_values(array_intersect($this->idsMenu(), [DatosPrueba::CATEGORIA_SOMBREROS, DatosPrueba::CATEGORIA_CAMISAS])),
+        );
+        $this->assertSame(1, $menu[DatosPrueba::CATEGORIA_SOMBREROS]->ordenVisualizacion);
+        $this->assertNull($menu[DatosPrueba::CATEGORIA_CAMISAS]->ordenVisualizacion);
+    }
+
+    public function test_una_subcategoria_con_fila_oculta_no_sale(): void
+    {
+        $this->usarFilas($this->filasBase() + [DatosPrueba::CATEGORIA_CAMISAS => $this->fila(1, visible: false)]);
+
+        $ids = $this->idsMenu();
+
+        $this->assertNotContains(DatosPrueba::CATEGORIA_CAMISAS, $ids);
+        $this->assertContains(DatosPrueba::CATEGORIA_SOMBREROS, $ids);
+    }
+
+    public function test_una_principal_lleva_su_orden_y_el_icono_de_su_fila(): void
+    {
+        $icono = 'https://cdn.pacificos.example/portal/ropa.svg';
+        $filas = $this->filasBase();
+        $filas[DatosPrueba::CATEGORIA_ROPA]['icono_url'] = $icono;
+        $this->usarFilas($filas);
+
+        $ropa = $this->menuPorId()[DatosPrueba::CATEGORIA_ROPA];
+
+        $this->assertNull($ropa->idCategoriaPadre);
+        $this->assertSame(2, $ropa->ordenVisualizacion);
+        $this->assertSame($icono, $ropa->iconoUrl);
+    }
+
+    public function test_sin_icono_en_la_fila_se_usa_el_de_m3(): void
+    {
+        $alimentos = $this->menuPorId()[DatosPrueba::CATEGORIA_ALIMENTOS];
+
+        $this->assertSame('https://cdn.pacificos.example/categorias/'.DatosPrueba::CATEGORIA_ALIMENTOS.'.svg', $alimentos->iconoUrl);
+    }
+
+    public function test_una_subcategoria_lleva_el_id_de_su_principal(): void
+    {
+        $this->assertSame(DatosPrueba::CATEGORIA_ROPA, $this->menuPorId()[DatosPrueba::CATEGORIA_CAMISAS]->idCategoriaPadre);
+    }
+
+    public function test_el_menu_lanza_err_006_si_m3_no_responde(): void
+    {
+        config(['integraciones.m1.m3.doble' => CatalogoNoDisponible::class]);
+
+        $this->expectException(DependenciaNoDisponibleException::class);
+
+        app(BusquedaService::class)->listarCategoriasPortal();
+    }
+
+    /**
+     * Filas base de categorias_portal: solo las principales, todas visibles.
+     *
+     * @return array<int, array{orden: int, visible: bool, icono_url: string|null}>
+     */
+    private function filasBase(): array
+    {
+        return [
+            DatosPrueba::CATEGORIA_ALIMENTOS => $this->fila(1),
+            DatosPrueba::CATEGORIA_ROPA => $this->fila(2),
+            DatosPrueba::CATEGORIA_ARTESANIA => $this->fila(3),
+            DatosPrueba::CATEGORIA_SOLO_SUSPENDIDO => $this->fila(4),
+            DatosPrueba::CATEGORIA_VACIA => $this->fila(5),
+        ];
+    }
+
+    /**
+     * @return array{orden: int, visible: bool, icono_url: string|null}
+     */
+    private function fila(int $orden, bool $visible = true): array
+    {
+        return ['orden' => $orden, 'visible' => $visible, 'icono_url' => null];
+    }
+
+    /**
+     * @param  array<int, array{orden: int, visible: bool, icono_url: string|null}>  $filas
+     */
+    private function usarFilas(array $filas): void
+    {
+        $this->app->instance(ConfiguracionMenuCategorias::class, new ConfiguracionMenuEnMemoria($filas));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function idsMenu(): array
+    {
+        return array_map(fn (CategoriaDTO $categoria): int => $categoria->idCategoria, app(BusquedaService::class)->listarCategoriasPortal());
+    }
+
+    /**
+     * @return array<int, CategoriaDTO>
+     */
+    private function menuPorId(): array
+    {
+        $menu = [];
+
+        foreach (app(BusquedaService::class)->listarCategoriasPortal() as $categoria) {
+            $menu[$categoria->idCategoria] = $categoria;
+        }
+
+        return $menu;
     }
 
     private function buscar(CriterioBusquedaDTO $criterio): ResultadoBusquedaDTO
