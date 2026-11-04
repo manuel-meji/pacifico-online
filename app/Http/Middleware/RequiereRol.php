@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Enums\Nucleo\CodigoErrorNucleo;
-use App\Models\Nucleo\Rol;
+use App\Enums\Nucleo\RolUsuario;
 use App\Models\Nucleo\VerificaRol;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -23,7 +23,7 @@ class RequiereRol
             return $this->error(CodigoErrorNucleo::SesionInvalida);
         }
 
-        $permitidos = array_map(fn (string $r) => Rol::from($r), $roles);
+        $permitidos = array_map(fn (string $r) => RolUsuario::from($r), $roles);
 
         if (! $this->tieneRol($usuario, ...$permitidos)) {
             return $this->error(CodigoErrorNucleo::RolSinPermiso);
