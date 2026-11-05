@@ -4,7 +4,6 @@ namespace App\Http\Controllers\M5_Pedidos;
 
 use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
-use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
@@ -39,13 +38,7 @@ class ControladorPedido extends Controller
         $this->m2Comercios = $comercioService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
         $this->m4Inventario = $inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
         $this->m6Pagos = $pagosService ?? (app()->bound(PagosServiceInterface::class) ? app(PagosServiceInterface::class) : null);
-        $this->pedidosService = $pedidosService ?? new PedidosService(
-            $this->m2Comercios instanceof ComerciosServiceInterface ? $this->m2Comercios : null,
-            app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null,
-            $this->m4Inventario instanceof InventarioServiceInterface ? $this->m4Inventario : null,
-            $this->m6Pagos instanceof PagosServiceInterface ? $this->m6Pagos : null,
-            app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null,
-        );
+        $this->pedidosService = $pedidosService ?? app(PedidosService::class);
     }
 
     public function procesarCheckout(Request $request): JsonResponse
@@ -81,8 +74,7 @@ class ControladorPedido extends Controller
         }
 
         // B1: Calcular desglose unificado del carrito con M3 y M2
-        $catalogoService = app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null;
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $catalogoService, $this->m2Comercios);
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, null, $this->m2Comercios);
         $itemsAgrupados = $desglose['grupos_comercio'];
         $comerciosInvolucrados = array_keys($itemsAgrupados);
 
