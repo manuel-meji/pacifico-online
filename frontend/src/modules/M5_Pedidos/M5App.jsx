@@ -11,6 +11,48 @@ import PanelComercioView from './views/PanelComercioView';
 const textoError = (e) => `${e.mensaje || e.message}${e.codigo ? ` (${e.codigo})` : ''}`;
 const maximoDisponible = (e) => e.detalles?.existencia_disponible ?? 0;
 
+// ---------- Agregar al carrito desde un enlace (p. ej. el portal de M1) ----------
+// ?agregar=<id_variacion>&cantidad=<n>  (cantidad por defecto 1)
+const PARAM_VARIACION = 'agregar';
+const PARAM_CANTIDAD = 'cantidad';
+
+// Devuelve null si no hay ?agregar=, { invalido: true } si los valores no son enteros >= 1,
+// o { idVariacion, cantidad }.
+function leerAgregarDeUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has(PARAM_VARIACION)) return null;
+  const idVariacion = Number(params.get(PARAM_VARIACION));
+  const cantidad = params.has(PARAM_CANTIDAD) ? Number(params.get(PARAM_CANTIDAD)) : 1;
+  const valido = (n) => Number.isInteger(n) && n >= 1;
+  if (!valido(idVariacion) || !valido(cantidad)) return { invalido: true };
+  return { idVariacion, cantidad };
+}
+
+// Quita solo ?agregar y ?cantidad, conservando el resto de la URL, para que recargar no vuelva a agregar.
+function limpiarAgregarDeUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(PARAM_VARIACION);
+  url.searchParams.delete(PARAM_CANTIDAD);
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+function avisoErrorAgregar(e) {
+  if (e.status === 409 && e.detalles?.existencia_disponible !== undefined) {
+    return {
+      tipo: 'error',
+      titulo: 'Stock insuficiente',
+      texto: `No se pudo agregar el producto. Cantidad máxima disponible: ${maximoDisponible(e)}.`,
+    };
+  }
+  if (e.codigo === 'ERR-003' || /suspend/i.test(e.mensaje ?? '')) {
+    return { tipo: 'error', titulo: 'Comercio suspendido', texto: `El comercio de este producto no está disponible. ${textoError(e)}` };
+  }
+  if (e.status === 422 || e.status === 404) {
+    return { tipo: 'error', titulo: 'Producto no disponible', texto: `La variación solicitada no existe o no está a la venta. ${textoError(e)}` };
+  }
+  return { tipo: 'error', titulo: 'No se pudo agregar el producto', texto: textoError(e) };
+}
+
 // Punto de entrada del modulo M5: carrito → checkout → pedido pendiente de pago, todo contra /api/m5/v1.
 // Las alternativas del CU-004 (stock agotado, comercio suspendido) llegan ahora como errores reales de la API.
 export default function M5App() {
@@ -31,7 +73,6 @@ export default function M5App() {
     }
   }, []);
 
-  useEffect(() => { cargarCarrito(); }, [cargarCarrito]);
 
   // ---------- Acciones del carrito (la pantalla se actualiza con la respuesta de la API) ----------
   // Claves en curso: 'cantidad-<id>', 'quitar-<id>', 'vaciar', 'agregar'. El ref evita el doble clic
@@ -134,6 +175,43 @@ export default function M5App() {
   const [pantalla, setPantalla] = useState('carrito');
   const [pedidoCreado, setPedidoCreado] = useState(null); // { pedido: respuesta 201, grupos: grupos_comercio }
   const [aviso, setAviso] = useState(null);
+
+  // Carga inicial. Si la URL trae ?agregar=, primero agrega el producto y muestra el carrito con el aviso.
+  // El ref impide que el doble montaje de React (StrictMode en desarrollo) agregue el producto dos veces.
+  const cargaInicialHecha = useRef(false);
+  useEffect(() => {
+    if (cargaInicialHecha.current) return;
+    cargaInicialHecha.current = true;
+
+    const solicitud = leerAgregarDeUrl();
+    if (!solicitud) { cargarCarrito(); return; }
+
+    limpiarAgregarDeUrl();
+    setPantalla('carrito');
+    if (solicitud.invalido) {
+      setAviso({ tipo: 'error', titulo: 'Enlace no válido', texto: 'El enlace para agregar al carrito no indica una variación y cantidad válidas.' });
+      cargarCarrito();
+      return;
+    }
+
+    (async () => {
+      setCargando(true);
+      setError(null);
+      try {
+        const respuesta = await agregarItem({ id_variacion: solicitud.idVariacion, cantidad: solicitud.cantidad });
+        setCarrito(respuesta);
+        setAviso({
+          tipo: 'exito',
+          titulo: 'Producto agregado al carrito',
+          texto: `Se ${solicitud.cantidad === 1 ? 'agregó 1 unidad' : `agregaron ${solicitud.cantidad} unidades`} al carrito.`,
+        });
+        setCargando(false);
+      } catch (e) {
+        setAviso(avisoErrorAgregar(e));
+        await cargarCarrito(); // Muestra el carrito tal como está, con el aviso de error.
+      }
+    })();
+  }, [cargarCarrito]);
 
   // Vuelve al carrito y lo recarga, porque el checkout pudo haber cambiado su estado (reservas, stock, pedido).
   function volverAlCarrito(nuevoAviso = null) {
