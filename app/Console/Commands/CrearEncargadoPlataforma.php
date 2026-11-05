@@ -7,7 +7,6 @@ namespace App\Console\Commands;
 use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Contracts\Nucleo\ServicioIdentidadInterface;
 use App\Enums\Nucleo\RolUsuario;
-use App\Models\Nucleo\Rol;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
