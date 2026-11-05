@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Services\M2_Comercios;
 
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
+use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
+use App\Contracts\Nucleo\NucleoServiceInterface;
+use App\Contracts\Nucleo\ServicioIdentidadInterface;
 use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\M2_Comercios\Comercio;
 use App\Models\M2_Comercios\ComisionComercio;
@@ -33,6 +36,12 @@ class ComerciosService implements ComerciosServiceInterface
     public const MAXIMO_POR_PAGINA = 50;
 
     public const MAXIMO_LOTE = 50;
+
+    public function __construct(
+        private readonly ServicioIdentidadInterface $identidad,
+        private readonly NucleoServiceInterface $nucleo,
+        private readonly SubpedidosServiceInterface $subpedidos,
+    ) {}
 
     public function listarComerciosHabilitados(int $pagina = 1, int $porPagina = 20, bool $destacado = false): array
     {
