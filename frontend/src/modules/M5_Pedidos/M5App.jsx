@@ -6,6 +6,7 @@ import CheckoutPage from './views/CheckoutView';
 import PedidoPendientePage from './views/PedidoPendienteView';
 import MisPedidosView from './views/MisPedidosView';
 import DetallePedidoView from './views/DetallePedidoView';
+import PanelComercioView from './views/PanelComercioView';
 
 const textoError = (e) => `${e.mensaje || e.message}${e.codigo ? ` (${e.codigo})` : ''}`;
 const maximoDisponible = (e) => e.detalles?.existencia_disponible ?? 0;
@@ -150,6 +151,8 @@ export default function M5App() {
   const navegacion = useMemo(() => ({
     abrirMisPedidos: () => { setAviso(null); setPantalla('mis-pedidos'); },
     enMisPedidos: pantalla === 'mis-pedidos',
+    abrirPanelComercio: () => { setAviso(null); setPantalla('panel-comercio'); },
+    enPanelComercio: pantalla === 'panel-comercio',
   }), [pantalla]);
 
   function mostrarPedido(pedido, grupos) {
@@ -180,6 +183,7 @@ export default function M5App() {
         {pantalla === 'detalle' && idPedidoSeleccionado != null && (
           <DetallePedidoView idPedido={idPedidoSeleccionado} onVolver={navegacion.abrirMisPedidos} />
         )}
+        {pantalla === 'panel-comercio' && <PanelComercioView onVolver={() => volverAlCarrito()} />}
       </div>
     </div>
     </NavegacionM5.Provider>

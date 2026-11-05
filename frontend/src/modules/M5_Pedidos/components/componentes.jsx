@@ -5,13 +5,14 @@ import {
 import { colones } from '../services/calculos';
 import logoImg from '../../../assets/Logo.jpeg';
 
-// Navegación compartida de M5 (la provee M5App): { abrirMisPedidos, enMisPedidos }.
-// Permite que cualquier vista muestre el acceso "Mis pedidos" en el encabezado sin pasar props.
+// Navegación compartida de M5 (la provee M5App): { abrirMisPedidos, enMisPedidos, abrirPanelComercio, enPanelComercio }.
+// Permite que cualquier vista muestre los accesos del encabezado sin pasar props.
 export const NavegacionM5 = createContext(null);
 
 export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al carrito' }) {
   const nav = useContext(NavegacionM5);
   const mostrarMisPedidos = nav?.abrirMisPedidos && !nav.enMisPedidos;
+  const mostrarPanel = nav?.abrirPanelComercio && !nav.enPanelComercio;
   return (
     <header className="sticky top-0 z-20 bg-white shadow-xs border-b border-gray-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
@@ -42,6 +43,13 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
               className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 sm:px-3 text-sm font-semibold text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
               <ClipboardList className="w-5 h-5" aria-hidden="true" />
               <span className="hidden sm:inline">Mis pedidos</span>
+            </button>
+          )}
+          {mostrarPanel && (
+            <button type="button" onClick={nav.abrirPanelComercio} aria-label="Panel del comercio (demo)"
+              className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 sm:px-3 text-sm font-semibold text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
+              <Store className="w-5 h-5" aria-hidden="true" />
+              <span className="hidden md:inline">Panel del comercio (demo)</span>
             </button>
           )}
         </div>
@@ -259,6 +267,85 @@ export function ModalConfirmacion({ abierto, titulo, children, textoConfirmar = 
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------- Modal con un campo de texto (guía de seguimiento, motivo, etc.) ----------
+// onConfirmar(valor) recibe el texto sin espacios extremos. Si `obligatorio`, no se envía vacío.
+export function ModalConCampo({
+  abierto, titulo, descripcion, etiquetaCampo, placeholder, obligatorio = false, multilinea = false,
+  textoConfirmar = 'Confirmar', textoOcupado = 'Procesando…', peligro = false, icono: Icono = Check, ocupado, onConfirmar, onCerrar,
+}) {
+  const [valor, setValor] = useState('');
+  const [intentado, setIntentado] = useState(false);
+  const campoRef = useRef(null);
+
+  useEffect(() => {
+    if (!abierto) return;
+    setValor('');
+    setIntentado(false);
+    campoRef.current?.focus();
+  }, [abierto]);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const alTeclear = (e) => { if (e.key === 'Escape' && !ocupado) onCerrar(); };
+    document.addEventListener('keydown', alTeclear);
+    return () => document.removeEventListener('keydown', alTeclear);
+  }, [abierto, ocupado, onCerrar]);
+
+  if (!abierto) return null;
+  const invalido = obligatorio && valor.trim() === '';
+  const mostrarError = intentado && invalido;
+
+  const enviar = (e) => {
+    e.preventDefault();
+    setIntentado(true);
+    if (invalido || ocupado) { campoRef.current?.focus(); return; }
+    onConfirmar(valor.trim());
+  };
+
+  const Control = multilinea ? 'textarea' : 'input';
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50" aria-hidden="true" onClick={() => !ocupado && onCerrar()} />
+      <form onSubmit={enviar} noValidate role="dialog" aria-modal="true" aria-labelledby="modal-campo-titulo"
+        className="relative bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6 space-y-4">
+        <div>
+          <h2 id="modal-campo-titulo" className="text-base font-bold text-gray-900">{titulo}</h2>
+          {descripcion && <p className="mt-1 text-sm text-gray-600">{descripcion}</p>}
+        </div>
+        <div>
+          <label htmlFor="modal-campo" className="text-xs font-medium text-gray-600 block mb-1">
+            {etiquetaCampo} {obligatorio ? '(obligatorio)' : '(opcional)'}
+          </label>
+          <Control
+            id="modal-campo"
+            ref={campoRef}
+            rows={multilinea ? 3 : undefined}
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            disabled={ocupado}
+            placeholder={placeholder}
+            aria-invalid={mostrarError}
+            aria-describedby={mostrarError ? 'modal-campo-error' : undefined}
+            className={`w-full min-h-11 border rounded-lg py-2 px-3 text-sm focus:outline-none ${mostrarError ? 'border-red-400 focus:border-red-600' : 'border-gray-200 focus:border-brandBlue'}`}
+          />
+          {mostrarError && <p id="modal-campo-error" role="alert" className="mt-1 text-xs text-red-600">Este campo es obligatorio.</p>}
+        </div>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <button type="button" disabled={ocupado} onClick={onCerrar}
+            className="min-h-11 px-5 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50">
+            Volver
+          </button>
+          <button type="submit" disabled={ocupado}
+            className={`min-h-11 px-5 rounded-lg text-white text-sm font-bold transition inline-flex items-center justify-center gap-2 disabled:opacity-70 ${peligro ? 'bg-red-600 hover:bg-red-700' : 'bg-brandDarkBlue hover:bg-brandBlue'}`}>
+            {ocupado ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Icono className="w-4 h-4" aria-hidden="true" />}
+            {ocupado ? textoOcupado : textoConfirmar}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
