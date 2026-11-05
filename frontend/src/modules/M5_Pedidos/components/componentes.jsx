@@ -4,7 +4,6 @@ import {
 import { colones } from '../services/calculos';
 import logoImg from '../../../assets/Logo.jpeg';
 
-// ---------- Encabezado con isotipo y responsive (sistema de diseño) ----------
 export function Encabezado({ titulo, paso, onVolver }) {
   return (
     <header className="sticky top-0 z-20 bg-white shadow-xs border-b border-gray-100">
@@ -35,7 +34,7 @@ export function Encabezado({ titulo, paso, onVolver }) {
   );
 }
 
-// ---------- Alertas: información, éxito, advertencia y error ----------
+// ---------- Alertas: informacion, exito, advertencia y error ----------
 const ALERTAS = {
   info: { caja: 'bg-blue-50 border-blue-200 text-blue-900', Icono: Info, icono: 'text-brandBlue', titulo: 'text-brandDarkBlue', texto: 'text-blue-800' },
   exito: { caja: 'bg-green-50 border-green-200 text-green-900', Icono: CircleCheck, icono: 'text-green-600', titulo: 'text-green-800', texto: 'text-green-700' },
@@ -90,31 +89,44 @@ export function SelectorCantidad({ nombre, valor, min = 1, deshabilitado, onMeno
   );
 }
 
-// ---------- Línea de ítem editable (carrito) ----------
+// ---------- Miniatura del producto (ícono si la API no trae imagen) ----------
+export function Miniatura({ imagen, nombre }) {
+  return (
+    <div className="h-16 w-16 sm:h-20 sm:w-20 shrink-0 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center overflow-hidden">
+      {imagen
+        ? <img src={imagen} alt={nombre} className="h-full w-full object-cover" />
+        : <Package className="w-8 h-8 sm:w-9 sm:h-9 stroke-1 text-gray-400" aria-hidden="true" />}
+    </div>
+  );
+}
+
+// ---------- Linea de item editable (carrito) ----------
+// Los controles de cantidad y "Quitar" quedan deshabilitados si no se pasan onCantidad / onQuitar.
 export function FilaItem({ item, deshabilitado, onCantidad, onQuitar }) {
-  const enMaximo = item.cantidad >= item.stock;
+  const conStock = item.stock != null;
+  const enMaximo = conStock && item.cantidad >= item.stock;
+  const subtotal = item.subtotal ?? item.precio_unitario * item.cantidad;
+  const detalle = item.variacion ?? (item.sku ? `SKU: ${item.sku}` : null);
   return (
     <li className={`py-3.5 border-b border-gray-100 last:border-0 ${deshabilitado ? 'opacity-50' : ''}`}>
       <div className="flex items-start sm:items-center gap-3">
-        <div aria-hidden="true" className="h-16 w-16 sm:h-20 sm:w-20 shrink-0 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center">
-          <Package className="w-8 h-8 sm:w-9 sm:h-9 stroke-1 text-gray-400" />
-        </div>
+        <Miniatura imagen={item.imagen} nombre={item.nombre} />
         <div className="min-w-0 flex-1">
           <p className="text-sm sm:text-base font-bold text-gray-900 break-words">{item.nombre}</p>
-          <p className="text-xs text-gray-500 font-normal break-words">{item.variacion}</p>
-          <p className="text-xs text-gray-600 font-medium mt-0.5">{colones(item.precio_unitario)} c/u</p>
-          {!deshabilitado && !enMaximo && (
+          {detalle && <p className="text-xs text-gray-500 font-normal break-words">{detalle}</p>}
+          <p className="text-xs text-gray-600 font-medium mt-0.5">{colones(item.precio_unitario)} c/u · Cantidad: {item.cantidad}</p>
+          {conStock && !deshabilitado && !enMaximo && (
             <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium mt-1">
               <Check className="w-3 h-3" aria-hidden="true" /> En Stock ({item.stock} disp.)
             </span>
           )}
         </div>
-        <p className="shrink-0 text-sm sm:text-base font-extrabold text-brandDarkBlue">{colones(item.precio_unitario * item.cantidad)}</p>
+        <p className="shrink-0 text-sm sm:text-base font-extrabold text-brandDarkBlue">{colones(subtotal)}</p>
       </div>
       <div className="mt-2.5 flex items-center justify-between sm:justify-end gap-3">
-        <SelectorCantidad nombre={item.nombre} valor={item.cantidad} deshabilitado={deshabilitado}
-          onMenos={() => onCantidad(item.id_item_carrito, item.cantidad - 1)} onMas={() => onCantidad(item.id_item_carrito, item.cantidad + 1)} />
-        <Boton variante="peligro" icono={Trash2} onClick={() => onQuitar(item.id_item_carrito)}>Quitar</Boton>
+        <SelectorCantidad nombre={item.nombre} valor={item.cantidad} deshabilitado={deshabilitado || !onCantidad}
+          onMenos={() => onCantidad?.(item.id_item_carrito, item.cantidad - 1)} onMas={() => onCantidad?.(item.id_item_carrito, item.cantidad + 1)} />
+        <Boton variante="peligro" icono={Trash2} disabled={!onQuitar} onClick={() => onQuitar?.(item.id_item_carrito)}>Quitar</Boton>
       </div>
       {item.aviso && (
         <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-red-700"><CircleAlert className="w-3.5 h-3.5" aria-hidden="true" />{item.aviso}</p>
@@ -126,7 +138,7 @@ export function FilaItem({ item, deshabilitado, onCantidad, onQuitar }) {
   );
 }
 
-// ---------- Línea compacta de ítem (resumen del checkout) ----------
+// ---------- Linea compacta de ítem (resumen del checkout) ----------
 export function FilaResumen({ item }) {
   return (
     <li className="flex items-center justify-between gap-2 text-xs sm:text-sm">
@@ -146,7 +158,7 @@ export function TarjetaComercio({ grupo, numero, editable, suspendido, onCantida
       <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
         <div className="flex items-center gap-2 min-w-0">
           <Store className="w-4 h-4 shrink-0 text-brandDarkBlue" aria-hidden="true" />
-          <h2 className="text-sm sm:text-base font-bold text-gray-900 truncate">{grupo.comercio.nombre}</h2>
+          <h2 className="text-sm sm:text-base font-bold text-gray-900 truncate">{grupo.comercio?.nombre ?? grupo.nombre_comercio}</h2>
         </div>
         <span className="shrink-0 text-xs font-semibold text-brandGreen bg-green-50 px-2.5 py-0.5 rounded border border-green-200">Subpedido {numero}</span>
       </div>

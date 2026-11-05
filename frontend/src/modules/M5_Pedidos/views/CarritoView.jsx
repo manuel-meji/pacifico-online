@@ -1,13 +1,40 @@
-import { CreditCard, Lock, ShoppingCart } from 'lucide-react';
+import { CreditCard, LoaderCircle, Lock, RefreshCw, ShoppingCart } from 'lucide-react';
 import { Alerta, Boton, Encabezado, TarjetaComercio, Total } from '../components/componentes';
-import { agruparPorComercio, colones, totalGeneral } from '../services/calculos';
+import { colones } from '../services/calculos';
 
-// CU-001 Gestionar carrito de compras (InterfazCarrito): productos agrupados por comercio,
-// cambio de cantidad, eliminación de ítems y subtotales recalculados.
-export default function CarritoPage({ items, comerciosSuspendidos, aviso, onCantidad, onQuitar, onContinuar }) {
-  const grupos = agruparPorComercio(items);
-  const unidades = items.reduce((s, i) => s + i.cantidad, 0);
-  const hayBloqueo = grupos.some((g) => comerciosSuspendidos.includes(g.comercio.id_comercio));
+// CU-001 Gestionar carrito de compras (InterfazCarrito): productos agrupados por comercio
+// GET /api/m5/v1/carrito (grupos_comercio + resumen).
+export default function CarritoPage({ carrito, cargando, error, onReintentar, aviso, onContinuar }) {
+  if (cargando) {
+    return (
+      <>
+        <Encabezado titulo="Mi carrito" />
+        <main className="max-w-4xl mx-auto px-4 py-16 flex flex-col items-center gap-3 text-gray-500" aria-live="polite">
+          <LoaderCircle className="w-8 h-8 animate-spin text-brandBlue" aria-hidden="true" />
+          <p className="text-sm font-medium">Cargando su carrito…</p>
+        </main>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <Encabezado titulo="Mi carrito" />
+        <main className="max-w-xl mx-auto px-4 py-12 space-y-4">
+          <Alerta tipo="error" titulo="No se pudo cargar el carrito">
+            {error.mensaje || error.message}{error.codigo ? ` (${error.codigo})` : ''}
+          </Alerta>
+          {onReintentar && (
+            <Boton variante="oscuro" icono={RefreshCw} onClick={onReintentar}>Reintentar</Boton>
+          )}
+        </main>
+      </>
+    );
+  }
+
+  const grupos = carrito?.grupos_comercio ?? [];
+  const items = grupos.flatMap((g) => g.items);
 
   if (items.length === 0) {
     return (
@@ -24,10 +51,10 @@ export default function CarritoPage({ items, comerciosSuspendidos, aviso, onCant
     );
   }
 
-  const subtotalItems = grupos.reduce((s, g) => s + g.subtotal, 0);
-  const impuestosTotal = grupos.reduce((s, g) => s + g.impuesto, 0);
-  const enviosTotal = grupos.reduce((s, g) => s + g.costo_envio, 0);
-  const total = totalGeneral(grupos);
+  const resumen = carrito.resumen ?? {};
+  const unidades = items.reduce((s, i) => s + i.cantidad, 0);
+  const hayBloqueo = carrito.hay_comercio_suspendido ?? grupos.some((g) => g.comercio_suspendido);
+  const total = resumen.total ?? 0;
 
   return (
     <>
@@ -40,18 +67,16 @@ export default function CarritoPage({ items, comerciosSuspendidos, aviso, onCant
           <div className="lg:col-span-7 xl:col-span-8 space-y-5">
             {grupos.map((g, n) => (
               <TarjetaComercio
-                key={g.comercio.id_comercio}
+                key={g.id_comercio}
                 grupo={g}
                 numero={n + 1}
                 editable
-                suspendido={comerciosSuspendidos.includes(g.comercio.id_comercio)}
-                onCantidad={onCantidad}
-                onQuitar={onQuitar}
+                suspendido={g.comercio_suspendido}
               />
             ))}
           </div>
 
-          {/* Columna derecha: Resumen de compra en versión escritorio (sticky) */}
+          {/* Columna derecha: Resumen de compra en version escritorio (sticky) */}
           <div className="hidden lg:block lg:col-span-5 xl:col-span-4 lg:sticky lg:top-20 space-y-4">
             <div className="bg-white rounded-xl shadow-xs border border-gray-200 p-6 space-y-5">
               <h2 className="text-base font-bold text-gray-900 pb-3 border-b border-gray-100 flex items-center justify-between">
@@ -64,15 +89,15 @@ export default function CarritoPage({ items, comerciosSuspendidos, aviso, onCant
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <dt>Subtotal ({unidades} {unidades === 1 ? 'artículo' : 'artículos'})</dt>
-                  <dd className="font-semibold text-gray-900">{colones(subtotalItems)}</dd>
+                  <dd className="font-semibold text-gray-900">{colones(resumen.subtotal ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <dt>Impuestos estimados</dt>
-                  <dd className="font-semibold text-gray-900">{colones(impuestosTotal)}</dd>
+                  <dt>IVA (13 %)</dt>
+                  <dd className="font-semibold text-gray-900">{colones(resumen.impuesto ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <dt>Costos de envío</dt>
-                  <dd className="font-semibold text-gray-900">{colones(enviosTotal)}</dd>
+                  <dt>Envío</dt>
+                  <dd className="font-semibold text-gray-900">{colones(resumen.costo_envio ?? 0)}</dd>
                 </div>
                 <div className="pt-4 border-t border-gray-100">
                   <Total etiqueta="Total" valor={total} />
@@ -98,7 +123,7 @@ export default function CarritoPage({ items, comerciosSuspendidos, aviso, onCant
         </div>
       </main>
 
-      {/* Barra fija inferior para dispositivos móviles (< lg) */}
+      {/* Barra fija inferior para dispositivos moviles (< lg) */}
       <footer className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 p-4 space-y-3 shadow-lg lg:hidden z-10">
         <div className="max-w-md mx-auto space-y-3">
           <Total etiqueta="Total" valor={total} />
