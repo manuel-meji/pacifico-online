@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Check, CircleAlert, CircleCheck, CircleX, Info, Lock, Minus, Package, Plus, Store, Trash2, TriangleAlert,
+  ArrowLeft, Check, CircleAlert, CircleCheck, CircleX, Info, LoaderCircle, Lock, Minus, Package, Plus, Store, Trash2, TriangleAlert,
 } from 'lucide-react';
 import { colones } from '../services/calculos';
 import logoImg from '../../../assets/Logo.jpeg';
@@ -91,10 +92,13 @@ export function SelectorCantidad({ nombre, valor, min = 1, deshabilitado, onMeno
 
 // ---------- Miniatura del producto (ícono si la API no trae imagen) ----------
 export function Miniatura({ imagen, nombre }) {
+  // Guarda la URL que falló: si `imagen` cambia, deja de coincidir y se reintenta la carga.
+  const [urlFallida, setUrlFallida] = useState(null);
+  const mostrarImagen = Boolean(imagen) && urlFallida !== imagen;
   return (
     <div className="h-16 w-16 sm:h-20 sm:w-20 shrink-0 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center overflow-hidden">
-      {imagen
-        ? <img src={imagen} alt={nombre} className="h-full w-full object-cover" />
+      {mostrarImagen
+        ? <img src={imagen} alt={nombre} className="h-full w-full object-cover" onError={() => setUrlFallida(imagen)} />
         : <Package className="w-8 h-8 sm:w-9 sm:h-9 stroke-1 text-gray-400" aria-hidden="true" />}
     </div>
   );
@@ -102,7 +106,11 @@ export function Miniatura({ imagen, nombre }) {
 
 // ---------- Linea de item editable (carrito) ----------
 // Los controles de cantidad y "Quitar" quedan deshabilitados si no se pasan onCantidad / onQuitar.
-export function FilaItem({ item, deshabilitado, onCantidad, onQuitar }) {
+// `pendientes` (Set) marca las peticiones en curso: 'cantidad-<id>' y 'quitar-<id>'.
+// Un comercio suspendido (`deshabilitado`) bloquea la cantidad, pero deja "Quitar" activo para poder resolverlo.
+export function FilaItem({ item, deshabilitado, pendientes, onCantidad, onQuitar }) {
+  const cambiando = pendientes?.has(`cantidad-${item.id_item_carrito}`) ?? false;
+  const quitando = pendientes?.has(`quitar-${item.id_item_carrito}`) ?? false;
   const conStock = item.stock != null;
   const enMaximo = conStock && item.cantidad >= item.stock;
   const subtotal = item.subtotal ?? item.precio_unitario * item.cantidad;
@@ -124,9 +132,12 @@ export function FilaItem({ item, deshabilitado, onCantidad, onQuitar }) {
         <p className="shrink-0 text-sm sm:text-base font-extrabold text-brandDarkBlue">{colones(subtotal)}</p>
       </div>
       <div className="mt-2.5 flex items-center justify-between sm:justify-end gap-3">
-        <SelectorCantidad nombre={item.nombre} valor={item.cantidad} deshabilitado={deshabilitado || !onCantidad}
+        <SelectorCantidad nombre={item.nombre} valor={item.cantidad} deshabilitado={deshabilitado || !onCantidad || cambiando || quitando}
           onMenos={() => onCantidad?.(item.id_item_carrito, item.cantidad - 1)} onMas={() => onCantidad?.(item.id_item_carrito, item.cantidad + 1)} />
-        <Boton variante="peligro" icono={Trash2} disabled={!onQuitar} onClick={() => onQuitar?.(item.id_item_carrito)}>Quitar</Boton>
+        <Boton variante="peligro" icono={quitando ? LoaderCircle : Trash2} disabled={!onQuitar || quitando || cambiando}
+          aria-label={`Quitar ${item.nombre} del carrito`} onClick={() => onQuitar?.(item.id_item_carrito)}>
+          {quitando ? 'Quitando…' : 'Quitar'}
+        </Boton>
       </div>
       {item.aviso && (
         <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-red-700"><CircleAlert className="w-3.5 h-3.5" aria-hidden="true" />{item.aviso}</p>
@@ -152,7 +163,7 @@ export function FilaResumen({ item }) {
 }
 
 // ---------- Tarjeta de subpedido (un comercio) ----------
-export function TarjetaComercio({ grupo, numero, editable, suspendido, onCantidad, onQuitar }) {
+export function TarjetaComercio({ grupo, numero, editable, suspendido, pendientes, onCantidad, onQuitar }) {
   return (
     <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
@@ -168,7 +179,7 @@ export function TarjetaComercio({ grupo, numero, editable, suspendido, onCantida
         </span>
       )}
       {editable ? (
-        <ul>{grupo.items.map((i) => <FilaItem key={i.id_item_carrito} item={i} deshabilitado={suspendido} onCantidad={onCantidad} onQuitar={onQuitar} />)}</ul>
+        <ul>{grupo.items.map((i) => <FilaItem key={i.id_item_carrito} item={i} deshabilitado={suspendido} pendientes={pendientes} onCantidad={onCantidad} onQuitar={onQuitar} />)}</ul>
       ) : (
         <ul className="py-3 space-y-3">{grupo.items.map((i) => <FilaResumen key={i.id_item_carrito} item={i} />)}</ul>
       )}
@@ -191,6 +202,49 @@ export function Total({ etiqueta, valor }) {
       <dt className="text-sm font-bold text-gray-800">{etiqueta}</dt>
       <dd className="text-xl font-extrabold text-brandDarkBlue">{colones(valor)}</dd>
     </dl>
+  );
+}
+
+// ---------- Modal de confirmación (reemplaza window.confirm) ----------
+export function ModalConfirmacion({ abierto, titulo, children, textoConfirmar = 'Confirmar', ocupado, onConfirmar, onCancelar }) {
+  const cancelarRef = useRef(null);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    cancelarRef.current?.focus();
+    const alTeclear = (e) => { if (e.key === 'Escape' && !ocupado) onCancelar(); };
+    document.addEventListener('keydown', alTeclear);
+    return () => document.removeEventListener('keydown', alTeclear);
+  }, [abierto, ocupado, onCancelar]);
+
+  if (!abierto) return null;
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50" aria-hidden="true" onClick={() => !ocupado && onCancelar()} />
+      <div role="alertdialog" aria-modal="true" aria-labelledby="modal-titulo" aria-describedby="modal-texto"
+        className="relative bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-sm p-6 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 shrink-0 rounded-full bg-red-50 flex items-center justify-center">
+            <TriangleAlert className="w-5 h-5 text-red-600" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h2 id="modal-titulo" className="text-base font-bold text-gray-900">{titulo}</h2>
+            <p id="modal-texto" className="mt-1 text-sm text-gray-600">{children}</p>
+          </div>
+        </div>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <button ref={cancelarRef} type="button" disabled={ocupado} onClick={onCancelar}
+            className="min-h-11 px-5 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50">
+            Cancelar
+          </button>
+          <button type="button" disabled={ocupado} onClick={onConfirmar}
+            className="min-h-11 px-5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition inline-flex items-center justify-center gap-2 disabled:opacity-70">
+            {ocupado ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Trash2 className="w-4 h-4" aria-hidden="true" />}
+            {ocupado ? 'Procesando…' : textoConfirmar}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

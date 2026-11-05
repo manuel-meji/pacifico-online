@@ -1,10 +1,22 @@
-import { CreditCard, LoaderCircle, Lock, RefreshCw, ShoppingCart } from 'lucide-react';
-import { Alerta, Boton, Encabezado, TarjetaComercio, Total } from '../components/componentes';
+import { useCallback, useState } from 'react';
+import { CreditCard, LoaderCircle, Lock, RefreshCw, ShoppingCart, Trash2 } from 'lucide-react';
+import { Alerta, Boton, Encabezado, ModalConfirmacion, TarjetaComercio, Total } from '../components/componentes';
+import AgregarProductoDemo from '../components/AgregarProductoDemo';
 import { colones } from '../services/calculos';
 
 // CU-001 Gestionar carrito de compras (InterfazCarrito): productos agrupados por comercio
-// GET /api/m5/v1/carrito (grupos_comercio + resumen).
-export default function CarritoPage({ carrito, cargando, error, onReintentar, aviso, onContinuar }) {
+// GET /api/m5/v1/carrito (grupos_comercio + resumen). Las acciones (cantidad, quitar, vaciar, agregar)
+// llegan como props desde M5App y los montos se muestran tal como los devuelve la API.
+export default function CarritoPage({
+  carrito, cargando, error, onReintentar, aviso, avisosItem = {}, avisoDemo, pendientes,
+  onCantidad, onQuitar, onVaciar, onAgregar, onContinuar,
+}) {
+  const [confirmandoVaciar, setConfirmandoVaciar] = useState(false);
+  const vaciando = pendientes?.has('vaciar') ?? false;
+  const cerrarModalVaciar = useCallback(() => setConfirmandoVaciar(false), []);
+
+  const demo = <AgregarProductoDemo ocupado={pendientes?.has('agregar')} aviso={avisoDemo} onAgregar={onAgregar} />;
+
   if (cargando) {
     return (
       <>
@@ -33,15 +45,21 @@ export default function CarritoPage({ carrito, cargando, error, onReintentar, av
     );
   }
 
-  const grupos = carrito?.grupos_comercio ?? [];
+  // Se agrega a cada ítem el aviso de stock (409) que M5App guarda por id_item_carrito.
+  const grupos = (carrito?.grupos_comercio ?? []).map((g) => ({
+    ...g,
+    items: g.items.map((i) => ({ ...i, aviso: avisosItem[i.id_item_carrito] ?? null })),
+  }));
   const items = grupos.flatMap((g) => g.items);
 
   if (items.length === 0) {
     return (
       <>
         <Encabezado titulo="Mi carrito" />
-        <main className="max-w-4xl mx-auto px-4 py-16 text-center">
-          <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-8 sm:p-12 max-w-md mx-auto">
+        <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+          {aviso && <Alerta tipo={aviso.tipo} titulo={aviso.titulo}>{aviso.texto}</Alerta>}
+          {demo}
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-8 sm:p-12 max-w-md mx-auto text-center">
             <ShoppingCart className="w-16 h-16 stroke-1 text-gray-300 mx-auto" aria-hidden="true" />
             <p className="mt-4 text-xl font-bold text-gray-800">Su carrito está vacío</p>
             <p className="mt-1 text-sm text-gray-500">No ha agregado productos a su carrito de compras.</p>
@@ -53,18 +71,37 @@ export default function CarritoPage({ carrito, cargando, error, onReintentar, av
 
   const resumen = carrito.resumen ?? {};
   const unidades = items.reduce((s, i) => s + i.cantidad, 0);
-  const hayBloqueo = carrito.hay_comercio_suspendido ?? grupos.some((g) => g.comercio_suspendido);
+  const suspendidos = grupos.filter((g) => g.comercio_suspendido);
+  const hayBloqueo = carrito.hay_comercio_suspendido ?? suspendidos.length > 0;
   const total = resumen.total ?? 0;
+
+  async function confirmarVaciar() {
+    await onVaciar();
+    cerrarModalVaciar();
+  }
 
   return (
     <>
       <Encabezado titulo="Mi carrito" paso={`${unidades} ${unidades === 1 ? 'producto' : 'productos'}`} />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-12 space-y-6">
         {aviso && <Alerta tipo={aviso.tipo} titulo={aviso.titulo}>{aviso.texto}</Alerta>}
+        {suspendidos.length > 0 && (
+          <Alerta tipo="aviso" titulo="Comercio suspendido">
+            {suspendidos.map((g) => g.nombre_comercio).join(', ')} tiene la membresía suspendida.
+            Sus productos están deshabilitados: quítelos para continuar con el resto de su compra.
+          </Alerta>
+        )}
+
+        {demo}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Columna izquierda: Subpedidos por comercio */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-5">
+            <div className="flex justify-end">
+              <Boton variante="peligro" icono={Trash2} disabled={vaciando} onClick={() => setConfirmandoVaciar(true)}>
+                Vaciar carrito
+              </Boton>
+            </div>
             {grupos.map((g, n) => (
               <TarjetaComercio
                 key={g.id_comercio}
@@ -72,6 +109,9 @@ export default function CarritoPage({ carrito, cargando, error, onReintentar, av
                 numero={n + 1}
                 editable
                 suspendido={g.comercio_suspendido}
+                pendientes={pendientes}
+                onCantidad={onCantidad}
+                onQuitar={onQuitar}
               />
             ))}
           </div>
@@ -137,6 +177,17 @@ export default function CarritoPage({ carrito, cargando, error, onReintentar, av
           </Boton>
         </div>
       </footer>
+
+      <ModalConfirmacion
+        abierto={confirmandoVaciar}
+        titulo="¿Vaciar el carrito?"
+        textoConfirmar="Vaciar carrito"
+        ocupado={vaciando}
+        onConfirmar={confirmarVaciar}
+        onCancelar={cerrarModalVaciar}
+      >
+        Se quitarán los {unidades} {unidades === 1 ? 'producto' : 'productos'} del carrito y se liberarán sus reservas. Esta acción no se puede deshacer.
+      </ModalConfirmacion>
     </>
   );
 }
