@@ -9,6 +9,7 @@ use App\Http\Middleware\RequiereRol;
 use App\Models\Nucleo\Usuario;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 /**
@@ -22,7 +23,10 @@ class RequiereRolTest extends TestCase
     /** @var list<string> */
     private const MIGRACIONES = [
         'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php',
+        'database/migrations/Nucleo/2026_09_30_000002_crear_tabla_bitacora_auditoria.php',
         'database/migrations/Nucleo/2026_09_30_000003_crear_tablas_sesiones_y_restablecimientos.php',
+        'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
+        'database/migrations/Nucleo/2026_11_02_191532_agregar_inmutabilidad_a_bitacora_auditoria.php',
     ];
 
     /** @return array<string, mixed> */
@@ -49,7 +53,7 @@ class RequiereRolTest extends TestCase
         ]);
     }
 
-    private function pasar(?object $usuario, string ...$roles): \Symfony\Component\HttpFoundation\Response
+    private function pasar(?object $usuario, string ...$roles): Response
     {
         $request = Request::create('/prueba');
         $request->setUserResolver(fn () => $usuario);
@@ -57,7 +61,7 @@ class RequiereRolTest extends TestCase
         return (new RequiereRol)->handle($request, fn () => response('ok'), ...$roles);
     }
 
-    private function codigo(\Symfony\Component\HttpFoundation\Response $respuesta): string
+    private function codigo(Response $respuesta): string
     {
         return json_decode((string) $respuesta->getContent(), true)['error']['codigo'];
     }

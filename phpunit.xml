@@ -10,7 +10,6 @@
         </testsuite>
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
-            <file>tests/SesionTest.php</file>
         </testsuite>
     </testsuites>
     <source>
