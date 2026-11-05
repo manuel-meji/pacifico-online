@@ -23,6 +23,13 @@ class BannerComercio extends Model
 
     protected $casts = ['orden' => 'integer', 'activo' => 'boolean'];
 
+    // --- CU-0004: administrar banner
+    public function actualizar(array $datos): void
+    {
+        $this->fill($datos);
+        $this->save();
+    }
+
     public function comercio(): BelongsTo
     {
         return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');
