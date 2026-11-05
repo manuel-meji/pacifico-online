@@ -12,6 +12,7 @@ use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Events\M5_Pedidos\PedidoPagado;
+use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
@@ -96,16 +97,54 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 $costoEnvioComercio = 0.0;
                 $suspendido = false;
 
-                if ($comercios && method_exists($comercios, 'obtenerMicrositio')) {
+                if ($comercios) {
                     try {
-                        $infoComercio = $comercios->obtenerMicrositio($comercioId);
-                        $nombreComercio = (string) ($infoComercio['nombre_comercial'] ?? $infoComercio['nombre'] ?? $nombreComercio);
-                        $costoEnvioComercio = (float) ($infoComercio['costo_envio'] ?? $infoComercio['tarifa_envio'] ?? 0.0);
-                        if (isset($infoComercio['estado']) && strtolower((string) $infoComercio['estado']) !== 'activo') {
-                            $suspendido = true;
+                        if (method_exists($comercios, 'obtenerComercioActivo')) {
+                            $infoEstado = $comercios->obtenerComercioActivo($comercioId);
+                            if (isset($infoEstado['activo']) && ! $infoEstado['activo']) {
+                                $suspendido = true;
+                            }
+                            if (isset($infoEstado['estado']) && strtolower((string) $infoEstado['estado']) !== 'activo') {
+                                $suspendido = true;
+                            }
                         }
-                        if (array_key_exists('activo', $infoComercio) && ! $infoComercio['activo']) {
-                            $suspendido = true;
+
+                        if (method_exists($comercios, 'obtenerPoliticasEnvio')) {
+                            try {
+                                $politicas = $comercios->obtenerPoliticasEnvio($comercioId);
+                                if (! empty($politicas['tarifas'][0]['costo'])) {
+                                    $costoEnvioComercio = (float) $politicas['tarifas'][0]['costo'];
+                                }
+                            } catch (\Throwable) {
+                                // Continuar
+                            }
+                        }
+
+                        if (method_exists($comercios, 'obtenerResumenComerciosLote')) {
+                            $lote = $comercios->obtenerResumenComerciosLote([$comercioId]);
+                            $comercioData = $lote['comercios'][0] ?? null;
+                            if ($comercioData) {
+                                $nombreComercio = (string) ($comercioData['nombre_comercial'] ?? $nombreComercio);
+                                if (isset($comercioData['estado']) && strtolower((string) $comercioData['estado']) !== 'activo') {
+                                    $suspendido = true;
+                                }
+                            } else {
+                                $suspendido = true;
+                            }
+                        }
+
+                        if (method_exists($comercios, 'obtenerMicrositio')) {
+                            $infoComercio = $comercios->obtenerMicrositio($comercioId);
+                            $nombreComercio = (string) ($infoComercio['nombre_comercial'] ?? $infoComercio['nombre'] ?? $nombreComercio);
+                            if ($costoEnvioComercio <= 0.0) {
+                                $costoEnvioComercio = (float) ($infoComercio['costo_envio'] ?? $infoComercio['tarifa_envio'] ?? 0.0);
+                            }
+                            if (isset($infoComercio['estado']) && strtolower((string) $infoComercio['estado']) !== 'activo') {
+                                $suspendido = true;
+                            }
+                            if (array_key_exists('activo', $infoComercio) && ! $infoComercio['activo']) {
+                                $suspendido = true;
+                            }
                         }
                     } catch (\Throwable) {
                         $suspendido = true;
@@ -396,6 +435,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
     {
         $pedidoId = 101;
         $subtotal = 15000.00;
+        $subpedido = null;
 
         if ($this->hasTable('pedidos_subpedidos')) {
             $subpedido = Subpedido::find($subpedidoId);
@@ -406,11 +446,9 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             }
         }
 
-        // Paso 9 del recorrido transversal: M2 consume SubpedidoDespachado para registrar comisión
-        $comisionRegistrada = false;
-        if ($this->comerciosService) {
-            $comisionRegistrada = $this->comerciosService->registrarComision($pedidoId, $subtotal);
-        }
+        // Paso 9 del recorrido transversal: M5 emite SubpedidoDespachado;
+        // M2 consume este evento de forma asíncrona para registrar la comisión.
+        event(new SubpedidoDespachado($subpedido ?? $subpedidoId, $guiaTransporte));
 
         return [
             'id_subpedido' => $subpedidoId,
@@ -419,7 +457,6 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             'guia_transporte' => $guiaTransporte,
             'evento' => 'SubpedidoDespachado',
             'consumidores_notificados' => ['M1', 'M2', 'M4', 'M7'],
-            'comision_registrada_m2' => $comisionRegistrada,
         ];
     }
 

@@ -8,6 +8,7 @@ use App\Models\M5_Pedidos\Subpedido;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -68,7 +69,15 @@ class SubpedidoDespachado
             $this->reservas = ! empty($reservas) ? $reservas : [(string) Str::uuid()];
         } else {
             $this->id_subpedido = (int) $subpedido;
-            $modelo = Subpedido::with('lineas')->find($this->id_subpedido);
+            $modelo = null;
+            try {
+                if (Schema::hasTable('pedidos_subpedidos')) {
+                    $modelo = Subpedido::with('lineas')->find($this->id_subpedido);
+                }
+            } catch (\Throwable) {
+                $modelo = null;
+            }
+
             if ($modelo) {
                 $this->id_pedido = (int) $modelo->id_pedido;
                 $this->id_comercio = (int) $modelo->id_comercio;
@@ -89,4 +98,3 @@ class SubpedidoDespachado
         }
     }
 }
-

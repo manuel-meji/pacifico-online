@@ -88,8 +88,51 @@ class ControladorPedido extends Controller
 
         // 2. Validar estado de los comercios con M2_Comercios (Contrato M2 v1.2.1 / RF-008)
         $comerciosActivos = ! $desglose['hay_comercio_suspendido'];
-        if ($comerciosActivos && $this->m2Comercios && method_exists($this->m2Comercios, 'ObtenerResumenComerciosLote')) {
-            $comerciosActivos = (bool) $this->m2Comercios->ObtenerResumenComerciosLote(array_values($comerciosInvolucrados));
+        if ($comerciosActivos && $this->m2Comercios) {
+            $idsSolicitados = array_values(array_map('intval', $comerciosInvolucrados));
+
+            if (method_exists($this->m2Comercios, 'obtenerResumenComerciosLote') || method_exists($this->m2Comercios, 'ObtenerResumenComerciosLote')) {
+                try {
+                    $resumen = method_exists($this->m2Comercios, 'obtenerResumenComerciosLote')
+                        ? $this->m2Comercios->obtenerResumenComerciosLote($idsSolicitados)
+                        : $this->m2Comercios->ObtenerResumenComerciosLote($idsSolicitados);
+                    $comerciosDevueltos = $resumen['comercios'] ?? [];
+                    $idsDevueltos = array_map('intval', array_column($comerciosDevueltos, 'id_comercio'));
+
+                    // M2 omite comercios no habilitados o inexistentes:
+                    // todos los comercios solicitados deben estar presentes en la lista devuelta
+                    $comerciosActivos = count($idsDevueltos) === count($idsSolicitados)
+                        && empty(array_diff($idsSolicitados, $idsDevueltos));
+                } catch (\Throwable) {
+                    $comerciosActivos = false;
+                }
+            } elseif (method_exists($this->m2Comercios, 'obtenerComercioActivo')) {
+                foreach ($idsSolicitados as $idComercio) {
+                    try {
+                        $info = $this->m2Comercios->obtenerComercioActivo($idComercio);
+                        if (isset($info['activo']) && ! $info['activo']) {
+                            $comerciosActivos = false;
+                            break;
+                        }
+                    } catch (\Throwable) {
+                        $comerciosActivos = false;
+                        break;
+                    }
+                }
+            } elseif (method_exists($this->m2Comercios, 'obtenerMicrositio')) {
+                foreach ($idsSolicitados as $idComercio) {
+                    try {
+                        $info = $this->m2Comercios->obtenerMicrositio($idComercio);
+                        if (isset($info['estado']) && strtolower((string) $info['estado']) !== 'activo') {
+                            $comerciosActivos = false;
+                            break;
+                        }
+                    } catch (\Throwable) {
+                        $comerciosActivos = false;
+                        break;
+                    }
+                }
+            }
         }
 
         if (! $comerciosActivos) {
