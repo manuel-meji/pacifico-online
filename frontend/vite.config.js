@@ -7,6 +7,13 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 // `npm run dev` abre el prototipo; `npm run build:single` genera un HTML de una sola pieza (dist-single/app.html).
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), ...(mode === 'single' ? [viteSingleFile()] : [])],
-  server: { open: '/app.html' },
+  server: {
+    open: '/app.html',
+    // Proxy al backend Laravel (php artisan serve) para evitar CORS y compartir cookies de sesión.
+    proxy: {
+      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+    },
+  },
   build: { rollupOptions: { input: 'app.html' } },
 }));
