@@ -4,7 +4,8 @@ namespace App\Services\M1_Portal\DTO;
 
 /**
  * Producto en una lista (búsqueda, destacados, micrositio, relacionados).
- * precio es el menor precio de sus variaciones y precioHasta el mayor, o nulo si son iguales.
+ * precio es el menor precio de sus variaciones y precioHasta el mayor (igual a
+ * precio si todas cuestan lo mismo, como dice el contrato).
  *
  * Objeto de transferencia (Vista 6 del PC3): solo atributos públicos, sin
  * métodos. No se persiste en M1.

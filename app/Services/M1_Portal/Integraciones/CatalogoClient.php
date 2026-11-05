@@ -227,7 +227,9 @@ class CatalogoClient
     private function resumen(array $producto): ProductoResumenDTO
     {
         $precio = (float) $producto['precio_desde'];
-        $precioHasta = isset($producto['precio_hasta']) ? (float) $producto['precio_hasta'] : null;
+        // Contrato M1 1.1.0 (ProductoResumen.precio_hasta): igual a precio
+        // cuando todas las variaciones cuestan lo mismo.
+        $precioHasta = max($precio, (float) ($producto['precio_hasta'] ?? $precio));
 
         return new ProductoResumenDTO(
             idProducto: $producto['id_producto'],
@@ -235,7 +237,7 @@ class CatalogoClient
             nombre: $producto['nombre'],
             imagenPrincipal: $producto['imagen_principal'] ?? null,
             precio: $precio,
-            precioHasta: $precioHasta !== null && $precioHasta > $precio ? $precioHasta : null,
+            precioHasta: $precioHasta,
             moneda: $producto['moneda'],
             nombreComercio: '',
             disponibilidad: Disponibilidad::Agotado,
