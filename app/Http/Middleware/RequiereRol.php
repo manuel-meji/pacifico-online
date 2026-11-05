@@ -7,8 +7,8 @@ namespace App\Http\Middleware;
 use App\Enums\Nucleo\CodigoErrorNucleo;
 use App\Enums\Nucleo\RolUsuario;
 use App\Models\Nucleo\VerificaRol;
+use App\Services\Nucleo\FormateadorErrores;
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class RequiereRol
@@ -20,28 +20,15 @@ class RequiereRol
         $usuario = $request->user();
 
         if (! $usuario) {
-            return $this->error(CodigoErrorNucleo::SesionInvalida);
+            return FormateadorErrores::respuestaDesdeCodigo(CodigoErrorNucleo::SesionInvalida);
         }
 
         $permitidos = array_map(fn (string $r) => RolUsuario::from($r), $roles);
 
         if (! $this->tieneRol($usuario, ...$permitidos)) {
-            return $this->error(CodigoErrorNucleo::RolSinPermiso);
+            return FormateadorErrores::respuestaDesdeCodigo(CodigoErrorNucleo::RolSinPermiso);
         }
 
         return $next($request);
-    }
-
-    // Provisional: cambiar por RespuestaError cuando la Persona 5 la entregue
-    private function error(CodigoErrorNucleo $codigo): JsonResponse
-    {
-        return response()->json(
-            ['error' => [
-                'codigo'   => $codigo->value,
-                'mensaje'  => $codigo->mensaje(),
-                'detalles' => null,
-            ]],
-            $codigo->codigoHttp()
-        );
     }
 }

@@ -11,6 +11,7 @@ use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Services\M5_Pedidos\Dobles\ComerciosStub;
 use Tests\TestCase;
 
 class M5_ProveedorContratoTest extends TestCase
@@ -49,12 +50,7 @@ class M5_ProveedorContratoTest extends TestCase
         ]);
         $this->app->instance(InventarioServiceInterface::class, $mockM4);
 
-        $mockM2 = $this->createStub(ComerciosServiceInterface::class);
-        $mockM2->method('obtenerMicrositio')->willReturn([
-            'id_comercio' => 1,
-            'nombre' => 'Comercio Uno',
-            'estado' => $comercioActivo ? 'activo' : 'suspendido',
-        ]);
+        $mockM2 = (new ComerciosStub)->setComercioSuspendido(! $comercioActivo);
         $this->app->instance(ComerciosServiceInterface::class, $mockM2);
 
         $mockM6 = $this->createStub(PagosServiceInterface::class);
