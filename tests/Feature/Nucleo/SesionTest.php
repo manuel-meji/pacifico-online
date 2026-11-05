@@ -1,8 +1,11 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Nucleo;
 
-use App\Models\Usuario;
+use App\Contracts\Nucleo\ServicioIdentidadInterface;
+use App\Enums\Nucleo\RolUsuario;
+use App\Models\Nucleo\Usuario;
+use Database\Factories\UsuarioFactory;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
@@ -19,12 +22,18 @@ class SesionTest extends TestCase
      */
     protected function migrateFreshUsing(): array
     {
-        return ['--path' => 'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php'];
+        return ['--path' => [
+            'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php',
+            'database/migrations/Nucleo/2026_09_30_000002_crear_tabla_bitacora_auditoria.php',
+            'database/migrations/Nucleo/2026_09_30_000003_crear_tablas_sesiones_y_restablecimientos.php',
+            'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
+            'database/migrations/Nucleo/2026_11_02_191532_agregar_inmutabilidad_a_bitacora_auditoria.php',
+        ]];
     }
 
     public function test_login_authenticates_and_rotates_the_session(): void
     {
-        $user = Usuario::factory()->create();
+        $user = UsuarioFactory::new()->create();
         $this->withSession(['_token' => 'previous-token']);
         $previousId = session()->getId();
 
@@ -42,7 +51,7 @@ class SesionTest extends TestCase
     #[TestWith(['password', true])]
     public function test_invalid_credentials_return_422_without_authentication(string $password, bool $unknownEmail): void
     {
-        $user = Usuario::factory()->create();
+        $user = UsuarioFactory::new()->create();
 
         $this->postJson('/login', [
             'correo' => $unknownEmail ? 'unknown@example.com' : $user->correo,
@@ -54,9 +63,31 @@ class SesionTest extends TestCase
         $this->assertGuest('web');
     }
 
+    public function test_account_created_by_identity_service_can_login(): void
+    {
+        $usuario = $this->app->make(ServicioIdentidadInterface::class)->crearCuenta([
+            'nombre' => 'Cliente de prueba',
+            'correo' => 'cliente.identidad@example.com',
+            'contrasena' => 'clave-segura-123',
+        ], RolUsuario::Cliente);
+
+        $this->postJson('/login', [
+            'correo' => 'cliente.identidad@example.com',
+            'contrasena' => 'clave-segura-123',
+        ])->assertOk()->assertExactJson(['user' => [
+            'id_usuario' => $usuario->id_usuario,
+            'nombre' => 'Cliente de prueba',
+            'correo' => 'cliente.identidad@example.com',
+            'rol' => 'cliente',
+            'id_comercio' => null,
+        ]]);
+
+        $this->assertAuthenticatedAs($usuario, 'web');
+    }
+
     public function test_inactive_account_cannot_login(): void
     {
-        $user = Usuario::factory()->inactivo()->create();
+        $user = UsuarioFactory::new()->inactivo()->create();
 
         $this->postJson('/login', ['correo' => $user->correo, 'contrasena' => 'password'])
             ->assertUnprocessable()
@@ -71,7 +102,7 @@ class SesionTest extends TestCase
     #[TestWith(['encargado_comercio', 42])]
     public function test_identity_comes_from_database_and_ignores_submitted_privileges(string $rol, ?int $idComercio): void
     {
-        $user = Usuario::factory()->create(['rol' => $rol, 'id_comercio' => $idComercio]);
+        $user = UsuarioFactory::new()->create(['rol' => $rol, 'id_comercio' => $idComercio]);
         $expected = ['user' => [
             'id_usuario' => $user->id_usuario,
             'nombre' => $user->nombre,
@@ -89,12 +120,14 @@ class SesionTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->getJson('/api/user')->assertOk()->assertExactJson($expected);
+        $this->assertInstanceOf(Usuario::class, auth('web')->user());
+        $this->assertSame(RolUsuario::from($rol), auth('web')->user()->rol);
         $this->assertArrayNotHasKey('contrasena', $user->toArray());
     }
 
     public function test_password_whitespace_is_preserved(): void
     {
-        $user = Usuario::factory()->create(['contrasena' => ' password ']);
+        $user = UsuarioFactory::new()->create(['contrasena' => ' password ']);
 
         $this->postJson('/login', ['correo' => $user->correo, 'contrasena' => ' password '])
             ->assertOk();
@@ -122,7 +155,7 @@ class SesionTest extends TestCase
 
     public function test_logout_clears_session_data_and_rotates_csrf(): void
     {
-        $user = Usuario::factory()->create();
+        $user = UsuarioFactory::new()->create();
         $this->actingAs($user, 'web')->withSession([
             'comercio_id' => 123,
             '_token' => 'previous-token',
@@ -150,7 +183,7 @@ class SesionTest extends TestCase
 
     public function test_spa_can_login_and_read_user_using_session_cookies(): void
     {
-        $user = Usuario::factory()->create();
+        $user = UsuarioFactory::new()->create();
         $this->app->instance('env', 'local');
         $this->withHeader('Origin', 'http://localhost:5173')->withCredentials();
 
@@ -172,7 +205,7 @@ class SesionTest extends TestCase
 
     public function test_login_is_limited_to_five_requests_per_minute(): void
     {
-        Usuario::factory()->create(['correo' => 'limited@example.com']);
+        UsuarioFactory::new()->create(['correo' => 'limited@example.com']);
         $this->freezeTime();
 
         for ($attempt = 0; $attempt < 5; $attempt++) {
