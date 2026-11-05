@@ -247,6 +247,22 @@ class ControladoresM5Test extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-M5-003');
     }
 
+    public function test_checkout_falla_con_err_003_si_comercio_esta_suspendido_en_m2(): void
+    {
+        $this->configurarMocks(stock: 10, comercioActivo: false);
+
+        $carrito = (new Carrito)->obtenerOCrearCarrito(4);
+        (new ItemCarrito)->crearItemCarrito($carrito->id_carrito, 201, 1);
+
+        $response = $this->postJson('/m5/pedidos', [
+            'id_cliente' => 4,
+            'metodoPago' => 'tarjeta',
+        ]);
+
+        $response->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-003');
+    }
+
     public function test_b7_seeder_m5_pedidos_es_idempotente_y_crea_datos_demo(): void
     {
         $this->seed(M5PedidosSeeder::class);
