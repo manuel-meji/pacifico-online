@@ -22,7 +22,7 @@ class ControladorCarrito extends Controller
 
     private PedidosService $pedidosService;
 
-    public function __construct($catalogoService = null, $inventarioService = null, $comerciosService = null, ?PedidosService $pedidosService = null)
+    public function __construct(?CatalogoServiceInterface $catalogoService = null, ?InventarioServiceInterface $inventarioService = null, ?ComerciosServiceInterface $comerciosService = null, ?PedidosService $pedidosService = null)
     {
         $this->m3Catalogo = $catalogoService ?? (app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null);
         $this->m4Inventario = $inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
