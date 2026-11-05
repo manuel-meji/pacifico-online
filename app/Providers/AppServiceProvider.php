@@ -63,7 +63,7 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('login', function (Request $request): Limit {
             return Limit::perMinute(5)->by(hash('sha256',
-                Str::lower($request->string('email')->toString()).'|'.$request->ip()
+                Str::lower($request->string('correo')->toString()).'|'.$request->ip()
             ));
         });
 
