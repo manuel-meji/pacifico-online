@@ -13,7 +13,9 @@ use App\Models\M2_Comercios\Comercio;
 use App\Models\M2_Comercios\ComisionComercio;
 use App\Models\M2_Comercios\ComisionSubpedido;
 use App\Models\M2_Comercios\ContactoComercio;
+use App\Models\M2_Comercios\DocumentoComercio;
 use App\Models\M2_Comercios\PublicidadComercio;
+use App\Models\M2_Comercios\SolicitudComercio;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -282,6 +284,67 @@ class ComerciosService implements ComerciosServiceInterface
     {
         return Comercio::query()->find($idComercio)
             ?? throw $this->noEncontrado('El comercio no existe.');
+    }
+
+    // --- CU-0014: revisar solicitudes (Jorge) ---
+
+    /** @return array{pagina: int, por_pagina: int, total: int, solicitudes: list<array<string, mixed>>} */
+    public function listarSolicitudes(?string $estado, int $pagina, int $porPagina): array
+    {
+        $errores = [];
+        if ($estado !== null && ! in_array($estado, [SolicitudComercio::PENDIENTE, SolicitudComercio::APROBADA, SolicitudComercio::RECHAZADA], true)) {
+            $errores['estado'] = ['El estado de la solicitud no es válido.'];
+        }
+        if ($pagina < 1) {
+            $errores['pagina'] = ['Debe ser un entero mayor o igual a 1.'];
+        }
+        if ($porPagina < 1 || $porPagina > self::MAXIMO_POR_PAGINA) {
+            $errores['por_pagina'] = ['Debe estar entre 1 y '.self::MAXIMO_POR_PAGINA.'.'];
+        }
+        $this->exigirValidos($errores);
+
+        $consulta = SolicitudComercio::query()->with(['comercio', 'documentos']);
+        if ($estado !== null) {
+            $consulta->where('estado', $estado);
+        }
+
+        $total = (clone $consulta)->count();
+        $solicitudes = $consulta->orderByDesc('id_solicitud')->forPage($pagina, $porPagina)->get();
+
+        return [
+            'pagina' => $pagina,
+            'por_pagina' => $porPagina,
+            'total' => $total,
+            'solicitudes' => $solicitudes->map(fn (SolicitudComercio $solicitud): array => $this->datosSolicitud($solicitud))->values()->all(),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function consultarSolicitud(int $idSolicitud): array
+    {
+        $solicitud = SolicitudComercio::query()->with(['comercio', 'documentos'])->find($idSolicitud)
+            ?? throw $this->noEncontrado('La solicitud no existe.');
+
+        return $this->datosSolicitud($solicitud);
+    }
+
+    /** @return array<string, mixed> */
+    private function datosSolicitud(SolicitudComercio $solicitud): array
+    {
+        return $solicitud->only([
+            'id_solicitud', 'id_comercio', 'nombre_encargado', 'correo_encargado',
+            'telefono_encargado', 'estado', 'requiere_documentos', 'motivo_rechazo',
+            'fecha_reenvio', 'created_at', 'updated_at',
+        ]) + [
+            'comercio' => $solicitud->comercio->only([
+                'id_comercio', 'cedula_juridica', 'nombre_comercial', 'razon_social',
+                'direccion_fiscal', 'inscrito_como_contribuyente', 'estado', 'created_at', 'updated_at',
+            ]),
+            'documentos' => $solicitud->documentos->map(fn (DocumentoComercio $documento): array => $documento->only([
+                'id_documento_comercio', 'id_comercio', 'tipo', 'fecha_vencimiento',
+                'resultado', 'observacion', 'created_at', 'updated_at',
+            ]))->values()->all(),
+        ];
     }
 
     /** @return array<string, mixed> */
