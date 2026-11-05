@@ -109,7 +109,28 @@ class M5_ProveedorContratoTest extends TestCase
             'created_at',
             'updated_at',
             'items',
+            'direcciones_cliente',
         ]);
+        $this->assertNotEmpty($response->json('direcciones_cliente'));
+    }
+
+    public function test_op02b_obtener_direcciones_cliente_desde_stub_m1(): void
+    {
+        $response = $this->getJson("{$this->prefix}/carrito/direcciones?id_cliente=1");
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'id_cliente',
+            'direcciones' => [
+                '*' => [
+                    'id_direccion_cliente',
+                    'alias_direccion',
+                    'texto_completo',
+                ],
+            ],
+        ]);
+        $this->assertCount(2, $response->json('direcciones'));
+        $this->assertSame('Casa (Principal)', $response->json('direcciones.0.alias_direccion'));
     }
 
     public function test_op03_actualizar_cantidad_item_carrito_exito_200(): void

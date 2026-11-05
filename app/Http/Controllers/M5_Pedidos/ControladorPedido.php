@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\M5_Pedidos;
 
+use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
@@ -419,7 +420,10 @@ class ControladorPedido extends Controller
             return $this->errorRespuesta('ERR-004', 'Pedido no encontrado', null, 404);
         }
 
-        return response()->json($pedido, 200);
+        $datos = $pedido->toArray();
+        $datos['direccion_envio_texto'] = $this->resolverTextoDireccion((int) $pedido->id_cliente, (int) $pedido->id_direccion_cliente);
+
+        return response()->json($datos, 200);
     }
 
     public function obtenerSubpedido(int|Request $requestOrId): JsonResponse
@@ -445,12 +449,43 @@ class ControladorPedido extends Controller
 
         $pedidos = $query->orderByDesc('fecha_creacion')->get();
 
+        $pedidosTransformados = $pedidos->map(function (PedidoMaestro $p) {
+            $arr = $p->toArray();
+            $arr['direccion_envio_texto'] = $this->resolverTextoDireccion((int) $p->id_cliente, (int) $p->id_direccion_cliente);
+
+            return $arr;
+        });
+
         return response()->json([
             'pagina' => (int) $request->input('pagina', 1),
             'por_pagina' => (int) $request->input('por_pagina', 15),
             'total_resultados' => $pedidos->count(),
-            'pedidos' => $pedidos,
+            'pedidos' => $pedidosTransformados,
         ], 200);
+    }
+
+    private function resolverTextoDireccion(int $idCliente, ?int $idDireccion): ?string
+    {
+        if (! $idDireccion) {
+            return null;
+        }
+
+        $portal = app()->bound(PortalPublicoContract::class)
+            ? app(PortalPublicoContract::class)
+            : (app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null);
+
+        if ($portal && method_exists($portal, 'obtenerDireccionCliente')) {
+            try {
+                $dir = $portal->obtenerDireccionCliente($idCliente, $idDireccion);
+
+                return $dir['texto_completo']
+                    ?? "{$dir['alias_direccion']} — {$dir['provincia']}, {$dir['canton']}, {$dir['distrito']}, {$dir['otras_senas']}";
+            } catch (\Throwable) {
+                return "Dirección #{$idDireccion}";
+            }
+        }
+
+        return "Dirección #{$idDireccion}";
     }
 
     public function calcularCostos(float $subtotal, float $impuestos, float $envio): float

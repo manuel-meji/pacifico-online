@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\M5_Pedidos;
 
+use App\Contracts\M1_Portal\PortalPublicoContract;
+use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
@@ -20,14 +22,22 @@ class ControladorCarrito extends Controller
 
     private $m2Comercios;
 
+    private $m1Portal;
+
     private PedidosService $pedidosService;
 
-    public function __construct(?CatalogoServiceInterface $catalogoService = null, ?InventarioServiceInterface $inventarioService = null, ?ComerciosServiceInterface $comerciosService = null, ?PedidosService $pedidosService = null)
-    {
+    public function __construct(
+        ?CatalogoServiceInterface $catalogoService = null,
+        ?InventarioServiceInterface $inventarioService = null,
+        ?ComerciosServiceInterface $comerciosService = null,
+        ?PedidosService $pedidosService = null,
+        ?PortalPublicoContract $portalService = null
+    ) {
         $this->m3Catalogo = $catalogoService ?? (app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null);
         $this->m4Inventario = $inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
         $this->m2Comercios = $comerciosService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
         $this->pedidosService = $pedidosService ?? app(PedidosService::class);
+        $this->m1Portal = $portalService ?? (app()->bound(PortalPublicoContract::class) ? app(PortalPublicoContract::class) : (app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null));
     }
 
     public function obtenerCarrito(Request $request): JsonResponse
@@ -281,6 +291,7 @@ class ControladorCarrito extends Controller
             'grupos_comercio' => array_values($grupos),
             'resumen' => $resumen,
             'hay_comercio_suspendido' => (bool) ($desglose['hay_comercio_suspendido'] ?? false),
+            'direcciones_cliente' => $this->obtenerDireccionesCliente((int) ($carrito->id_cliente ?? 1)),
         ];
 
         if ($mensaje !== null) {
@@ -288,6 +299,57 @@ class ControladorCarrito extends Controller
         }
 
         return $respuesta;
+    }
+
+    public function obtenerDireccionesCliente(int $clienteId): array
+    {
+        if ($this->m1Portal && method_exists($this->m1Portal, 'listarDireccionesCliente')) {
+            try {
+                return $this->m1Portal->listarDireccionesCliente($clienteId);
+            } catch (\Throwable) {
+                // Si el proveedor M1 no responde o falla, continuar con direcciones de respaldo
+            }
+        }
+
+        return [
+            [
+                'id_direccion_cliente' => 1,
+                'id_cliente' => $clienteId,
+                'alias_direccion' => 'Casa (Principal)',
+                'nombre_destinatario' => 'Ana Mora Rojas',
+                'telefono_destinatario' => '8888-0001',
+                'provincia' => 'San José',
+                'canton' => 'Central',
+                'distrito' => 'Carmen',
+                'otras_senas' => 'Av. Central Calle 5, 200 m norte del parque',
+                'es_principal' => true,
+                'texto_completo' => 'Casa (Principal) — San José, Central, Carmen, Av. Central Calle 5, 200 m norte del parque',
+            ],
+            [
+                'id_direccion_cliente' => 2,
+                'id_cliente' => $clienteId,
+                'alias_direccion' => 'Trabajo / Oficina',
+                'nombre_destinatario' => 'Ana Mora Rojas',
+                'telefono_destinatario' => '8888-0001',
+                'provincia' => 'San José',
+                'canton' => 'Montes de Oca',
+                'distrito' => 'San Pedro',
+                'otras_senas' => 'Del hospital 100 m sur, Oficinas Pacíficos #3',
+                'es_principal' => false,
+                'texto_completo' => 'Trabajo / Oficina — San José, Montes de Oca, San Pedro, Del hospital 100 m sur, Oficinas Pacíficos #3',
+            ],
+        ];
+    }
+
+    public function listarDirecciones(Request $request): JsonResponse
+    {
+        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
+        $direcciones = $this->obtenerDireccionesCliente($clienteId);
+
+        return response()->json([
+            'id_cliente' => $clienteId,
+            'direcciones' => $direcciones,
+        ], 200);
     }
 
     private function consultarStockVariacion(int $comercioId, int $idVariacion, int $ubicacionId = 1): int
