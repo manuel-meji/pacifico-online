@@ -34,7 +34,7 @@ class ControladorPedido extends Controller
 
     private PedidosService $pedidosService;
 
-    public function __construct($comercioService = null, $inventarioService = null, $pagosService = null, ?PedidosService $pedidosService = null)
+    public function __construct(?ComerciosServiceInterface $comercioService = null, ?InventarioServiceInterface $inventarioService = null, ?PagosServiceInterface $pagosService = null, ?PedidosService $pedidosService = null)
     {
         $this->m2Comercios = $comercioService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
         $this->m4Inventario = $inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
