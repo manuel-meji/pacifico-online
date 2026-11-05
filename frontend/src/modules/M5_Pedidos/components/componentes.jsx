@@ -1,17 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Check, CircleAlert, CircleCheck, CircleX, Info, LoaderCircle, Lock, Minus, Package, Plus, Store, Trash2, TriangleAlert,
+  ArrowLeft, Check, CircleAlert, ClipboardList, CircleCheck, CircleX, Info, LoaderCircle, Lock, Minus, Package, Plus, Store, Trash2, TriangleAlert,
 } from 'lucide-react';
 import { colones } from '../services/calculos';
 import logoImg from '../../../assets/Logo.jpeg';
 
-export function Encabezado({ titulo, paso, onVolver }) {
+// Navegación compartida de M5 (la provee M5App): { abrirMisPedidos, enMisPedidos }.
+// Permite que cualquier vista muestre el acceso "Mis pedidos" en el encabezado sin pasar props.
+export const NavegacionM5 = createContext(null);
+
+export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al carrito' }) {
+  const nav = useContext(NavegacionM5);
+  const mostrarMisPedidos = nav?.abrirMisPedidos && !nav.enMisPedidos;
   return (
     <header className="sticky top-0 z-20 bg-white shadow-xs border-b border-gray-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           {onVolver && (
-            <button onClick={onVolver} aria-label="Volver al carrito"
+            <button onClick={onVolver} aria-label={etiquetaVolver}
               className="h-10 w-10 -ml-2 shrink-0 rounded-full flex items-center justify-center text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
               <ArrowLeft className="w-5 h-5" aria-hidden="true" />
             </button>
@@ -25,11 +31,20 @@ export function Encabezado({ titulo, paso, onVolver }) {
           <div className="h-5 w-px bg-gray-200 hidden sm:block mx-1" aria-hidden="true"></div>
           <h1 className="min-w-0 truncate text-base sm:text-lg font-bold text-gray-800 tracking-tight">{titulo}</h1>
         </div>
-        {paso && (
-          <span className="shrink-0 text-xs sm:text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
-            {paso}
-          </span>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {paso && (
+            <span className="shrink-0 text-xs sm:text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
+              {paso}
+            </span>
+          )}
+          {mostrarMisPedidos && (
+            <button type="button" onClick={nav.abrirMisPedidos} aria-label="Mis pedidos"
+              className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 sm:px-3 text-sm font-semibold text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
+              <ClipboardList className="w-5 h-5" aria-hidden="true" />
+              <span className="hidden sm:inline">Mis pedidos</span>
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

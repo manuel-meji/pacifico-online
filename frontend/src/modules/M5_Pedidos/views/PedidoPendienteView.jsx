@@ -1,18 +1,7 @@
-import { Clock, ExternalLink, ShoppingCart, Store } from 'lucide-react';
+import { ClipboardList, Clock, ExternalLink, ShoppingCart, Store } from 'lucide-react';
 import { Alerta, Boton, Encabezado, Total } from '../components/componentes';
 import { colones } from '../services/calculos';
-
-// Etiquetas visibles para estado_pedido / estado_subpedido.
-const ESTADOS = {
-  pendiente: 'Pendiente de pago',
-  confirmado: 'Confirmado',
-  pagado: 'Pagado',
-  en_preparacion: 'En preparación',
-  despachado: 'Despachado',
-  entregado: 'Entregado',
-  cancelado: 'Cancelado',
-};
-const etiquetaEstado = (estado) => ESTADOS[String(estado ?? '').toLowerCase()] ?? estado ?? 'Pendiente de pago';
+import { etiquetaEstado } from '../services/estados';
 
 // Los montos llegan como texto decimal ("45000.00") por los casts del modelo.
 const monto = (valor) => colones(Number(valor ?? 0));
@@ -20,7 +9,7 @@ const monto = (valor) => colones(Number(valor ?? 0));
 // CU-004 postcondición: Pedido Maestro en estado "Pendiente de pago" y enlace a la pasarela (paso 9).
 // `pedido` es la respuesta 201 de POST /api/m5/v1/pedidos; `grupos` son los grupos_comercio del carrito,
 // usados solo para mostrar el nombre de cada comercio (el subpedido trae id_comercio).
-export default function PedidoPendientePage({ pedido, grupos = [], onSeguirComprando }) {
+export default function PedidoPendientePage({ pedido, grupos = [], onSeguirComprando, onVerMisPedidos }) {
   const nombreComercio = (idComercio) =>
     grupos.find((g) => Number(g.id_comercio) === Number(idComercio))?.nombre_comercio ?? `Comercio ${idComercio}`;
   const subpedidos = pedido.subpedidos ?? [];
@@ -94,9 +83,14 @@ export default function PedidoPendientePage({ pedido, grupos = [], onSeguirCompr
           </Alerta>
         </div>
 
-        {onSeguirComprando && (
-          <Boton variante="oscuro" icono={ShoppingCart} onClick={onSeguirComprando}>Volver al carrito</Boton>
-        )}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {onVerMisPedidos && (
+            <Boton icono={ClipboardList} onClick={onVerMisPedidos}>Ver mis pedidos</Boton>
+          )}
+          {onSeguirComprando && (
+            <Boton variante="oscuro" icono={ShoppingCart} onClick={onSeguirComprando}>Volver al carrito</Boton>
+          )}
+        </div>
       </main>
     </>
   );

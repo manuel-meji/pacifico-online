@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NavegacionM5 } from './components/componentes';
 import { actualizarCantidad, agregarItem, eliminarItem, obtenerCarrito, vaciarCarrito } from './services/m5Api';
 import CarritoPage from './views/CarritoView';
 import CheckoutPage from './views/CheckoutView';
 import PedidoPendientePage from './views/PedidoPendienteView';
+import MisPedidosView from './views/MisPedidosView';
+import DetallePedidoView from './views/DetallePedidoView';
 
 const textoError = (e) => `${e.mensaje || e.message}${e.codigo ? ` (${e.codigo})` : ''}`;
 const maximoDisponible = (e) => e.detalles?.existencia_disponible ?? 0;
@@ -138,12 +141,24 @@ export default function M5App() {
     cargarCarrito();
   }
 
+  // Mis pedidos → detalle: "Ver detalle" guarda el id_pedido y abre DetallePedidoView.
+  const [idPedidoSeleccionado, setIdPedidoSeleccionado] = useState(null);
+  function verDetalle(idPedido) {
+    setIdPedidoSeleccionado(idPedido);
+    setPantalla('detalle');
+  }
+  const navegacion = useMemo(() => ({
+    abrirMisPedidos: () => { setAviso(null); setPantalla('mis-pedidos'); },
+    enMisPedidos: pantalla === 'mis-pedidos',
+  }), [pantalla]);
+
   function mostrarPedido(pedido, grupos) {
     setPedidoCreado({ pedido, grupos });
     setPantalla('pedido');
   }
 
   return (
+    <NavegacionM5.Provider value={navegacion}>
     <div className="min-h-screen bg-brandLightBg text-gray-800 font-sans antialiased flex flex-col">
       <div className="flex-1 w-full">
         {pantalla === 'carrito' && (
@@ -156,9 +171,17 @@ export default function M5App() {
           <CheckoutPage onVolver={() => volverAlCarrito()} onVolverConAviso={volverAlCarrito} onPedidoCreado={mostrarPedido} />
         )}
         {pantalla === 'pedido' && pedidoCreado && (
-          <PedidoPendientePage pedido={pedidoCreado.pedido} grupos={pedidoCreado.grupos} onSeguirComprando={() => volverAlCarrito()} />
+          <PedidoPendientePage pedido={pedidoCreado.pedido} grupos={pedidoCreado.grupos}
+            onSeguirComprando={() => volverAlCarrito()} onVerMisPedidos={navegacion.abrirMisPedidos} />
+        )}
+        {pantalla === 'mis-pedidos' && (
+          <MisPedidosView idSeleccionado={idPedidoSeleccionado} onVerDetalle={verDetalle} onVolver={() => volverAlCarrito()} />
+        )}
+        {pantalla === 'detalle' && idPedidoSeleccionado != null && (
+          <DetallePedidoView idPedido={idPedidoSeleccionado} onVolver={navegacion.abrirMisPedidos} />
         )}
       </div>
     </div>
+    </NavegacionM5.Provider>
   );
 }
