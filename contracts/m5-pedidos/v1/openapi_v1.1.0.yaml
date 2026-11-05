@@ -376,6 +376,62 @@ paths:
         '409':
           $ref: '#/components/responses/EstadoInvalidoParaCancelar'
 
+  /pedidos/{id_pedido}/pago-confirmado:
+    parameters:
+      - $ref: '#/components/parameters/IdPedido'
+    post:
+      tags: [Pedidos]
+      operationId: confirmarPagoPedido
+      summary: Confirmar pago del pedido maestro (idempotente)
+      description: |
+        Registra la confirmación de pago de un pedido de forma idempotente, actualizando
+        el pedido maestro a estado `pagado` y los subpedidos a `en_preparacion` o `pagado`.
+        Emite el evento canónico `PedidoPagado` hacia M2, M6 y M7, y confirma las reservas en M4.
+        Consumido internamente por el frontend del portal y por integraciones de pasarela de pago.
+      x-consumidores: [Frontend del portal, M6 Pagos y facturación electrónica]
+      x-operacion-interfaz-php: PedidosServiceInterface::marcarComoPagado
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                referencia_pago:
+                  type: string
+                  example: TXN-ABC-001
+                  description: Identificador o referencia de la transacción de pago
+                monto_pagado:
+                  type: number
+                  format: float
+                  example: 28250.00
+                  description: Monto total pagado confirmado
+      responses:
+        '200':
+          description: Pago registrado correctamente u operación idempotente ya procesada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: Pago registrado correctamente
+                  referencia:
+                    type: string
+                    example: TXN-ABC-001
+                  estado:
+                    type: string
+                    example: PAGADO
+                  pedido:
+                    $ref: '#/components/schemas/PedidoMaestro'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/PedidoNoEncontrado'
+
   /subpedidos/{id_subpedido}:
     parameters:
       - $ref: '#/components/parameters/IdSubpedido'
