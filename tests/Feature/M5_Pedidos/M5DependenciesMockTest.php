@@ -41,6 +41,27 @@ class M5DependenciesMockTest extends TestCase
         $stub->buscar('');
     }
 
+    public function test_m1_portal_doble_cliente_y_direcciones(): void
+    {
+        $stub = new PortalStub;
+
+        $cliente = $stub->obtenerCliente(1);
+        $this->assertSame(1, $cliente['id_cliente']);
+        $this->assertSame('Ana', $cliente['nombre']);
+        $this->assertNotEmpty($cliente['direccion_envio']);
+
+        $direcciones = $stub->listarDireccionesCliente(1);
+        $this->assertIsArray($direcciones);
+        $this->assertCount(2, $direcciones);
+        $this->assertSame(1, $direcciones[0]['id_direccion_cliente']);
+        $this->assertTrue($direcciones[0]['es_principal']);
+        $this->assertStringContainsString('Casa (Principal)', $direcciones[0]['texto_completo']);
+
+        $dir1 = $stub->obtenerDireccionCliente(1, 1);
+        $this->assertSame(1, $dir1['id_direccion_cliente']);
+        $this->assertSame('Casa (Principal)', $dir1['alias_direccion']);
+    }
+
     public function test_m2_comercios_doble_exito(): void
     {
         $stub = new ComerciosStub;

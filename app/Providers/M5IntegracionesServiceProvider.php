@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
@@ -37,6 +38,7 @@ class M5IntegracionesServiceProvider extends ServiceProvider
      */
     public const INTERFACES = [
         'm1' => PortalServiceInterface::class,
+        'm1_contract' => PortalPublicoContract::class,
         'm2' => ComerciosServiceInterface::class,
         'm3' => CatalogoServiceInterface::class,
         'm4' => InventarioServiceInterface::class,
@@ -64,7 +66,7 @@ class M5IntegracionesServiceProvider extends ServiceProvider
 
         // Enlace contextual de proveedores externos para M5
         foreach (self::INTERFACES as $clave => $interfaz) {
-            $proveedor = ($clave === 'm4_module') ? 'm4' : $clave;
+            $proveedor = in_array($clave, ['m1_contract'], true) ? 'm1' : (($clave === 'm4_module') ? 'm4' : $clave);
 
             $this->app->when(self::CONSUMIDORES_M5)
                 ->needs($interfaz)
