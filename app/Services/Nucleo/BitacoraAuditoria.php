@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Nucleo;
 
+use App\Models\Nucleo\RegistroAuditoria;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Servicio central para registrar operaciones sensibles en la bitácora
@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\DB;
  */
 class BitacoraAuditoria
 {
+    public function __construct(private readonly ContextoComercio $contextoComercio) {}
+
     /**
      * Registra una operación en la bitácora.
      *
@@ -30,7 +32,7 @@ class BitacoraAuditoria
      * NucleoServiceInterface actualmente no recibe $modulo como
      * parámetro explícito.
      *
-     * @param array<string, mixed> $detalles
+     * @param  array<string, mixed>  $detalles
      */
     public function registrar(
         string $accion,
@@ -40,14 +42,7 @@ class BitacoraAuditoria
     ): void {
         $usuario = Auth::user();
 
-        /*
-         * TODO INTEGRACIÓN:
-         * Confirmar con el equipo del Núcleo si el comercio debe obtenerse
-         * siempre del usuario autenticado, de la sesión o del contexto
-         * definido por Persona 6 (EstablecerComercio).
-         */
-        $idComercio = $usuario?->id_comercio
-            ?? session('comercio_id');
+        $idComercio = $this->contextoComercio->idActual();
 
         /*
          * TODO CONTRATO:
@@ -60,7 +55,7 @@ class BitacoraAuditoria
          */
         $modulo = $detalles['modulo'] ?? 'NUCLEO';
 
-        DB::table('bitacora_auditoria')->insert([
+        RegistroAuditoria::create([
             'id_usuario' => $usuario?->id_usuario,
             'id_comercio' => $idComercio,
             'fecha_hora' => now(),
