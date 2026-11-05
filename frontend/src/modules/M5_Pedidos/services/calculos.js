@@ -20,10 +20,11 @@ export function agruparPorComercio(items) {
 export const totalGeneral = (grupos) => grupos.reduce((s, g) => s + g.total, 0);
 
 // Validación del formulario de checkout. Reglas: CU-004 paso 2 (dirección y método de pago obligatorios)
-// y CrearPedidoRequest del contrato de M5 (cupon_descuento y tarjeta_regalo, máximo 50 caracteres).
-export function validarCheckout({ direccion, metodoPago, cupon, tarjetaRegalo }) {
+// y CrearPedidoRequest del contrato de M5 (id_direccion_cliente entero; cupon_descuento y tarjeta_regalo, máximo 50 caracteres).
+export function validarCheckout({ idDireccion, metodoPago, cupon, tarjetaRegalo }) {
   const e = {};
-  if (!direccion.trim()) e.direccion = 'Ingrese la dirección de envío.';
+  const id = Number(idDireccion);
+  if (!Number.isInteger(id) || id < 1) e.idDireccion = 'Indique una dirección de envío válida.';
   if (!metodoPago) e.metodoPago = 'Seleccione un método de pago.';
   if (cupon.length > 50) e.cupon = 'El cupón no puede superar los 50 caracteres.';
   if (tarjetaRegalo.length > 50) e.tarjetaRegalo = 'La tarjeta de regalo no puede superar los 50 caracteres.';

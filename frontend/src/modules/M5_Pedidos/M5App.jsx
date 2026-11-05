@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-// datosMock solo alimenta el checkout y la confirmación simulada; el carrito ya viene de la API.
-import { carritoInicial, comercios } from './services/datosMock';
 import { actualizarCantidad, agregarItem, eliminarItem, obtenerCarrito, vaciarCarrito } from './services/m5Api';
-import { agruparPorComercio, totalGeneral } from './services/calculos';
 import CarritoPage from './views/CarritoView';
 import CheckoutPage from './views/CheckoutView';
 import PedidoPendientePage from './views/PedidoPendienteView';
@@ -10,10 +7,9 @@ import PedidoPendientePage from './views/PedidoPendienteView';
 const textoError = (e) => `${e.mensaje || e.message}${e.codigo ? ` (${e.codigo})` : ''}`;
 const maximoDisponible = (e) => e.detalles?.existencia_disponible ?? 0;
 
-// Punto de entrada del modulo M5. `simular` fuerza las alternativas del CU-004 durante la validacion:
-//   'stock'    → M4 no puede reservar (alternativa al paso 4, 409 STOCK_INSUFICIENTE)
-//   'comercio' → un comercio esta suspendido en M2 (alternativa al paso 5)
-export default function M5App({ simular = null }) {
+// Punto de entrada del modulo M5: carrito → checkout → pedido pendiente de pago, todo contra /api/m5/v1.
+// Las alternativas del CU-004 (stock agotado, comercio suspendido) llegan ahora como errores reales de la API.
+export default function M5App() {
   // Carrito real: GET /api/m5/v1/carrito (id_cliente=1 por defecto).
   const [carrito, setCarrito] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -131,31 +127,19 @@ export default function M5App({ simular = null }) {
     }
   }
 
-  // Items simulados del checkout
-  const [items, setItems] = useState(carritoInicial.items);
   const [pantalla, setPantalla] = useState('carrito');
-  const [pedido, setPedido] = useState(null);
-  const [suspendidos, setSuspendidos] = useState([]);
+  const [pedidoCreado, setPedidoCreado] = useState(null); // { pedido: respuesta 201, grupos: grupos_comercio }
   const [aviso, setAviso] = useState(null);
 
-  // Doble de POST /api/m5/v1/pedidos. Se sustituye por fetch cuando el modulo esté desplegado.
-  async function confirmar() {
-    await new Promise((r) => setTimeout(r, 600));
-    if (simular === 'stock') {
-      const agotado = items[0];
-      setItems((xs) => xs.map((i) => (i === agotado ? { ...i, aviso: 'Este producto se agotó. Ajuste la cantidad o quítelo.' } : i)));
-      setAviso({ tipo: 'error', titulo: 'Stock insuficiente', texto: `${agotado.nombre} se agotó mientras compraba. Ajuste las cantidades para continuar.` });
-      setPantalla('carrito');
-      return;
-    }
-    if (simular === 'comercio' && !suspendidos.length) {
-      setSuspendidos([2]);
-      setAviso({ tipo: 'aviso', titulo: 'Comercio suspendido', texto: `${comercios[2].nombre} tiene su membresía suspendida. Quite sus productos para continuar con el resto de su compra.` });
-      setPantalla('carrito');
-      return;
-    }
-    const grupos = agruparPorComercio(items);
-    setPedido({ monto_total: totalGeneral(grupos), subpedidos: grupos.map((g) => ({ comercio: g.comercio.nombre })) });
+  // Vuelve al carrito y lo recarga, porque el checkout pudo haber cambiado su estado (reservas, stock, pedido).
+  function volverAlCarrito(nuevoAviso = null) {
+    setAviso(nuevoAviso);
+    setPantalla('carrito');
+    cargarCarrito();
+  }
+
+  function mostrarPedido(pedido, grupos) {
+    setPedidoCreado({ pedido, grupos });
     setPantalla('pedido');
   }
 
@@ -168,8 +152,12 @@ export default function M5App({ simular = null }) {
             onCantidad={cambiarCantidad} onQuitar={quitar} onVaciar={vaciar} onAgregar={agregar}
             onContinuar={() => { setAviso(null); setPantalla('checkout'); }} />
         )}
-        {pantalla === 'checkout' && <CheckoutPage items={items} onVolver={() => setPantalla('carrito')} onConfirmar={confirmar} />}
-        {pantalla === 'pedido' && <PedidoPendientePage pedido={pedido} />}
+        {pantalla === 'checkout' && (
+          <CheckoutPage onVolver={() => volverAlCarrito()} onVolverConAviso={volverAlCarrito} onPedidoCreado={mostrarPedido} />
+        )}
+        {pantalla === 'pedido' && pedidoCreado && (
+          <PedidoPendientePage pedido={pedidoCreado.pedido} grupos={pedidoCreado.grupos} onSeguirComprando={() => volverAlCarrito()} />
+        )}
       </div>
     </div>
   );

@@ -1,8 +1,22 @@
-import { useState } from 'react';
-import { ArrowRight, Check, LoaderCircle, MapPin, Tag, Truck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Check, LoaderCircle, MapPin, RefreshCw, Tag, Truck } from 'lucide-react';
 import { Alerta, Boton, Campo, clasesInput, Encabezado, TarjetaComercio, Total } from '../components/componentes';
-import { agruparPorComercio, colones, totalGeneral, validarCheckout } from '../services/calculos';
-import { metodosPago } from '../services/datosMock';
+import { colones, validarCheckout } from '../services/calculos';
+import { crearPedido, obtenerCarrito } from '../services/m5Api';
+
+// Medios de pago de CrearPedidoRequest (contrato M5): el backend los lee como `metodoPago`.
+const METODOS_PAGO = [
+  { valor: 'tarjeta', etiqueta: 'Tarjeta' },
+  { valor: 'sinpe', etiqueta: 'SINPE' },
+  { valor: 'paypal', etiqueta: 'PayPal' },
+];
+
+// Errores de ControladorPedido::procesarCheckout que obligan a volver al carrito.
+const ERRORES_QUE_VUELVEN_AL_CARRITO = {
+  'ERR-M5-001': { tipo: 'aviso', titulo: 'Carrito vacío', texto: 'Su carrito no tiene productos. Agregue productos antes de confirmar el pedido.' },
+  'ERR-M5-002': { tipo: 'error', titulo: 'Stock agotado', texto: 'Uno o más productos ya no tienen existencias suficientes. Ajuste las cantidades para continuar.' },
+  'ERR-003': { tipo: 'aviso', titulo: 'Comercio suspendido', texto: 'Uno de los comercios de su carrito no está disponible. Quite sus productos para continuar con el resto de su compra.' },
+};
 
 const Titulo = ({ icono: Icono, children }) => (
   <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 mb-3">
@@ -11,13 +25,33 @@ const Titulo = ({ icono: Icono, children }) => (
 );
 
 // CU-004 Confirmar compra y generar pedido(s) (InterfazPedido), pasos 1, 2 y 9.
-// onConfirmar(payload) llama a POST /api/m5/v1/pedidos (crearPedidoCheckout) y devuelve { ok } o { ok:false, ... }.
-export default function CheckoutPage({ items, onVolver, onConfirmar }) {
-  const [f, setF] = useState({ direccion: '', metodoPago: '', cupon: '', tarjetaRegalo: '', nota: '' });
+// El resumen sale de GET /api/m5/v1/carrito y "Confirmar pedido" llama a POST /api/m5/v1/pedidos.
+//   onPedidoCreado(respuesta, grupos) → respuesta 201 y grupos del carrito (para el nombre de cada comercio).
+//   onVolverConAviso(aviso)           → regresa al carrito mostrando el error.
+export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCreado }) {
+  const [carrito, setCarrito] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(null);
+  const [intentoCarga, setIntentoCarga] = useState(0);
+
+  const [f, setF] = useState({ idDireccion: '1', metodoPago: '', cupon: '', tarjetaRegalo: '', nota: '' });
   const [errores, setErrores] = useState({});
-  const [enviando, setEnviando] = useState(false);
   const [cuponIngresado, setCuponIngresado] = useState('');
-  const grupos = agruparPorComercio(items);
+  const [enviando, setEnviando] = useState(false);
+  const [errorEnvio, setErrorEnvio] = useState(null);
+  const enviandoRef = useRef(false); // Evita un segundo POST antes de que React deshabilite el botón.
+
+  useEffect(() => {
+    let vigente = true;
+    setCargando(true);
+    setErrorCarga(null);
+    obtenerCarrito()
+      .then((c) => { if (vigente) setCarrito(c); })
+      .catch((e) => { if (vigente) setErrorCarga(e); })
+      .finally(() => { if (vigente) setCargando(false); });
+    return () => { vigente = false; };
+  }, [intentoCarga]);
+
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   // El cupón se envía con el pedido (cupon_descuento); la validación y el descuento los hace el servidor.
@@ -30,46 +64,134 @@ export default function CheckoutPage({ items, onVolver, onConfirmar }) {
 
   async function enviar(e) {
     e.preventDefault();
+    if (enviandoRef.current) return;
     const errs = validarCheckout(f);
     setErrores(errs);
     if (Object.keys(errs).length) { document.getElementById(Object.keys(errs)[0])?.focus(); return; }
+
+    enviandoRef.current = true;
     setEnviando(true);
-    await onConfirmar({ direccion: f.direccion, metodoPago: f.metodoPago, cupon_descuento: f.cupon, tarjeta_regalo: f.tarjetaRegalo, nota: f.nota });
-    setEnviando(false);
+    setErrorEnvio(null);
+    try {
+      const respuesta = await crearPedido({
+        id_direccion_cliente: Number(f.idDireccion),
+        metodoPago: f.metodoPago,
+        medio_pago: f.metodoPago,
+        cupon_descuento: f.cupon.trim() || null,
+        tarjeta_regalo: f.tarjetaRegalo.trim() || null,
+        nota: f.nota.trim() || null,
+      });
+      onPedidoCreado(respuesta, carrito?.grupos_comercio ?? []);
+    } catch (err) {
+      const aviso = ERRORES_QUE_VUELVEN_AL_CARRITO[err.codigo];
+      if (aviso) {
+        onVolverConAviso({ ...aviso, texto: err.mensaje ? `${aviso.texto} Detalle: ${err.mensaje}.` : aviso.texto });
+        return;
+      }
+      setErrorEnvio(err);
+    } finally {
+      enviandoRef.current = false;
+      setEnviando(false);
+    }
   }
 
-  const subtotalItems = grupos.reduce((s, g) => s + g.subtotal, 0);
-  const impuestosTotal = grupos.reduce((s, g) => s + g.impuesto, 0);
-  const enviosTotal = grupos.reduce((s, g) => s + g.costo_envio, 0);
-  const total = totalGeneral(grupos);
+  if (cargando) {
+    return (
+      <>
+        <Encabezado titulo="Checkout" onVolver={onVolver} />
+        <main className="max-w-4xl mx-auto px-4 py-16 flex flex-col items-center gap-3 text-gray-500" aria-live="polite">
+          <LoaderCircle className="w-8 h-8 animate-spin text-brandBlue" aria-hidden="true" />
+          <p className="text-sm font-medium">Cargando el resumen de su compra…</p>
+        </main>
+      </>
+    );
+  }
+
+  if (errorCarga) {
+    return (
+      <>
+        <Encabezado titulo="Checkout" onVolver={onVolver} />
+        <main className="max-w-xl mx-auto px-4 py-12 space-y-4">
+          <Alerta tipo="error" titulo="No se pudo cargar el carrito">
+            {errorCarga.mensaje || errorCarga.message}{errorCarga.codigo ? ` (${errorCarga.codigo})` : ''}
+          </Alerta>
+          <Boton variante="oscuro" icono={RefreshCw} onClick={() => setIntentoCarga((n) => n + 1)}>Reintentar</Boton>
+        </main>
+      </>
+    );
+  }
+
+  const grupos = carrito?.grupos_comercio ?? [];
+  const resumen = carrito?.resumen ?? {};
+  const total = resumen.total ?? 0;
+  const hayBloqueo = carrito?.hay_comercio_suspendido ?? grupos.some((g) => g.comercio_suspendido);
+
+  if (grupos.length === 0) {
+    return (
+      <>
+        <Encabezado titulo="Checkout" onVolver={onVolver} />
+        <main className="max-w-xl mx-auto px-4 py-12 space-y-4">
+          <Alerta tipo="aviso" titulo="Carrito vacío">Agregue productos a su carrito antes de confirmar el pedido.</Alerta>
+          <Boton variante="oscuro" onClick={onVolver}>Volver al carrito</Boton>
+        </main>
+      </>
+    );
+  }
+
+  const botonConfirmar = (clases) => (
+    <Boton
+      type="submit"
+      disabled={enviando || hayBloqueo}
+      icono={enviando ? LoaderCircle : ArrowRight}
+      className={clases}
+    >
+      {enviando ? 'Procesando…' : 'Confirmar pedido'}
+    </Boton>
+  );
 
   return (
     <>
       <Encabezado titulo="Checkout" onVolver={onVolver} />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-12">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-12 space-y-6">
+        {errorEnvio && (
+          <Alerta tipo="error" titulo="No se pudo crear el pedido">
+            {errorEnvio.mensaje || errorEnvio.message}{errorEnvio.codigo ? ` (${errorEnvio.codigo})` : ''}
+          </Alerta>
+        )}
+        {hayBloqueo && (
+          <Alerta tipo="aviso" titulo="Comercio suspendido">
+            Hay productos de un comercio suspendido. Vuelva al carrito y quítelos para continuar.
+          </Alerta>
+        )}
+
         <form onSubmit={enviar} noValidate className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Columna izquierda: Formularios de Envío/Pago, Opcional y Resumen por comercio */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-6">
             <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-5 space-y-4">
               <Titulo icono={Truck}>Envío y pago</Titulo>
-              <Campo id="direccion" etiqueta="Dirección de envío" error={errores.direccion}>
+              <Campo id="idDireccion" etiqueta="Dirección de envío (id_direccion_cliente)" error={errores.idDireccion}>
                 <div className="relative">
                   <MapPin className="w-4 h-4 text-gray-400 absolute left-3 top-3" aria-hidden="true" />
-                  <textarea
-                    id="direccion"
-                    rows={3}
-                    value={f.direccion}
-                    onChange={set('direccion')}
-                    aria-invalid={!!errores.direccion}
-                    className={clasesInput(errores.direccion, true)}
-                    placeholder="Provincia, cantón, distrito y señas exactas"
+                  <input
+                    id="idDireccion"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={f.idDireccion}
+                    onChange={set('idDireccion')}
+                    aria-invalid={!!errores.idDireccion}
+                    aria-describedby="idDireccion-ayuda"
+                    className={clasesInput(errores.idDireccion, true)}
                   />
                 </div>
+                <p id="idDireccion-ayuda" className="mt-1 text-xs text-gray-500">
+                  Las direcciones las administra M1. Se usa la dirección 1 del cliente de prueba.
+                </p>
               </Campo>
               <Campo id="metodoPago" etiqueta="Método de pago" error={errores.metodoPago}>
-                <select id="metodoPago" value={f.metodoPago} onChange={set('metodoPago')} className={clasesInput(errores.metodoPago)}>
+                <select id="metodoPago" value={f.metodoPago} onChange={set('metodoPago')} aria-invalid={!!errores.metodoPago} className={clasesInput(errores.metodoPago)}>
                   <option value="">Seleccione una opción</option>
-                  {metodosPago.map((m) => <option key={m} value={m}>{m}</option>)}
+                  {METODOS_PAGO.map((m) => <option key={m.valor} value={m.valor}>{m.etiqueta}</option>)}
                 </select>
               </Campo>
             </section>
@@ -82,6 +204,7 @@ export default function CheckoutPage({ items, onVolver, onConfirmar }) {
                     id="cupon"
                     value={f.cupon}
                     onChange={set('cupon')}
+                    maxLength={50}
                     placeholder="Ej: PACIFICO10"
                     className={`${clasesInput(errores.cupon)} flex-1 uppercase`}
                   />
@@ -95,6 +218,7 @@ export default function CheckoutPage({ items, onVolver, onConfirmar }) {
                     id="tarjetaRegalo"
                     value={f.tarjetaRegalo}
                     onChange={set('tarjetaRegalo')}
+                    maxLength={50}
                     placeholder="Código de tarjeta"
                     className={clasesInput(errores.tarjetaRegalo)}
                   />
@@ -114,7 +238,9 @@ export default function CheckoutPage({ items, onVolver, onConfirmar }) {
 
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Detalle por comercio</h2>
-              {grupos.map((g, n) => <TarjetaComercio key={g.comercio.id_comercio} grupo={g} numero={n + 1} editable={false} />)}
+              {grupos.map((g, n) => (
+                <TarjetaComercio key={g.id_comercio} grupo={g} numero={n + 1} editable={false} suspendido={g.comercio_suspendido} />
+              ))}
             </div>
           </div>
 
@@ -131,29 +257,22 @@ export default function CheckoutPage({ items, onVolver, onConfirmar }) {
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <dt>Subtotal productos</dt>
-                  <dd className="font-semibold text-gray-900">{colones(subtotalItems)}</dd>
+                  <dd className="font-semibold text-gray-900">{colones(resumen.subtotal ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <dt>Impuestos</dt>
-                  <dd className="font-semibold text-gray-900">{colones(impuestosTotal)}</dd>
+                  <dt>IVA (13 %)</dt>
+                  <dd className="font-semibold text-gray-900">{colones(resumen.impuesto ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <dt>Costos de envío</dt>
-                  <dd className="font-semibold text-gray-900">{colones(enviosTotal)}</dd>
+                  <dt>Envío</dt>
+                  <dd className="font-semibold text-gray-900">{colones(resumen.costo_envio ?? 0)}</dd>
                 </div>
                 <div className="pt-4 border-t border-gray-100">
                   <Total etiqueta="Total a cobrar" valor={total} />
                 </div>
               </dl>
 
-              <Boton
-                type="submit"
-                disabled={enviando}
-                icono={enviando ? LoaderCircle : ArrowRight}
-                className="w-full text-base py-3"
-              >
-                {enviando ? 'Procesando…' : 'Continuar a la pasarela de pago'}
-              </Boton>
+              {botonConfirmar('w-full text-base py-3')}
             </div>
           </div>
 
@@ -161,14 +280,7 @@ export default function CheckoutPage({ items, onVolver, onConfirmar }) {
           <footer className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 p-4 space-y-3 shadow-lg lg:hidden z-10">
             <div className="max-w-md mx-auto space-y-3">
               <Total etiqueta="Total a cobrar" valor={total} />
-              <Boton
-                type="submit"
-                disabled={enviando}
-                icono={enviando ? LoaderCircle : ArrowRight}
-                className="w-full text-sm"
-              >
-                {enviando ? 'Procesando…' : 'Continuar a la pasarela de pago'}
-              </Boton>
+              {botonConfirmar('w-full text-sm')}
             </div>
           </footer>
         </form>

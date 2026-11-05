@@ -157,7 +157,7 @@ export function FilaResumen({ item }) {
         <span className="min-w-5 h-5 px-1 bg-gray-100 rounded flex items-center justify-center font-bold text-gray-700 text-xs">{item.cantidad}x</span>
         <span className="text-gray-800 font-medium break-words">{item.nombre}</span>
       </div>
-      <span className="shrink-0 font-bold text-gray-900">{colones(item.precio_unitario * item.cantidad)}</span>
+      <span className="shrink-0 font-bold text-gray-900">{colones(item.subtotal ?? item.precio_unitario * item.cantidad)}</span>
     </li>
   );
 }
