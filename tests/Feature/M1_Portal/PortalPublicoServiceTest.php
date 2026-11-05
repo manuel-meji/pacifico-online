@@ -21,6 +21,7 @@ use App\Services\M1_Portal\DTO\ProductoResumenDTO;
 use App\Services\M1_Portal\DTO\ResultadoBusquedaDTO;
 use App\Services\M1_Portal\DTO\VariacionDTO;
 use App\Services\M1_Portal\PortalPublicoService;
+use ReflectionMethod;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
 
@@ -41,25 +42,33 @@ class PortalPublicoServiceTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Servicios que todavía no existen
+    // Servicios que no existen o no están disponibles
     // ---------------------------------------------------------------
 
+    /**
+     * Se usa un nombre de clase que nunca va a existir, así la prueba no
+     * depende de qué servicios de SG1 ya estén subidos.
+     */
     public function test_una_operacion_cuyo_servicio_no_existe_lanza_err_006(): void
     {
+        $servicio = new ReflectionMethod(PortalPublicoService::class, 'servicio');
+
         $this->expectException(DependenciaNoDisponibleException::class);
 
-        app(PortalPublicoContract::class)->buscarProductos('café');
+        $servicio->invoke(app(PortalPublicoContract::class), 'App\\Services\\M1_Portal\\ServicioQueNoExiste');
     }
 
-    public function test_listar_destacados_sin_servicio_no_falla_y_marca_las_secciones(): void
+    public function test_listar_destacados_no_falla_si_el_servicio_no_esta_disponible_y_marca_las_secciones(): void
     {
+        $this->enlazar(PortalPublicoService::SERVICIO_PORTADA, $this->servicioNoDisponible());
+
         $destacados = app(PortalPublicoContract::class)->listarDestacados();
 
         $this->assertSame(['comercios' => [], 'productos' => [], 'secciones_no_disponibles' => ['comercios', 'productos']], $destacados);
         $this->assertCumpleEsquema('Destacados', $destacados);
     }
 
-    public function test_un_servicio_faltante_no_afecta_a_los_demas(): void
+    public function test_un_servicio_no_disponible_no_afecta_a_los_demas(): void
     {
         $this->enlazar(PortalPublicoService::SERVICIO_FICHA, new class
         {
@@ -68,6 +77,7 @@ class PortalPublicoServiceTest extends TestCase
                 return PortalPublicoServiceTest::ficha($idProducto);
             }
         });
+        $this->enlazar(PortalPublicoService::SERVICIO_MICROSITIO, $this->servicioNoDisponible());
 
         $this->assertSame(1520, app(PortalPublicoContract::class)->obtenerFichaProducto(1520)['id_producto']);
 
@@ -464,6 +474,23 @@ class PortalPublicoServiceTest extends TestCase
             'distrito' => 'Liberia',
             'otras_senas' => 'Frente al hospital',
         ];
+    }
+
+    /**
+     * Servicio cuyo proveedor está caído: cualquier método lanza ERR-006.
+     */
+    private function servicioNoDisponible(): object
+    {
+        return new class
+        {
+            /**
+             * @param  array<int, mixed>  $argumentos
+             */
+            public function __call(string $metodo, array $argumentos): never
+            {
+                throw new DependenciaNoDisponibleException;
+            }
+        };
     }
 
     private function enlazar(string $clase, object $servicio): void

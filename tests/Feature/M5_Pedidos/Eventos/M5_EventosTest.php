@@ -19,6 +19,7 @@ use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Services\M5_Pedidos\Dobles\ComerciosStub;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -49,12 +50,7 @@ class M5_EventosTest extends TestCase
         ]);
         $this->app->instance(CatalogoServiceInterface::class, $mockM3);
 
-        $mockM2 = $this->createStub(ComerciosServiceInterface::class);
-        $mockM2->method('obtenerMicrositio')->willReturn([
-            'id_comercio' => 1,
-            'nombre' => 'Comercio Evento',
-            'estado' => 'activo',
-        ]);
+        $mockM2 = (new ComerciosStub)->setComercioSuspendido(false);
         $this->app->instance(ComerciosServiceInterface::class, $mockM2);
 
         $mockM4 = $this->createStub(InventarioServiceInterface::class);

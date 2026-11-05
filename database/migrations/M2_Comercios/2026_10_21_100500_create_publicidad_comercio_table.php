@@ -23,8 +23,11 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_publicidad_comercio_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE publicidad_comercio ADD CONSTRAINT chk_publicidad_fechas CHECK (fin >= inicio)"); // Vigencia coherente
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE publicidad_comercio ADD CONSTRAINT chk_publicidad_fechas CHECK (fin >= inicio)"); // Vigencia coherente
+        }
     }
 
     public function down(): void

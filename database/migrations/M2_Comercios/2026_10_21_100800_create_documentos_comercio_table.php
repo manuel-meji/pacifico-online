@@ -24,8 +24,11 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_documentos_comercio_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE documentos_comercio ADD CONSTRAINT chk_documentos_resultado CHECK (resultado IN ('pendiente', 'valido', 'invalido'))"); // RN-002
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE documentos_comercio ADD CONSTRAINT chk_documentos_resultado CHECK (resultado IN ('pendiente', 'valido', 'invalido'))"); // RN-002
+        }
     }
 
     public function down(): void

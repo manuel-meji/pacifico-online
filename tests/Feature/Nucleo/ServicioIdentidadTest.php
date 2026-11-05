@@ -23,14 +23,17 @@ class ServicioIdentidadTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Solo las migraciones del núcleo que esta prueba necesita. Así no depende de las migraciones
+     * Las migraciones independientes del núcleo compartidas con las demás pruebas. Así no depende de las migraciones
      * de otros módulos, que pueden traer SQL exclusivo de PostgreSQL y no corren en SQLite.
      *
      * @var list<string>
      */
     private const MIGRACIONES = [
         'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php',
+        'database/migrations/Nucleo/2026_09_30_000002_crear_tabla_bitacora_auditoria.php',
         'database/migrations/Nucleo/2026_09_30_000003_crear_tablas_sesiones_y_restablecimientos.php',
+        'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
+        'database/migrations/Nucleo/2026_11_02_191532_agregar_inmutabilidad_a_bitacora_auditoria.php',
     ];
 
     /** @return array<string, mixed> */

@@ -24,9 +24,12 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_horarios_comercio_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE horarios_comercio ADD CONSTRAINT chk_horarios_dia CHECK (dia_semana BETWEEN 1 AND 7)"); // 1 = lunes, 7 = domingo
-        DB::statement("ALTER TABLE horarios_comercio ADD CONSTRAINT chk_horarios_horas CHECK (cerrado OR (hora_apertura IS NOT NULL AND hora_cierre IS NOT NULL AND hora_apertura < hora_cierre))"); // Horas coherentes si abre
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE horarios_comercio ADD CONSTRAINT chk_horarios_dia CHECK (dia_semana BETWEEN 1 AND 7)"); // 1 = lunes, 7 = domingo
+            DB::statement("ALTER TABLE horarios_comercio ADD CONSTRAINT chk_horarios_horas CHECK (cerrado OR (hora_apertura IS NOT NULL AND hora_cierre IS NOT NULL AND hora_apertura < hora_cierre))"); // Horas coherentes si abre
+        }
     }
 
     public function down(): void

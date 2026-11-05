@@ -14,13 +14,17 @@ class SesionController extends Controller
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
-            'email' => ['required', 'string', 'email', 'max:255'],
-            'password' => ['required', 'string'],
+            'correo' => ['required', 'string', 'email', 'max:150'],
+            'contrasena' => ['required', 'string'],
         ]);
 
-        if (! Auth::guard('web')->attempt($credentials)) {
+        if (! Auth::guard('web')->attempt([
+            'correo' => $credentials['correo'],
+            'password' => $credentials['contrasena'],
+            'activo' => true,
+        ])) {
             throw ValidationException::withMessages([
-                'email' => ['Las credenciales proporcionadas son incorrectas.'],
+                'correo' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
 
@@ -41,7 +45,7 @@ class SesionController extends Controller
     public function usuario(Request $request): JsonResponse
     {
         return response()->json([
-            'user' => $request->user()->only(['id', 'name', 'email']),
+            'user' => $request->user()->only(['id_usuario', 'nombre', 'correo', 'rol', 'id_comercio']),
         ])->header('Cache-Control', 'no-store');
     }
 }

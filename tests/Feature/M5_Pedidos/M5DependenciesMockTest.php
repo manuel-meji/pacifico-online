@@ -44,11 +44,14 @@ class M5DependenciesMockTest extends TestCase
     public function test_m2_comercios_doble_exito(): void
     {
         $stub = new ComerciosStub;
-        $micrositio = $stub->obtenerMicrositio(ComerciosStub::COMERCIO_ACTIVO);
+        $comercio = $stub->obtenerComercioActivo(ComerciosStub::COMERCIO_ACTIVO);
 
-        $this->assertSame('activo', $micrositio['estado']);
-        $this->assertSame(2, $micrositio['id_comercio']);
-        $this->assertTrue($stub->registrarComision(101, 15000.00));
+        $this->assertTrue($comercio['activo']);
+        $this->assertSame(2, $comercio['id_comercio']);
+
+        $resumen = $stub->obtenerResumenComerciosLote([ComerciosStub::COMERCIO_ACTIVO]);
+        $this->assertNotEmpty($resumen['comercios']);
+        $this->assertSame(2, $resumen['comercios'][0]['id_comercio']);
     }
 
     public function test_m2_comercios_doble_error_suspendido(): void
@@ -57,7 +60,7 @@ class M5DependenciesMockTest extends TestCase
         $this->expectExceptionCode(409);
 
         $stub = new ComerciosStub;
-        $stub->obtenerMicrositio(ComerciosStub::COMERCIO_SUSPENDIDO);
+        $stub->obtenerComercioActivo(ComerciosStub::COMERCIO_SUSPENDIDO);
     }
 
     public function test_m3_catalogo_doble_exito(): void

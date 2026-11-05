@@ -23,9 +23,12 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE comercios ADD CONSTRAINT chk_comercios_estado CHECK (estado IN ('Pendiente', 'Activo', 'Rechazado', 'Suspendido'))"); // Estados del comercio (glosario)
-        DB::statement("ALTER TABLE comercios ADD CONSTRAINT chk_comercios_cedula_formato CHECK (cedula_juridica ~ '^[0-9]-[0-9]{3}-[0-9]{6}$')"); // Formato de cédula jurídica
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE comercios ADD CONSTRAINT chk_comercios_estado CHECK (estado IN ('Pendiente', 'Activo', 'Rechazado', 'Suspendido'))"); // Estados del comercio (glosario)
+            DB::statement("ALTER TABLE comercios ADD CONSTRAINT chk_comercios_cedula_formato CHECK (cedula_juridica ~ '^[0-9]-[0-9]{3}-[0-9]{6}$')"); // Formato de cédula jurídica
+        }
     }
 
     public function down(): void

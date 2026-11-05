@@ -25,10 +25,13 @@ return new class extends Migration
             $table->foreign('id_comercio', 'fk_membresias_comercio_id_comercio')->references('id_comercio')->on('comercios')->restrictOnDelete();
         });
 
-        // Restricciones que implementan reglas de negocio (sección 6.3)
-        DB::statement("ALTER TABLE membresias_comercio ADD CONSTRAINT chk_membresia_comision_preferencial CHECK (comision_preferencial IS NULL OR (comision_preferencial >= 0 AND comision_preferencial <= 100))"); // RN-008
-        DB::statement("ALTER TABLE membresias_comercio ADD CONSTRAINT chk_membresias_fechas CHECK (fin IS NULL OR fin >= inicio)"); // Vigencia coherente
-        DB::statement("CREATE UNIQUE INDEX uq_membresia_activa_comercio ON membresias_comercio (id_comercio) WHERE activa");
+        // Restricciones que implementan reglas de negocio (sección 6.3).
+        // Los CHECK son de PostgreSQL; en SQLite (pruebas automatizadas) se omiten.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE membresias_comercio ADD CONSTRAINT chk_membresia_comision_preferencial CHECK (comision_preferencial IS NULL OR (comision_preferencial >= 0 AND comision_preferencial <= 100))"); // RN-008
+            DB::statement("ALTER TABLE membresias_comercio ADD CONSTRAINT chk_membresias_fechas CHECK (fin IS NULL OR fin >= inicio)"); // Vigencia coherente
+            DB::statement("CREATE UNIQUE INDEX uq_membresia_activa_comercio ON membresias_comercio (id_comercio) WHERE activa");
+        }
     }
 
     public function down(): void

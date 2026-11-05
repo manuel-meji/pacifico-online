@@ -2,13 +2,13 @@
 
 namespace App\Services\M5_Pedidos\Dobles;
 
-use App\Contracts\M2_Comercios\ComerciosServiceInterface;
+use App\Services\M2_Comercios\Dobles\ComerciosDobleBase;
 
 /**
  * Doble de prueba formal (Stub) para M2 Micrositios y Comercios.
- * Implementa App\Contracts\M2_Comercios\ComerciosServiceInterface.
+ * Extiende App\Services\M2_Comercios\Dobles\ComerciosDobleBase (Contrato OpenAPI v1.2.1).
  */
-class ComerciosStub implements ComerciosServiceInterface
+class ComerciosStub extends ComerciosDobleBase
 {
     public const COMERCIO_ACTIVO = 2;
 
@@ -33,7 +33,83 @@ class ComerciosStub implements ComerciosServiceInterface
     }
 
     /**
+     * Consulta políticas y tarifas de envío de un comercio (Contrato OpenAPI v1.2.1).
+     *
+     * @return array{id_comercio: int, politicas: list<array<string, mixed>>, tarifas: list<array<string, mixed>>}
+     */
+    public function obtenerPoliticasEnvio(int $idComercio): array
+    {
+        return [
+            'id_comercio' => $idComercio,
+            'politicas' => [],
+            'tarifas' => [
+                [
+                    'zona' => 'GAM',
+                    'costo' => $this->costoEnvio > 0 ? $this->costoEnvio : 1500.00,
+                    'moneda' => 'CRC',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Consulta el estado de activación de un comercio (Contrato OpenAPI v1.2.1).
+     *
+     * @return array{id_comercio: int, estado: string, activo: bool, motivo_estado: ?string}
+     *
+     * @throws ErrorProveedorException ERR-M2-002 si el comercio está suspendido (409)
+     */
+    public function obtenerComercioActivo(int $idComercio): array
+    {
+        $estaSuspendido = $this->forzarSuspendido ?? ($idComercio === self::COMERCIO_SUSPENDIDO);
+
+        if ($estaSuspendido) {
+            throw ErrorProveedorException::comercioSuspendido('Comercio suspendido');
+        }
+
+        return [
+            'id_comercio' => $idComercio,
+            'estado' => 'Activo',
+            'activo' => true,
+            'motivo_estado' => null,
+        ];
+    }
+
+    /**
+     * Obtiene el resumen de comercios por lote (Contrato OpenAPI v1.2.1).
+     * M2 omite los comercios suspendidos o no habilitados.
+     *
+     * @param  list<int>  $idsComercio
+     * @return array{comercios: list<array<string, mixed>>}
+     */
+    public function obtenerResumenComerciosLote(array $idsComercio): array
+    {
+        $comercios = [];
+        foreach ($idsComercio as $id) {
+            $estaSuspendido = $this->forzarSuspendido ?? ($id === self::COMERCIO_SUSPENDIDO);
+            if (! $estaSuspendido) {
+                $nombre = match ($id) {
+                    1 => 'Café Don Manuel S.A.',
+                    4 => 'Mercado Artesanal Pacífico S.A.',
+                    default => 'Comercio de prueba S.A.',
+                };
+                $comercios[] = [
+                    'id_comercio' => $id,
+                    'nombre_comercial' => $nombre,
+                    'logo_url' => "https://pacifico.test/storage/comercios/{$id}/logo.png",
+                    'estado' => 'Activo',
+                    'destacado' => false,
+                ];
+            }
+        }
+
+        return ['comercios' => $comercios];
+    }
+
+    /**
      * Consultar información pública del micrositio de un comercio.
+     *
+     * @deprecated Usar obtenerComercioActivo u obtenerResumenComerciosLote (contrato v1.2.1).
      *
      * @return array<string, mixed>
      *
@@ -80,7 +156,8 @@ class ComerciosStub implements ComerciosServiceInterface
 
     /**
      * Registrar la comisión de la plataforma sobre el subtotal de un pedido.
-     * Invocado en el paso 9 del recorrido transversal.
+     *
+     * @deprecated Retirado en contrato v1.2.1; M2 consume SubpedidoDespachado.
      */
     public function registrarComision(int $pedidoId, float $subtotalPedido): bool
     {
