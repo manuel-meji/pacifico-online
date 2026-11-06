@@ -72,4 +72,80 @@ class RegistroSolicitudHttpTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('error.codigo', 'ERR-005');
     }
+
+    public function test_interesado_puede_corregir_solicitud_rechazada_sin_sesion(): void
+{
+    $comercio = $this->crearComercio([
+        'cedula_juridica' => '3-101-654321',
+        'nombre_comercial' => 'Comercio Original',
+        'estado' => Comercio::RECHAZADO,
+    ]);
+
+    $solicitud = SolicitudComercio::create([
+        'id_comercio' => $comercio->id_comercio,
+        'nombre_encargado' => 'Persona Encargada',
+        'correo_encargado' => 'encargado@example.com',
+        'telefono_encargado' => '88888888',
+        'estado' => SolicitudComercio::RECHAZADA,
+        'requiere_documentos' => false,
+        'motivo_rechazo' => 'Debe corregir información.',
+    ]);
+
+    $respuesta = $this->putJson(
+        "/api/m2/v1/solicitudes/{$solicitud->id_solicitud}",
+        [
+            'cedula_juridica' => '3-101-654321',
+            'correo_encargado' => 'encargado@example.com',
+            'nombre_comercial' => 'Comercio Corregido',
+            'direccion_fiscal' => 'Liberia centro',
+        ]
+    );
+
+    $respuesta
+        ->assertOk()
+        ->assertJsonPath('estado', SolicitudComercio::PENDIENTE);
+
+    $this->assertDatabaseHas('solicitudes_comercio', [
+        'id_solicitud' => $solicitud->id_solicitud,
+        'estado' => SolicitudComercio::PENDIENTE,
+        'motivo_rechazo' => null,
+    ]);
+
+    $this->assertDatabaseHas('comercios', [
+        'id_comercio' => $comercio->id_comercio,
+        'nombre_comercial' => 'Comercio Corregido',
+        'estado' => Comercio::PENDIENTE,
+    ]);
+}
+
+public function test_corregir_con_datos_que_no_coinciden_responde_err_004(): void
+{
+    $comercio = $this->crearComercio([
+        'cedula_juridica' => '3-101-654321',
+        'estado' => Comercio::RECHAZADO,
+    ]);
+
+    $solicitud = SolicitudComercio::create([
+        'id_comercio' => $comercio->id_comercio,
+        'nombre_encargado' => 'Persona Encargada',
+        'correo_encargado' => 'correcto@example.com',
+        'telefono_encargado' => null,
+        'estado' => SolicitudComercio::RECHAZADA,
+        'requiere_documentos' => false,
+        'motivo_rechazo' => 'Debe corregir información.',
+    ]);
+
+    $respuesta = $this->putJson(
+        "/api/m2/v1/solicitudes/{$solicitud->id_solicitud}",
+        [
+            'cedula_juridica' => '3-101-654321',
+            'correo_encargado' => 'incorrecto@example.com',
+        ]
+    );
+
+    $respuesta
+        ->assertStatus(404)
+        ->assertJsonPath('error.codigo', 'ERR-004');
+}
+
 }

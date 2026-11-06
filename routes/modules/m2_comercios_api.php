@@ -59,9 +59,9 @@ Route::prefix('api/m2/v1')
         Route::post('solicitudes', [Solicitudes::class, 'registrar'])
             ->middleware('throttle:10,1')->name('solicitudes.registrar');
 
-        Route::middleware('auth:sanctum')->group(function (): void {
-            Route::put('solicitudes/{idSolicitud}', [Solicitudes::class, 'corregir'])
-                ->whereNumber('idSolicitud')->name('solicitudes.corregir');
+        Route::put('solicitudes/{idSolicitud}', [Solicitudes::class, 'corregir'])
+    ->whereNumber('idSolicitud')->middleware('throttle:10,1')->name('solicitudes.corregir');
+    Route::middleware('auth:sanctum')->group(function (): void {
             Route::get('solicitudes', [Solicitudes::class, 'listar'])->name('solicitudes.listar');
             Route::get('solicitudes/{idSolicitud}', [Solicitudes::class, 'consultar'])
                 ->whereNumber('idSolicitud')->name('solicitudes.consultar');
@@ -72,4 +72,4 @@ Route::prefix('api/m2/v1')
             Route::post('solicitudes/{idSolicitud}/documentos/{idDocumento}/evaluar', [Solicitudes::class, 'evaluarDocumento'])
                 ->whereNumber(['idSolicitud', 'idDocumento'])->name('solicitudes.documentos.evaluar');
         });
-    });
+            });
