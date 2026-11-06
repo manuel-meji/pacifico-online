@@ -41,7 +41,7 @@ Se elige la **Opción 2: bloqueo pesimista**, dentro de `DB::transaction`. En M4
 - La **idempotencia** se garantiza con la restricción única `uq_reservas_comercio_clave_idempotencia (id_comercio, clave_idempotencia)`. Si dos solicitudes con la misma clave compiten, la que pierde la carrera recibe la violación de unicidad y devuelve la reserva existente.
 - La **base de datos protege lo que el código no debe romper**: el trigger `tr_reservas_transicion` solo admite las transiciones 1→2, 1→4, 1→5, 2→3 y 2→4; `tr_reservas_no_delete` impide borrar reservas; y la restricción `ck_existencias_disponible_no_negativo` impide un disponible negativo aunque falle el código.
 - Los eventos (`ExistenciaReservada`, `ExistenciaAgotada`, `ExistenciaRepuesta`) se publican **después** de confirmar la transacción, para no emitir un evento de algo que se revirtió.
-- La prueba `ReservaUltimaUnidadConcurrencyTest` verifica el caso crítico: varias solicitudes simultáneas sobre la última unidad, de las cuales solo una obtiene la reserva.
+- La prueba `ConcurrenciaReservaStockTest` verifica el caso crítico: varias solicitudes simultáneas sobre el mismo stock, de las cuales solo se atienden las que caben en el disponible, sin sobreventa.
 
 ---
 
