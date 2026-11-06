@@ -46,8 +46,17 @@ class ComerciosService implements ComerciosServiceInterface
     public function __construct(
         private readonly ServicioIdentidadInterface $identidad,
         private readonly NucleoServiceInterface $nucleo,
-        private readonly SubpedidosServiceInterface $subpedidos,
     ) {}
+
+    /**
+     * Servicio de M5 que usa el cálculo de la comisión (Ds-03). Se pide recién
+     * cuando se usa, no en el constructor: PedidosService de M5 depende a su vez
+     * de ComerciosServiceInterface, y pedirlo al construir crea un ciclo infinito.
+     */
+    private function subpedidos(): SubpedidosServiceInterface
+    {
+        return app(SubpedidosServiceInterface::class);
+    }
 
     public function listarComerciosHabilitados(int $pagina = 1, int $porPagina = 20, bool $destacado = false): array
     {
