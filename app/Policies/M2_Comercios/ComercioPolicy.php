@@ -7,6 +7,9 @@ namespace App\Policies\M2_Comercios;
 use App\Enums\Nucleo\RolUsuario;
 use App\Exceptions\Nucleo\ErrorNucleoException;
 use Illuminate\Contracts\Auth\Authenticatable;
+use App\Models\M2_Comercios\Comercio;
+use App\Models\Nucleo\Usuario;
+use App\Models\Nucleo\VerificaRol;
 
 /**
  * Autorización HTTP de las consultas de M2 (x-autorizacion del contrato v1.2.1).
@@ -22,6 +25,16 @@ use Illuminate\Contracts\Auth\Authenticatable;
  */
 class ComercioPolicy
 {
+
+    use VerificaRol;
+
+    // --- CU-0001 a CU-0007: edición del micrositio
+    public function actualizar(Usuario $usuario, Comercio $comercio): bool
+    {
+        return $this->esEncargadoComercio($usuario)
+            && $usuario->id_comercio === $comercio->id_comercio;
+    }
+
     /**
      * Estado, sedes y datos fiscales: plataforma, cualquier comercio;
      * encargado del comercio, solo el suyo; cliente, 403.

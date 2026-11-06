@@ -23,6 +23,13 @@ class HorarioComercio extends Model
 
     protected $casts = ['dia_semana' => 'integer', 'cerrado' => 'boolean'];
 
+    // --- CU-0006: administrar horarios 
+    public function actualizar(array $datos): void
+    {
+        $this->fill($datos);
+        $this->save();
+    }
+
     public function comercio(): BelongsTo
     {
         return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');

@@ -23,6 +23,13 @@ class Micrositio extends Model
 
     protected $casts = [];
 
+    // --- CU-0003: administrar logotipo
+    public function cambiarLogotipo(?string $ruta): void
+    {
+        $this->logotipo = $ruta;
+        $this->save();
+    }
+
     public function comercio(): BelongsTo
     {
         return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');

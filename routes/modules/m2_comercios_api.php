@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\M2_Comercios\ConsultasComerciosController as Consultas;
+use App\Http\Controllers\M2_Comercios\MicrositiosController as Micrositios;
 use App\Http\Controllers\M2_Comercios\SolicitudesController as Solicitudes;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,23 @@ Route::prefix('api/m2/v1')
                 ->whereNumber('idComercio')->name('comercios.datos_fiscales');
             Route::get('subpedidos/{idSubpedido}/comision', [Consultas::class, 'comisionSubpedido'])
                 ->whereNumber('idSubpedido')->name('subpedidos.comision');
+                // --- CU-0001 a CU-0007: edición del micrositio
+            Route::get('comercios/{idComercio}/micrositio', [Micrositios::class, 'consultar'])
+                ->whereNumber('idComercio')->name('comercios.micrositio.editar');
+            Route::post('comercios/{idComercio}/micrositio/logotipo', [Micrositios::class, 'guardarLogotipo'])
+                ->whereNumber('idComercio')->name('comercios.micrositio.logotipo');
+            Route::put('comercios/{idComercio}/micrositio/galeria', [Micrositios::class, 'gestionarGaleria'])
+                ->whereNumber('idComercio')->name('comercios.micrositio.galeria');
+            Route::put('comercios/{idComercio}/micrositio', [Micrositios::class, 'actualizarInformacion'])
+                ->whereNumber('idComercio') ->name('comercios.micrositio.actualizar');
+            Route::put('comercios/{idComercio}/micrositio/banners', [Micrositios::class, 'gestionarBanners'])
+                ->whereNumber('idComercio')->name('comercios.micrositio.banners');
+            Route::put('comercios/{idComercio}/micrositio/horarios', [Micrositios::class, 'guardarHorarios'])
+                ->whereNumber('idComercio')->name('comercios.micrositio.horarios');
+            Route::put('comercios/{idComercio}/micrositio/contactos', [Micrositios::class, 'guardarContactos'])
+                ->whereNumber('idComercio')->name('comercios.micrositio.contactos');
+            Route::put('comercios/{idComercio}/micrositio/politicas', [Micrositios::class, 'guardarPoliticas'])
+                ->whereNumber('idComercio')->name('comercios.micrositio.politicas');
         });
 
         // --- CU-0012 a CU-0016 y CU-0022: esqueleto de solicitudes (Jorge) ---

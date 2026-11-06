@@ -23,6 +23,12 @@ class PoliticaComercio extends Model
 
     protected $casts = ['configuracion_envio' => 'array'];
 
+    // --- Políticas del micrositio
+    public function actualizar(array $datos): void
+    {
+        $this->fill($datos);
+        $this->save();
+    }
     public function comercio(): BelongsTo
     {
         return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');

@@ -27,6 +27,12 @@ class ContactoComercio extends Model
 
     public const TIPOS_RED_SOCIAL = ['facebook', 'instagram', 'whatsapp', 'tiktok', 'sitio_web'];
 
+    // --- CU-0007: administrar contactos y redes sociales
+    public function actualizar(array $datos): void
+    {
+        $this->fill($datos);
+        $this->save();
+    }
     public function comercio(): BelongsTo
     {
         return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');
