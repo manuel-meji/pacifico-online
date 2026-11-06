@@ -8,11 +8,15 @@ use App\Models\Nucleo\Usuario;
 use App\Models\Nucleo\VerificaRol;
 
 /**
- * Funciones comunes para las Policies del Núcleo.
+ * Comprobaciones transversales reutilizables por las Policies.
  *
- * No representa autorización de una entidad específica.
- * Las Policies concretas de cada módulo deben extender o reutilizar
- * estas comprobaciones.
+ * Cada módulo mantiene sus propias Policies para las entidades que posee.
+ * Esta clase únicamente centraliza comprobaciones comunes de usuario,
+ * rol y pertenencia.
+ *
+ * El aislamiento de consultas por comercio no se implementa aquí.
+ * Ese mecanismo corresponde a EstablecerComercio, ContextoComercio,
+ * PerteneceAComercio y FiltroComercioScope.
  */
 abstract class PolicyBaseNucleo
 {
@@ -23,17 +27,19 @@ abstract class PolicyBaseNucleo
         return $usuario->activo === true;
     }
 
+    /**
+     * Verifica que el usuario sea un Encargado del comercio activo
+     * y que pertenezca al comercio indicado.
+     *
+     * Esta comprobación complementa el aislamiento automático aplicado
+     * por el Núcleo; no sustituye el global scope PerteneceAComercio.
+     */
     protected function perteneceAlComercio(
         Usuario $usuario,
         int $idComercio
     ): bool {
-        /*
-         * TODO PERSONA 6:
-         * Cuando estén disponibles PerteneceAComercio y
-         * EstablecerComercio, revisar si esta comprobación debe
-         * delegarse al contexto/trait común para evitar duplicación.
-         */
         return $this->esEncargadoComercio($usuario)
-            && $usuario->id_comercio === $idComercio;
+            && $usuario->id_comercio !== null
+            && (int) $usuario->id_comercio === $idComercio;
     }
 }

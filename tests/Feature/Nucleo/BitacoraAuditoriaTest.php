@@ -212,13 +212,39 @@ class BitacoraAuditoriaTest extends TestCase
         ];
     }
 
-    /*
-     * TODO POSTGRESQL:
-     *
-     * La prueba que verifica que UPDATE y DELETE son rechazados no debe
-     * ejecutarse con SQLite, porque el trigger utiliza PL/pgSQL.
-     *
-     * Esta prueba debe agregarse cuando Supabase/PostgreSQL vuelva a estar
-     * disponible o usando PostgreSQL local.
-     */
+    public function test_postgresql_rechaza_update_directo_en_bitacora(): void
+{
+    if (DB::getDriverName() !== 'pgsql') {
+        $this->markTestSkipped(
+            'Esta prueba requiere PostgreSQL porque valida el trigger PL/pgSQL.'
+        );
+    }
+
+    $registro = RegistroAuditoria::factory()->create();
+
+    $this->expectException(\Throwable::class);
+
+    DB::table('bitacora_auditoria')
+        ->where('id_bitacora', $registro->id_bitacora)
+        ->update([
+            'accion' => 'modificacion_no_permitida',
+        ]);
+}
+
+public function test_postgresql_rechaza_delete_directo_en_bitacora(): void
+{
+    if (DB::getDriverName() !== 'pgsql') {
+        $this->markTestSkipped(
+            'Esta prueba requiere PostgreSQL porque valida el trigger PL/pgSQL.'
+        );
+    }
+
+    $registro = RegistroAuditoria::factory()->create();
+
+    $this->expectException(\Throwable::class);
+
+    DB::table('bitacora_auditoria')
+        ->where('id_bitacora', $registro->id_bitacora)
+        ->delete();
+}
 }

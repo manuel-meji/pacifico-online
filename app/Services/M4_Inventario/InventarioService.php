@@ -4,6 +4,7 @@ namespace App\Services\M4_Inventario;
 
 use App\Contracts\M4_Inventario\Dependencias\CatalogoDependencia;
 use App\Contracts\M4_Inventario\Dependencias\ComerciosDependencia;
+use App\Contracts\M4_Inventario\Dependencias\NucleoDependencia;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Events\M4_Inventario\ExistenciaAgotada;
 use App\Events\M4_Inventario\ExistenciaRepuesta;
@@ -49,7 +50,21 @@ class InventarioService implements InventarioModuleInterface
     public function __construct(
         private readonly ComerciosDependencia $comercios,
         private readonly CatalogoDependencia $catalogo,
+        private readonly NucleoDependencia $nucleo,
     ) {}
+
+    /**
+     * RN-12: con sesión de comercio, un recurso de otro comercio responde ERR-003 (404).
+     * Sin sesión de comercio (M1, M5, procesos del sistema) no se filtra.
+     */
+    private function exigirComercioDeSesion(int $idComercioRecurso): void
+    {
+        $comercioSesion = $this->nucleo->comercioActual();
+
+        if ($comercioSesion !== null && $comercioSesion !== $idComercioRecurso) {
+            throw ErrorInventarioException::recursoNoAccesible();
+        }
+    }
 
     // ------------------------------------------------------------------ disponibilidad
 
@@ -197,6 +212,10 @@ class InventarioService implements InventarioModuleInterface
             if ($reserva === null) {
                 throw ErrorInventarioException::reservaNoEncontrada();
             }
+
+            $this->exigirComercioDeSesion(
+                (int) DB::table('existencias')->where('id_existencia', $reserva->id_existencia)->value('id_comercio')
+            );
 
             $estado = (int) $reserva->id_estado_reserva;
 

@@ -40,6 +40,12 @@ class Comercio extends Model
         return $this->estado === self::ACTIVO;
     }
 
+    public function activar(): void
+    {
+        $this->estado = self::ACTIVO;
+        $this->save();
+    }
+
     public function estaPendiente(): bool
     {
         return $this->estado === self::PENDIENTE;

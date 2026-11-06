@@ -48,11 +48,11 @@ class IntegracionesTest extends TestCase
         $this->assertSame('CRC', $producto->moneda);
     }
 
-    public function test_catalogo_deja_nulo_el_precio_hasta_cuando_todas_las_variaciones_cuestan_igual(): void
+    public function test_catalogo_iguala_el_precio_hasta_al_precio_cuando_todas_las_variaciones_cuestan_igual(): void
     {
-        $resultado = app(CatalogoClient::class)->buscarProductos(new CriterioBusquedaDTO(termino: 'sombrero'));
+        $producto = app(CatalogoClient::class)->buscarProductos(new CriterioBusquedaDTO(termino: 'sombrero'))->productos[0];
 
-        $this->assertNull($resultado->productos[0]->precioHasta);
+        $this->assertSame($producto->precio, $producto->precioHasta);
     }
 
     public function test_catalogo_envia_a_m3_el_filtro_por_categoria_y_la_paginacion(): void

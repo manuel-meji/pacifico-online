@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\M2_Comercios\ConsultasComerciosController as Consultas;
 use App\Http\Controllers\M2_Comercios\MicrositiosController as Micrositios;
+use App\Http\Controllers\M2_Comercios\SolicitudesController as Solicitudes;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -52,5 +53,23 @@ Route::prefix('api/m2/v1')
                 ->whereNumber('idComercio')->name('comercios.micrositio.contactos');
             Route::put('comercios/{idComercio}/micrositio/politicas', [Micrositios::class, 'guardarPoliticas'])
                 ->whereNumber('idComercio')->name('comercios.micrositio.politicas');
+        });
+
+        // --- CU-0012 a CU-0016 y CU-0022: esqueleto de solicitudes (Jorge) ---
+        Route::post('solicitudes', [Solicitudes::class, 'registrar'])
+            ->middleware('throttle:10,1')->name('solicitudes.registrar');
+
+        Route::middleware('auth:sanctum')->group(function (): void {
+            Route::put('solicitudes/{idSolicitud}', [Solicitudes::class, 'corregir'])
+                ->whereNumber('idSolicitud')->name('solicitudes.corregir');
+            Route::get('solicitudes', [Solicitudes::class, 'listar'])->name('solicitudes.listar');
+            Route::get('solicitudes/{idSolicitud}', [Solicitudes::class, 'consultar'])
+                ->whereNumber('idSolicitud')->name('solicitudes.consultar');
+            Route::post('solicitudes/{idSolicitud}/aprobar', [Solicitudes::class, 'aprobar'])
+                ->whereNumber('idSolicitud')->name('solicitudes.aprobar');
+            Route::post('solicitudes/{idSolicitud}/rechazar', [Solicitudes::class, 'rechazar'])
+                ->whereNumber('idSolicitud')->name('solicitudes.rechazar');
+            Route::post('solicitudes/{idSolicitud}/documentos/{idDocumento}/evaluar', [Solicitudes::class, 'evaluarDocumento'])
+                ->whereNumber(['idSolicitud', 'idDocumento'])->name('solicitudes.documentos.evaluar');
         });
     });
