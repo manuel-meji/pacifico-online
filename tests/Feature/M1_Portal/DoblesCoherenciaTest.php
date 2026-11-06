@@ -15,7 +15,9 @@ use App\Services\M1_Portal\Dobles\DatosPrueba;
 use App\Services\M1_Portal\Dobles\ErrorProveedorException;
 use App\Services\M1_Portal\Dobles\InventarioStub;
 use App\Services\M1_Portal\PortalService;
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Services\M2_Comercios\ComerciosService;
+use App\Services\M2_Comercios\Dobles\ComerciosDobleBase;
 use Tests\Doubles\M1\CarritoNoDisponible;
 use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\CatalogoRelacionadosNoDisponible;
@@ -55,6 +57,32 @@ class DoblesCoherenciaTest extends TestCase
     public function test_los_dobles_no_afectan_a_los_demas_modulos(): void
     {
         $this->assertInstanceOf(ComerciosService::class, app(ComerciosServiceInterface::class));
+    }
+
+    public function test_el_stub_de_m2_extiende_la_base_y_no_simula_lo_que_m1_no_consume(): void
+    {
+        $m2 = new ComerciosStub;
+
+        $this->assertInstanceOf(ComerciosDobleBase::class, $m2);
+
+        $noConsumidas = [
+            'obtenerComercioActivo' => fn () => $m2->obtenerComercioActivo(1),
+            'obtenerSedesComercio' => fn () => $m2->obtenerSedesComercio(1),
+            'obtenerPoliticasEnvio' => fn () => $m2->obtenerPoliticasEnvio(1),
+            'obtenerDatosFiscalesComercio' => fn () => $m2->obtenerDatosFiscalesComercio(1),
+            'obtenerComisionSubpedido' => fn () => $m2->obtenerComisionSubpedido(1),
+            'obtenerMicrositio' => fn () => $m2->obtenerMicrositio(1),
+            'registrarComision' => fn () => $m2->registrarComision(1, 10.0),
+        ];
+
+        foreach ($noConsumidas as $nombre => $operacion) {
+            try {
+                $operacion();
+                $this->fail("{$nombre} debía responder ERR-006.");
+            } catch (ErrorNucleoException $error) {
+                $this->assertSame('ERR-006', $error->codigo, $nombre);
+            }
+        }
     }
 
     public function test_el_fake_de_m5_conserva_su_estado_durante_la_peticion(): void
