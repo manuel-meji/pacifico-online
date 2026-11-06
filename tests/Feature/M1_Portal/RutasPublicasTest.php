@@ -7,14 +7,13 @@ use App\Contracts\M1_Portal\Exceptions\RecursoNoEncontradoException;
 use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Services\M1_Portal\Dobles\DatosPrueba;
 use Mockery\MockInterface;
-use Tests\TestCase;
 
 /**
  * Rutas públicas de M1 en /api/m1/v1 (búsqueda, ficha y categorías) con un
  * mock de PortalPublicoContract: validación de entrada y formato de error del
  * núcleo.
  */
-class RutasPublicasTest extends TestCase
+class RutasPublicasTest extends PruebaM1
 {
     private const RESULTADO_VACIO = ['pagina' => 1, 'por_pagina' => 20, 'total_resultados' => 0, 'productos' => []];
 

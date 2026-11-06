@@ -29,14 +29,13 @@ use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionProperty;
-use Tests\TestCase;
 
 /**
  * Tarea 19: cada proveedor pasa del doble al servicio real solo con
  * config/integraciones.php. Tarea 20: los listeners de los eventos de M2 y M4
  * actualizan la caché del portal (x-eventos-consumidos del contrato).
  */
-class EventosYModoRealTest extends TestCase
+class EventosYModoRealTest extends PruebaM1
 {
     // ---------------------------------------------------------------
     // Tarea 19: dobles y servicios reales

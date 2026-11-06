@@ -14,6 +14,7 @@ export function Encabezado({ pantalla, onIr }) {
         <nav aria-label="Cuenta" className="flex items-center gap-4">
           {enlace('crear', 'Crea tu cuenta')}
           {enlace('ingresar', 'Inicia sesión')}
+          {enlace('perfil', 'Mi cuenta')}
         </nav>
       </div>
     </header>

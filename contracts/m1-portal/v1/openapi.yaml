@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: M1 Portal público y búsqueda — Contrato del módulo
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Contrato formal del módulo M1 Portal público y búsqueda de Pacíficos Online
     (IF6100, II Ciclo 2026, subgrupo SG1).
@@ -392,10 +392,14 @@ paths:
         Desde 1.1.0: M1 coordina el registro dentro de una misma transacción.
         Solicita al núcleo compartido la creación de la cuenta de acceso con rol
         Cliente (ServicioIdentidad::crearCuenta), recibe el id_usuario y crea el registro en clientes con ese
-        id_usuario. La dirección enviada en direccion_envio se guarda como la
-        dirección principal en direcciones_cliente. Ningún módulo escribe
+        id_usuario. Ningún módulo escribe
         directamente en la tabla de usuarios del núcleo. Si cualquier paso falla,
         no queda ni la cuenta ni el cliente.
+
+        Desde 1.2.0: el cuerpo trae la cédula (obligatoria y única) y la
+        dirección de envío desglosada en el objeto direccion, con los campos de
+        direcciones_cliente. Esa dirección se guarda como la dirección
+        principal del cliente, en la misma transacción.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-14, RN-M1-15]
       x-dependencias: [Nucleo.ServicioIdentidad::crearCuenta]
@@ -417,6 +421,32 @@ paths:
           $ref: '#/components/responses/CorreoDuplicado'
         '422':
           $ref: '#/components/responses/DatosInvalidos'
+
+  /clientes/sesion:
+    get:
+      tags: [Clientes]
+      operationId: obtenerClienteSesion
+      summary: Obtener el cliente de la persona con sesión
+      description: |
+        Nuevo en 1.2.0. Devuelve los datos de la persona compradora que tiene
+        la sesión abierta. El frontend la usa para conocer su id_cliente, que
+        el núcleo no entrega en /api/user. Si la cuenta no pertenece a un
+        cliente (por ejemplo, una cuenta de comercio), responde ERR-003.
+      x-consumidores: [Frontend del portal]
+      x-reglas: [RN-M1-16]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Datos del cliente con sesión.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/ClienteNoAccesible'
 
   /clientes/{id_cliente}:
     parameters:
@@ -450,18 +480,24 @@ paths:
                 $ref: '#/components/schemas/Cliente'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/ClienteNoEncontrado'
+          $ref: '#/components/responses/ClienteNoAccesible'
     put:
       tags: [Clientes]
       operationId: actualizarCliente
       summary: Actualizar cliente
       description: |
         Reemplaza los datos de la persona compradora. Solo la propia persona puede
-        modificarlos (RN-M1-16) y solo M1 los modifica (RN-M1-15). El campo
-        direccion_envio actualiza la dirección principal del cliente.
+        modificarlos (RN-M1-16) y solo M1 los modifica (RN-M1-15).
+
+        Desde 1.2.0 esta operación no modifica direcciones: la dirección
+        principal y las demás se cambian con las operaciones de Direcciones.
+        La cédula no se cambia desde aquí.
+
+        Temporal en 1.2.0: el correo no se puede cambiar (422 ERR-005 con
+        detalle en correo_electronico) hasta que el núcleo ofrezca
+        actualizarCorreo, porque el inicio de sesión usa el correo de la
+        cuenta del núcleo. Se acepta el mismo correo con otras mayúsculas.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-14, RN-M1-15, RN-M1-16]
       security:
@@ -481,10 +517,8 @@ paths:
                 $ref: '#/components/schemas/ClienteId'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/ClienteNoEncontrado'
+          $ref: '#/components/responses/ClienteNoAccesible'
         '409':
           $ref: '#/components/responses/CorreoDuplicado'
         '422':
@@ -518,10 +552,8 @@ paths:
                   $ref: '#/components/schemas/DireccionCliente'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/ClienteNoEncontrado'
+          $ref: '#/components/responses/ClienteNoAccesible'
     post:
       tags: [Direcciones]
       operationId: agregarDireccionCliente
@@ -549,10 +581,8 @@ paths:
                 $ref: '#/components/schemas/DireccionCliente'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/ClienteNoEncontrado'
+          $ref: '#/components/responses/ClienteNoAccesible'
         '422':
           $ref: '#/components/responses/DatosInvalidos'
 
@@ -564,7 +594,15 @@ paths:
       tags: [Direcciones]
       operationId: actualizarDireccionCliente
       summary: Actualizar una dirección de envío
-      description: Nuevo en 1.1.0. Reemplaza los datos de una dirección del propio cliente.
+      description: |
+        Nuevo en 1.1.0. Reemplaza los datos de una dirección del propio cliente.
+        El alias no puede repetirse para el mismo cliente. Marcarla como
+        principal desmarca la anterior.
+
+        Desde 1.2.0 la dirección principal no se puede desmarcar directamente
+        (422 con detalle en es_principal): se cambia marcando otra como
+        principal. Así el cliente siempre tiene una dirección principal y el
+        direccion_envio que leen M5 y M6 nunca queda vacío.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-15, RN-M1-16]
       security:
@@ -584,10 +622,14 @@ paths:
                 $ref: '#/components/schemas/DireccionCliente'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/RecursoNoEncontrado'
+          description: |
+            ERR-003 si el cliente no es la persona con sesión (RN-M1-16), o
+            ERR-004 si la dirección no existe o no pertenece a ese cliente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '422':
           $ref: '#/components/responses/DatosInvalidos'
 
@@ -942,49 +984,72 @@ components:
           $ref: '#/components/schemas/ResultadoBusqueda'
 
     DatosCliente:
+      description: |
+        Datos de la persona compradora que se envían al actualizar. Desde
+        1.2.0 los largos coinciden con la tabla clientes (nombre 80,
+        apellidos 120) y direccion_envio ya no forma parte de la entrada.
       type: object
-      required: [nombre, apellidos, correo_electronico, telefono, direccion_envio]
+      required: [nombre, apellidos, correo_electronico, telefono]
       properties:
         nombre:
           type: string
-          maxLength: 100
+          maxLength: 80
         apellidos:
           type: string
-          maxLength: 150
+          maxLength: 120
         correo_electronico:
           type: string
           format: email
           maxLength: 150
         telefono:
           type: string
+          minLength: 1
           maxLength: 20
-        direccion_envio:
-          type: string
-          maxLength: 300
-          description: |
-            Dirección principal del cliente en texto, tal como la usan M5 y M6
-            desde la versión 1.0.0. Desde 1.1.0 corresponde a la dirección
-            marcada como principal en direcciones_cliente; para elegir otra
-            dirección, usar las operaciones de Direcciones.
+          description: Obligatorio desde 1.2.0; no puede quedar en blanco.
 
     RegistroCliente:
-      description: Nuevo en 1.1.0. Datos para el autorregistro; incluye la contraseña de la cuenta que crea el núcleo.
+      description: |
+        Nuevo en 1.1.0. Datos para el autorregistro; incluye la contraseña de
+        la cuenta que crea el núcleo. Desde 1.2.0 incluye la cédula y la
+        dirección principal desglosada (objeto direccion).
       allOf:
         - $ref: '#/components/schemas/DatosCliente'
         - type: object
-          required: [contrasena]
+          required: [cedula, contrasena, direccion]
           properties:
+            cedula:
+              type: string
+              minLength: 1
+              maxLength: 20
+              description: Nuevo en 1.2.0. Obligatoria y única (clientes.cedula).
             contrasena:
               type: string
               format: password
               minLength: 8
               writeOnly: true
-              description: Se entrega al núcleo para crear la cuenta; M1 no la guarda.
+              description: Se entrega al núcleo para crear la cuenta; M1 no la guarda. Mínimo 8 caracteres, la misma regla de ServicioIdentidad::crearCuenta.
+            direccion:
+              description: Nuevo en 1.2.0. Se guarda como la dirección principal del cliente; es_principal se ignora.
+              allOf:
+                - $ref: '#/components/schemas/DatosDireccionCliente'
 
     Cliente:
       allOf:
         - $ref: '#/components/schemas/ClienteId'
         - $ref: '#/components/schemas/DatosCliente'
+        - type: object
+          required: [direccion_envio]
+          properties:
+            direccion_envio:
+              type: string
+              readOnly: true
+              description: |
+                Dirección principal del cliente en texto, tal como la usan M5 y
+                M6 desde la versión 1.0.0. No se guarda: se arma con la
+                dirección marcada como principal en direcciones_cliente (otras
+                señas, distrito, cantón, provincia), o es una cadena vacía si
+                el cliente no tiene direcciones. Desde 1.2.0 solo es de salida;
+                para cambiarla, usar las operaciones de Direcciones.
 
     ClienteId:
       type: object
@@ -1093,8 +1158,13 @@ components:
               codigo: ERR-001
               mensaje: Tu sesión expiró, inicia sesión de nuevo.
               detalles: null
-    AccesoDenegado:
-      description: Solo en las rutas web. La persona con sesión intenta ver o editar los datos de otro cliente (RN-M1-16).
+    ClienteNoAccesible:
+      description: |
+        Solo en las rutas web. El cliente pedido no es la persona con sesión,
+        o la cuenta con sesión no pertenece a ningún cliente (RN-M1-16,
+        RNF-M1-08). Desde 1.2.0 responde 404 con ERR-003, igual que el
+        aislamiento del núcleo, y no revela si ese cliente existe. En 1.1.0 se
+        documentaba como 403.
       content:
         application/json:
           schema:
@@ -1217,9 +1287,10 @@ x-interfaz-php:
       - firma: "obtenerMicrositio(int $idComercio, int $pagina = 1, int $porPagina = 20): array"
         excepciones: [RecursoNoEncontradoException, DependenciaNoDisponibleException]
       - firma: "registrarCliente(array $datos): int"
-        notas: $datos sigue el esquema RegistroCliente. La contraseña se entrega al núcleo y M1 no la guarda.
+        notas: $datos sigue el esquema RegistroCliente (desde 1.2.0 con cedula y direccion). La contraseña se entrega al núcleo y M1 no la guarda.
         excepciones: [CorreoYaRegistradoException, DatosInvalidosException]
       - firma: "actualizarCliente(int $idCliente, array $datos): int"
+        notas: $datos sigue el esquema DatosCliente. Desde 1.2.0 no modifica direcciones ni la cédula.
         excepciones: [ClienteNoEncontradoException, CorreoYaRegistradoException, DatosInvalidosException]
       - firma: "agregarDireccionCliente(int $idCliente, array $datos): array"
         excepciones: [ClienteNoEncontradoException, DatosInvalidosException]
@@ -1300,3 +1371,22 @@ x-historial-versiones:
       interfaz PHP, que no cambia. Por eso se publica como versión menor. Si el
       Comité considera que deben tratarse como cambios que rompen, se renombra
       esta versión como 2.0.0 sin modificar su contenido.
+  - version: 1.2.0
+    cambios:
+      - Largos de DatosCliente alineados con la tabla clientes (nombre 80, apellidos 120).
+      - Teléfono del cliente obligatorio y no vacío.
+      - RegistroCliente agrega cedula (obligatoria, única, máximo 20) y direccion (DatosDireccionCliente), que se guarda como la dirección principal.
+      - direccion_envio sale de la entrada (DatosCliente) y queda solo en la salida (Cliente), calculada a partir de la dirección principal (tercera forma normal; no se guarda en texto).
+      - actualizarCliente ya no modifica direcciones; se usan las operaciones de Direcciones.
+      - Nueva ruta web GET /clientes/sesion (obtenerClienteSesion) con los datos de la persona con sesión.
+      - RN-M1-16 responde 404 ERR-003 (respuesta ClienteNoAccesible) en lugar de 403, alineado con la tabla de errores del núcleo (ERR-003 = 404) y sin revelar si el cliente existe.
+      - Temporal - el correo del cliente no se puede cambiar hasta que el núcleo ofrezca actualizarCorreo.
+      - actualizarDireccionCliente no permite desmarcar la dirección principal; se cambia marcando otra.
+    nota_de_compatibilidad: |
+      Sin cambios en las firmas de la interfaz PHP. El esquema Cliente que
+      reciben M5 y M6 por obtenerCliente conserva los mismos campos
+      (id_cliente, nombre, apellidos, correo_electronico, telefono,
+      direccion_envio); solo se acotan los largos y telefono deja de venir
+      vacío, lo que no afecta a quien lo lee. Los cambios de entrada solo
+      afectan a POST y PUT /clientes, cuyo único consumidor es el frontend
+      del propio M1. Por eso se publica como versión menor.

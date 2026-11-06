@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Encabezado } from './components/componentes';
-import { correoDuplicado, credencialesIncorrectas, registroExitoso } from './services/datosMock';
+import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
+import { registrarCliente } from './services/m1Api';
 import CrearCuentaView from './views/CrearCuentaView';
 import FichaComercioView from './views/FichaComercioView';
 import IniciarSesionView from './views/IniciarSesionView';
 import InicioView from './views/InicioView';
+import PerfilView from './views/PerfilView';
 import FichaProductoView from './views/FichaProductoView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
@@ -14,6 +16,7 @@ const titulos = {
   inicio: 'Pacíficos Online · Inicio',
   ingresar: 'Pacíficos Online · M1 Iniciar sesión',
   crear: 'Pacíficos Online · M1 Crear cuenta',
+  perfil: 'Pacíficos Online · M1 Mi cuenta',
 };
 
 
@@ -48,11 +51,14 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
     if (titulos[pantalla]) document.title = titulos[pantalla];
   }, [pantalla]);
 
-  // Doble de POST /api/m1/v1/clientes (registrarCliente). Se sustituye por la llamada real cuando el módulo esté desplegado.
-  async function registrar() {
-    await esperar();
-    if (simular === 'correo') return { ok: false, ...correoDuplicado };
-    return { ok: true, ...registroExitoso };
+  // POST /api/m1/v1/clientes (registrarCliente) contra el backend real. Con ?simular=correo se muestra,
+  // sin backend, la respuesta 409 ERR-M1-001 (correo ya registrado) para el recorrido del prototipo.
+  async function registrar(datos) {
+    if (simular === 'correo') {
+      await esperar();
+      return { ok: false, ...correoDuplicado };
+    }
+    return registrarCliente(datos);
   }
 
   // Doble del ingreso del núcleo compartido (su contrato todavía no está publicado).
@@ -80,7 +86,7 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
     );
   }
 
-  if (pantalla !== 'ingresar' && pantalla !== 'crear') {
+  if (pantalla !== 'ingresar' && pantalla !== 'crear' && pantalla !== 'perfil') {
     return <FichaComercioView idComercio={7} simular={simular} />;
   }
 
@@ -101,6 +107,10 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
           onRegistrar={registrar}
           onIrIngresar={() => navegar('ingresar')}
         />
+      )}
+
+      {pantalla === 'perfil' && (
+        <PerfilView onIrIngresar={() => navegar('ingresar')} />
       )}
     </div>
   );

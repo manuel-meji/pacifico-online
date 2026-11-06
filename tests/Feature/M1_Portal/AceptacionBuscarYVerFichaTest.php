@@ -9,14 +9,13 @@ use Illuminate\Testing\TestResponse;
 use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\ConfiguracionMenuEnMemoria;
 use Tests\Doubles\M1\RegistroBusquedasEnMemoria;
-use Tests\TestCase;
 
 /**
  * Prueba de aceptación de los pasos 1 y 2 del recorrido transversal (tarea 25):
  * buscar un producto y abrir su ficha. Va de la ruta a la fachada real, los
  * servicios de M1 y los dobles de M2, M3 y M4 de config/integraciones.php.
  */
-class AceptacionBuscarYVerFichaTest extends TestCase
+class AceptacionBuscarYVerFichaTest extends PruebaM1
 {
     /** Esquema ProductoResumen del contrato. */
     private const PRODUCTO_RESUMEN = [

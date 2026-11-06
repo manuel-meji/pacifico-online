@@ -39,12 +39,27 @@ Pantallas de ingreso y autorregistro del cliente. El registro respeta el esquema
 | `views/CrearCuentaView.jsx` | Nombre, apellidos, correo, teléfono, dirección de envío, contraseña y confirmación (no se envía), con los límites de `RegistroCliente` |
 | `components/componentes.jsx` | Encabezado, migas de pan, campo con ícono, avisos y botón principal de estas pantallas |
 | `components/Logo.jsx` | Logotipo (`assets/logo-pacificos.png`) con el nombre al lado |
-| `services/datosMock.js` | Respuestas simuladas: registro exitoso, ERR-M1-001 y credenciales incorrectas |
+| `services/datosMock.js` | Respuestas simuladas: ERR-M1-001 y credenciales incorrectas |
+| `services/m1Api.js` | Cliente HTTP de `/api/m1/v1` con el token CSRF de Sanctum; hoy expone `registrarCliente` |
 
 Se abren con `m1.html?pantalla=ingresar` o `m1.html?pantalla=crear` (en los archivos de doble clic, `window.PANTALLA_M1`).
 Sin `pantalla` se muestra la ficha de comercio.
 
 Simular: `?pantalla=crear&simular=correo` (409 ERR-M1-001, correo ya registrado) y `?pantalla=ingresar&simular=credenciales`.
 
-Pendiente: cambiar `registrar` e `ingresar` de `M1App.jsx` por las llamadas reales cuando existan el backend de M1
-y el contrato de ingreso del núcleo.
+Crear cuenta llama a `POST /api/m1/v1/clientes` real (contrato 1.2.0: cédula y dirección principal desglosada).
+Necesita el backend encendido (`php artisan serve`) y `npm run dev`, que pasa `/api` y `/sanctum` al backend.
+La ruta admite 10 intentos por minuto.
+
+Mi cuenta (`?pantalla=perfil`, `views/PerfilView.jsx`) usa `GET /api/m1/v1/clientes/sesion` y
+`PUT /api/m1/v1/clientes/{id_cliente}`: muestra y actualiza nombre, apellidos y teléfono de la persona con sesión
+(RN-M1-16). El correo se muestra bloqueado hasta que el núcleo ofrezca `actualizarCorreo`. Sin sesión muestra el
+aviso y el botón Ingresar.
+
+Debajo, la sección Direcciones de envío (`components/DireccionesSeccion.jsx`) usa
+`GET/POST /api/m1/v1/clientes/{id_cliente}/direcciones` y `PUT .../direcciones/{id_direccion_cliente}`: lista las
+direcciones (la principal primero), permite agregar, editar y marcar otra como principal. La principal no se
+desmarca directamente. Los campos y su validación están en `services/camposDireccion.js`, compartidos con el registro.
+
+Pendiente: cambiar `ingresar` de `M1App.jsx` por la llamada real cuando exista el contrato de ingreso del núcleo;
+hasta entonces Mi cuenta solo funciona con una sesión abierta por otro medio (por ejemplo, `POST /login`).

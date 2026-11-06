@@ -21,7 +21,6 @@ use Tests\Doubles\M1\CarritoNoDisponible;
 use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\ComerciosNoDisponible;
 use Tests\Doubles\M1\InventarioNoDisponible;
-use Tests\TestCase;
 
 /**
  * Adaptadores de M1 (Vista 2 y 3 del PC3) contra los dobles de M2, M3, M4 y M5:
@@ -29,7 +28,7 @@ use Tests\TestCase;
  * excepciones del contrato de M1 y respetan el tiempo máximo (RNF-M1-04) y la
  * caché (RNF-M1-06). Son las pruebas de contrato de M1 como consumidor.
  */
-class IntegracionesTest extends TestCase
+class IntegracionesTest extends PruebaM1
 {
     // ---------------------------------------------------------------
     // CatalogoClient (M3)

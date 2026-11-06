@@ -23,7 +23,6 @@ use App\Services\M1_Portal\DTO\VariacionDTO;
 use App\Services\M1_Portal\PortalPublicoService;
 use ReflectionMethod;
 use Symfony\Component\Yaml\Yaml;
-use Tests\TestCase;
 
 /**
  * La fachada PortalPublicoService delega en el servicio de cada caso de uso y
@@ -31,7 +30,7 @@ use Tests\TestCase;
  * los casos de uso los hacen otros integrantes de SG1; aquí se reemplazan por
  * servicios de prueba enlazados con el nombre de su clase.
  */
-class PortalPublicoServiceTest extends TestCase
+class PortalPublicoServiceTest extends PruebaM1
 {
     /** @var array<string, mixed>|null */
     private static ?array $esquemas = null;
@@ -273,9 +272,14 @@ class PortalPublicoServiceTest extends TestCase
             'correo_electronico' => '  nueva@example.com ',
             'cedula' => '5-0123-0456',
             'contrasena' => 'secreta123',
+            'direccion' => [...$this->datosDireccion(), 'es_principal' => false],
         ]);
 
         $this->assertSame(80, $id);
+        $this->assertTrue($servicio->direccionRegistrada->esPrincipal);
+        $this->assertNull($servicio->direccionRegistrada->idCliente);
+        $this->assertSame('Liberia', $servicio->direccionRegistrada->canton);
+        $this->assertSame('', $servicio->registrado->direccionEnvio);
         $this->assertSame('secreta123', $servicio->contrasena);
         $this->assertNull($servicio->registrado->idCliente);
         $this->assertSame('nueva@example.com', $servicio->registrado->correoElectronico);
@@ -299,7 +303,71 @@ class PortalPublicoServiceTest extends TestCase
                 'nombre' => 'Es obligatorio.',
                 'telefono' => 'No puede tener más de 20 caracteres.',
                 'correo_electronico' => 'No tiene un formato de correo válido.',
+                'cedula' => 'Es obligatorio.',
                 'contrasena' => 'Es obligatorio.',
+                'direccion' => 'Es obligatorio.',
+            ], $excepcion->detalles());
+        }
+    }
+
+    public function test_registrar_cliente_respeta_los_largos_de_la_tabla_clientes(): void
+    {
+        $this->enlazar(PortalPublicoService::SERVICIO_CLIENTE, $this->servicioCliente());
+
+        try {
+            app(PortalPublicoContract::class)->registrarCliente([
+                ...$this->datosCliente(),
+                'nombre' => str_repeat('a', 81),
+                'apellidos' => str_repeat('b', 121),
+                'cedula' => str_repeat('1', 21),
+                'contrasena' => 'secreta123',
+                'direccion' => $this->datosDireccion(),
+            ]);
+            $this->fail('Debió lanzar DatosInvalidosException.');
+        } catch (DatosInvalidosException $excepcion) {
+            $this->assertSame([
+                'nombre' => 'No puede tener más de 80 caracteres.',
+                'apellidos' => 'No puede tener más de 120 caracteres.',
+                'cedula' => 'No puede tener más de 20 caracteres.',
+            ], $excepcion->detalles());
+        }
+    }
+
+    public function test_registrar_cliente_acepta_los_largos_maximos_de_la_tabla(): void
+    {
+        $servicio = $this->servicioCliente();
+        $this->enlazar(PortalPublicoService::SERVICIO_CLIENTE, $servicio);
+
+        app(PortalPublicoContract::class)->registrarCliente([
+            ...$this->datosCliente(),
+            'nombre' => str_repeat('a', 80),
+            'apellidos' => str_repeat('b', 120),
+            'cedula' => str_repeat('1', 20),
+            'contrasena' => 'secreta123',
+            'direccion' => $this->datosDireccion(),
+        ]);
+
+        $this->assertSame(str_repeat('a', 80), $servicio->registrado->nombre);
+        $this->assertSame(str_repeat('1', 20), $servicio->registrado->cedula);
+    }
+
+    public function test_registrar_cliente_exige_telefono_y_contrasena_de_al_menos_8_caracteres(): void
+    {
+        $this->enlazar(PortalPublicoService::SERVICIO_CLIENTE, $this->servicioCliente());
+
+        try {
+            app(PortalPublicoContract::class)->registrarCliente([
+                ...$this->datosCliente(),
+                'telefono' => ' ',
+                'cedula' => '5-0123-0456',
+                'contrasena' => 'corta12',
+                'direccion' => $this->datosDireccion(),
+            ]);
+            $this->fail('Debió lanzar DatosInvalidosException.');
+        } catch (DatosInvalidosException $excepcion) {
+            $this->assertSame([
+                'telefono' => 'Es obligatorio.',
+                'contrasena' => 'Debe tener al menos 8 caracteres.',
             ], $excepcion->detalles());
         }
     }
@@ -315,6 +383,45 @@ class PortalPublicoServiceTest extends TestCase
         $this->assertSame('Ana María', $servicio->actualizado->nombre);
         $this->assertSame('5-0123-0456', $servicio->actualizado->cedula);
         $this->assertSame(5, $servicio->actualizado->idCliente);
+    }
+
+    public function test_actualizar_cliente_no_toca_la_direccion_principal(): void
+    {
+        $servicio = $this->servicioCliente();
+        $this->enlazar(PortalPublicoService::SERVICIO_CLIENTE, $servicio);
+
+        app(PortalPublicoContract::class)->actualizarCliente(5, [
+            ...$this->datosCliente(),
+            'direccion_envio' => 'Otra dirección que se ignora',
+        ]);
+
+        $this->assertSame('200 m norte del parque, Liberia, Liberia, Guanacaste', $servicio->actualizado->direccionEnvio);
+    }
+
+    public function test_registrar_cliente_valida_la_direccion_con_los_largos_y_formato_de_la_tabla(): void
+    {
+        $this->enlazar(PortalPublicoService::SERVICIO_CLIENTE, $this->servicioCliente());
+
+        try {
+            app(PortalPublicoContract::class)->registrarCliente([
+                ...$this->datosCliente(),
+                'cedula' => '5-0123-0456',
+                'contrasena' => 'secreta123',
+                'direccion' => [
+                    ...$this->datosDireccion(),
+                    'alias_direccion' => str_repeat('a', 41),
+                    'provincia' => ' ',
+                    'telefono_destinatario' => 'llamar al 8888',
+                ],
+            ]);
+            $this->fail('Debió lanzar DatosInvalidosException.');
+        } catch (DatosInvalidosException $excepcion) {
+            $this->assertSame([
+                'direccion.alias_direccion' => 'No puede tener más de 40 caracteres.',
+                'direccion.provincia' => 'Es obligatorio.',
+                'direccion.telefono_destinatario' => 'Solo admite dígitos, espacios, + y -.',
+            ], $excepcion->detalles());
+        }
     }
 
     public function test_agregar_y_actualizar_direccion_validan_y_devuelven_direccion_cliente(): void
@@ -390,13 +497,15 @@ class PortalPublicoServiceTest extends TestCase
 
             public ?ClienteDTO $actualizado = null;
 
+            public ?DireccionClienteDTO $direccionRegistrada = null;
+
             public function obtener(int $idCliente): ClienteDTO
             {
                 if ($idCliente !== 5) {
                     throw new ClienteNoEncontradoException;
                 }
 
-                return new ClienteDTO(5, 'Ana', 'Mora Rojas', 'ana@example.com', null, '5-0123-0456', '200 m norte del parque, Liberia, Liberia, Guanacaste');
+                return new ClienteDTO(5, 'Ana', 'Mora Rojas', 'ana@example.com', '8888-0000', '5-0123-0456', '200 m norte del parque, Liberia, Liberia, Guanacaste');
             }
 
             public function obtenerIdPorUsuario(int $idUsuario): int
@@ -404,9 +513,10 @@ class PortalPublicoServiceTest extends TestCase
                 return 5;
             }
 
-            public function registrar(ClienteDTO $cliente, string $contrasena): int
+            public function registrar(ClienteDTO $cliente, DireccionClienteDTO $direccion, string $contrasena): int
             {
                 $this->registrado = $cliente;
+                $this->direccionRegistrada = $direccion;
                 $this->contrasena = $contrasena;
 
                 return 80;
@@ -456,7 +566,6 @@ class PortalPublicoServiceTest extends TestCase
             'apellidos' => 'Mora Rojas',
             'correo_electronico' => 'ana@example.com',
             'telefono' => '8888-0000',
-            'direccion_envio' => '200 m norte del parque, Liberia, Liberia, Guanacaste',
         ];
     }
 

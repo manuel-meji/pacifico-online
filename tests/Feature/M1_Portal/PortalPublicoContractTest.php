@@ -22,7 +22,6 @@ use ReflectionParameter;
 use RuntimeException;
 use Symfony\Component\Yaml\Yaml;
 use Tests\Doubles\M1\PortalPublicoFake;
-use Tests\TestCase;
 
 /**
  * La interfaz PHP de M1 coincide con lo publicado en el contrato v1.1.0
@@ -30,7 +29,7 @@ use Tests\TestCase;
  * llevan los códigos del contrato y el doble que usan M5, M6 y el núcleo se
  * comporta como el contrato describe.
  */
-class PortalPublicoContractTest extends TestCase
+class PortalPublicoContractTest extends PruebaM1
 {
     public function test_la_interfaz_tiene_exactamente_los_metodos_publicados_en_el_contrato(): void
     {
@@ -170,8 +169,49 @@ class PortalPublicoContractTest extends TestCase
             'nombre' => 'Otra',
             'apellidos' => 'Persona',
             'correo_electronico' => 'ANA.MORA@example.com',
+            'telefono' => '8888-0099',
+            'cedula' => '1-1111-1111',
             'contrasena' => 'secreta123',
+            'direccion' => [
+                'alias_direccion' => 'Casa',
+                'nombre_destinatario' => 'Otra Persona',
+                'telefono_destinatario' => '8888-0099',
+                'provincia' => 'Guanacaste',
+                'canton' => 'Liberia',
+                'distrito' => 'Liberia',
+                'otras_senas' => 'Frente a la escuela',
+            ],
         ]);
+    }
+
+    public function test_el_registro_guarda_la_direccion_como_principal_y_m5_m6_la_ven_en_direccion_envio(): void
+    {
+        $fake = new PortalPublicoFake;
+
+        $idCliente = $fake->registrarCliente([
+            'nombre' => 'Marta',
+            'apellidos' => 'Solano Ruiz',
+            'correo_electronico' => 'marta.solano@example.com',
+            'telefono' => '8888-0100',
+            'cedula' => '2-2222-2222',
+            'contrasena' => 'secreta123',
+            'direccion' => [
+                'alias_direccion' => 'Casa',
+                'nombre_destinatario' => 'Marta Solano',
+                'telefono_destinatario' => '8888-0100',
+                'provincia' => 'Guanacaste',
+                'canton' => 'Nicoya',
+                'distrito' => 'Nicoya',
+                'otras_senas' => '100 m sur de la iglesia',
+                'es_principal' => false,
+            ],
+        ]);
+
+        $direcciones = $fake->listarDireccionesCliente($idCliente);
+
+        $this->assertCount(1, $direcciones);
+        $this->assertTrue($direcciones[0]['es_principal']);
+        $this->assertSame('100 m sur de la iglesia, Nicoya, Nicoya, Guanacaste', $fake->obtenerCliente($idCliente)['direccion_envio']);
     }
 
     public function test_una_direccion_nueva_principal_deja_de_lado_la_anterior(): void

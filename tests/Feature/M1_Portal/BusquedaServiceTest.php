@@ -24,13 +24,12 @@ use Tests\Doubles\M1\ConfiguracionMenuEnMemoria;
 use Tests\Doubles\M1\InventarioNoDisponible;
 use Tests\Doubles\M1\RegistroBusquedasEnMemoria;
 use Tests\Doubles\M1\RegistroBusquedasQueFalla;
-use Tests\TestCase;
 
 /**
  * CU-002 Buscar productos y menú de categorías (BusquedaService) contra los
  * dobles de M2, M3 y M4, con el registro de búsquedas y categorias_portal en memoria.
  */
-class BusquedaServiceTest extends TestCase
+class BusquedaServiceTest extends PruebaM1
 {
     private RegistroBusquedasEnMemoria $registro;
 

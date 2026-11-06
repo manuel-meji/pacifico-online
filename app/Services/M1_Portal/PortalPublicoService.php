@@ -44,28 +44,49 @@ class PortalPublicoService implements PortalPublicoContract
     public const SERVICIO_CLIENTE = ClienteService::class;
 
     /**
-     * Campos y largo máximo del esquema DatosCliente.
+     * Campos obligatorios y largo máximo de DatosCliente (contrato 1.2.0),
+     * iguales a las columnas de la tabla clientes. El teléfono es obligatorio.
+     * direccion_envio ya no es de entrada: sale calculada de la dirección
+     * principal (tercera forma normal).
      */
     private const CAMPOS_CLIENTE = [
-        'nombre' => 100,
-        'apellidos' => 150,
+        'nombre' => 80,
+        'apellidos' => 120,
         'correo_electronico' => 150,
         'telefono' => 20,
-        'direccion_envio' => 300,
     ];
 
     /**
-     * Campos obligatorios del esquema DatosDireccionCliente.
+     * Largo máximo de clientes.cedula. La cédula es obligatoria al registrarse
+     * y única en la tabla.
+     */
+    private const LARGO_CEDULA = 20;
+
+    /**
+     * Largo mínimo de la contraseña; es la misma regla que aplica el núcleo en
+     * ServicioIdentidad::crearCuenta para el rol Cliente (min:8).
+     */
+    private const LARGO_MINIMO_CONTRASENA = 8;
+
+    /**
+     * Campos obligatorios y largo máximo de DatosDireccionCliente, iguales a
+     * las columnas de la tabla direcciones_cliente.
      */
     private const CAMPOS_DIRECCION = [
-        'alias_direccion',
-        'nombre_destinatario',
-        'telefono_destinatario',
-        'provincia',
-        'canton',
-        'distrito',
-        'otras_senas',
+        'alias_direccion' => 40,
+        'nombre_destinatario' => 150,
+        'telefono_destinatario' => 20,
+        'provincia' => 40,
+        'canton' => 60,
+        'distrito' => 60,
+        'otras_senas' => 300,
     ];
+
+    /**
+     * Formato de direcciones_cliente.telefono_destinatario
+     * (chk_direcciones_cliente_telefono).
+     */
+    private const FORMATO_TELEFONO_DESTINATARIO = '/^[0-9 +-]+$/';
 
     public function __construct(private Container $contenedor) {}
 
@@ -97,29 +118,56 @@ class PortalPublicoService implements PortalPublicoContract
     }
 
     /**
-     * $datos sigue el esquema RegistroCliente. La cédula no está en el
-     * contrato, pero la tabla clientes la pide: si viene en $datos se pasa
-     * al servicio tal cual.
+     * $datos sigue el esquema RegistroCliente (contrato 1.2.0): los datos del
+     * cliente, la cédula (obligatoria, única, máximo 20), la contraseña y la
+     * dirección desglosada en 'direccion', que se guarda como la principal.
+     * Los errores de la dirección se informan como 'direccion.<campo>'.
      */
     public function registrarCliente(array $datos): int
     {
         $errores = $this->validarCliente($datos);
 
-        if (! is_string($datos['contrasena'] ?? null) || $datos['contrasena'] === '') {
+        $cedula = $datos['cedula'] ?? null;
+
+        if (! is_string($cedula) || trim($cedula) === '') {
+            $errores['cedula'] = 'Es obligatorio.';
+        } elseif (mb_strlen(trim($cedula)) > self::LARGO_CEDULA) {
+            $errores['cedula'] = 'No puede tener más de '.self::LARGO_CEDULA.' caracteres.';
+        }
+
+        $contrasena = $datos['contrasena'] ?? null;
+
+        if (! is_string($contrasena) || $contrasena === '') {
             $errores['contrasena'] = 'Es obligatorio.';
+        } elseif (mb_strlen($contrasena) < self::LARGO_MINIMO_CONTRASENA) {
+            $errores['contrasena'] = 'Debe tener al menos '.self::LARGO_MINIMO_CONTRASENA.' caracteres.';
+        }
+
+        $direccion = $datos['direccion'] ?? null;
+
+        if (! is_array($direccion)) {
+            $errores['direccion'] = 'Es obligatorio.';
+        } else {
+            // La dirección del registro siempre queda como principal.
+            unset($direccion['es_principal']);
+
+            foreach ($this->validarDireccion($direccion) as $campo => $mensaje) {
+                $errores["direccion.{$campo}"] = $mensaje;
+            }
         }
 
         $this->rechazarSiHayErrores($errores);
 
         return $this->servicio(self::SERVICIO_CLIENTE)->registrar(
-            $this->clienteDTO(null, $datos, (string) ($datos['cedula'] ?? '')),
-            $datos['contrasena'],
+            $this->clienteDTO(null, $datos, trim($cedula)),
+            $this->direccionDTO(null, null, $direccion, esPrincipal: true),
+            $contrasena,
         );
     }
 
     /**
-     * $datos sigue el esquema DatosCliente. La cédula no se cambia desde aquí:
-     * se conserva la que el cliente ya tiene.
+     * $datos sigue el esquema DatosCliente. No cambia la cédula ni las
+     * direcciones (contrato 1.2.0): se conservan las que el cliente ya tiene.
      */
     public function actualizarCliente(int $idCliente, array $datos): int
     {
@@ -128,7 +176,10 @@ class PortalPublicoService implements PortalPublicoContract
         $servicio = $this->servicio(self::SERVICIO_CLIENTE);
         $actual = $servicio->obtener($idCliente);
 
-        return $servicio->actualizar($idCliente, $this->clienteDTO($idCliente, $datos, $actual->cedula));
+        return $servicio->actualizar(
+            $idCliente,
+            $this->clienteDTO($idCliente, $datos, $actual->cedula, $actual->direccionEnvio),
+        );
     }
 
     public function agregarDireccionCliente(int $idCliente, array $datos): array
@@ -311,7 +362,7 @@ class PortalPublicoService implements PortalPublicoContract
             'nombre' => $cliente->nombre,
             'apellidos' => $cliente->apellidos,
             'correo_electronico' => $cliente->correoElectronico,
-            'telefono' => $cliente->telefono ?? '',
+            'telefono' => $cliente->telefono,
             'direccion_envio' => $cliente->direccionEnvio,
         ];
     }
@@ -426,7 +477,7 @@ class PortalPublicoService implements PortalPublicoContract
     /**
      * @param  array<string, mixed>  $datos
      */
-    private function clienteDTO(?int $idCliente, array $datos, string $cedula): ClienteDTO
+    private function clienteDTO(?int $idCliente, array $datos, string $cedula, string $direccionEnvio = ''): ClienteDTO
     {
         return new ClienteDTO(
             idCliente: $idCliente,
@@ -435,14 +486,14 @@ class PortalPublicoService implements PortalPublicoContract
             correoElectronico: trim($datos['correo_electronico']),
             telefono: trim($datos['telefono']),
             cedula: $cedula,
-            direccionEnvio: trim($datos['direccion_envio']),
+            direccionEnvio: $direccionEnvio,
         );
     }
 
     /**
      * @param  array<string, mixed>  $datos
      */
-    private function direccionDTO(?int $idDireccionCliente, int $idCliente, array $datos): DireccionClienteDTO
+    private function direccionDTO(?int $idDireccionCliente, ?int $idCliente, array $datos, ?bool $esPrincipal = null): DireccionClienteDTO
     {
         return new DireccionClienteDTO(
             idDireccionCliente: $idDireccionCliente,
@@ -454,7 +505,7 @@ class PortalPublicoService implements PortalPublicoContract
             canton: trim($datos['canton']),
             distrito: trim($datos['distrito']),
             otrasSenas: trim($datos['otras_senas']),
-            esPrincipal: (bool) ($datos['es_principal'] ?? false),
+            esPrincipal: $esPrincipal ?? (bool) ($datos['es_principal'] ?? false),
         );
     }
 
@@ -495,12 +546,19 @@ class PortalPublicoService implements PortalPublicoContract
     {
         $errores = [];
 
-        foreach (self::CAMPOS_DIRECCION as $campo) {
+        foreach (self::CAMPOS_DIRECCION as $campo => $maximo) {
             $valor = $datos[$campo] ?? null;
 
             if (! is_string($valor) || trim($valor) === '') {
                 $errores[$campo] = 'Es obligatorio.';
+            } elseif (mb_strlen(trim($valor)) > $maximo) {
+                $errores[$campo] = "No puede tener más de {$maximo} caracteres.";
             }
+        }
+
+        if (! isset($errores['telefono_destinatario'])
+            && preg_match(self::FORMATO_TELEFONO_DESTINATARIO, trim($datos['telefono_destinatario'])) !== 1) {
+            $errores['telefono_destinatario'] = 'Solo admite dígitos, espacios, + y -.';
         }
 
         if (array_key_exists('es_principal', $datos) && ! is_bool($datos['es_principal'])) {
