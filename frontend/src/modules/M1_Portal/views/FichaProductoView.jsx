@@ -1,4 +1,12 @@
 
+// Variación de ejemplo mientras la ficha use datos fijos: la 1 existe en el doble
+// de catálogo de M5. Reemplazar por el id_variacion de M3 cuando la ficha reciba
+// el producto real.
+const ID_VARIACION_EJEMPLO = 1;
+
+// M5 agrega al carrito desde un enlace: /app.html?agregar=<id_variacion>&cantidad=<n>
+const urlAgregarAlCarrito = (idVariacion, cantidad = 1) => `/app.html?agregar=${idVariacion}&cantidad=${cantidad}`;
+
 export default function FichaProductoView() {
   return (
     <div className="min-h-screen bg-brandLightBg font-sans text-gray-800 antialiased">
@@ -59,7 +67,7 @@ export default function FichaProductoView() {
               Mi Cuenta
             </span>
           </a>
-          <a href="#" className="flex items-center space-x-1 hover:text-brandBlue transition relative">
+          <a href="/app.html" className="flex items-center space-x-1 hover:text-brandBlue transition relative">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"></path>
             </svg>
@@ -142,12 +150,12 @@ export default function FichaProductoView() {
         Disponible en inventario
       </p>
 
-      <button
-        type="button"
-        className="w-full rounded-lg bg-brandGreen px-6 py-3 font-bold text-white"
+      <a
+        href={urlAgregarAlCarrito(ID_VARIACION_EJEMPLO)}
+        className="w-full block text-center rounded-lg bg-brandGreen px-6 py-3 font-bold text-white"
       >
         Agregar al carrito
-      </button>
+      </a>
     </div>
 
   </section>
