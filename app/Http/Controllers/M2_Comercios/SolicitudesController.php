@@ -87,12 +87,96 @@ class SolicitudesController extends Controller
     }
 
     public function registrar(Request $request): JsonResponse
-    {
-        return response()->json(['mensaje' => 'Pendiente de implementar'], 501);
-    }
+{
+    $datos = $request->validate([
+        'nombre_comercial' => ['required', 'string'],
+        'cedula_juridica' => [
+            'required',
+            'string',
+            'regex:/^[0-9]-[0-9]{3}-[0-9]{6}$/',
+            'unique:comercios,cedula_juridica',
+        ],
+        'razon_social' => ['required', 'string'],
+        'direccion_fiscal' => ['required', 'string'],
+        'inscrito_como_contribuyente' => ['required', 'boolean'],
 
-    public function corregir(int $idSolicitud, Request $request): JsonResponse
-    {
-        return response()->json(['mensaje' => 'Pendiente de implementar'], 501);
-    }
+        'nombre_encargado' => ['required', 'string'],
+        'correo_encargado' => ['required', 'email'],
+        'telefono_encargado' => ['nullable', 'string'],
+
+        'documentos' => ['sometimes', 'array'],
+        'documentos.*.archivo' => [
+            'required',
+            'file',
+            'mimes:pdf,jpg,png',
+            'max:5120',
+        ],
+        'documentos.*.tipo' => ['required', 'string'],
+        'documentos.*.fecha_vencimiento' => [
+            'required',
+            'date',
+            'after:today',
+        ],
+    ]);
+
+    $documentos = $datos['documentos'] ?? [];
+    unset($datos['documentos']);
+
+    $solicitud = $this->comercios->registrarSolicitud(
+        $datos,
+        $documentos,
+    );
+
+    return response()->json($solicitud->only([
+        'id_solicitud',
+        'id_comercio',
+        'nombre_encargado',
+        'correo_encargado',
+        'telefono_encargado',
+        'estado',
+        'requiere_documentos',
+        'motivo_rechazo',
+        'fecha_reenvio',
+        'created_at',
+        'updated_at',
+    ]));
+}
+
+public function corregir(int $idSolicitud, Request $request): JsonResponse
+{
+    $datos = $request->validate([
+        'cedula_juridica' => [
+            'required',
+            'string',
+            'regex:/^[0-9]-[0-9]{3}-[0-9]{6}$/',
+        ],
+        'correo_encargado' => ['required', 'email'],
+
+        'nombre_comercial' => ['sometimes', 'string'],
+        'razon_social' => ['sometimes', 'string'],
+        'direccion_fiscal' => ['sometimes', 'string'],
+        'inscrito_como_contribuyente' => ['sometimes', 'boolean'],
+        'nombre_encargado' => ['sometimes', 'string'],
+        'telefono_encargado' => ['sometimes', 'nullable', 'string'],
+    ]);
+
+    $solicitud = $this->comercios->corregirSolicitud(
+        $idSolicitud,
+        $datos,
+    );
+
+    return response()->json($solicitud->only([
+        'id_solicitud',
+        'id_comercio',
+        'nombre_encargado',
+        'correo_encargado',
+        'telefono_encargado',
+        'estado',
+        'requiere_documentos',
+        'motivo_rechazo',
+        'fecha_reenvio',
+        'created_at',
+        'updated_at',
+    ]));
+}
 }
