@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Ban, Check, CircleX, CreditCard, History, LoaderCircle, MapPin, Package, RefreshCw, Store, Truck,
+  ArrowLeft, Ban, Check, CircleX, CreditCard, History, LoaderCircle, MapPin, Minus, Package, RefreshCw, Store, Truck,
 } from 'lucide-react';
+import { nombreComercio, nombreVariacion } from '../services/nombres';
 import { Alerta, Boton, Encabezado, Total } from '../components/componentes';
 import PasarelaPagoSimulada, { esPasarelaSimulada } from '../components/PasarelaPagoSimulada';
 import { colones } from '../services/calculos';
@@ -35,30 +36,50 @@ function motivoNoCancelable(pedido) {
   return null;
 }
 
-function LineaEstados({ estado }) {
+// Pasos que el subpedido saltó según el historial (Subpedido permite pagado → despachado sin en_preparacion).
+// Solo se marca omitido si el historial trae filas de este subpedido y ninguna pasa por en_preparacion.
+function pasosOmitidos(subpedido, historial) {
+  if (!['despachado', 'entregado'].includes(normalizar(subpedido.estado_subpedido))) return [];
+  const propios = historial.filter((h) => Number(h.id_subpedido) === Number(subpedido.id_subpedido));
+  if (propios.length === 0) return [];
+  const pasoPorPreparacion = propios.some(
+    (h) => normalizar(h.estado) === 'en_preparacion' || normalizar(h.estado_anterior) === 'en_preparacion',
+  );
+  return pasoPorPreparacion ? [] : ['en_preparacion'];
+}
+
+function LineaEstados({ estado, omitidos = [] }) {
   const actual = indicePaso(estado);
   return (
     <ol className="grid grid-cols-5 gap-1" aria-label="Avance del subpedido">
       {PASOS.map((paso, i) => {
-        const hecho = actual >= 0 && i < actual;
+        const omitido = omitidos.includes(paso) && i < actual;
+        const hecho = !omitido && actual >= 0 && i < actual;
         const esActual = i === actual;
+        const lineaVerde = i <= actual && !omitido;
         return (
           <li key={paso} aria-current={esActual ? 'step' : undefined} className="flex flex-col items-center text-center gap-1 min-w-0">
             <span className="relative w-full flex justify-center">
               {i > 0 && (
-                <span aria-hidden="true" className={`absolute top-1/2 right-1/2 w-full h-0.5 -translate-y-1/2 ${i <= actual ? 'bg-brandGreen' : 'bg-gray-200'}`} />
+                <span aria-hidden="true" className={`absolute top-1/2 right-1/2 w-full h-0.5 -translate-y-1/2 ${lineaVerde ? 'bg-brandGreen' : 'bg-gray-200'}`} />
               )}
               <span className={`relative z-10 h-7 w-7 rounded-full flex items-center justify-center border-2 ${
-                hecho ? 'bg-brandGreen border-brandGreen text-white'
-                  : esActual ? 'bg-white border-brandDarkBlue text-brandDarkBlue ring-4 ring-blue-100'
-                    : 'bg-white border-gray-200 text-gray-300'
+                omitido ? 'bg-gray-100 border-gray-300 text-gray-400'
+                  : hecho ? 'bg-brandGreen border-brandGreen text-white'
+                    : esActual ? 'bg-white border-brandDarkBlue text-brandDarkBlue ring-4 ring-blue-100'
+                      : 'bg-white border-gray-200 text-gray-300'
               }`}>
-                {hecho ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <span className="text-xs font-bold">{i + 1}</span>}
+                {omitido ? <Minus className="w-3.5 h-3.5" aria-hidden="true" />
+                  : hecho ? <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                    : <span className="text-xs font-bold">{i + 1}</span>}
               </span>
             </span>
-            <span className={`text-[11px] leading-tight break-words ${esActual ? 'font-bold text-brandDarkBlue' : hecho ? 'text-gray-700' : 'text-gray-400'}`}>
+            <span className={`text-[11px] leading-tight break-words ${
+              esActual ? 'font-bold text-brandDarkBlue' : omitido ? 'text-gray-400' : hecho ? 'text-gray-700' : 'text-gray-400'
+            }`}>
               {etiquetaEstado(paso)}
               {esActual && <span className="sr-only"> (estado actual)</span>}
+              {omitido && <span className="sr-only"> (paso omitido)</span>}
             </span>
           </li>
         );
@@ -67,7 +88,7 @@ function LineaEstados({ estado }) {
   );
 }
 
-function TarjetaSubpedido({ subpedido, numero }) {
+function TarjetaSubpedido({ subpedido, numero, historial }) {
   const cancelado = normalizar(subpedido.estado_subpedido) === 'cancelado';
   const lineas = subpedido.lineas ?? [];
   return (
@@ -75,7 +96,7 @@ function TarjetaSubpedido({ subpedido, numero }) {
       <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
         <div className="flex items-center gap-2 min-w-0">
           <Store className="w-4 h-4 shrink-0 text-brandDarkBlue" aria-hidden="true" />
-          <h3 className="text-sm sm:text-base font-bold text-gray-900 truncate">Comercio #{subpedido.id_comercio}</h3>
+          <h3 className="text-sm sm:text-base font-bold text-gray-900 truncate">{nombreComercio(subpedido)}</h3>
         </div>
         <span className="shrink-0 text-xs font-semibold text-gray-500">Subpedido {numero} · #{subpedido.id_subpedido}</span>
       </div>
@@ -85,7 +106,7 @@ function TarjetaSubpedido({ subpedido, numero }) {
           <CircleX className="w-4 h-4 shrink-0" aria-hidden="true" /> Subpedido cancelado
         </p>
       ) : (
-        <LineaEstados estado={subpedido.estado_subpedido} />
+        <LineaEstados estado={subpedido.estado_subpedido} omitidos={pasosOmitidos(subpedido, historial)} />
       )}
 
       {subpedido.guia_seguimiento && (
@@ -105,7 +126,7 @@ function TarjetaSubpedido({ subpedido, numero }) {
                 <Package className="w-5 h-5 stroke-1 text-gray-400" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-gray-900">{l.nombre ?? `Variación #${l.id_variacion}`}</p>
+                <p className="font-semibold text-gray-900">{nombreVariacion(l)}</p>
                 <p className="text-gray-500">{l.cantidad} × {colones(precio)}</p>
               </div>
               <p className="shrink-0 font-bold text-gray-900">{colones(precio * Number(l.cantidad ?? 0))}</p>
@@ -368,7 +389,7 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
         {/* Subpedidos */}
         <div className="space-y-4">
           <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Subpedidos por comercio</h2>
-          {subpedidos.map((s, n) => <TarjetaSubpedido key={s.id_subpedido} subpedido={s} numero={n + 1} />)}
+          {subpedidos.map((s, n) => <TarjetaSubpedido key={s.id_subpedido} subpedido={s} numero={n + 1} historial={historial} />)}
         </div>
 
         {/* Historial de estados */}
