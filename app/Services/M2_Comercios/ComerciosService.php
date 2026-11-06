@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Models\M2_Comercios\SolicitudComercio;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Crypt;
 
 /**
  * Fachada de M2 (patrón Facade, sección 7 del PC3): implementa las 8 operaciones
@@ -936,6 +937,123 @@ public function gestionarGaleria(int $idComercio, array $galeria): array
         });
     }
 
+    // --- CU-0012 y CU-0013: solicitud de incorporación
+public function registrarSolicitud(array $datos, array $documentos): SolicitudComercio
+{
+    return DB::transaction(function () use ($datos, $documentos): SolicitudComercio {
+        if (Comercio::query()
+            ->where('cedula_juridica', $datos['cedula_juridica'])
+            ->exists()) {
+            $this->exigirValidos([
+                'cedula_juridica' => ['Ya existe un comercio con esta cédula jurídica.'],
+            ]);
+        }
+
+        $comercio = Comercio::create([
+            'nombre_comercial' => $datos['nombre_comercial'],
+            'cedula_juridica' => $datos['cedula_juridica'],
+            'razon_social' => $datos['razon_social'],
+            'direccion_fiscal' => $datos['direccion_fiscal'],
+            'inscrito_como_contribuyente' => $datos['inscrito_como_contribuyente'],
+            'estado' => Comercio::PENDIENTE,
+        ]);
+
+        $solicitud = SolicitudComercio::create([
+            'id_comercio' => $comercio->id_comercio,
+            'nombre_encargado' => $datos['nombre_encargado'],
+            'correo_encargado' => $datos['correo_encargado'],
+            'telefono_encargado' => $datos['telefono_encargado'] ?? null,
+            'estado' => SolicitudComercio::PENDIENTE,
+            'requiere_documentos' => $documentos !== [],
+            'motivo_rechazo' => null,
+            'fecha_reenvio' => null,
+        ]);
+
+        foreach ($documentos as $documento) {
+            /** @var UploadedFile $archivo */
+            $archivo = $documento['archivo'];
+
+            $cifrado = Crypt::encryptString($archivo->getContent());
+
+            $ruta = 'm2/documentos/'
+                .$comercio->id_comercio.'/'
+                .Str::uuid().'.enc';
+
+            Storage::disk('local')->put($ruta, $cifrado);
+
+            DocumentoComercio::create([
+                'id_comercio' => $comercio->id_comercio,
+                'tipo' => $documento['tipo'],
+                'ruta_cifrada' => $ruta,
+                'fecha_vencimiento' => $documento['fecha_vencimiento'],
+                'resultado' => 'pendiente',
+                'observacion' => null,
+            ]);
+        }
+
+        return $solicitud;
+    });
+}
+
+public function corregirSolicitud(int $idSolicitud, array $datos): SolicitudComercio
+{
+    return DB::transaction(function () use ($idSolicitud, $datos): SolicitudComercio {
+        $solicitud = SolicitudComercio::query()
+            ->lockForUpdate()
+            ->find($idSolicitud)
+            ?? throw $this->noEncontrado('La solicitud no existe.');
+
+        $comercio = $solicitud->comercio()
+            ->lockForUpdate()
+            ->first()
+            ?? throw $this->noEncontrado('La solicitud no existe.');
+
+        if (
+            $comercio->cedula_juridica !== $datos['cedula_juridica']
+            || mb_strtolower($solicitud->correo_encargado)
+                !== mb_strtolower($datos['correo_encargado'])
+        ) {
+            throw $this->noEncontrado('La solicitud no existe.');
+        }
+
+        if ($solicitud->estado !== SolicitudComercio::RECHAZADA) {
+            $this->exigirValidos([
+                'estado' => ['Solo se puede corregir una solicitud rechazada.'],
+            ]);
+        }
+
+        foreach (
+            [
+                'nombre_comercial',
+                'razon_social',
+                'direccion_fiscal',
+                'inscrito_como_contribuyente',
+            ] as $campo
+        ) {
+            if (array_key_exists($campo, $datos)) {
+                $comercio->{$campo} = $datos[$campo];
+            }
+        }
+
+        $comercio->estado = Comercio::PENDIENTE;
+        $comercio->save();
+
+        if (array_key_exists('nombre_encargado', $datos)) {
+            $solicitud->nombre_encargado = $datos['nombre_encargado'];
+        }
+
+        if (array_key_exists('telefono_encargado', $datos)) {
+            $solicitud->telefono_encargado = $datos['telefono_encargado'];
+        }
+
+        $solicitud->estado = SolicitudComercio::PENDIENTE;
+        $solicitud->motivo_rechazo = null;
+        $solicitud->fecha_reenvio = now();
+        $solicitud->save();
+
+        return $solicitud;
+    });
+}
     private function noEncontrado(string $mensaje): ErrorNucleoException
     {
         return ErrorNucleoException::paraModulo(self::MODULO, 'ERR-004', 404, $mensaje);
