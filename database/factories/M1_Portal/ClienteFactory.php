@@ -3,7 +3,7 @@
 namespace Database\Factories\M1_Portal;
 
 use App\Models\M1_Portal\Cliente;
-use App\Models\User;
+use Database\Factories\UsuarioFactory;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -21,7 +21,7 @@ class ClienteFactory extends Factory
     public function definition(): array
     {
         return [
-            'id_usuario' => User::factory(),
+            'id_usuario' => UsuarioFactory::new(),
             'cedula' => fake()->unique()->numerify('#-####-####'),
             'nombre' => fake()->firstName(),
             'apellidos' => fake()->lastName().' '.fake()->lastName(),
