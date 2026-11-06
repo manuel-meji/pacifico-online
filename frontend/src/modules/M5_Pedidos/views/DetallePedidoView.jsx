@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Ban, Check, CircleX, History, LoaderCircle, MapPin, Package, RefreshCw, Store, Truck,
+  ArrowLeft, Ban, Check, CircleX, CreditCard, History, LoaderCircle, MapPin, Package, RefreshCw, Store, Truck,
 } from 'lucide-react';
 import { Alerta, Boton, Encabezado, Total } from '../components/componentes';
+import PasarelaPagoSimulada, { esPasarelaSimulada } from '../components/PasarelaPagoSimulada';
 import { colones } from '../services/calculos';
 import { etiquetaEstado, formatearFecha } from '../services/estados';
 import { cancelarPedido, obtenerPedido } from '../services/m5Api';
@@ -21,6 +22,9 @@ const indicePaso = (estado) => {
 
 // RN-M5-05: no se cancela el pedido completo si algún subpedido ya avanzó a estos estados.
 const ESTADOS_NO_CANCELABLES = ['en_preparacion', 'despachado', 'entregado'];
+
+// Solo se puede pagar un pedido pendiente de pago ('confirmado' es el respaldo del servicio).
+const ESTADOS_PAGABLES = ['pendiente', 'confirmado'];
 
 function motivoNoCancelable(pedido) {
   if (normalizar(pedido.estado_pedido) === 'cancelado') return 'Este pedido ya fue cancelado.';
@@ -215,8 +219,9 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [cancelando, setCancelando] = useState(false);
   const [errorCancelar, setErrorCancelar] = useState(null);
-  const [exito, setExito] = useState(null);
+  const [exito, setExito] = useState(null); // { titulo, texto }
   const cancelandoRef = useRef(false);
+  const [pasarelaAbierta, setPasarelaAbierta] = useState(false);
 
   useEffect(() => {
     let vigente = true;
@@ -230,6 +235,24 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
   }, [idPedido, intento]);
 
   const cerrarModal = useCallback(() => setModalAbierto(false), []);
+  const cerrarPasarela = useCallback(() => setPasarelaAbierta(false), []);
+
+  // Misma regla que en PedidoPendienteView: sin URL o con la del doble de M6 se usa la pasarela simulada.
+  function abrirPago() {
+    const url = pedido?.urlPasarelaPago ?? pedido?.url_pasarela_pago;
+    setExito(null);
+    if (esPasarelaSimulada(url)) {
+      setPasarelaAbierta(true);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  function alPagar() {
+    setPasarelaAbierta(false);
+    setExito({ titulo: 'Pago confirmado', texto: `El pago del pedido #${idPedido} se registró correctamente.` });
+    setIntento((n) => n + 1); // Recarga el detalle: pedido y subpedidos quedan en Pagado.
+  }
 
   async function confirmarCancelacion(motivo) {
     if (cancelandoRef.current) return;
@@ -239,7 +262,7 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
     try {
       await cancelarPedido(idPedido, { motivo, requiere_reembolso: normalizar(pedido?.estado_pedido) === 'pagado' });
       setModalAbierto(false);
-      setExito('El pedido se canceló correctamente.');
+      setExito({ titulo: 'Pedido cancelado', texto: 'El pedido se canceló correctamente.' });
       setIntento((n) => n + 1); // Recarga el detalle desde la API.
     } catch (e) {
       // 409 (ERR-M5-003): se muestra el mensaje de la API, que indica qué subpedido lo impide.
@@ -290,12 +313,13 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
   const historial = [...(pedido.estados ?? pedido.historial_estados ?? [])]
     .sort((a, b) => new Date(a.fecha_estado ?? a.created_at ?? 0) - new Date(b.fecha_estado ?? b.created_at ?? 0));
   const bloqueo = motivoNoCancelable(pedido);
+  const pagable = ESTADOS_PAGABLES.includes(normalizar(pedido.estado_pedido));
 
   return (
     <>
       {encabezado}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {exito && <Alerta tipo="exito" titulo="Pedido cancelado">{exito}</Alerta>}
+        {exito && <Alerta tipo="exito" titulo={exito.titulo}>{exito.texto}</Alerta>}
 
         {/* Encabezado del pedido y desglose */}
         <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-5 sm:p-6 space-y-4">
@@ -325,11 +349,18 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
           </dl>
 
           <div className="pt-3 border-t border-gray-100 space-y-2">
-            <Boton variante="peligro" icono={Ban} disabled={Boolean(bloqueo) || cargando}
-              aria-describedby={bloqueo ? 'cancelar-bloqueo' : undefined}
-              onClick={() => { setErrorCancelar(null); setExito(null); setModalAbierto(true); }}>
-              Cancelar pedido
-            </Boton>
+            <div className="flex flex-col sm:flex-row gap-2">
+              {pagable && (
+                <Boton icono={CreditCard} disabled={cargando} onClick={abrirPago}>
+                  Pagar pedido
+                </Boton>
+              )}
+              <Boton variante="peligro" icono={Ban} disabled={Boolean(bloqueo) || cargando}
+                aria-describedby={bloqueo ? 'cancelar-bloqueo' : undefined}
+                onClick={() => { setErrorCancelar(null); setExito(null); setModalAbierto(true); }}>
+                Cancelar pedido
+              </Boton>
+            </div>
             {bloqueo && <p id="cancelar-bloqueo" className="text-xs text-gray-600">{bloqueo}</p>}
           </div>
         </section>
@@ -374,6 +405,13 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
         error={errorCancelar}
         onConfirmar={confirmarCancelacion}
         onCerrar={cerrarModal}
+      />
+
+      <PasarelaPagoSimulada
+        abierto={pasarelaAbierta}
+        pedido={pedido}
+        onCerrar={cerrarPasarela}
+        onPagado={alPagar}
       />
     </>
   );
