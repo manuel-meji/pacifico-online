@@ -1,4 +1,4 @@
-import { ClipboardList, Clock, ExternalLink, ShoppingCart, Store } from 'lucide-react';
+import { ClipboardList, Clock, ExternalLink, MapPin, ShoppingCart, Store } from 'lucide-react';
 import { Alerta, Boton, Encabezado, Total } from '../components/componentes';
 import { colones } from '../services/calculos';
 import { etiquetaEstado } from '../services/estados';
@@ -28,6 +28,13 @@ export default function PedidoPendientePage({ pedido, grupos = [], onSeguirCompr
               <Clock className="w-3.5 h-3.5 text-brandBlue" aria-hidden="true" /> {etiquetaEstado(pedido.estado_pedido)}
             </span>
           </div>
+
+          {pedido.direccion_envio_texto && (
+            <p className="flex items-start gap-2 text-xs sm:text-sm text-gray-700">
+              <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-brandBlue" aria-hidden="true" />
+              <span><span className="font-semibold">Dirección de envío: </span><span className="break-words">{pedido.direccion_envio_texto}</span></span>
+            </p>
+          )}
 
           <div className="pt-2 border-t border-gray-100">
             <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Subpedidos por comercio</p>

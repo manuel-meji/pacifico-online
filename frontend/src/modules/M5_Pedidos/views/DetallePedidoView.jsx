@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Ban, Check, CircleX, History, LoaderCircle, Package, RefreshCw, Store, Truck,
+  ArrowLeft, Ban, Check, CircleX, History, LoaderCircle, MapPin, Package, RefreshCw, Store, Truck,
 } from 'lucide-react';
 import { Alerta, Boton, Encabezado, Total } from '../components/componentes';
 import { colones } from '../services/calculos';
@@ -306,6 +306,13 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
             </div>
             <EtiquetaEstado estado={pedido.estado_pedido} />
           </div>
+
+          {pedido.direccion_envio_texto && (
+            <p className="flex items-start gap-2 text-xs sm:text-sm text-gray-700">
+              <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-brandBlue" aria-hidden="true" />
+              <span><span className="font-semibold">Dirección de envío: </span><span className="break-words">{pedido.direccion_envio_texto}</span></span>
+            </p>
+          )}
 
           <dl className="space-y-2 text-sm pt-3 border-t border-gray-100">
             <div className="flex justify-between text-gray-600"><dt>Subtotal</dt><dd className="font-semibold text-gray-900">{monto(pedido.subtotal)}</dd></div>

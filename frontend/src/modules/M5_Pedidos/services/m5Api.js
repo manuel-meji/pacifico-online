@@ -69,7 +69,11 @@ const json = (datos) => JSON.stringify(datos ?? {});
 export const obtenerCarrito = (idCliente = ID_CLIENTE_POR_DEFECTO) =>
   llamar(armarRuta('/carrito', idCliente));
 
-export const vaciarCarrito = (idCliente = ID_CLIENTE_POR_DEFECTO) =>
+// Respuesta: { id_cliente, direcciones: [{ id_direccion_cliente, texto_completo, es_principal, ... }] }.
+export const obtenerDirecciones = (idCliente = ID_CLIENTE_POR_DEFECTO) =>
+  llamar(armarRuta('/carrito/direcciones', idCliente));
+
+export const vaciarCarrito =(idCliente = ID_CLIENTE_POR_DEFECTO) =>
   llamar(armarRuta('/carrito', idCliente), { method: 'DELETE' });
 
 export const agregarItem = ({ id_variacion, cantidad = 1, id_reserva = null }, idCliente = ID_CLIENTE_POR_DEFECTO) =>
