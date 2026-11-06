@@ -3,6 +3,7 @@ import { ArrowRight, Check, LoaderCircle, MapPin, RefreshCw, Tag, Truck } from '
 import { Alerta, Boton, Campo, clasesInput, Encabezado, TarjetaComercio, Total } from '../components/componentes';
 import { colones, validarCheckout } from '../services/calculos';
 import { crearPedido, obtenerCarrito, obtenerDirecciones } from '../services/m5Api';
+import { guardarMetodoPago } from '../components/PasarelaPagoSimulada';
 
 // Medios de pago de CrearPedidoRequest (contrato M5): el backend los lee como `metodoPago`.
 const METODOS_PAGO = [
@@ -108,9 +109,15 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
         nota: f.nota.trim() || null,
       });
       // La respuesta 201 no trae direccion_envio_texto; se completa con la dirección elegida.
+      // Tampoco trae el método de pago: se agrega y se recuerda para preseleccionarlo en la pasarela.
       const elegida = direcciones.find((d) => String(d.id_direccion_cliente) === f.idDireccion);
+      guardarMetodoPago(respuesta.id_pedido, f.metodoPago);
       onPedidoCreado(
-        { ...respuesta, direccion_envio_texto: respuesta.direccion_envio_texto ?? elegida?.texto_completo ?? null },
+        {
+          ...respuesta,
+          direccion_envio_texto: respuesta.direccion_envio_texto ?? elegida?.texto_completo ?? null,
+          metodoPago: respuesta.metodoPago ?? f.metodoPago,
+        },
         carrito?.grupos_comercio ?? [],
       );
     } catch (err) {

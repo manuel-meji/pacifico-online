@@ -17,26 +17,45 @@ const DOMINIO_PASARELA_SIMULADA = 'pago.pacificos.com';
 // true si no hay URL de pago o si es la del doble: en ese caso se usa este modal en vez del enlace.
 export const esPasarelaSimulada = (url) => !url || String(url).includes(DOMINIO_PASARELA_SIMULADA);
 
+// El backend no guarda el método de pago en el pedido; el checkout lo recuerda en el navegador
+// para preseleccionarlo aquí (también al pagar desde "Mis pedidos").
+const claveMetodo = (idPedido) => `m5.metodoPago.${idPedido}`;
+
+export function guardarMetodoPago(idPedido, metodo) {
+  if (!idPedido || !metodo) return;
+  try { localStorage.setItem(claveMetodo(idPedido), metodo); } catch { /* almacenamiento no disponible */ }
+}
+
+function leerMetodoGuardado(idPedido) {
+  try { return localStorage.getItem(claveMetodo(idPedido)); } catch { return null; }
+}
+
 function metodoInicial(pedido) {
-  const valor = String(pedido?.metodo_pago ?? pedido?.medio_pago ?? pedido?.metodoPago ?? '').toLowerCase();
+  const valor = String(
+    pedido?.metodo_pago ?? pedido?.medio_pago ?? pedido?.metodoPago ?? leerMetodoGuardado(pedido?.id_pedido) ?? '',
+  ).toLowerCase();
   return METODOS_PAGO.some((m) => m.valor === valor) ? valor : 'tarjeta';
 }
 
 // Pasarela de pago simulada de M6: confirma el pago con POST /api/m5/v1/pedidos/{id}/pago-confirmado.
 //   onPagado(respuesta) → el pago se registró (respuesta trae { estado: 'PAGADO', pedido }); el padre actualiza el pedido.
 //   onCerrar()          → el usuario canceló sin pagar.
-export default function PasarelaPagoSimulada({ abierto, pedido, onCerrar, onPagado }) {
+//   metodoPago          → método ya elegido en el checkout ('tarjeta' | 'sinpe' | 'paypal'). Si viene,
+//                         se muestra como texto fijo; si no (p. ej. desde el detalle), se muestra el selector.
+export default function PasarelaPagoSimulada({ abierto, pedido, metodoPago, onCerrar, onPagado }) {
+  const metodoFijo = METODOS_PAGO.find((m) => m.valor === String(metodoPago ?? '').toLowerCase()) ?? null;
   const [metodo, setMetodo] = useState('tarjeta');
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState(null);
   const procesandoRef = useRef(false); // Evita un segundo POST antes de que React deshabilite el botón.
   const primerCampoRef = useRef(null);
+  const pagarRef = useRef(null);
 
   useEffect(() => {
     if (!abierto) return;
     setMetodo(metodoInicial(pedido));
     setError(null);
-    primerCampoRef.current?.focus();
+    (primerCampoRef.current ?? pagarRef.current)?.focus();
   }, [abierto, pedido]);
 
   useEffect(() => {
@@ -91,28 +110,34 @@ export default function PasarelaPagoSimulada({ abierto, pedido, onCerrar, onPaga
           </div>
         </dl>
 
-        <fieldset disabled={procesando}>
-          <legend className="text-xs font-medium text-gray-600 mb-2">Método de pago</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {METODOS_PAGO.map((m, i) => (
-              <label key={m.valor}
-                className={`min-h-11 flex items-center justify-center gap-2 rounded-lg border px-2 text-sm font-semibold cursor-pointer transition ${
-                  metodo === m.valor ? 'border-brandBlue bg-blue-50 text-brandDarkBlue' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
-                }`}>
-                <input
-                  ref={i === 0 ? primerCampoRef : undefined}
-                  type="radio"
-                  name="metodo-pago-pasarela"
-                  value={m.valor}
-                  checked={metodo === m.valor}
-                  onChange={() => setMetodo(m.valor)}
-                  className="accent-brandBlue"
-                />
-                {m.etiqueta}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        {metodoFijo ? (
+          <p className="text-sm text-gray-700">
+            <span className="font-semibold">Método de pago: </span>{metodoFijo.etiqueta}
+          </p>
+        ) : (
+          <fieldset disabled={procesando}>
+            <legend className="text-xs font-medium text-gray-600 mb-2">Método de pago</legend>
+            <div className="grid grid-cols-3 gap-2">
+              {METODOS_PAGO.map((m, i) => (
+                <label key={m.valor}
+                  className={`min-h-11 flex items-center justify-center gap-2 rounded-lg border px-2 text-sm font-semibold cursor-pointer transition ${
+                    metodo === m.valor ? 'border-brandBlue bg-blue-50 text-brandDarkBlue' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}>
+                  <input
+                    ref={i === 0 ? primerCampoRef : undefined}
+                    type="radio"
+                    name="metodo-pago-pasarela"
+                    value={m.valor}
+                    checked={metodo === m.valor}
+                    onChange={() => setMetodo(m.valor)}
+                    className="accent-brandBlue"
+                  />
+                  {m.etiqueta}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         {error && <Alerta tipo="error" titulo="No se pudo confirmar el pago">{error}</Alerta>}
 
@@ -121,7 +146,7 @@ export default function PasarelaPagoSimulada({ abierto, pedido, onCerrar, onPaga
             className="min-h-11 px-5 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50">
             Cancelar
           </button>
-          <button type="submit" disabled={procesando}
+          <button ref={pagarRef} type="submit" disabled={procesando}
             className="min-h-11 px-5 rounded-lg bg-brandDarkBlue hover:bg-brandBlue text-white text-sm font-bold transition inline-flex items-center justify-center gap-2 disabled:opacity-70">
             {procesando ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Lock className="w-4 h-4" aria-hidden="true" />}
             {procesando ? 'Procesando…' : 'Pagar'}

@@ -143,6 +143,7 @@ export default function PedidoPendientePage({ pedido: pedidoInicial, grupos = []
       <PasarelaPagoSimulada
         abierto={pasarelaAbierta}
         pedido={pedido}
+        metodoPago={pedido.metodoPago}
         onCerrar={cerrarPasarela}
         onPagado={alPagar}
       />
