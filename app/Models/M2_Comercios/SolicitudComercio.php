@@ -33,6 +33,19 @@ class SolicitudComercio extends Model
         return $this->estado === self::PENDIENTE;
     }
 
+    public function rechazar(string $motivo): void
+    {
+        $this->estado = self::RECHAZADA;
+        $this->motivo_rechazo = $motivo;
+        $this->save();
+    }
+
+    public function aprobar(): void
+    {
+        $this->estado = self::APROBADA;
+        $this->save();
+    }
+
     public function comercio(): BelongsTo
     {
         return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');

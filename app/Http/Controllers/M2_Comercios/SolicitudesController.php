@@ -42,17 +42,48 @@ class SolicitudesController extends Controller
 
     public function aprobar(int $idSolicitud, Request $request): JsonResponse
     {
-        return response()->json(['mensaje' => 'Pendiente de implementar'], 501);
+        Gate::authorize('aprobar', new SolicitudComercio);
+
+        return response()->json($this->comercios->aprobarSolicitud($idSolicitud)->only([
+            'id_comercio', 'cedula_juridica', 'nombre_comercial', 'razon_social',
+            'direccion_fiscal', 'inscrito_como_contribuyente', 'estado', 'created_at', 'updated_at',
+        ]));
     }
 
     public function rechazar(int $idSolicitud, Request $request): JsonResponse
     {
-        return response()->json(['mensaje' => 'Pendiente de implementar'], 501);
+        Gate::authorize('rechazar', new SolicitudComercio);
+
+        $datos = $request->validate(['motivo' => ['required', 'string']]);
+        $solicitud = $this->comercios->rechazarSolicitud($idSolicitud, $datos['motivo']);
+
+        return response()->json($solicitud->only([
+            'id_solicitud', 'id_comercio', 'nombre_encargado', 'correo_encargado',
+            'telefono_encargado', 'estado', 'requiere_documentos', 'motivo_rechazo',
+            'fecha_reenvio', 'created_at', 'updated_at',
+        ]));
     }
 
     public function evaluarDocumento(int $idSolicitud, int $idDocumento, Request $request): JsonResponse
     {
-        return response()->json(['mensaje' => 'Pendiente de implementar'], 501);
+        Gate::authorize('evaluarDocumento', new SolicitudComercio);
+
+        $datos = $request->validate([
+            'resultado' => ['required', 'string', Rule::in(['valido', 'invalido'])],
+            'observacion' => ['nullable', 'string'],
+        ]);
+
+        $documento = $this->comercios->evaluarDocumento(
+            $idSolicitud,
+            $idDocumento,
+            $datos['resultado'],
+            $datos['observacion'] ?? null,
+        );
+
+        return response()->json($documento->only([
+            'id_documento_comercio', 'id_comercio', 'tipo', 'fecha_vencimiento',
+            'resultado', 'observacion', 'created_at', 'updated_at',
+        ]));
     }
 
     public function registrar(Request $request): JsonResponse

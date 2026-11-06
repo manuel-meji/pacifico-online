@@ -8,6 +8,8 @@ use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
 use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Contracts\Nucleo\ServicioIdentidadInterface;
+use App\Enums\Nucleo\RolUsuario;
+use App\Events\M2_Comercios\ComercioAprobado;
 use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\M2_Comercios\Comercio;
 use App\Models\M2_Comercios\ComisionComercio;
@@ -16,7 +18,9 @@ use App\Models\M2_Comercios\ContactoComercio;
 use App\Models\M2_Comercios\DocumentoComercio;
 use App\Models\M2_Comercios\PublicidadComercio;
 use App\Models\M2_Comercios\SolicitudComercio;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Fachada de M2 (patrón Facade, sección 7 del PC3): implementa las 8 operaciones
@@ -366,6 +370,110 @@ class ComerciosService implements ComerciosServiceInterface
         }
 
         return str_starts_with($ruta, 'http') ? $ruta : asset($ruta);
+    }
+
+    // --- CU-0022: verificar documentos comerciales (Jorge) ---
+
+    public function evaluarDocumento(int $idSolicitud, int $idDocumento, string $resultado, ?string $observacion): DocumentoComercio
+    {
+        $this->exigirValidos(in_array($resultado, ['valido', 'invalido'], true)
+            ? []
+            : ['resultado' => ['El resultado debe ser valido o invalido.']]);
+
+        $solicitud = SolicitudComercio::query()->find($idSolicitud)
+            ?? throw $this->noEncontrado('La solicitud no existe.');
+        $documento = $solicitud->documentos()->find($idDocumento)
+            ?? throw $this->noEncontrado('El documento no existe en el comercio de la solicitud.');
+
+        $documento->evaluar($resultado, $observacion);
+
+        return $documento;
+    }
+
+    // --- CU-0016: rechazar solicitud comercial (Jorge) ---
+
+    public function rechazarSolicitud(int $idSolicitud, string $motivo): SolicitudComercio
+    {
+        return DB::transaction(function () use ($idSolicitud, $motivo): SolicitudComercio {
+            $motivo = trim($motivo);
+            if ($motivo === '') {
+                $this->exigirValidos(['motivo' => ['El motivo de rechazo es obligatorio.']]);
+            }
+
+            $solicitud = SolicitudComercio::query()->lockForUpdate()->find($idSolicitud)
+                ?? throw $this->noEncontrado('La solicitud no existe.');
+
+            if (! $solicitud->estaPendiente()) {
+                $this->exigirValidos(['estado' => ['La solicitud ya fue revisada.']]);
+            }
+
+            $comercio = $solicitud->comercio()->lockForUpdate()->first()
+                ?? throw $this->noEncontrado('El comercio no existe.');
+
+            $solicitud->rechazar($motivo);
+            $comercio->estado = Comercio::RECHAZADO;
+            $comercio->save();
+
+            $this->nucleo->registrarAuditoria('rechazar_solicitud_comercio', 'solicitud_comercio', $solicitud->id_solicitud, [
+                'modulo' => 'M2',
+                'id_comercio' => $comercio->id_comercio,
+                'motivo' => $motivo,
+            ]);
+
+            return $solicitud;
+        });
+    }
+
+    // --- CU-0015: aprobar solicitud comercial (Jorge) ---
+
+    public function aprobarSolicitud(int $idSolicitud): Comercio
+    {
+        return DB::transaction(function () use ($idSolicitud): Comercio {
+            $solicitud = SolicitudComercio::query()->lockForUpdate()->find($idSolicitud)
+                ?? throw $this->noEncontrado('La solicitud no existe.');
+
+            if (! $solicitud->estaPendiente()) {
+                $this->exigirValidos(['estado' => ['La solicitud ya fue revisada.']]);
+            }
+
+            $comercio = $solicitud->comercio()->lockForUpdate()->first()
+                ?? throw $this->noEncontrado('El comercio no existe.');
+
+            $errores = [];
+            if (! $comercio->inscrito_como_contribuyente) {
+                $errores['inscrito_como_contribuyente'] = ['El comercio debe estar inscrito como contribuyente.'];
+            }
+            foreach (['cedula_juridica', 'razon_social', 'direccion_fiscal'] as $campo) {
+                if (trim((string) $comercio->{$campo}) === '') {
+                    $errores[$campo] = ['La información empresarial está incompleta.'];
+                }
+            }
+
+            if ($solicitud->requiere_documentos) {
+                $documentos = $solicitud->documentos()->lockForUpdate()->get();
+                $fecha = now();
+                if ($documentos->isEmpty() || $documentos->contains(fn (DocumentoComercio $documento): bool => ! $documento->esValido($fecha))) {
+                    $errores['documentos'] = ['Los documentos requeridos deben existir, estar validados y vigentes.'];
+                }
+            }
+            $this->exigirValidos($errores);
+
+            $solicitud->aprobar();
+            $comercio->activar();
+
+            $this->identidad->crearCuenta([
+                'nombre' => $solicitud->nombre_encargado,
+                'correo' => $solicitud->correo_encargado,
+            ], RolUsuario::EncargadoComercio, $comercio->id_comercio);
+
+            $this->nucleo->registrarAuditoria('aprobar_solicitud_comercio', 'solicitud_comercio', $solicitud->id_solicitud, [
+                'modulo' => 'M2', 'id_comercio' => $comercio->id_comercio,
+            ]);
+
+            ComercioAprobado::dispatch((string) Str::uuid(), now(), $comercio->id_comercio, $comercio->estado, $comercio->nombre_comercial);
+
+            return $comercio;
+        });
     }
 
     private function noEncontrado(string $mensaje): ErrorNucleoException

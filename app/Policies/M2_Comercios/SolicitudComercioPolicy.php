@@ -16,4 +16,19 @@ class SolicitudComercioPolicy
     {
         return $this->esEncargadoPlataforma($usuario);
     }
+
+    public function evaluarDocumento(Usuario $usuario, SolicitudComercio $solicitud): bool
+    {
+        return $this->esEncargadoPlataforma($usuario);
+    }
+
+    public function rechazar(Usuario $usuario, SolicitudComercio $solicitud): bool
+    {
+        return $this->esEncargadoPlataforma($usuario);
+    }
+
+    public function aprobar(Usuario $usuario, SolicitudComercio $solicitud): bool
+    {
+        return $this->esEncargadoPlataforma($usuario);
+    }
 }
