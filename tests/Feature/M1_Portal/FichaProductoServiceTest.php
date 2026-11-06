@@ -16,13 +16,12 @@ use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\CatalogoRelacionadosNoDisponible;
 use Tests\Doubles\M1\ComerciosNoDisponible;
 use Tests\Doubles\M1\InventarioNoDisponible;
-use Tests\TestCase;
 
 /**
  * CU-003 Consultar ficha de producto (FichaProductoService) contra los dobles
  * de M2, M3 y M4.
  */
-class FichaProductoServiceTest extends TestCase
+class FichaProductoServiceTest extends PruebaM1
 {
     // ---------------------------------------------------------------
     // Flujo básico y disponibilidad (RN-M1-04)

@@ -37,7 +37,7 @@ interface PortalPublicoContract
      * Datos de la persona compradora. Sin sesión de usuario; puede llamarse
      * desde procesos en segundo plano. Desde 1.0.0, sin cambios en 1.1.0.
      *
-     * @return array{id_cliente: int, nombre: string, apellidos: string, correo_electronico: string, telefono: string|null, direccion_envio: string} Esquema Cliente.
+     * @return array{id_cliente: int, nombre: string, apellidos: string, correo_electronico: string, telefono: string, direccion_envio: string} Esquema Cliente.
      *
      * @throws ClienteNoEncontradoException ERR-004.
      */
@@ -147,8 +147,10 @@ interface PortalPublicoContract
 
     /**
      * Registra a la persona compradora y crea su cuenta en el núcleo (POST
-     * /clientes). $datos sigue el esquema RegistroCliente; la contraseña se
-     * entrega al núcleo y M1 no la guarda.
+     * /clientes). $datos sigue el esquema RegistroCliente (1.2.0): datos del
+     * cliente, cedula, contrasena y la dirección desglosada en 'direccion',
+     * que se guarda como la principal. La contraseña se entrega al núcleo y
+     * M1 no la guarda.
      *
      * @param  array<string, mixed>  $datos
      * @return int id_cliente creado.
@@ -160,6 +162,7 @@ interface PortalPublicoContract
 
     /**
      * Actualiza los datos de la persona compradora (PUT /clientes/{id_cliente}).
+     * Desde 1.2.0 no cambia la cédula ni las direcciones.
      *
      * @param  array<string, mixed>  $datos  Esquema DatosCliente.
      * @return int id_cliente actualizado.

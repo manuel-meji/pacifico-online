@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $nombre
  * @property string $apellidos
  * @property string $correo_electronico
- * @property string|null $telefono
+ * @property string $telefono
  * @property string $estado_cliente
  */
 class Cliente extends Model

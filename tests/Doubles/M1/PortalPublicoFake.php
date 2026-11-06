@@ -71,7 +71,7 @@ class PortalPublicoFake implements PortalPublicoContract
                 'nombre' => 'Fulano',
                 'apellidos' => 'Castillo',
                 'correo_electronico' => 'fulano@example.com',
-                'telefono' => null,
+                'telefono' => '8888-0002',
             ],
             3 => [
                 'id_cliente' => 3,
@@ -157,6 +157,14 @@ class PortalPublicoFake implements PortalPublicoContract
         $this->validarDatosCliente($datos, exigirContrasena: true);
         $this->validarCorreoUnico($datos['correo_electronico']);
 
+        // Contrato 1.2.0: la dirección del registro se guarda como la principal.
+        if (! is_array($datos['direccion'] ?? null)) {
+            throw new DatosInvalidosException(['direccion' => 'Es obligatorio.']);
+        }
+
+        $direccion = [...$datos['direccion'], 'es_principal' => true];
+        $this->validarDatosDireccion($direccion);
+
         $idCliente = $this->siguienteIdCliente++;
 
         $this->clientes[$idCliente] = [
@@ -165,8 +173,10 @@ class PortalPublicoFake implements PortalPublicoContract
             'nombre' => $datos['nombre'],
             'apellidos' => $datos['apellidos'],
             'correo_electronico' => $datos['correo_electronico'],
-            'telefono' => $datos['telefono'] ?? null,
+            'telefono' => $datos['telefono'],
         ];
+
+        $this->guardarDireccion($this->siguienteIdDireccion++, $idCliente, $direccion);
 
         return $idCliente;
     }
@@ -185,7 +195,7 @@ class PortalPublicoFake implements PortalPublicoContract
             'nombre' => $datos['nombre'],
             'apellidos' => $datos['apellidos'],
             'correo_electronico' => $datos['correo_electronico'],
-            'telefono' => $datos['telefono'] ?? null,
+            'telefono' => $datos['telefono'],
         ];
 
         return $idCliente;
@@ -291,9 +301,20 @@ class PortalPublicoFake implements PortalPublicoContract
     {
         $errores = [];
 
-        foreach (['nombre', 'apellidos'] as $campo) {
+        // Mismos campos obligatorios y largos que la tabla clientes.
+        foreach (['nombre' => 80, 'apellidos' => 120, 'telefono' => 20] as $campo => $maximo) {
             if (! is_string($datos[$campo] ?? null) || trim($datos[$campo]) === '') {
                 $errores[$campo] = 'Es obligatorio.';
+            } elseif (mb_strlen(trim($datos[$campo])) > $maximo) {
+                $errores[$campo] = "No puede tener más de {$maximo} caracteres.";
+            }
+        }
+
+        if ($exigirContrasena) {
+            if (! is_string($datos['cedula'] ?? null) || trim($datos['cedula']) === '') {
+                $errores['cedula'] = 'Es obligatorio.';
+            } elseif (mb_strlen(trim($datos['cedula'])) > 20) {
+                $errores['cedula'] = 'No puede tener más de 20 caracteres.';
             }
         }
 

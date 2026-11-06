@@ -26,6 +26,7 @@ abstract class PortalPublicoException extends RuntimeException implements ErrorE
      * @var array<string, int>
      */
     private const CODIGOS_HTTP = [
+        'ERR-003' => 404,
         'ERR-004' => 404,
         'ERR-005' => 422,
         'ERR-006' => 503,

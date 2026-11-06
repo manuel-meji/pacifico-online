@@ -23,13 +23,12 @@ use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\CatalogoRelacionadosNoDisponible;
 use Tests\Doubles\M1\ComerciosNoDisponible;
 use Tests\Doubles\M1\InventarioNoDisponible;
-use Tests\TestCase;
 
 /**
  * Verifica que los dobles de M1 sean coherentes entre sí, se comporten según
  * los contratos de sus proveedores y se seleccionen desde config/integraciones.php.
  */
-class DoblesCoherenciaTest extends TestCase
+class DoblesCoherenciaTest extends PruebaM1
 {
     public function test_los_servicios_de_m1_reciben_los_dobles_por_defecto(): void
     {
