@@ -11,7 +11,15 @@ use App\Models\M2_Comercios\ComisionComercio;
 use App\Models\M2_Comercios\ComisionSubpedido;
 use App\Models\M2_Comercios\ContactoComercio;
 use App\Models\M2_Comercios\PublicidadComercio;
+use App\Models\M2_Comercios\BannerComercio;
+use App\Models\M2_Comercios\ImagenGaleriaComercio;
 use Illuminate\Support\Facades\Log;
+use App\Models\M2_Comercios\HorarioComercio;
+use App\Models\M2_Comercios\Micrositio;
+use App\Models\M2_Comercios\PoliticaComercio;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Fachada de M2 (patrón Facade, sección 7 del PC3): implementa las 8 operaciones
@@ -267,8 +275,452 @@ class ComerciosService implements ComerciosServiceInterface
         return false;
     }
 
-    // ------------------------------------------------------------------
+    // --- CU-0001 a CU-0007: edición del micrositio
+public function consultar(int $idComercio): array
+{
+    $comercio = Comercio::query()
+        ->with([
+            'micrositio',
+            'banners',
+            'galeria',
+            'horarios',
+            'contactos',
+            'politicas',
+        ])
+        ->find($idComercio);
 
+    if ($comercio === null) {
+        throw $this->noEncontrado('El comercio no existe.');
+    }
+
+    return [
+        'id_comercio' => $comercio->id_comercio,
+        'nombre_comercial' => $comercio->nombre_comercial,
+        'descripcion' => $comercio->micrositio?->descripcion,
+        'logotipo' => $comercio->micrositio?->logotipo,
+
+        'banners' => $comercio->banners
+            ->sortBy('orden')
+            ->values()
+            ->map(fn ($banner): array => [
+                'id_banner' => $banner->id_banner,
+                'ruta' => $banner->ruta,
+                'texto_alternativo' => $banner->texto_alternativo,
+                'orden' => $banner->orden,
+                'activo' => $banner->activo,
+            ])
+            ->all(),
+
+        'galeria' => $comercio->galeria
+            ->sortBy('orden')
+            ->values()
+            ->map(fn ($imagen): array => [
+                'id_imagen' => $imagen->id_imagen,
+                'ruta' => $imagen->ruta,
+                'texto_alternativo' => $imagen->texto_alternativo,
+                'orden' => $imagen->orden,
+            ])
+            ->all(),
+
+        'horarios' => $comercio->horarios
+            ->sortBy('dia_semana')
+            ->values()
+            ->map(fn ($horario): array => [
+                'id_horario' => $horario->id_horario,
+                'dia_semana' => $horario->dia_semana,
+                'hora_apertura' => $horario->hora_apertura
+                    ? substr((string) $horario->hora_apertura, 0, 5)
+                    : null,
+                'hora_cierre' => $horario->hora_cierre
+                    ? substr((string) $horario->hora_cierre, 0, 5)
+                    : null,
+                'cerrado' => $horario->cerrado,
+            ])
+            ->all(),
+
+        'contactos' => $comercio->contactos
+            ->map(fn ($contacto): array => [
+                'id_contacto' => $contacto->id_contacto,
+                'tipo' => $contacto->tipo,
+                'valor' => $contacto->valor,
+            ])
+            ->values()
+            ->all(),
+
+        'politicas' => $comercio->politicas
+            ->map(fn ($politica): array => [
+                'id_politica' => $politica->id_politica,
+                'tipo' => $politica->tipo,
+                'contenido' => $politica->contenido,
+                'configuracion_envio' => $politica->configuracion_envio,
+            ])
+            ->values()
+            ->all(),
+    ];
+}
+
+public function actualizarInformacion(
+    int $idComercio,
+    ?string $descripcion
+): Micrositio {
+    $this->buscar($idComercio);
+
+    $micrositio = Micrositio::query()->firstOrCreate([
+        'id_comercio' => $idComercio,
+    ]);
+
+    $micrositio->descripcion = $descripcion;
+    $micrositio->save();
+
+    return $micrositio;
+}
+
+public function guardarLogotipo(
+    int $idComercio,
+    UploadedFile $archivo
+): Micrositio {
+    $this->buscar($idComercio);
+
+    $micrositio = Micrositio::query()->firstOrCreate([
+        'id_comercio' => $idComercio,
+    ]);
+
+    $ruta = Storage::disk('public')->putFile(
+        "m2/comercios/{$idComercio}/logotipo",
+        $archivo
+    );
+
+    $micrositio->cambiarLogotipo(
+        Storage::disk('public')->url($ruta)
+    );
+
+    return $micrositio;
+}
+
+public function guardarHorarios(int $idComercio, array $horarios): array
+{
+    $this->buscar($idComercio);
+
+    $errores = [];
+    $dias = [];
+
+    if (count($horarios) !== 7) {
+        $errores['horarios'] = [
+            'Se deben indicar los horarios de los 7 días.',
+        ];
+    }
+
+    foreach ($horarios as $indice => $horario) {
+        $dia = (int) ($horario['dia_semana'] ?? 0);
+        $cerrado = (bool) ($horario['cerrado'] ?? false);
+
+        if ($dia < 1 || $dia > 7) {
+            $errores["horarios.{$indice}.dia_semana"] = [
+                'El día de la semana debe estar entre 1 y 7.',
+            ];
+        }
+
+        if (in_array($dia, $dias, true)) {
+            $errores["horarios.{$indice}.dia_semana"] = [
+                'No se pueden repetir días de la semana.',
+            ];
+        }
+
+        $dias[] = $dia;
+
+        if (! $cerrado) {
+            $apertura = $horario['hora_apertura'] ?? null;
+            $cierre = $horario['hora_cierre'] ?? null;
+
+            if ($apertura === null || $cierre === null) {
+                $errores["horarios.{$indice}"] = [
+                    'Un día abierto debe indicar hora de apertura y cierre.',
+                ];
+            } elseif ($apertura >= $cierre) {
+                $errores["horarios.{$indice}.hora_apertura"] = [
+                    'La hora de apertura debe ser anterior a la hora de cierre.',
+                ];
+            }
+        }
+    }
+
+    $this->exigirValidos($errores);
+
+    return DB::transaction(function () use ($idComercio, $horarios): array {
+        HorarioComercio::query()
+            ->where('id_comercio', $idComercio)
+            ->delete();
+
+        $resultado = [];
+
+        foreach ($horarios as $datos) {
+            if ((bool) $datos['cerrado']) {
+                $datos['hora_apertura'] = null;
+                $datos['hora_cierre'] = null;
+            }
+
+            $horario = new HorarioComercio();
+
+            $horario->actualizar([
+                ...$datos,
+                'id_comercio' => $idComercio,
+            ]);
+
+            $resultado[] = $horario->toArray();
+        }
+
+        return $resultado;
+    });
+}
+
+public function guardarContactos(int $idComercio, array $contactos): array
+{
+    $this->buscar($idComercio);
+
+    return DB::transaction(function () use ($idComercio, $contactos): array {
+        ContactoComercio::query()
+            ->where('id_comercio', $idComercio)
+            ->delete();
+
+        $resultado = [];
+
+        foreach ($contactos as $datos) {
+            $contacto = new ContactoComercio();
+
+            $contacto->actualizar([
+                ...$datos,
+                'id_comercio' => $idComercio,
+            ]);
+
+            $resultado[] = $contacto->toArray();
+        }
+
+        return $resultado;
+    });
+}
+
+public function guardarPoliticas(int $idComercio, array $politicas): array
+{
+    $this->buscar($idComercio);
+
+    return DB::transaction(function () use ($idComercio, $politicas): array {
+        PoliticaComercio::query()
+            ->where('id_comercio', $idComercio)
+            ->delete();
+
+        $resultado = [];
+
+        foreach ($politicas as $datos) {
+            if (($datos['tipo'] ?? null) !== 'envio') {
+                $datos['configuracion_envio'] = null;
+            }
+
+            $politica = new PoliticaComercio();
+
+            $politica->actualizar([
+                ...$datos,
+                'id_comercio' => $idComercio,
+            ]);
+
+            $resultado[] = $politica->toArray();
+        }
+
+        return $resultado;
+    });
+}
+
+public function gestionarBanners(int $idComercio, array $banners): array
+{
+    $this->buscar($idComercio);
+
+    $existentes = BannerComercio::query()
+        ->where('id_comercio', $idComercio)
+        ->get()
+        ->keyBy('id_banner');
+
+    $rutasEliminar = [];
+
+    $resultado = DB::transaction(function () use (
+        $idComercio,
+        $banners,
+        $existentes,
+        &$rutasEliminar
+    ): array {
+        $idsConservados = [];
+        $resultado = [];
+
+        foreach ($banners as $datos) {
+            $idBanner = $datos['id_banner'] ?? null;
+
+            if ($idBanner !== null) {
+                $banner = $existentes->get($idBanner);
+
+                if ($banner === null) {
+                    throw $this->noEncontrado(
+                        'El banner no existe o no pertenece al comercio.'
+                    );
+                }
+
+                $idsConservados[] = (int) $idBanner;
+                $ruta = $banner->ruta;
+            } else {
+                $banner = new BannerComercio();
+                $ruta = null;
+            }
+
+            if (
+                isset($datos['imagen'])
+                && $datos['imagen'] instanceof UploadedFile
+            ) {
+                $rutaNueva = Storage::disk('public')->putFile(
+                    "m2/comercios/{$idComercio}/banners",
+                    $datos['imagen']
+                );
+
+                if ($ruta !== null) {
+                    $rutasEliminar[] = $ruta;
+                }
+
+                $ruta = Storage::disk('public')->url($rutaNueva);
+            }
+
+            if ($ruta === null) {
+                throw ErrorNucleoException::paraModulo(
+                    self::MODULO,
+                    'ERR-005',
+                    422,
+                    'El banner nuevo debe incluir una imagen.',
+                    [
+                        'imagen' => [
+                            'La imagen es obligatoria para un banner nuevo.',
+                        ],
+                    ]
+                );
+            }
+
+            $banner->actualizar([
+                'id_comercio' => $idComercio,
+                'ruta' => $ruta,
+                'texto_alternativo' => $datos['texto_alternativo'],
+                'orden' => $datos['orden'],
+                'activo' => $datos['activo'],
+            ]);
+
+            $resultado[] = $banner->toArray();
+        }
+
+        foreach ($existentes as $idBanner => $bannerExistente) {
+            if (! in_array((int) $idBanner, $idsConservados, true)) {
+                $rutasEliminar[] = $bannerExistente->ruta;
+                $bannerExistente->delete();
+            }
+        }
+
+        return $resultado;
+    });
+
+    foreach (array_unique($rutasEliminar) as $ruta) {
+        $this->eliminarArchivoPublico($ruta);
+    }
+
+    return $resultado;
+}
+
+public function gestionarGaleria(int $idComercio, array $galeria): array
+{
+    $this->buscar($idComercio);
+
+    $existentes = ImagenGaleriaComercio::query()
+        ->where('id_comercio', $idComercio)
+        ->get()
+        ->keyBy('id_imagen');
+
+    $rutasEliminar = [];
+
+    $resultado = DB::transaction(function () use (
+        $idComercio,
+        $galeria,
+        $existentes,
+        &$rutasEliminar
+    ): array {
+        $idsConservados = [];
+        $resultado = [];
+
+        foreach ($galeria as $datos) {
+            $idImagen = $datos['id_imagen'] ?? null;
+
+            if ($idImagen !== null) {
+                $imagen = $existentes->get($idImagen);
+
+                if ($imagen === null) {
+                    throw $this->noEncontrado(
+                        'La imagen no existe o no pertenece al comercio.'
+                    );
+                }
+
+                $idsConservados[] = (int) $idImagen;
+                $ruta = $imagen->ruta;
+            } else {
+                $imagen = new ImagenGaleriaComercio();
+                $ruta = null;
+            }
+
+            if (
+                isset($datos['imagen'])
+                && $datos['imagen'] instanceof UploadedFile
+            ) {
+                $rutaNueva = Storage::disk('public')->putFile(
+                    "m2/comercios/{$idComercio}/galeria",
+                    $datos['imagen']
+                );
+
+                if ($ruta !== null) {
+                    $rutasEliminar[] = $ruta;
+                }
+
+                $ruta = Storage::disk('public')->url($rutaNueva);
+            }
+
+            if ($ruta === null) {
+                throw ErrorNucleoException::paraModulo(
+                    self::MODULO,
+                    'ERR-005',
+                    422,
+                    'La imagen nueva de la galería debe incluir un archivo.',
+                    [
+                        'imagen' => [
+                            'La imagen es obligatoria para un elemento nuevo.',
+                        ],
+                    ]
+                );
+            }
+
+            $imagen->actualizar([
+                'id_comercio' => $idComercio,
+                'ruta' => $ruta,
+                'texto_alternativo' => $datos['texto_alternativo'],
+                'orden' => $datos['orden'],
+            ]);
+
+            $resultado[] = $imagen->toArray();
+        }
+
+        foreach ($existentes as $idImagen => $imagenExistente) {
+            if (! in_array((int) $idImagen, $idsConservados, true)) {
+                $rutasEliminar[] = $imagenExistente->ruta;
+                $imagenExistente->delete();
+            }
+        }
+
+        return $resultado;
+    });
+
+    foreach (array_unique($rutasEliminar) as $ruta) {
+        $this->eliminarArchivoPublico($ruta);
+    }
+
+    return $resultado;
+}
     private function buscar(int $idComercio): Comercio
     {
         return Comercio::query()->find($idComercio)
@@ -314,4 +766,25 @@ class ComerciosService implements ComerciosServiceInterface
             );
         }
     }
+
+    private function eliminarArchivoPublico(?string $ruta): void
+{
+    if ($ruta === null || $ruta === '') {
+        return;
+    }
+
+    $path = parse_url($ruta, PHP_URL_PATH);
+
+    if (! is_string($path) || $path === '') {
+        return;
+    }
+
+    $path = ltrim($path, '/');
+
+    if (str_starts_with($path, 'storage/')) {
+        $path = substr($path, strlen('storage/'));
+    }
+
+    Storage::disk('public')->delete($path);
+}
 }
