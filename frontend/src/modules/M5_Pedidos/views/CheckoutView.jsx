@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, LoaderCircle, MapPin, RefreshCw, Tag, Truck } from 'lucide-react';
 import { Alerta, Boton, Campo, clasesInput, Encabezado, TarjetaComercio, Total } from '../components/componentes';
 import { colones, validarCheckout } from '../services/calculos';
-import { crearPedido, obtenerCarrito } from '../services/m5Api';
+import { crearPedido, obtenerCarrito, obtenerDirecciones } from '../services/m5Api';
+import { guardarMetodoPago } from '../components/PasarelaPagoSimulada';
 
 // Medios de pago de CrearPedidoRequest (contrato M5): el backend los lee como `metodoPago`.
 const METODOS_PAGO = [
@@ -17,6 +18,20 @@ const ERRORES_QUE_VUELVEN_AL_CARRITO = {
   'ERR-M5-002': { tipo: 'error', titulo: 'Stock agotado', texto: 'Uno o más productos ya no tienen existencias suficientes. Ajuste las cantidades para continuar.' },
   'ERR-003': { tipo: 'aviso', titulo: 'Comercio suspendido', texto: 'Uno de los comercios de su carrito no está disponible. Quite sus productos para continuar con el resto de su compra.' },
 };
+
+// Direcciones del cliente (las administra M1): vienen en carrito.direcciones_cliente;
+// si el carrito no las trae, se piden a GET /api/m5/v1/carrito/direcciones.
+async function cargarDirecciones(carrito) {
+  if (Array.isArray(carrito?.direcciones_cliente) && carrito.direcciones_cliente.length > 0) {
+    return carrito.direcciones_cliente;
+  }
+  try {
+    const r = await obtenerDirecciones();
+    return Array.isArray(r?.direcciones) ? r.direcciones : [];
+  } catch {
+    return []; // Sin direcciones se bloquea "Confirmar pedido" con un mensaje.
+  }
+}
 
 const Titulo = ({ icono: Icono, children }) => (
   <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 mb-3">
@@ -34,7 +49,8 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const [errorCarga, setErrorCarga] = useState(null);
   const [intentoCarga, setIntentoCarga] = useState(0);
 
-  const [f, setF] = useState({ idDireccion: '1', metodoPago: '', cupon: '', tarjetaRegalo: '', nota: '' });
+  const [direcciones, setDirecciones] = useState([]);
+  const [f, setF] = useState({ idDireccion: '', metodoPago: '', cupon: '', tarjetaRegalo: '', nota: '' });
   const [errores, setErrores] = useState({});
   const [cuponIngresado, setCuponIngresado] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -45,10 +61,21 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
     let vigente = true;
     setCargando(true);
     setErrorCarga(null);
-    obtenerCarrito()
-      .then((c) => { if (vigente) setCarrito(c); })
-      .catch((e) => { if (vigente) setErrorCarga(e); })
-      .finally(() => { if (vigente) setCargando(false); });
+    (async () => {
+      try {
+        const c = await obtenerCarrito();
+        const dirs = await cargarDirecciones(c);
+        if (!vigente) return;
+        setCarrito(c);
+        setDirecciones(dirs);
+        const preseleccionada = dirs.find((d) => d.es_principal === true) ?? dirs[0];
+        setF((actual) => ({ ...actual, idDireccion: preseleccionada ? String(preseleccionada.id_direccion_cliente) : '' }));
+      } catch (e) {
+        if (vigente) setErrorCarga(e);
+      } finally {
+        if (vigente) setCargando(false);
+      }
+    })();
     return () => { vigente = false; };
   }, [intentoCarga]);
 
@@ -64,7 +91,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
 
   async function enviar(e) {
     e.preventDefault();
-    if (enviandoRef.current) return;
+    if (enviandoRef.current || direcciones.length === 0) return;
     const errs = validarCheckout(f);
     setErrores(errs);
     if (Object.keys(errs).length) { document.getElementById(Object.keys(errs)[0])?.focus(); return; }
@@ -81,7 +108,18 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
         tarjeta_regalo: f.tarjetaRegalo.trim() || null,
         nota: f.nota.trim() || null,
       });
-      onPedidoCreado(respuesta, carrito?.grupos_comercio ?? []);
+      // La respuesta 201 no trae direccion_envio_texto; se completa con la dirección elegida.
+      // Tampoco trae el método de pago: se agrega y se recuerda para preseleccionarlo en la pasarela.
+      const elegida = direcciones.find((d) => String(d.id_direccion_cliente) === f.idDireccion);
+      guardarMetodoPago(respuesta.id_pedido, f.metodoPago);
+      onPedidoCreado(
+        {
+          ...respuesta,
+          direccion_envio_texto: respuesta.direccion_envio_texto ?? elegida?.texto_completo ?? null,
+          metodoPago: respuesta.metodoPago ?? f.metodoPago,
+        },
+        carrito?.grupos_comercio ?? [],
+      );
     } catch (err) {
       const aviso = ERRORES_QUE_VUELVEN_AL_CARRITO[err.codigo];
       if (aviso) {
@@ -125,6 +163,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const resumen = carrito?.resumen ?? {};
   const total = resumen.total ?? 0;
   const hayBloqueo = carrito?.hay_comercio_suspendido ?? grupos.some((g) => g.comercio_suspendido);
+  const sinDirecciones = direcciones.length === 0;
 
   if (grupos.length === 0) {
     return (
@@ -141,7 +180,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const botonConfirmar = (clases) => (
     <Boton
       type="submit"
-      disabled={enviando || hayBloqueo}
+      disabled={enviando || hayBloqueo || sinDirecciones}
       icono={enviando ? LoaderCircle : ArrowRight}
       className={clases}
     >
@@ -169,25 +208,35 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
           <div className="lg:col-span-7 xl:col-span-8 space-y-6">
             <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-5 space-y-4">
               <Titulo icono={Truck}>Envío y pago</Titulo>
-              <Campo id="idDireccion" etiqueta="Dirección de envío (id_direccion_cliente)" error={errores.idDireccion}>
+              <Campo id="idDireccion" etiqueta="Dirección de envío" error={errores.idDireccion}>
                 <div className="relative">
                   <MapPin className="w-4 h-4 text-gray-400 absolute left-3 top-3" aria-hidden="true" />
-                  <input
+                  <select
                     id="idDireccion"
-                    type="number"
-                    min="1"
-                    step="1"
                     value={f.idDireccion}
                     onChange={set('idDireccion')}
+                    disabled={sinDirecciones}
                     aria-invalid={!!errores.idDireccion}
                     aria-describedby="idDireccion-ayuda"
                     className={clasesInput(errores.idDireccion, true)}
-                  />
+                  >
+                    {sinDirecciones && <option value="">Sin direcciones registradas</option>}
+                    {direcciones.map((d) => (
+                      <option key={d.id_direccion_cliente} value={String(d.id_direccion_cliente)}>
+                        {d.texto_completo ?? `Dirección #${d.id_direccion_cliente}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <p id="idDireccion-ayuda" className="mt-1 text-xs text-gray-500">
-                  Las direcciones las administra M1. Se usa la dirección 1 del cliente de prueba.
+                  Las direcciones las administra M1 (Portal).
                 </p>
               </Campo>
+              {sinDirecciones && (
+                <Alerta tipo="aviso" titulo="Sin dirección de envío">
+                  No tiene direcciones registradas. Agregue una dirección en su perfil para poder confirmar el pedido.
+                </Alerta>
+              )}
               <Campo id="metodoPago" etiqueta="Método de pago" error={errores.metodoPago}>
                 <select id="metodoPago" value={f.metodoPago} onChange={set('metodoPago')} aria-invalid={!!errores.metodoPago} className={clasesInput(errores.metodoPago)}>
                   <option value="">Seleccione una opción</option>

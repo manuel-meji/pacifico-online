@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\M5_Pedidos;
 
-use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
@@ -470,19 +469,18 @@ class ControladorPedido extends Controller
             return null;
         }
 
-        $portal = app()->bound(PortalPublicoContract::class)
-            ? app(PortalPublicoContract::class)
-            : (app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null);
+        // Misma fuente que el checkout (ControladorCarrito): respeta el modo doble/real de M5_M1_MODO.
+        try {
+            $direcciones = app(ControladorCarrito::class)->obtenerDireccionesCliente($idCliente);
 
-        if ($portal && method_exists($portal, 'obtenerDireccionCliente')) {
-            try {
-                $dir = $portal->obtenerDireccionCliente($idCliente, $idDireccion);
-
-                return $dir['texto_completo']
-                    ?? "{$dir['alias_direccion']} — {$dir['provincia']}, {$dir['canton']}, {$dir['distrito']}, {$dir['otras_senas']}";
-            } catch (\Throwable) {
-                return "Dirección #{$idDireccion}";
+            foreach ($direcciones as $dir) {
+                if ((int) ($dir['id_direccion_cliente'] ?? 0) === $idDireccion) {
+                    return $dir['texto_completo']
+                        ?? "{$dir['alias_direccion']} — {$dir['provincia']}, {$dir['canton']}, {$dir['distrito']}, {$dir['otras_senas']}";
+                }
             }
+        } catch (\Throwable) {
+            // Sin datos de M1: se devuelve el identificador.
         }
 
         return "Dirección #{$idDireccion}";
