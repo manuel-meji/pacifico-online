@@ -25,6 +25,13 @@ class IdentidadDoble implements ServicioIdentidadInterface
 
     public ?ErrorNucleoException $error = null;
 
+    public int $llamadasActualizarCorreo = 0;
+
+    /** @var list<array{id_usuario: int, correo: string}> */
+    public array $correosActualizados = [];
+
+    public ?ErrorNucleoException $errorActualizarCorreo = null;
+
     public function crearCuenta(array $datos, RolUsuario|string $rol, ?int $idComercio = null): Usuario
     {
         $this->llamadas++;
@@ -39,5 +46,16 @@ class IdentidadDoble implements ServicioIdentidadInterface
         $usuario->forceFill(['id_usuario' => self::PRIMER_ID + $this->llamadas - 1]);
 
         return $usuario;
+    }
+
+    public function actualizarCorreo(int $idUsuario, string $correo): void
+    {
+        $this->llamadasActualizarCorreo++;
+
+        if ($this->errorActualizarCorreo !== null) {
+            throw $this->errorActualizarCorreo;
+        }
+
+        $this->correosActualizados[] = ['id_usuario' => $idUsuario, 'correo' => $correo];
     }
 }

@@ -20,4 +20,15 @@ interface ServicioIdentidadInterface
      * @throws ErrorNucleoException ERR-005 si los datos no son válidos.
      */
     public function crearCuenta(array $datos, RolUsuario|string $rol, ?int $idComercio = null): Usuario;
+
+    /**
+     * Cambia el correo de una cuenta existente. Reutiliza la validación de crearCuenta:
+     * se pasa a minúsculas y sin espacios, con formato de correo, máximo 150 caracteres y
+     * único en usuarios, ignorando el propio registro del usuario. No abre una transacción
+     * propia: si el módulo que la llama ya tiene una (por ejemplo, M1 al actualizar el
+     * perfil del cliente), el cambio se revierte junto con ella.
+     *
+     * @throws ErrorNucleoException ERR-004 si el usuario no existe; ERR-005 (detalles['correo']) si el correo no es válido.
+     */
+    public function actualizarCorreo(int $idUsuario, string $correo): void;
 }
