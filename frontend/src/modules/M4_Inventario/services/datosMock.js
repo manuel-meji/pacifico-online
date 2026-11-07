@@ -16,10 +16,10 @@ export const variaciones = [
 
 // Cantidades enteras; costo_promedio con 4 decimales como numeric(14,4) de la sección 6.5.
 export const existenciasIniciales = [
-  { id_existencia: 1, id_comercio: 104, id_producto: 301, id_variacion: 501, id_ubicacion: 12, cantidad_fisica: 40, cantidad_reservada: 2, cantidad_defectuosa: 2, costo_promedio: 8500, stock_minimo: 10 },
-  { id_existencia: 2, id_comercio: 104, id_producto: 301, id_variacion: 501, id_ubicacion: 13, cantidad_fisica: 14, cantidad_reservada: 0, cantidad_defectuosa: 0, costo_promedio: 8500, stock_minimo: 10 },
-  { id_existencia: 3, id_comercio: 104, id_producto: 301, id_variacion: 502, id_ubicacion: 12, cantidad_fisica: 6, cantidad_reservada: 1, cantidad_defectuosa: 0, costo_promedio: 9000, stock_minimo: 8 },
-  { id_existencia: 4, id_comercio: 104, id_producto: 301, id_variacion: 502, id_ubicacion: 13, cantidad_fisica: 0, cantidad_reservada: 0, cantidad_defectuosa: 0, costo_promedio: 9000, stock_minimo: 5 },
+  { id_existencia: 1, id_comercio: 104, id_producto: 301, id_variacion: 501, id_ubicacion: 12, cantidad_fisica: 40, cantidad_reservada: 2, costo_promedio: 8500, stock_minimo: 10 },
+  { id_existencia: 2, id_comercio: 104, id_producto: 301, id_variacion: 501, id_ubicacion: 13, cantidad_fisica: 14, cantidad_reservada: 0, costo_promedio: 8500, stock_minimo: 10 },
+  { id_existencia: 3, id_comercio: 104, id_producto: 301, id_variacion: 502, id_ubicacion: 12, cantidad_fisica: 6, cantidad_reservada: 1, costo_promedio: 9000, stock_minimo: 8 },
+  { id_existencia: 4, id_comercio: 104, id_producto: 301, id_variacion: 502, id_ubicacion: 13, cantidad_fisica: 0, cantidad_reservada: 0, costo_promedio: 9000, stock_minimo: 5 },
 ];
 
 // Usuarios del núcleo que aparecen en el Kardex. El contrato entrega id_usuario e id_autorizador; la vista
@@ -83,10 +83,10 @@ export const kardexInicial = [
   L({ id_kardex: 1007, id_variacion: 502, id_ubicacion: 12, tipo_movimiento: 'reserva', cantidad: 1, ...reservaRef(RESERVA_PENDIENTE),
     saldo_cantidad: 6, saldo_reservado: 1, saldo_disponible: 5, saldo_valorizado: 54000, fecha_movimiento: '2026-10-16T09:00:00-06:00', justificacion: 'Reserva de M5 para el carrito del pedido 9002' }),
   L({ id_kardex: 1008, id_variacion: 501, id_ubicacion: 12, tipo_movimiento: 'ajuste', efecto_stock: 'disminuye', cantidad: 2, costo_unitario: 8500, monto_total: 17000,
-    saldo_cantidad: 40, saldo_reservado: 2, saldo_disponible: 36, saldo_valorizado: 340000, fecha_movimiento: '2026-10-16T16:05:00-06:00',
-    justificacion: 'Conteo físico: faltan 2 unidades; otras 2 quedan apartadas como defectuosas', id_autorizador: 2, fecha_autorizacion: '2026-10-16T16:00:00-06:00' }),
+    saldo_cantidad: 40, saldo_reservado: 2, saldo_disponible: 38, saldo_valorizado: 340000, fecha_movimiento: '2026-10-16T16:05:00-06:00',
+    justificacion: 'Conteo físico: faltan 2 unidades', id_autorizador: 2, fecha_autorizacion: '2026-10-16T16:00:00-06:00' }),
   L({ id_kardex: 1009, id_variacion: 501, id_ubicacion: 12, tipo_movimiento: 'confirmacion_reserva', cantidad: 2, ...reservaRef(RESERVA_PAGADA),
-    saldo_cantidad: 40, saldo_reservado: 2, saldo_disponible: 36, saldo_valorizado: 340000, fecha_movimiento: '2026-10-17T08:10:00-06:00', justificacion: 'M5 confirmó la reserva: pedido 9001, subpedido 9101' }),
+    saldo_cantidad: 40, saldo_reservado: 2, saldo_disponible: 38, saldo_valorizado: 340000, fecha_movimiento: '2026-10-17T08:10:00-06:00', justificacion: 'M5 confirmó la reserva: pedido 9001, subpedido 9101' }),
   L({ id_kardex: 1010, id_variacion: 502, id_ubicacion: 12, tipo_movimiento: 'confirmacion_reserva', cantidad: 1, ...reservaRef(RESERVA_PENDIENTE),
     saldo_cantidad: 6, saldo_reservado: 1, saldo_disponible: 5, saldo_valorizado: 54000, fecha_movimiento: '2026-10-17T08:30:00-06:00', justificacion: 'M5 confirmó la reserva: pedido 9002, subpedido 9102' }),
 ];
