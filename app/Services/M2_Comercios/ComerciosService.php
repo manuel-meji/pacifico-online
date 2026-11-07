@@ -35,6 +35,10 @@ use App\Models\M2_Comercios\SedeComercio;
 use App\Models\M2_Comercios\SuspensionComercio;
 use App\Services\Nucleo\ContextoComercio;
 use Closure;
+use App\Models\M2_Comercios\MembresiaComercio;
+use App\Services\M2_Comercios\Comision\CalculoMontoFijo;
+use App\Services\M2_Comercios\Comision\CalculoPorcentaje;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
  * Fachada de M2 (patrón Facade, sección 7 del PC3): implementa las 8 operaciones
@@ -1232,5 +1236,84 @@ public function corregirSolicitud(int $idSolicitud, array $datos): SolicitudCome
     }
 
     Storage::disk('public')->delete($path);
+}
+
+// ** Comisión (Josefh) *./
+
+public function registrarComisionDespacho(int $idSubpedido, string $idEvento): void
+{
+    // 1. Idempotencia
+    if (ComisionSubpedido::existePorSubpedido($idSubpedido)) {
+        return;
+    }
+
+    // 2. Obtener los datos reales del subpedido desde M5
+    $subpedido = $this->subpedidos()->obtenerSubpedido($idSubpedido);
+
+    // 3. Verificar que M5 devolvió el subpedido correcto y que fue despachado
+    if (
+        $subpedido['id_subpedido'] !== $idSubpedido
+        || $subpedido['estado_subpedido'] !== 'despachado'
+    ) {
+        Log::warning('M2: no se registra comisión porque el subpedido no es válido o no está despachado.', [
+            'id_subpedido' => $idSubpedido,
+        ]);
+
+        return;
+    }
+
+    // 4. Obtener la configuración de comisión vigente
+    $config = ComisionComercio::vigentePara($subpedido['id_comercio']);
+
+    if ($config === null) {
+        Log::warning('M2: no existe configuración de comisión vigente para el comercio.', [
+            'id_comercio' => $subpedido['id_comercio'],
+            'id_subpedido' => $idSubpedido,
+        ]);
+
+        return;
+    }
+
+    // 5. Buscar una membresía vigente con comisión preferencial
+    $membresia = MembresiaComercio::query()
+        ->where('id_comercio', $subpedido['id_comercio'])
+        ->get()
+        ->first(
+            fn (MembresiaComercio $membresia): bool =>
+                $membresia->estaVigente(now())
+                && $membresia->comision_preferencial !== null
+        );
+
+    if ($membresia !== null) {
+        $estrategia = new CalculoPorcentaje();
+        $valor = (string) $membresia->comision_preferencial;
+    } else {
+        // 6. Seleccionar la estrategia según la configuración normal
+        $estrategia = match ($config->tipo) {
+            ComisionComercio::PORCENTAJE => new CalculoPorcentaje(),
+            ComisionComercio::MONTO_FIJO => new CalculoMontoFijo(),
+        };
+
+        $valor = (string) $config->valor;
+    }
+
+    $monto = $estrategia->calcular(
+        (string) $subpedido['subtotal'],
+        $valor
+    );
+
+    // 7. Guardar una sola vez, incluso si dos eventos llegan al mismo tiempo
+    try {
+        ComisionSubpedido::create([
+            'id_subpedido' => $idSubpedido,
+            'id_comercio' => $subpedido['id_comercio'],
+            'subtotal_base' => $subpedido['subtotal'],
+            'monto' => $monto,
+            'moneda' => 'CRC',
+            'id_evento' => $idEvento,
+        ]);
+    } catch (UniqueConstraintViolationException) {
+        // Otro evento ya registró esta misma comisión.
+    }
 }
 }

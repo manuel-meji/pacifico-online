@@ -3,15 +3,16 @@
 namespace App\Services\M2_Comercios;
 
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
+use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use LogicException;
-use RuntimeException;
 
 /**
  * Fake de M5 Pedidos para la operación obtenerSubpedido.
  *
  * Imita el contrato M5 v1.1.0 consumido por M2.
  */
-class PedidosFake implements PedidosServiceInterface
+class PedidosFake implements PedidosServiceInterface, SubpedidosServiceInterface
 {
     public const SUBPEDIDO_EXISTENTE = 1001;
 
@@ -25,13 +26,13 @@ class PedidosFake implements PedidosServiceInterface
     public function obtenerSubpedido(int $idSubpedido): array
     {
         if ($idSubpedido === self::SUBPEDIDO_NO_ACCESIBLE) {
-            throw new RuntimeException(
+            throw ErrorNucleoException::recursoNoAccesible(
                 'ERR-003: El recurso solicitado no existe o no es accesible.'
             );
         }
 
         if ($idSubpedido !== self::SUBPEDIDO_EXISTENTE) {
-            throw new RuntimeException(
+            throw ErrorNucleoException::recursoNoEncontrado(
                 'ERR-004: No se encontró lo que buscas.'
             );
         }
@@ -98,6 +99,20 @@ class PedidosFake implements PedidosServiceInterface
 
     public function agregarItemCarrito(int $idCliente, array $datos): array
     {
+        throw new LogicException('Fuera del alcance del doble de M2.');
+    }
+
+    public function confirmarEntregaSubpedido(
+        int $idSubpedido,
+        array $datosEntrega = []
+    ): array {
+        throw new LogicException('Fuera del alcance del doble de M2.');
+    }
+
+    public function cancelarSubpedidoParcial(
+        int $idSubpedido,
+        array $datosCancelacion = []
+    ): array {
         throw new LogicException('Fuera del alcance del doble de M2.');
     }
 }

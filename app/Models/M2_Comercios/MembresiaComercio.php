@@ -6,6 +6,7 @@ namespace App\Models\M2_Comercios;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Carbon\Carbon;
 
 /**
  * Membresía del comercio; puede fijar una comisión preferencial (RN-008).
@@ -22,6 +23,13 @@ class MembresiaComercio extends Model
     protected $guarded = ['id_membresia_comercio'];
 
     protected $casts = ['comision_preferencial' => 'decimal:2', 'inicio' => 'date', 'fin' => 'date', 'activa' => 'boolean'];
+
+    public function estaVigente(Carbon $fecha): bool
+{
+    return $this->activa
+        && $this->inicio->lte($fecha)
+        && ($this->fin === null || $this->fin->gte($fecha));
+}
 
     public function comercio(): BelongsTo
     {
