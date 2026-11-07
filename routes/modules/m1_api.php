@@ -4,6 +4,7 @@ use App\Http\Controllers\M1_Portal\BusquedaController;
 use App\Http\Controllers\M1_Portal\ClienteController;
 use App\Http\Controllers\M1_Portal\DireccionClienteController;
 use App\Http\Controllers\M1_Portal\FichaProductoController;
+use App\Http\Middleware\EstablecerCliente;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -12,14 +13,22 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Prefijo: /api/m1/v1
 | Nombre de ruta: api.m1.v1.*
-| Subgrupo 1 (SG1). Rutas públicas (security: [] en el contrato).
+| Subgrupo 1 (SG1).
+|
+| Aislamiento del núcleo (tarea 23 del PC4, RN-12, ADR-006): EstablecerCliente
+| fija ContextoCliente con el cliente de la sesión, usando ResolvedorCliente de
+| M1. En la búsqueda y la ficha la sesión es opcional (security: [] en el
+| contrato); si hay sesión de cliente, la búsqueda se registra con su
+| id_cliente.
 */
 
-Route::get('/productos/busqueda', [BusquedaController::class, 'buscar'])->name('productos.busqueda');
+Route::middleware(EstablecerCliente::class)->group(function (): void {
+    Route::get('/productos/busqueda', [BusquedaController::class, 'buscar'])->name('productos.busqueda');
 
-Route::get('/productos/{id_producto}', [FichaProductoController::class, 'mostrar'])
-    ->where('id_producto', '[1-9][0-9]*')
-    ->name('productos.ficha');
+    Route::get('/productos/{id_producto}', [FichaProductoController::class, 'mostrar'])
+        ->where('id_producto', '[1-9][0-9]*')
+        ->name('productos.ficha');
+});
 
 Route::get('/categorias', [BusquedaController::class, 'listarCategorias'])->name('categorias');
 
@@ -29,9 +38,10 @@ Route::post('/clientes', [ClienteController::class, 'registrar'])
     ->middleware('throttle:10,1')
     ->name('clientes.registrar');
 
-// Datos de la persona compradora. Requieren la sesión del núcleo; cada persona
-// solo ve y edita sus propios datos (RN-M1-16, ERR-003 en cualquier otro caso).
-Route::middleware('auth:sanctum')->group(function (): void {
+// Datos de la persona compradora. Requieren la sesión del núcleo, que fija el
+// ámbito de cliente; cada persona solo ve y edita sus propios datos
+// (RN-M1-16, ERR-003 en cualquier otro caso).
+Route::middleware(['auth:sanctum', EstablecerCliente::class])->group(function (): void {
     Route::get('/clientes/sesion', [ClienteController::class, 'sesion'])->name('clientes.sesion');
 
     Route::get('/clientes/{id_cliente}', [ClienteController::class, 'mostrar'])
