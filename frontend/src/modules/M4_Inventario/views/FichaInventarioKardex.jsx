@@ -70,7 +70,7 @@ export default function FichaInventarioKardex({ api, existencias, version }) {
                     : <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-700"><IconoCirculoCheck className="h-3.5 w-3.5" />Disponible</span>}
               </div>
               <p className="mt-2 text-sm text-gray-600">
-                Física {e.cantidad_fisica} − reservada {e.cantidad_reservada} − defectuosa {e.cantidad_defectuosa} = <span className="font-bold text-gray-900">{d} disponibles</span>
+                Física {e.cantidad_fisica} − reservada {e.cantidad_reservada} = <span className="font-bold text-gray-900">{d} disponibles</span>
               </p>
               <p className="mt-1 text-xs text-gray-500">Costo promedio {formatoColones(e.costo_promedio)} · Valor {formatoColones(e.cantidad_fisica * e.costo_promedio)}</p>
             </button>
