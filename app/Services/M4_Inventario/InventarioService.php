@@ -18,12 +18,15 @@ use Illuminate\Support\Str;
 use LogicException;
 
 /**
- * Implementación real de M4 Inventario multiempresa para el despliegue mínimo
- * (contrato openapi v1.2.0): consultas de disponibilidad, reserva atómica bajo
- * bloqueo pesimista (ADR-002) y liberación.
+ * Implementación de InventarioModuleInterface (contrato openapi v1.3.0).
+ * Despliegue mínimo del PC3: verificación de estado, consultas de disponibilidad,
+ * reserva atómica bajo bloqueo pesimista SELECT … FOR UPDATE (ADR-002) y
+ * liberación. Las demás operaciones del contrato se implementan en el PC4;
+ * mientras tanto lanzan LogicException para que ningún consumidor reciba una
+ * respuesta inventada.
  *
  * Usa las tablas de las migraciones 2026_10_21_00000x_m4_* (sección 6.5):
- *  - existencias: disponible = cantidad_fisica − cantidad_reservada − cantidad_defectuosa.
+ *  - existencias: disponible = cantidad_fisica − cantidad_reservada (no se maneja stock defectuoso).
  *  - reservas: estado en id_estado_reserva (1 activa, 2 confirmada, 3 consumida,
  *    4 liberada, 5 vencida); el trigger tr_reservas_transicion solo permite
  *    1→2, 1→4, 1→5, 2→3 y 2→4. Cada cambio de estado se agrega a historial.
@@ -45,13 +48,20 @@ class InventarioService implements InventarioModuleInterface
 
     private const VENCIDA = 5;
 
-    private const DISPONIBLE_SQL = 'cantidad_fisica - cantidad_reservada - cantidad_defectuosa';
+    private const DISPONIBLE_SQL = 'cantidad_fisica - cantidad_reservada';
 
     public function __construct(
         private readonly ComerciosDependencia $comercios,
         private readonly CatalogoDependencia $catalogo,
         private readonly NucleoDependencia $nucleo,
     ) {}
+
+    // ------------------------------------------------------------------ estado
+
+    public function verificarEstado(): array
+    {
+        return ['status' => 'ok', 'module' => 'm4-inventario'];
+    }
 
     /**
      * RN-12: con sesión de comercio, un recurso de otro comercio responde ERR-003 (404).
@@ -251,6 +261,78 @@ class InventarioService implements InventarioModuleInterface
         }
 
         return $this->aReserva($this->filaReserva($idReserva));
+    }
+
+    // ------------------------------------------------------------------ operaciones del PC4
+
+    public function obtenerReserva(string $idReserva): array
+    {
+        $this->pendiente('obtenerReserva');
+    }
+
+    public function confirmarReserva(string $idReserva, int $idPedido, int $idSubpedido): array
+    {
+        $this->pendiente('confirmarReserva');
+    }
+
+    public function confirmarSalidaPorReserva(string $idReserva, int $idPedido, int $idSubpedido): array
+    {
+        $this->pendiente('confirmarSalidaPorReserva');
+    }
+
+    public function registrarReingresoPorReserva(string $idReserva, array $solicitud): array
+    {
+        $this->pendiente('registrarReingresoPorReserva');
+    }
+
+    public function listarExistencias(int $idComercio, array $filtros = []): array
+    {
+        $this->pendiente('listarExistencias');
+    }
+
+    public function fijarStockMinimo(int $idExistencia, int $stockMinimo): array
+    {
+        $this->pendiente('fijarStockMinimo');
+    }
+
+    public function registrarMovimientoManual(array $solicitud): array
+    {
+        $this->pendiente('registrarMovimientoManual');
+    }
+
+    public function registrarTransferencia(array $solicitud): array
+    {
+        $this->pendiente('registrarTransferencia');
+    }
+
+    public function registrarAjusteInventario(array $solicitud): array
+    {
+        $this->pendiente('registrarAjusteInventario');
+    }
+
+    public function consultarKardex(int $idComercio, int $idVariacion, array $filtros = []): array
+    {
+        $this->pendiente('consultarKardex');
+    }
+
+    public function obtenerKardexValorizado(int $idComercio, string $fechaInicio, string $fechaFin, array $filtros = []): array
+    {
+        $this->pendiente('obtenerKardexValorizado');
+    }
+
+    public function consultarInventarioAuditoria(array $idsComercio, ?string $fechaInicio = null, ?string $fechaFin = null): array
+    {
+        $this->pendiente('consultarInventarioAuditoria');
+    }
+
+    public function obtenerCostoProductosVendidos(int $idSubpedido): array
+    {
+        $this->pendiente('ObtenerCostoProductosVendidos');
+    }
+
+    private function pendiente(string $operacion): never
+    {
+        throw new LogicException("Operación {$operacion} del contrato M4 v1.3.0: se implementa en el PC4.");
     }
 
     // ------------------------------------------------------------------ interfaz anterior
@@ -455,7 +537,7 @@ class InventarioService implements InventarioModuleInterface
 
     private function disponible(object $existencia): int
     {
-        return (int) ((float) $existencia->cantidad_fisica - (float) $existencia->cantidad_reservada - (float) $existencia->cantidad_defectuosa);
+        return (int) ((float) $existencia->cantidad_fisica - (float) $existencia->cantidad_reservada);
     }
 
     private function disponibleTotal(int $idComercio, int $idVariacion): int
