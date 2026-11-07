@@ -1,6 +1,8 @@
+import { createContext, useContext } from 'react';
 import Logo from './Logo';
 
-export function Encabezado({ pantalla, onIr }) {
+// Con sesión (usuario) muestra el nombre y "Cerrar sesión" en lugar de "Crea tu cuenta" e "Inicia sesión".
+export function Encabezado({ pantalla, onIr, usuario = null, onCerrarSesion }) {
   const enlace = (destino, texto) => (
     <button type="button" onClick={() => onIr(destino)} aria-current={pantalla === destino ? 'page' : undefined}
       className={`min-h-[44px] border-b-2 px-1 text-sm font-medium text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${pantalla === destino ? 'border-brandBlue' : 'border-transparent'}`}>
@@ -10,22 +12,47 @@ export function Encabezado({ pantalla, onIr }) {
   return (
     <header className="bg-brandDarkBlue">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2">
-        <Logo />
-        <nav aria-label="Cuenta" className="flex items-center gap-4">
-          {enlace('crear', 'Crea tu cuenta')}
-          {enlace('ingresar', 'Inicia sesión')}
-          {enlace('perfil', 'Mi cuenta')}
+        <button type="button" onClick={() => onIr('inicio')} aria-label="Ir al inicio"
+          className="flex min-h-[44px] items-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+          <Logo />
+        </button>
+        <nav aria-label="Cuenta" className="flex min-w-0 flex-wrap items-center gap-x-4">
+          {usuario ? (
+            <>
+              <span className="max-w-[9rem] truncate text-sm text-white sm:max-w-[16rem]" title={usuario.nombre}>{usuario.nombre}</span>
+              {enlace('perfil', 'Mi cuenta')}
+              <button type="button" onClick={onCerrarSesion}
+                className="min-h-[44px] border-b-2 border-transparent px-1 text-sm font-medium text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                Cerrar sesión
+              </button>
+            </>
+          ) : (
+            <>
+              {enlace('crear', 'Crea tu cuenta')}
+              {enlace('ingresar', 'Inicia sesión')}
+              {enlace('perfil', 'Mi cuenta')}
+            </>
+          )}
         </nav>
       </div>
     </header>
   );
 }
 
+// M1App provee onIr con este contexto para que "Inicio" de las migas navegue sin pasar la función por cada vista.
+export const NavegacionCuentaContext = createContext(null);
+
 export function MigasDePan({ actual }) {
+  const onIr = useContext(NavegacionCuentaContext);
   return (
     <nav aria-label="Migas de pan" className="text-sm text-gray-600">
       <ol className="flex flex-wrap items-center gap-1.5">
-        <li>Inicio</li>
+        <li>
+          <button type="button" onClick={() => onIr?.('inicio')}
+            className="rounded-sm font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue">
+            Inicio
+          </button>
+        </li>
         <li aria-hidden>›</li>
         <li>Cuenta</li>
         <li aria-hidden>›</li>

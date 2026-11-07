@@ -31,7 +31,7 @@ Desde `frontend/`: `npm install` y `npm run dev`, luego abrir `http://localhost:
 ## Iniciar sesión y Crear cuenta (prototipo)
 
 Pantallas de ingreso y autorregistro del cliente. El registro respeta el esquema `RegistroCliente` del contrato de M1
-(`POST /api/m1/v1/clientes`); el ingreso lo resuelve el núcleo y aquí se simula.
+(`POST /api/m1/v1/clientes`); el ingreso lo resuelve el núcleo (real, no simulado).
 
 | Archivo | Contenido |
 |---|---|
@@ -39,7 +39,7 @@ Pantallas de ingreso y autorregistro del cliente. El registro respeta el esquema
 | `views/CrearCuentaView.jsx` | Nombre, apellidos, correo, teléfono, dirección de envío, contraseña y confirmación (no se envía), con los límites de `RegistroCliente` |
 | `components/componentes.jsx` | Encabezado, migas de pan, campo con ícono, avisos y botón principal de estas pantallas |
 | `components/Logo.jsx` | Logotipo (`assets/logo-pacificos.png`) con el nombre al lado |
-| `services/datosMock.js` | Respuestas simuladas: ERR-M1-001 y credenciales incorrectas |
+| `services/datosMock.js` | Respuestas simuladas: ERR-M1-001 y credenciales incorrectas (solo con `?simular=`) |
 | `services/m1Api.js` | Cliente HTTP de `/api/m1/v1` con el token CSRF de Sanctum; hoy expone `registrarCliente` |
 
 Se abren con `m1.html?pantalla=ingresar` o `m1.html?pantalla=crear` (en los archivos de doble clic, `window.PANTALLA_M1`).
@@ -48,8 +48,14 @@ Sin `pantalla` se muestra la ficha de comercio.
 Simular: `?pantalla=crear&simular=correo` (409 ERR-M1-001, correo ya registrado) y `?pantalla=ingresar&simular=credenciales`.
 
 Crear cuenta llama a `POST /api/m1/v1/clientes` real (contrato 1.2.0: cédula y dirección principal desglosada).
-Necesita el backend encendido (`php artisan serve`) y `npm run dev`, que pasa `/api` y `/sanctum` al backend.
+Necesita el backend encendido (`php artisan serve`) y `npm run dev`, que pasa `/api`, `/sanctum`, `/login` y `/logout` al backend.
 La ruta admite 10 intentos por minuto.
+
+Iniciar sesión ya usa el ingreso real del núcleo (cliente `frontend/src/modules/Nucleo/services/sesionApi.js`): `POST /login` con `{ correo, contrasena }`, `GET /api/user` al cargar para
+saber si hay sesión y `POST /logout`, con el mismo manejo de CSRF que `m1Api.js`. Las credenciales incorrectas o la
+cuenta inactiva (422 ERR-005) se muestran junto al correo; el límite es de 5 intentos por minuto (429). Un cliente va
+al inicio del portal; con sesión, el encabezado muestra el nombre y "Cerrar sesión". `?simular=credenciales` sigue
+mostrando el error sin backend.
 
 Mi cuenta (`?pantalla=perfil`, `views/PerfilView.jsx`) usa `GET /api/m1/v1/clientes/sesion` y
 `PUT /api/m1/v1/clientes/{id_cliente}`: muestra y actualiza nombre, apellidos y teléfono de la persona con sesión
@@ -61,5 +67,4 @@ Debajo, la sección Direcciones de envío (`components/DireccionesSeccion.jsx`) 
 direcciones (la principal primero), permite agregar, editar y marcar otra como principal. La principal no se
 desmarca directamente. Los campos y su validación están en `services/camposDireccion.js`, compartidos con el registro.
 
-Pendiente: cambiar `ingresar` de `M1App.jsx` por la llamada real cuando exista el contrato de ingreso del núcleo;
-hasta entonces Mi cuenta solo funciona con una sesión abierta por otro medio (por ejemplo, `POST /login`).
+Pendiente: panel para `encargado_comercio` y `encargado_plataforma`; hoy, al ingresar, solo ven un aviso.
