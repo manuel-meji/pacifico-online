@@ -75,6 +75,37 @@ class ServicioIdentidad implements ServicioIdentidadInterface
         return $usuario;
     }
 
+    public function actualizarCorreo(int $idUsuario, string $correo): void
+    {
+        $usuario = Usuario::query()->find($idUsuario)
+            ?? throw ErrorNucleoException::recursoNoEncontrado();
+
+        $nuevo = mb_strtolower(trim($correo));
+
+        $validador = Validator::make(['correo' => $nuevo], [
+            'correo' => [
+                'required',
+                'email',
+                'max:150',
+                Rule::unique('usuarios', 'correo')->ignore($idUsuario, 'id_usuario'),
+            ],
+        ]);
+
+        if ($validador->fails()) {
+            throw ErrorNucleoException::validacionFallida($validador->errors()->toArray());
+        }
+
+        try {
+            $usuario->correo = $nuevo;
+            $usuario->save();
+        } catch (UniqueConstraintViolationException) {
+            // Dos solicitudes simultáneas con el mismo correo: la restricción de la base de datos decide.
+            throw ErrorNucleoException::validacionFallida([
+                'correo' => ['El correo ya está registrado.'],
+            ]);
+        }
+    }
+
     private function resolverRol(RolUsuario|string $rol): RolUsuario
     {
         if ($rol instanceof RolUsuario) {
