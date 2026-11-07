@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Encabezado } from './components/componentes';
+import { Aviso, Encabezado, NavegacionCuentaContext } from './components/componentes';
 import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
 import { registrarCliente } from './services/m1Api';
+import { cerrarSesion, iniciarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
 import CrearCuentaView from './views/CrearCuentaView';
 import FichaComercioView from './views/FichaComercioView';
 import IniciarSesionView from './views/IniciarSesionView';
@@ -22,9 +23,23 @@ const titulos = {
 
 export default function M1App({ pantalla: pantallaInicial = 'comercio', simular = null }) {
   const [pantalla, setPantalla] = useState(pantallaInicial);
+  // Persona con sesión ({ id_usuario, nombre, correo, rol, id_comercio }) o null. Viene de GET /api/user.
+  const [usuario, setUsuario] = useState(null);
+  const [errorCierre, setErrorCierre] = useState(false);
+
+  // Al cargar se consulta la sesión. 401 es "sin sesión"; cualquier otro fallo (por ejemplo sin conexión)
+  // se ignora en silencio para no bloquear el portal.
+  useEffect(() => {
+    let activo = true;
+    obtenerUsuario().then((respuesta) => {
+      if (activo && respuesta.ok) setUsuario(respuesta.datos.user);
+    });
+    return () => { activo = false; };
+  }, []);
 
   function navegar(destino) {
     if (destino === pantalla) return;
+    setErrorCierre(false);
 
     window.history.pushState(
       { pantallaM1: destino },
@@ -61,15 +76,36 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
     return registrarCliente(datos);
   }
 
-  // Doble del ingreso del núcleo compartido (su contrato todavía no está publicado).
-  async function ingresar() {
-    await esperar();
-    if (simular === 'credenciales') return { ok: false, ...credencialesIncorrectas };
-    return { ok: true };
+  // POST /login del núcleo compartido. Con ?simular=credenciales se muestra, sin backend, el error 422 del ingreso.
+  // Si entra un cliente va al inicio del portal. Los encargados todavía no tienen panel: la vista les avisa.
+  async function ingresar({ correo, contrasena }) {
+    if (simular === 'credenciales') {
+      await esperar();
+      return { ok: false, ...credencialesIncorrectas };
+    }
+    const respuesta = await iniciarSesion(correo, contrasena);
+    if (respuesta.ok) {
+      setUsuario(respuesta.datos.user);
+      if (respuesta.datos.user.rol === 'cliente') navegar('inicio');
+    }
+    return respuesta;
   }
-  
+
+  // POST /logout. Si el servidor no se pudo contactar se conserva la sesión; un 401 significa que ya no había.
+  async function cerrar() {
+    setErrorCierre(false);
+    const respuesta = await cerrarSesion();
+    if (!respuesta.ok && respuesta.estado !== 401) {
+      setErrorCierre(true);
+      return;
+    }
+    setUsuario(null);
+    navegar('ingresar');
+  }
+
   if (pantalla === 'inicio') {
-    return <InicioView onIr={navegar} />;
+    // Con sesión, "Mi cuenta" del encabezado del portal lleva a perfil (donde está "Cerrar sesión").
+    return <InicioView onIr={(destino) => navegar(usuario && destino === 'ingresar' ? 'perfil' : destino)} />;
   }
 
   if (pantalla === 'producto') {
@@ -92,8 +128,15 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
 
   
   return (
+    <NavegacionCuentaContext.Provider value={navegar}>
     <div className="min-h-screen overflow-x-hidden bg-brandLightBg font-sans font-normal text-gray-800">
-      <Encabezado pantalla={pantalla} onIr={navegar} />
+      <Encabezado pantalla={pantalla} onIr={navegar} usuario={usuario} onCerrarSesion={cerrar} />
+
+      {errorCierre && (
+        <div className="mx-auto w-full max-w-5xl px-4 pt-4">
+          <Aviso>No se pudo cerrar la sesión. Intente de nuevo.</Aviso>
+        </div>
+      )}
 
       {pantalla === 'ingresar' && (
         <IniciarSesionView
@@ -113,5 +156,6 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
         <PerfilView onIrIngresar={() => navegar('ingresar')} />
       )}
     </div>
+    </NavegacionCuentaContext.Provider>
   );
 }
