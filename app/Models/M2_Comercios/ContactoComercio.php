@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\M2_Comercios;
 
+use App\Models\Nucleo\Concerns\PerteneceAComercio;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ContactoComercio extends Model
 {
+    use PerteneceAComercio;
+
     protected $table = 'contacto_comercio';
 
     protected $primaryKey = 'id_contacto';
@@ -33,6 +36,7 @@ class ContactoComercio extends Model
         $this->fill($datos);
         $this->save();
     }
+
     public function comercio(): BelongsTo
     {
         return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');
