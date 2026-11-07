@@ -19,7 +19,7 @@ export const redondear = (n, decimales) => Math.round((n + Number.EPSILON) * 10 
 const costo4 = (n) => redondear(n, 4);
 const monto2 = (n) => redondear(n, 2);
 
-export const disponible = (e) => e.cantidad_fisica - e.cantidad_reservada - e.cantidad_defectuosa;
+export const disponible = (e) => e.cantidad_fisica - e.cantidad_reservada;
 
 const nuevoUuid = () => crypto.randomUUID?.()
   ?? 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16));
