@@ -24,7 +24,18 @@ trait VerificaRol
         return $actual !== null && in_array($actual, $roles, true);
     }
 
-    protected function esEncargadoPlataforma($u): bool { return $this->tieneRol($u, RolUsuario::EncargadoPlataforma); }
-    protected function esEncargadoComercio($u): bool   { return $this->tieneRol($u, RolUsuario::EncargadoComercio); }
-    protected function esCliente($u): bool             { return $this->tieneRol($u, RolUsuario::Cliente); }
+    protected function esEncargadoPlataforma($u): bool
+    {
+        return $this->tieneRol($u, RolUsuario::EncargadoPlataforma);
+    }
+
+    protected function esEncargadoComercio($u): bool
+    {
+        return $this->tieneRol($u, RolUsuario::EncargadoComercio);
+    }
+
+    protected function esCliente($u): bool
+    {
+        return $this->tieneRol($u, RolUsuario::Cliente);
+    }
 }

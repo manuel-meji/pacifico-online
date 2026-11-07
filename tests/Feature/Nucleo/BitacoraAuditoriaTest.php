@@ -213,38 +213,38 @@ class BitacoraAuditoriaTest extends TestCase
     }
 
     public function test_postgresql_rechaza_update_directo_en_bitacora(): void
-{
-    if (DB::getDriverName() !== 'pgsql') {
-        $this->markTestSkipped(
-            'Esta prueba requiere PostgreSQL porque valida el trigger PL/pgSQL.'
-        );
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped(
+                'Esta prueba requiere PostgreSQL porque valida el trigger PL/pgSQL.'
+            );
+        }
+
+        $registro = RegistroAuditoria::factory()->create();
+
+        $this->expectException(\Throwable::class);
+
+        DB::table('bitacora_auditoria')
+            ->where('id_bitacora', $registro->id_bitacora)
+            ->update([
+                'accion' => 'modificacion_no_permitida',
+            ]);
     }
 
-    $registro = RegistroAuditoria::factory()->create();
+    public function test_postgresql_rechaza_delete_directo_en_bitacora(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped(
+                'Esta prueba requiere PostgreSQL porque valida el trigger PL/pgSQL.'
+            );
+        }
 
-    $this->expectException(\Throwable::class);
+        $registro = RegistroAuditoria::factory()->create();
 
-    DB::table('bitacora_auditoria')
-        ->where('id_bitacora', $registro->id_bitacora)
-        ->update([
-            'accion' => 'modificacion_no_permitida',
-        ]);
-}
+        $this->expectException(\Throwable::class);
 
-public function test_postgresql_rechaza_delete_directo_en_bitacora(): void
-{
-    if (DB::getDriverName() !== 'pgsql') {
-        $this->markTestSkipped(
-            'Esta prueba requiere PostgreSQL porque valida el trigger PL/pgSQL.'
-        );
+        DB::table('bitacora_auditoria')
+            ->where('id_bitacora', $registro->id_bitacora)
+            ->delete();
     }
-
-    $registro = RegistroAuditoria::factory()->create();
-
-    $this->expectException(\Throwable::class);
-
-    DB::table('bitacora_auditoria')
-        ->where('id_bitacora', $registro->id_bitacora)
-        ->delete();
-}
 }
