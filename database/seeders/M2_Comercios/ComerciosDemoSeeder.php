@@ -6,6 +6,7 @@ namespace Database\Seeders\M2_Comercios;
 
 use App\Models\M2_Comercios\Comercio;
 use App\Models\M2_Comercios\ComisionComercio;
+use App\Services\Nucleo\ContextoComercio;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -32,11 +33,12 @@ class ComerciosDemoSeeder extends Seeder
 
     public function run(): void
     {
-        DB::transaction(function (): void {
+        // Sin usuario no hay ámbito de comercio: se siembra en modo sistema (PerteneceAComercio).
+        app(ContextoComercio::class)->ejecutarComoSistema(fn () => DB::transaction(function (): void {
             foreach (self::COMERCIOS as $i => $datos) {
                 $this->sembrar($datos, $i + 1);
             }
-        });
+        }));
     }
 
     /** @param  array<string, mixed>  $d */
@@ -83,6 +85,18 @@ class ComerciosDemoSeeder extends Seeder
                 ['zona' => 'Resto del país', 'costo' => 3500, 'moneda' => 'CRC'],
             ],
         ]);
+
+        // Sedes (contrato SedeHabilitada): id_sede = id_ubicacion de M4.
+        $comercio->sedes()->updateOrCreate($id + ['nombre' => 'Sede principal'], [
+            'direccion' => $d['direccion'],
+            'habilitada' => true,
+        ]);
+        if ($n === 1) {
+            $comercio->sedes()->updateOrCreate($id + ['nombre' => 'Bodega Liberia'], [
+                'direccion' => 'Zona industrial, Liberia, Guanacaste',
+                'habilitada' => true,
+            ]);
+        }
 
         // Publicidad vigente solo para demostrar el filtro de destacados de M1 (pendiente de confirmar con M1).
         if ($d['destacado']) {

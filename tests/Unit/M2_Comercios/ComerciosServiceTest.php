@@ -94,12 +94,14 @@ class ComerciosServiceTest extends TestCase
     public function test_micrositio_publico_arma_contacto_redes_horarios_y_banners_activos(): void
     {
         $c = $this->crearComercio();
-        $c->micrositio()->create(['descripcion' => 'Soda típica', 'logotipo' => 'https://cdn.test/logo.png']);
-        $c->contactos()->create(['tipo' => 'telefono', 'valor' => '2666-0000']);
-        $c->contactos()->create(['tipo' => 'instagram', 'valor' => 'https://instagram.com/soda']);
-        $c->horarios()->create(['dia_semana' => 1, 'hora_apertura' => '08:00:00', 'hora_cierre' => '17:30:00', 'cerrado' => false]);
-        $c->banners()->create(['ruta' => 'https://cdn.test/b1.png', 'texto_alternativo' => 'Activo', 'orden' => 1, 'activo' => true]);
-        $c->banners()->create(['ruta' => 'https://cdn.test/b2.png', 'texto_alternativo' => 'Inactivo', 'orden' => 2, 'activo' => false]);
+        $this->comoSistema(function () use ($c): void {
+            $c->micrositio()->create(['descripcion' => 'Soda típica', 'logotipo' => 'https://cdn.test/logo.png']);
+            $c->contactos()->create(['tipo' => 'telefono', 'valor' => '2666-0000']);
+            $c->contactos()->create(['tipo' => 'instagram', 'valor' => 'https://instagram.com/soda']);
+            $c->horarios()->create(['dia_semana' => 1, 'hora_apertura' => '08:00:00', 'hora_cierre' => '17:30:00', 'cerrado' => false]);
+            $c->banners()->create(['ruta' => 'https://cdn.test/b1.png', 'texto_alternativo' => 'Activo', 'orden' => 1, 'activo' => true]);
+            $c->banners()->create(['ruta' => 'https://cdn.test/b2.png', 'texto_alternativo' => 'Inactivo', 'orden' => 2, 'activo' => false]);
+        });
 
         $datos = $this->servicio->obtenerDatosComercioPublico($c->id_comercio);
 
@@ -159,8 +161,10 @@ class ComerciosServiceTest extends TestCase
     public function test_politicas_de_envio_incluyen_las_tarifas(): void
     {
         $c = $this->crearComercio();
-        $c->politicas()->create(['tipo' => 'envio', 'contenido' => 'Envío nacional', 'configuracion_envio' => [['zona' => 'GAM', 'costo' => 2500, 'moneda' => 'CRC']]]);
-        $c->politicas()->create(['tipo' => 'devolucion', 'contenido' => '8 días']);
+        $this->comoSistema(function () use ($c): void {
+            $c->politicas()->create(['tipo' => 'envio', 'contenido' => 'Envío nacional', 'configuracion_envio' => [['zona' => 'GAM', 'costo' => 2500, 'moneda' => 'CRC']]]);
+            $c->politicas()->create(['tipo' => 'devolucion', 'contenido' => '8 días']);
+        });
 
         $datos = $this->servicio->obtenerPoliticasEnvio($c->id_comercio);
 
@@ -202,7 +206,7 @@ class ComerciosServiceTest extends TestCase
             $this->assertSame($valor, $this->servicio->obtenerDatosFiscalesComercio($id)['comision']['valor']);
         }
         $this->assertSame(5, ComisionComercio::query()->count());
-        $this->assertSame(35, HorarioComercio::query()->count());
+        $this->assertSame(35, $this->comoSistema(fn () => HorarioComercio::query()->count()));
         $this->assertSame(2, PublicidadComercio::query()->count());
         $this->assertSame(2, $this->servicio->listarComerciosHabilitados(1, 20, true)['total']);
     }

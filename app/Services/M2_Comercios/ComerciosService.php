@@ -29,6 +29,12 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\M2_Comercios\SolicitudComercio;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Crypt;
+use App\Events\M2_Comercios\ComercioReactivado;
+use App\Events\M2_Comercios\ComercioSuspendido;
+use App\Models\M2_Comercios\SedeComercio;
+use App\Models\M2_Comercios\SuspensionComercio;
+use App\Services\Nucleo\ContextoComercio;
+use Closure;
 
 /**
  * Fachada de M2 (patrón Facade, sección 7 del PC3): implementa las 8 operaciones
@@ -61,6 +67,16 @@ class ComerciosService implements ComerciosServiceInterface
      * cuando se usa, no en el constructor: PedidosService de M5 depende a su vez
      * de ComerciosServiceInterface, y pedirlo al construir crea un ciclo infinito.
      */
+    /**
+     * Las consultas públicas y entre módulos leen el micrositio de cualquier comercio
+     * habilitado (datos públicos), así que corren sin el filtro de PerteneceAComercio.
+     * La autorización de cada vía la aplican el controlador y los consumidores.
+     */
+    private function comoSistema(Closure $consulta): mixed
+    {
+        return app(ContextoComercio::class)->ejecutarComoSistema($consulta);
+    }
+
     private function subpedidos(): SubpedidosServiceInterface
     {
         return app(SubpedidosServiceInterface::class);
@@ -68,119 +84,125 @@ class ComerciosService implements ComerciosServiceInterface
 
     public function listarComerciosHabilitados(int $pagina = 1, int $porPagina = 20, bool $destacado = false): array
     {
-        $errores = [];
-        if ($pagina < 1) {
-            $errores['pagina'] = ['Debe ser un entero mayor o igual a 1.'];
-        }
-        if ($porPagina < 1 || $porPagina > self::MAXIMO_POR_PAGINA) {
-            $errores['por_pagina'] = ['Debe estar entre 1 y '.self::MAXIMO_POR_PAGINA.'.'];
-        }
-        $this->exigirValidos($errores);
+        return $this->comoSistema(function () use ($pagina, $porPagina, $destacado): array {
+            $errores = [];
+            if ($pagina < 1) {
+                $errores['pagina'] = ['Debe ser un entero mayor o igual a 1.'];
+            }
+            if ($porPagina < 1 || $porPagina > self::MAXIMO_POR_PAGINA) {
+                $errores['por_pagina'] = ['Debe estar entre 1 y '.self::MAXIMO_POR_PAGINA.'.'];
+            }
+            $this->exigirValidos($errores);
 
-        $consulta = Comercio::query()->habilitados()->with(['micrositio', 'publicidades']);
+            $consulta = Comercio::query()->habilitados()->with(['micrositio', 'publicidades']);
 
-        if ($destacado) {
-            // Contrato: los destacados se ordenan por el inicio de la publicidad vigente, la más reciente primero.
-            $consulta->destacados()->orderByDesc(
-                PublicidadComercio::query()
-                    ->selectRaw('MAX(inicio)')
-                    ->whereColumn('publicidad_comercio.id_comercio', 'comercios.id_comercio')
-                    ->vigentes()
-            );
-        }
-        $consulta->orderBy('nombre_comercial');
+            if ($destacado) {
+                // Contrato: los destacados se ordenan por el inicio de la publicidad vigente, la más reciente primero.
+                $consulta->destacados()->orderByDesc(
+                    PublicidadComercio::query()
+                        ->selectRaw('MAX(inicio)')
+                        ->whereColumn('publicidad_comercio.id_comercio', 'comercios.id_comercio')
+                        ->vigentes()
+                );
+            }
+            $consulta->orderBy('nombre_comercial');
 
-        $total = (clone $consulta)->count();
-        $comercios = $consulta->forPage($pagina, $porPagina)->get();
+            $total = (clone $consulta)->count();
+            $comercios = $consulta->forPage($pagina, $porPagina)->get();
 
-        return [
-            'pagina' => $pagina,
-            'por_pagina' => $porPagina,
-            'total' => $total,
-            'comercios' => $comercios->map(fn (Comercio $c): array => $this->resumen($c))->values()->all(),
-        ];
+            return [
+                'pagina' => $pagina,
+                'por_pagina' => $porPagina,
+                'total' => $total,
+                'comercios' => $comercios->map(fn (Comercio $c): array => $this->resumen($c))->values()->all(),
+            ];
+        });
     }
 
     public function obtenerResumenComerciosLote(array $idsComercio): array
     {
-        $ids = array_values($idsComercio);
-        $errores = [];
-        if ($ids === [] || count($ids) > self::MAXIMO_LOTE) {
-            $errores['ids_comercio'] = ['Debe tener entre 1 y '.self::MAXIMO_LOTE.' identificadores.'];
-        } elseif (array_filter($ids, fn ($id): bool => ! is_int($id)) !== []) {
-            $errores['ids_comercio'] = ['Todos los identificadores deben ser enteros.'];
-        } elseif (count(array_unique($ids)) !== count($ids)) {
-            $errores['ids_comercio'] = ['Los identificadores no se pueden repetir.'];
-        }
-        $this->exigirValidos($errores);
-
-        $encontrados = Comercio::query()->habilitados()
-            ->with(['micrositio', 'publicidades'])
-            ->whereIn('id_comercio', $ids)
-            ->get()
-            ->keyBy('id_comercio');
-
-        // Se omiten los inexistentes o no habilitados y se conserva el orden de la solicitud.
-        $comercios = [];
-        foreach ($ids as $id) {
-            if ($encontrados->has($id)) {
-                $comercios[] = $this->resumen($encontrados->get($id));
+        return $this->comoSistema(function () use ($idsComercio): array {
+            $ids = array_values($idsComercio);
+            $errores = [];
+            if ($ids === [] || count($ids) > self::MAXIMO_LOTE) {
+                $errores['ids_comercio'] = ['Debe tener entre 1 y '.self::MAXIMO_LOTE.' identificadores.'];
+            } elseif (array_filter($ids, fn ($id): bool => ! is_int($id)) !== []) {
+                $errores['ids_comercio'] = ['Todos los identificadores deben ser enteros.'];
+            } elseif (count(array_unique($ids)) !== count($ids)) {
+                $errores['ids_comercio'] = ['Los identificadores no se pueden repetir.'];
             }
-        }
+            $this->exigirValidos($errores);
 
-        return ['comercios' => $comercios];
+            $encontrados = Comercio::query()->habilitados()
+                ->with(['micrositio', 'publicidades'])
+                ->whereIn('id_comercio', $ids)
+                ->get()
+                ->keyBy('id_comercio');
+
+            // Se omiten los inexistentes o no habilitados y se conserva el orden de la solicitud.
+            $comercios = [];
+            foreach ($ids as $id) {
+                if ($encontrados->has($id)) {
+                    $comercios[] = $this->resumen($encontrados->get($id));
+                }
+            }
+
+            return ['comercios' => $comercios];
+        });
     }
 
     public function obtenerDatosComercioPublico(int $idComercio): array
     {
-        $c = Comercio::query()->habilitados()
-            ->with(['micrositio', 'banners', 'galeria', 'horarios', 'contactos', 'politicas'])
-            ->find($idComercio);
+        return $this->comoSistema(function () use ($idComercio): array {
+            $c = Comercio::query()->habilitados()
+                ->with(['micrositio', 'banners', 'galeria', 'horarios', 'contactos', 'politicas'])
+                ->find($idComercio);
 
-        if ($c === null) {
-            throw $this->noEncontrado('El comercio no existe o no está habilitado.');
-        }
-
-        $contacto = ['telefono' => null, 'correo' => null, 'direccion' => null];
-        $redes = [];
-        foreach ($c->contactos as $medio) {
-            if (in_array($medio->tipo, ContactoComercio::TIPOS_CONTACTO, true)) {
-                $contacto[$medio->tipo] ??= $medio->valor;
-            } elseif (in_array($medio->tipo, ContactoComercio::TIPOS_RED_SOCIAL, true)) {
-                $redes[] = ['plataforma' => $medio->tipo, 'url' => $medio->valor];
+            if ($c === null) {
+                throw $this->noEncontrado('El comercio no existe o no está habilitado.');
             }
-        }
 
-        return [
-            'id_comercio' => $c->id_comercio,
-            'nombre_comercial' => $c->nombre_comercial,
-            'descripcion' => $c->micrositio?->descripcion,
-            'logo_url' => $this->url($c->micrositio?->logotipo),
-            'banners' => $c->banners->where('activo', true)->sortBy('orden')->map(fn ($b): array => [
-                'id_banner' => $b->id_banner,
-                'imagen_url' => $this->url($b->ruta),
-                'texto_alternativo' => $b->texto_alternativo,
-            ])->values()->all(),
-            'galeria' => $c->galeria->sortBy('orden')->map(fn ($i): array => [
-                'id_imagen' => $i->id_imagen,
-                'imagen_url' => $this->url($i->ruta),
-                'texto_alternativo' => $i->texto_alternativo,
-            ])->values()->all(),
-            'horarios' => $c->horarios->sortBy('dia_semana')->map(fn ($h): array => [
-                'id_horario' => $h->id_horario,
-                'dia_semana' => $h->dia_semana,
-                'hora_apertura' => $h->hora_apertura ? substr((string) $h->hora_apertura, 0, 5) : null,
-                'hora_cierre' => $h->hora_cierre ? substr((string) $h->hora_cierre, 0, 5) : null,
-                'cerrado' => $h->cerrado,
-            ])->values()->all(),
-            'contacto' => $contacto,
-            'redes_sociales' => $redes,
-            'politicas' => $c->politicas->map(fn ($p): array => [
-                'tipo' => $p->tipo,
-                'descripcion' => $p->contenido,
-            ])->values()->all(),
-            'estado' => $c->estado,
-        ];
+            $contacto = ['telefono' => null, 'correo' => null, 'direccion' => null];
+            $redes = [];
+            foreach ($c->contactos as $medio) {
+                if (in_array($medio->tipo, ContactoComercio::TIPOS_CONTACTO, true)) {
+                    $contacto[$medio->tipo] ??= $medio->valor;
+                } elseif (in_array($medio->tipo, ContactoComercio::TIPOS_RED_SOCIAL, true)) {
+                    $redes[] = ['plataforma' => $medio->tipo, 'url' => $medio->valor];
+                }
+            }
+
+            return [
+                'id_comercio' => $c->id_comercio,
+                'nombre_comercial' => $c->nombre_comercial,
+                'descripcion' => $c->micrositio?->descripcion,
+                'logo_url' => $this->url($c->micrositio?->logotipo),
+                'banners' => $c->banners->where('activo', true)->sortBy('orden')->map(fn ($b): array => [
+                    'id_banner' => $b->id_banner,
+                    'imagen_url' => $this->url($b->ruta),
+                    'texto_alternativo' => $b->texto_alternativo,
+                ])->values()->all(),
+                'galeria' => $c->galeria->sortBy('orden')->map(fn ($i): array => [
+                    'id_imagen' => $i->id_imagen,
+                    'imagen_url' => $this->url($i->ruta),
+                    'texto_alternativo' => $i->texto_alternativo,
+                ])->values()->all(),
+                'horarios' => $c->horarios->sortBy('dia_semana')->map(fn ($h): array => [
+                    'id_horario' => $h->id_horario,
+                    'dia_semana' => $h->dia_semana,
+                    'hora_apertura' => $h->hora_apertura ? substr((string) $h->hora_apertura, 0, 5) : null,
+                    'hora_cierre' => $h->hora_cierre ? substr((string) $h->hora_cierre, 0, 5) : null,
+                    'cerrado' => $h->cerrado,
+                ])->values()->all(),
+                'contacto' => $contacto,
+                'redes_sociales' => $redes,
+                'politicas' => $c->politicas->map(fn ($p): array => [
+                    'tipo' => $p->tipo,
+                    'descripcion' => $p->contenido,
+                ])->values()->all(),
+                'estado' => $c->estado,
+            ];
+        });
     }
 
     public function obtenerComercioActivo(int $idComercio): array
@@ -199,32 +221,43 @@ class ComerciosService implements ComerciosServiceInterface
     {
         $c = $this->buscar($idComercio);
 
-        // Supuesto del PC3: id_sede = id_ubicacion de M4. La tabla de sedes se agrega
-        // cuando M4 lo confirme; mientras tanto la lista va vacía.
-        return ['id_comercio' => $c->id_comercio, 'sedes' => []];
+        // id_sede = id_ubicacion de M4 (confirmado por M4 el 6/11). Se devuelven todas las
+        // sedes con su indicador habilitada, para que M4 distinga una sede ajena de una
+        // deshabilitada.
+        return [
+            'id_comercio' => $c->id_comercio,
+            'sedes' => $c->sedes()->orderBy('id_sede')->get()->map(fn (SedeComercio $sede): array => [
+                'id_sede' => $sede->id_sede,
+                'nombre' => $sede->nombre,
+                'direccion' => $sede->direccion,
+                'habilitada' => $sede->habilitada,
+            ])->values()->all(),
+        ];
     }
 
     public function obtenerPoliticasEnvio(int $idComercio): array
     {
-        $c = $this->buscar($idComercio);
-        $politicas = $c->politicas()->get();
+        return $this->comoSistema(function () use ($idComercio): array {
+            $c = $this->buscar($idComercio);
+            $politicas = $c->politicas()->get();
 
-        $tarifas = $politicas->where('tipo', 'envio')
-            ->flatMap(fn ($p): array => $p->configuracion_envio ?? [])
-            ->map(fn (array $t): array => [
-                'zona' => (string) ($t['zona'] ?? ''),
-                'costo' => (float) ($t['costo'] ?? 0),
-                'moneda' => (string) ($t['moneda'] ?? 'CRC'),
-            ])->values()->all();
+            $tarifas = $politicas->where('tipo', 'envio')
+                ->flatMap(fn ($p): array => $p->configuracion_envio ?? [])
+                ->map(fn (array $t): array => [
+                    'zona' => (string) ($t['zona'] ?? ''),
+                    'costo' => (float) ($t['costo'] ?? 0),
+                    'moneda' => (string) ($t['moneda'] ?? 'CRC'),
+                ])->values()->all();
 
-        return [
-            'id_comercio' => $c->id_comercio,
-            'politicas' => $politicas->map(fn ($p): array => [
-                'tipo' => $p->tipo,
-                'descripcion' => $p->contenido,
-            ])->values()->all(),
-            'tarifas' => $tarifas,
-        ];
+            return [
+                'id_comercio' => $c->id_comercio,
+                'politicas' => $politicas->map(fn ($p): array => [
+                    'tipo' => $p->tipo,
+                    'descripcion' => $p->contenido,
+                ])->values()->all(),
+                'tarifas' => $tarifas,
+            ];
+        });
     }
 
     public function obtenerDatosFiscalesComercio(int $idComercio): array
@@ -274,15 +307,17 @@ class ComerciosService implements ComerciosServiceInterface
      */
     public function obtenerMicrositio(int $comercioId): array
     {
-        $c = $this->buscar($comercioId);
+        return $this->comoSistema(function () use ($comercioId): array {
+            $c = $this->buscar($comercioId);
 
-        return [
-            'id_comercio' => $c->id_comercio,
-            'nombre_comercial' => $c->nombre_comercial,
-            'estado' => $c->estado,
-            'activo' => $c->estaActivo(),
-            'logo_url' => $this->url($c->micrositio?->logotipo),
-        ];
+            return [
+                'id_comercio' => $c->id_comercio,
+                'nombre_comercial' => $c->nombre_comercial,
+                'estado' => $c->estado,
+                'activo' => $c->estaActivo(),
+                'logo_url' => $this->url($c->micrositio?->logotipo),
+            ];
+        });
     }
 
     /**
@@ -1054,6 +1089,111 @@ public function corregirSolicitud(int $idSolicitud, array $datos): SolicitudCome
         return $solicitud;
     });
 }
+    // --- CU-0017 y CU-0018: suspender y reactivar comercios (Diego) ---
+
+    /** CU-0017 (diseño, Ds-02). RN-004: solo un comercio Activo. RN-005: motivo obligatorio. */
+    public function suspenderComercio(int $idComercio, string $motivo): SuspensionComercio
+    {
+        $motivo = trim($motivo);
+        if ($motivo === '') {
+            $this->exigirValidos(['motivo' => ['El motivo de la suspensión es obligatorio.']]);
+        }
+        $idUsuario = auth()->id() ?? throw ErrorNucleoException::sesionInvalida();
+
+        return DB::transaction(function () use ($idComercio, $motivo, $idUsuario): SuspensionComercio {
+            $comercio = Comercio::query()->lockForUpdate()->find($idComercio)
+                ?? throw $this->noEncontrado('El comercio no existe.');
+
+            if (! $comercio->estaActivo()) {
+                $this->exigirValidos(['estado' => ['Solo se puede suspender un comercio Activo.']]);
+            }
+
+            $comercio->suspender();
+            $suspension = $comercio->suspensiones()->create([
+                'id_usuario' => $idUsuario,
+                'motivo' => $motivo,
+                'fecha_suspension' => now(),
+            ]);
+
+            $this->nucleo->registrarAuditoria('suspender_comercio', 'comercio', $comercio->id_comercio, [
+                'modulo' => 'M2', 'motivo' => $motivo,
+            ]);
+
+            ComercioSuspendido::dispatch((string) Str::uuid(), now(), $comercio->id_comercio, Comercio::SUSPENDIDO, $motivo);
+
+            return $suspension;
+        });
+    }
+
+    /** CU-0018. Solo un comercio Suspendido; cierra la suspensión abierta. RN-017: comisión y membresía se mantienen. */
+    public function reactivarComercio(int $idComercio): Comercio
+    {
+        return DB::transaction(function () use ($idComercio): Comercio {
+            $comercio = Comercio::query()->lockForUpdate()->find($idComercio)
+                ?? throw $this->noEncontrado('El comercio no existe.');
+
+            if (! $comercio->estaSuspendido()) {
+                $this->exigirValidos(['estado' => ['Solo se puede reactivar un comercio Suspendido.']]);
+            }
+
+            $comercio->suspensiones()->whereNull('fecha_reactivacion')->get()
+                ->each(fn (SuspensionComercio $suspension) => $suspension->cerrar());
+            $comercio->activar();
+
+            $this->nucleo->registrarAuditoria('reactivar_comercio', 'comercio', $comercio->id_comercio, ['modulo' => 'M2']);
+
+            ComercioReactivado::dispatch((string) Str::uuid(), now(), $comercio->id_comercio, Comercio::ACTIVO, $comercio->nombre_comercial);
+
+            return $comercio;
+        });
+    }
+
+    /** Panel de la plataforma: todos los comercios, en cualquier estado. */
+    public function listarComercios(?string $estado, int $pagina, int $porPagina): array
+    {
+        $errores = [];
+        if ($estado !== null && ! in_array($estado, Comercio::ESTADOS, true)) {
+            $errores['estado'] = ['El estado no es válido.'];
+        }
+        if ($pagina < 1) {
+            $errores['pagina'] = ['Debe ser un entero mayor o igual a 1.'];
+        }
+        if ($porPagina < 1 || $porPagina > self::MAXIMO_POR_PAGINA) {
+            $errores['por_pagina'] = ['Debe estar entre 1 y '.self::MAXIMO_POR_PAGINA.'.'];
+        }
+        $this->exigirValidos($errores);
+
+        $consulta = Comercio::query()->when($estado !== null, fn ($q) => $q->where('estado', $estado));
+        $total = (clone $consulta)->count();
+        $comercios = $consulta->orderBy('nombre_comercial')->forPage($pagina, $porPagina)->get();
+
+        return [
+            'pagina' => $pagina,
+            'por_pagina' => $porPagina,
+            'total' => $total,
+            'comercios' => $comercios->map(fn (Comercio $c): array => $this->fichaComercio($c))->values()->all(),
+        ];
+    }
+
+    /** Ficha administrativa de un comercio (diseño: ComerciosController::consultar). */
+    public function consultarComercio(int $idComercio): array
+    {
+        return $this->fichaComercio($this->buscar($idComercio));
+    }
+
+    /** @return array<string, mixed> */
+    private function fichaComercio(Comercio $c): array
+    {
+        return [
+            'id_comercio' => $c->id_comercio,
+            'nombre_comercial' => $c->nombre_comercial,
+            'cedula_juridica' => $c->cedula_juridica,
+            'razon_social' => $c->razon_social,
+            'estado' => $c->estado,
+            'motivo_estado' => $c->motivoEstado(),
+        ];
+    }
+
     private function noEncontrado(string $mensaje): ErrorNucleoException
     {
         return ErrorNucleoException::paraModulo(self::MODULO, 'ERR-004', 404, $mensaje);
