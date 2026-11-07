@@ -32,7 +32,6 @@ CREATE TABLE existencias (
     id_ubicacion bigint NOT NULL,
     cantidad_fisica numeric(14,3) NOT NULL DEFAULT 0,
     cantidad_reservada numeric(14,3) NOT NULL DEFAULT 0,
-    cantidad_defectuosa numeric(14,3) NOT NULL DEFAULT 0,
     stock_minimo numeric(14,3) NOT NULL DEFAULT 0,
     costo_promedio numeric(14,4) NOT NULL DEFAULT 0,
     created_at timestamp,
@@ -41,7 +40,7 @@ CREATE TABLE existencias (
     UNIQUE (id_comercio, id_existencia),
     CHECK (cantidad_fisica >= 0),
     CHECK (cantidad_reservada >= 0),
-    CHECK (cantidad_fisica - cantidad_reservada - cantidad_defectuosa >= 0)
+    CHECK (cantidad_fisica - cantidad_reservada >= 0)
 );
 
 CREATE TABLE reservas (
@@ -74,7 +73,6 @@ SQL
             'id_comercio' => 1,
             'id_producto' => 1,
             'cantidad_reservada' => 0,
-            'cantidad_defectuosa' => 0,
             'stock_minimo' => 0,
         ], 'id_existencia');
     }

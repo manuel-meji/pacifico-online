@@ -2,7 +2,7 @@
 
 namespace Tests\Doubles\M4;
 
-use App\Contracts\M2_Comercios\ComerciosServiceInterface;
+use App\Services\M2_Comercios\Dobles\ComerciosDobleBase;
 use LogicException;
 
 /**
@@ -12,7 +12,7 @@ use LogicException;
  * obtenerComercioActivo (GET /comercios/{id_comercio}/estado) y obtenerSedesComercio
  * (GET /comercios/{id_comercio}/sedes). Errores en el formato del núcleo: ERR-004 y ERR-005.
  */
-class ComerciosContratoM2 implements ComerciosServiceInterface
+class ComerciosContratoM2 extends ComerciosDobleBase
 {
     /** @return array{id_comercio: int, estado: string, activo: bool, motivo_estado: string|null} */
     public function obtenerComercioActivo(int $idComercio): array

@@ -11,6 +11,7 @@ use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Events\M4_Inventario\ExistenciaAgotada;
 use App\Events\M4_Inventario\ExistenciaRepuesta;
 use App\Events\M4_Inventario\ExistenciaReservada;
+use App\Models\M2_Comercios\Comercio;
 use App\Services\M4_Inventario\Dependencias\CatalogoReal;
 use App\Services\M4_Inventario\Dependencias\ComerciosReal;
 use App\Services\M4_Inventario\Dependencias\NucleoReal;
@@ -20,6 +21,7 @@ use App\Services\M4_Inventario\Dobles\NucleoStub;
 use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 use App\Services\M4_Inventario\InventarioService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
@@ -44,7 +46,7 @@ class DespliegueMinimoM4Test extends TestCase
         // Variación 10: la última unidad. Variación 11: sin stock en la ubicación 1 y 4 disponibles en la 2.
         $this->ultimaUnidad = $this->existencia(['id_variacion' => 10, 'id_ubicacion' => 1, 'cantidad_fisica' => 1, 'stock_minimo' => 2]);
         $this->existencia(['id_variacion' => 11, 'id_ubicacion' => 1, 'cantidad_fisica' => 0]);
-        $this->existencia(['id_variacion' => 11, 'id_ubicacion' => 2, 'cantidad_fisica' => 6, 'cantidad_reservada' => 1, 'cantidad_defectuosa' => 1]);
+        $this->existencia(['id_variacion' => 11, 'id_ubicacion' => 2, 'cantidad_fisica' => 5, 'cantidad_reservada' => 1]);
     }
 
     private function inventario(): InventarioModuleInterface
@@ -115,18 +117,47 @@ class DespliegueMinimoM4Test extends TestCase
         $this->esperarError('ERR-M4-013', 404, fn () => $this->inventario()->reservarExistencias(1, 5000, 1));
     }
 
-    public function test_si_m2_real_aun_no_publica_la_operacion_responde_err_006(): void
+    public function test_con_m2_real_m4_usa_el_estado_del_comercio(): void
     {
-        config(['integraciones.m4.m2.modo' => 'real']);
-        $this->assertFalse(method_exists(app(ComerciosServiceInterface::class), 'obtenerComercioActivo'));
+        // Tablas de M2 y dos comercios: uno activo y uno suspendido.
+        $this->assertSame(0, Artisan::call('migrate', ['--path' => 'database/migrations/M2_Comercios']));
+        $activo = $this->comercioM2(Comercio::ACTIVO);
+        $suspendido = $this->comercioM2(Comercio::SUSPENDIDO);
 
-        try {
-            $this->inventario()->reservarExistencias(1, 10, 1);
-            $this->fail('Debía lanzar ERR-006.');
-        } catch (ErrorInventarioException $e) {
-            $this->assertSame('ERR-006', $e->codigo);
-            $this->assertSame('M2', $e->detalles['modulo']);
-        }
+        // Una sola instancia de M2 real en la prueba: resolver ComerciosServiceInterface dos veces
+        // en el mismo proceso hoy entra en un ciclo M2 -> M5 -> M2 (reportado a M2 y M5).
+        $this->app->instance(ComerciosServiceInterface::class, app(ComerciosServiceInterface::class));
+        config(['integraciones.m4.m2.modo' => 'real']);
+        $m2 = app(ComerciosDependencia::class);
+        $this->assertInstanceOf(ComerciosReal::class, $m2);
+
+        // ObtenerComercioActivo de M2 real llega a M4 con estado y activo.
+        $this->assertSame(
+            ['id_comercio' => $activo, 'estado' => 'Activo', 'activo' => true, 'motivo_estado' => null],
+            $m2->obtenerComercioActivo($activo),
+        );
+        $respuesta = $m2->obtenerComercioActivo($suspendido);
+        $this->assertSame('Suspendido', $respuesta['estado']);
+        $this->assertFalse($respuesta['activo']);
+
+        // Con el comercio suspendido, M4 no reserva (RN-M4-009).
+        $this->esperarError('ERR-M4-015', 409, fn () => $this->inventario()->reservarExistencias($suspendido, 10, 1));
+        $this->assertSame(0.0, (float) DB::table('existencias')->where('id_existencia', $this->ultimaUnidad)->value('cantidad_reservada'));
+    }
+
+    private function comercioM2(string $estado): int
+    {
+        static $secuencia = 400000;
+        $secuencia++;
+
+        return Comercio::query()->create([
+            'cedula_juridica' => '3-101-'.$secuencia,
+            'nombre_comercial' => 'Comercio '.$secuencia,
+            'razon_social' => 'Comercio '.$secuencia.' S.A.',
+            'direccion_fiscal' => 'Liberia, Guanacaste',
+            'inscrito_como_contribuyente' => true,
+            'estado' => $estado,
+        ])->id_comercio;
     }
 
     // ---------------------------------------------------------------- disponibilidad
@@ -137,7 +168,7 @@ class DespliegueMinimoM4Test extends TestCase
         $this->get('/api/m4/v1/existencias/disponibilidad?id_comercio=1&id_variacion=10')->assertNotFound();
     }
 
-    public function test_la_disponibilidad_resta_reservado_y_defectuoso_y_suma_ubicaciones(): void
+    public function test_la_disponibilidad_resta_lo_reservado_y_suma_ubicaciones(): void
     {
         $this->assertSame([
             'id_comercio' => 1,
