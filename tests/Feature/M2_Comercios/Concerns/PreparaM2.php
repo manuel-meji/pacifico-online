@@ -7,6 +7,8 @@ namespace Tests\Feature\M2_Comercios\Concerns;
 use App\Models\M2_Comercios\Comercio;
 use App\Models\M2_Comercios\ComisionComercio;
 use App\Models\Nucleo\Usuario;
+use App\Services\Nucleo\ContextoComercio;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 
@@ -84,5 +86,20 @@ trait PreparaM2
         $usuario->setAttribute($usuario->getKeyName(), 1);
 
         return $usuario;
+    }
+
+    /**
+     * Ejecuta sin el filtro de PerteneceAComercio (modo sistema del núcleo). Sirve para
+     * preparar datos de prueba de varios comercios o revisar lo que quedó guardado.
+     */
+    protected function comoSistema(Closure $operacion): mixed
+    {
+        return app(ContextoComercio::class)->ejecutarComoSistema($operacion);
+    }
+
+    /** Fija el ámbito del comercio, como hace EstablecerComercio con un encargado de comercio. */
+    protected function enAmbitoDe(int $idComercio): void
+    {
+        app(ContextoComercio::class)->establecer($idComercio);
     }
 }

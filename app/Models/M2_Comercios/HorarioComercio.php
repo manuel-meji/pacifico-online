@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\M2_Comercios;
 
+use App\Models\Nucleo\Concerns\PerteneceAComercio;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class HorarioComercio extends Model
 {
+    use PerteneceAComercio;
+
     protected $table = 'horarios_comercio';
 
     protected $primaryKey = 'id_horario';
@@ -23,7 +26,7 @@ class HorarioComercio extends Model
 
     protected $casts = ['dia_semana' => 'integer', 'cerrado' => 'boolean'];
 
-    // --- CU-0006: administrar horarios 
+    // --- CU-0006: administrar horarios
     public function actualizar(array $datos): void
     {
         $this->fill($datos);

@@ -27,6 +27,13 @@ class SuspensionComercio extends Model
         return $this->fecha_reactivacion === null;
     }
 
+    /** CU-0018: cierra la suspensión al reactivar el comercio. */
+    public function cerrar(): void
+    {
+        $this->fecha_reactivacion = now();
+        $this->save();
+    }
+
     public function comercio(): BelongsTo
     {
         return $this->belongsTo(Comercio::class, 'id_comercio', 'id_comercio');

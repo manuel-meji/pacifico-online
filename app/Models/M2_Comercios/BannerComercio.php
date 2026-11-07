@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\M2_Comercios;
 
+use App\Models\Nucleo\Concerns\PerteneceAComercio;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class BannerComercio extends Model
 {
+    use PerteneceAComercio;
+
     protected $table = 'banners_comercio';
 
     protected $primaryKey = 'id_banner';

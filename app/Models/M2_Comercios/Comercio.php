@@ -51,6 +51,13 @@ class Comercio extends Model
         return $this->estado === self::PENDIENTE;
     }
 
+    /** CU-0017: pasa el comercio a Suspendido (diseño, tabla 4.1). El motivo va en SuspensionComercio. */
+    public function suspender(): void
+    {
+        $this->estado = self::SUSPENDIDO;
+        $this->save();
+    }
+
     public function estaSuspendido(): bool
     {
         return $this->estado === self::SUSPENDIDO;
@@ -137,6 +144,11 @@ class Comercio extends Model
     public function comisiones(): HasMany
     {
         return $this->hasMany(ComisionComercio::class, 'id_comercio', 'id_comercio');
+    }
+
+    public function sedes(): HasMany
+    {
+        return $this->hasMany(SedeComercio::class, 'id_comercio', 'id_comercio');
     }
 
     public function membresias(): HasMany
