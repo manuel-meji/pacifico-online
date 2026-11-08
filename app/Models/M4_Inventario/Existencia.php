@@ -101,6 +101,26 @@ class Existencia extends Model
         $this->cantidad_fisica -= $cantidad;
     }
 
+    /** Reserva: compromete unidades disponibles sin tocar el físico (ERR-M4-001 si no alcanzan). */
+    public function comprometer(int $cantidad): void
+    {
+        $this->verificarSuficiente($cantidad);
+        $this->cantidad_reservada += $cantidad;
+    }
+
+    /** Liberación o vencimiento: devuelve las unidades comprometidas al disponible. */
+    public function liberarCompromiso(int $cantidad): void
+    {
+        $this->cantidad_reservada -= $cantidad;
+    }
+
+    /** Salida por despacho: descuenta físico y reservado en igual medida (el disponible no cambia). */
+    public function consumirCompromiso(int $cantidad): void
+    {
+        $this->cantidad_reservada -= $cantidad;
+        $this->cantidad_fisica -= $cantidad;
+    }
+
     private function verificarSuficiente(int $cantidad): void
     {
         if ($this->disponible() < $cantidad) {

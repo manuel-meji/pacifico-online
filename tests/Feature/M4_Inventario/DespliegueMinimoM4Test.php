@@ -327,10 +327,10 @@ class DespliegueMinimoM4Test extends TestCase
         Event::fake();
         $reserva = $this->inventario()->reservarExistencias(1, 10, 1);
 
-        $liberada = $this->inventario()->liberarReserva($reserva['id_reserva'], 'pago rechazado');
+        $liberada = $this->inventario()->liberarReserva($reserva['id_reserva'], 'pago_rechazado');
 
         $this->assertSame('liberada', $liberada['estado_reserva']);
-        $this->assertSame('pago rechazado', $liberada['motivo_cierre']);
+        $this->assertSame('pago_rechazado', $liberada['motivo_cierre']);
         $this->assertNotNull($liberada['fecha_resolucion']);
         $this->assertSame(0, (int) DB::table('existencias')->where('id_existencia', $this->ultimaUnidad)->value('cantidad_reservada'));
 

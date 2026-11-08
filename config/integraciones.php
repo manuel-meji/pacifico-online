@@ -8,6 +8,7 @@ use App\Services\M4_Inventario\Dobles\AutorizacionesStub as M4AutorizacionesStub
 use App\Services\M4_Inventario\Dobles\CatalogoStub as M4CatalogoStub;
 use App\Services\M4_Inventario\Dobles\ComerciosStub as M4ComerciosStub;
 use App\Services\M4_Inventario\Dobles\NucleoStub as M4NucleoStub;
+use App\Services\M4_Inventario\Dobles\PedidosStub as M4PedidosStub;
 use App\Services\M5_Pedidos\Dobles\CatalogoStub as M5CatalogoStub;
 use App\Services\M5_Pedidos\Dobles\ComerciosStub as M5ComerciosStub;
 use App\Services\M5_Pedidos\Dobles\InventarioStub as M5InventarioStub;
@@ -87,6 +88,10 @@ return [
         'nucleo' => [
             'modo' => env('M4_NUCLEO_MODO', 'doble'),
             'doble' => M4NucleoStub::class,
+        ],
+        'm5' => [
+            'modo' => env('M4_M5_MODO', 'doble'),
+            'doble' => M4PedidosStub::class,
         ],
 
         // Minutos de vigencia de una reserva si el solicitante no indica otro valor.

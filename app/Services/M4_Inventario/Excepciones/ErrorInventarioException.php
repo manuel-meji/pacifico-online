@@ -48,6 +48,31 @@ class ErrorInventarioException extends RuntimeException
         return new self('ERR-M4-004', 404, 'No se encontró la reserva.');
     }
 
+    public static function reservaVencida(): self
+    {
+        return new self('ERR-M4-005', 409, 'La reserva venció y ya no puede confirmarse.');
+    }
+
+    public static function vinculoNoCorresponde(): self
+    {
+        return new self('ERR-M4-007', 409, 'El pedido o subpedido no corresponde a la reserva.');
+    }
+
+    public static function pedidoNoPagado(): self
+    {
+        return new self('ERR-M4-009', 409, 'El pedido aún no está pagado.');
+    }
+
+    public static function reingresoYaRegistrado(): self
+    {
+        return new self('ERR-M4-010', 409, 'El reingreso de esta reserva ya fue registrado.');
+    }
+
+    public static function recepcionNoVerificada(): self
+    {
+        return new self('ERR-M4-011', 409, 'La recepción física de la mercadería no está verificada.');
+    }
+
     public static function reservaYaConsumida(): self
     {
         return new self('ERR-M4-008', 409, 'La reserva ya se convirtió en salida y no puede liberarse.');
