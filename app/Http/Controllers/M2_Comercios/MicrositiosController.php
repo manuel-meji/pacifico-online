@@ -192,89 +192,89 @@ class MicrositiosController extends Controller
         );
     }
 
-     public function gestionarGaleria(int $idComercio, Request $request): JsonResponse
-{
-    $comercio = Comercio::findOrFail($idComercio);
+    public function gestionarGaleria(int $idComercio, Request $request): JsonResponse
+    {
+        $comercio = Comercio::findOrFail($idComercio);
 
-    Gate::authorize('actualizar', $comercio);
+        Gate::authorize('actualizar', $comercio);
 
-    $datos = $request->validate([
-        'galeria' => [
-            'required',
-            'array',
-        ],
-        'galeria.*.id_imagen' => [
-            'nullable',
-            'integer',
-        ],
-        'galeria.*.imagen' => [
-            'required_without:galeria.*.id_imagen',
-            'image',
-            'mimes:jpg,jpeg,png,webp',
-            'max:2048',
-        ],
-        'galeria.*.orden' => [
-            'required',
-            'integer',
-            'min:1',
-        ],
-        'galeria.*.texto_alternativo' => [
-            'required',
-            'string',
-            'max:150',
-        ],
-    ]);
+        $datos = $request->validate([
+            'galeria' => [
+                'required',
+                'array',
+            ],
+            'galeria.*.id_imagen' => [
+                'nullable',
+                'integer',
+            ],
+            'galeria.*.imagen' => [
+                'required_without:galeria.*.id_imagen',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:2048',
+            ],
+            'galeria.*.orden' => [
+                'required',
+                'integer',
+                'min:1',
+            ],
+            'galeria.*.texto_alternativo' => [
+                'required',
+                'string',
+                'max:150',
+            ],
+        ]);
 
-    return response()->json(
-        $this->comercios->gestionarGaleria(
-            $idComercio,
-            $datos['galeria']
-        )
-    );
-}
+        return response()->json(
+            $this->comercios->gestionarGaleria(
+                $idComercio,
+                $datos['galeria']
+            )
+        );
+    }
 
     public function gestionarBanners(int $idComercio, Request $request): JsonResponse
-{
-    $comercio = Comercio::findOrFail($idComercio);
+    {
+        $comercio = Comercio::findOrFail($idComercio);
 
-    Gate::authorize('actualizar', $comercio);
+        Gate::authorize('actualizar', $comercio);
 
-    $datos = $request->validate([
-        'banners' => [
-            'required',
-            'array',
-        ],
-        'banners.*.id_banner' => [
-            'nullable',
-            'integer',
-        ],
-        'banners.*.imagen' => [
-            'required_without:banners.*.id_banner',
-            'image',
-            'mimes:jpg,jpeg,png,webp',
-            'max:2048',
-        ],
-        'banners.*.orden' => [
-            'required',
-            'integer',
-            'min:1',
-        ],
-        'banners.*.texto_alternativo' => [
-            'required',
-            'string',
-            'max:150',
-        ],
-        'banners.*.activo' => [
-            'required',
-            'boolean',
-        ],
-    ]);
+        $datos = $request->validate([
+            'banners' => [
+                'required',
+                'array',
+            ],
+            'banners.*.id_banner' => [
+                'nullable',
+                'integer',
+            ],
+            'banners.*.imagen' => [
+                'required_without:banners.*.id_banner',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:2048',
+            ],
+            'banners.*.orden' => [
+                'required',
+                'integer',
+                'min:1',
+            ],
+            'banners.*.texto_alternativo' => [
+                'required',
+                'string',
+                'max:150',
+            ],
+            'banners.*.activo' => [
+                'required',
+                'boolean',
+            ],
+        ]);
 
-    return response()->json(
-        $this->comercios->gestionarBanners(
-            $idComercio,
-            $datos['banners']
-        )
-    );
-}
+        return response()->json(
+            $this->comercios->gestionarBanners(
+                $idComercio,
+                $datos['banners']
+            )
+        );
+    }
 }
