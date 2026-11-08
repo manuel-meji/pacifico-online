@@ -200,7 +200,7 @@ class MicrositiosController extends Controller
 
         $datos = $request->validate([
             'galeria' => [
-                'required',
+                'present',
                 'array',
             ],
             'galeria.*.id_imagen' => [
@@ -241,7 +241,7 @@ class MicrositiosController extends Controller
 
         $datos = $request->validate([
             'banners' => [
-                'required',
+                'present',
                 'array',
             ],
             'banners.*.id_banner' => [
