@@ -9,8 +9,7 @@ class NucleoService implements NucleoServiceInterface
     public function __construct(
         private readonly BitacoraAuditoria $bitacoraAuditoria,
         private readonly ContextoComercio $contextoComercio,
-    ) {
-    }
+    ) {}
 
     /**
      * Regla RN-12: comercio del ámbito de aislamiento de la petición actual

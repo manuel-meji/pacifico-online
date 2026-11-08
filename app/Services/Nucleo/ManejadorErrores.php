@@ -11,12 +11,12 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use Illuminate\Support\Facades\Facade;
 use Throwable;
 
 /**
@@ -158,61 +158,46 @@ class ManejadorErrores
      * (storage/logs/laravel-YYYY-MM-DD.log) con código, módulo de origen, traza y petición.
      */
     public static function registrarEnLogDiario(Throwable $e, ?Request $request = null): void
-{
-    if (! self::debeRegistrarseEnLog($e)) {
-        return;
-    }
+    {
+        if (! self::debeRegistrarseEnLog($e)) {
+            return;
+        }
 
-    /*
-     * Durante el arranque de Artisan/PHPUnit Laravel puede reportar una
-     * excepción antes de que las Facades hayan sido inicializadas.
-     *
-     * En ese escenario no se intenta escribir en el log porque hacerlo
-     * produciría "A facade root has not been set" y ocultaría la excepción
-     * original que provocó el fallo.
-     */
-    if (Facade::getFacadeApplication() === null) {
-        return;
-    }
-
-    $codigo = self::resolverCodigoError($e);
-    $modulo = self::detectarModulo($e, $request);
-
-    $contexto = [
-        'codigo' => $codigo,
-        'modulo_origen' => $modulo,
-        'peticion' => $request ? [
-            'metodo' => $request->method(),
-            'url' => $request->fullUrl(),
-            'ip' => $request->ip(),
-            'parametros' => $request->except([
-                'password',
-                'contrasena',
-                'password_confirmation',
-                'token',
-                'secret',
-            ]),
-        ] : null,
-        'traza' => $e->getTraceAsString(),
-    ];
-
-    try {
-        Log::channel('daily')->error(
-            sprintf(
-                '[%s][%s] %s',
-                $modulo,
-                $codigo,
-                $e->getMessage()
-            ),
-            $contexto
-        );
-    } catch (Throwable) {
         /*
-         * El registro de errores nunca debe provocar una segunda excepción
-         * ni ocultar el error original.
+         * Durante el arranque de Artisan/PHPUnit Laravel puede reportar una
+         * excepción antes de que las Facades hayan sido inicializadas.
+         *
+         * En ese escenario no se intenta escribir en el log porque hacerlo
+         * produciría "A facade root has not been set" y ocultaría la excepción
+         * original que provocó el fallo.
          */
+        if (Facade::getFacadeApplication() === null) {
+            return;
+        }
+
+        $codigo = self::resolverCodigoError($e);
+        $modulo = self::detectarModulo($e, $request);
+
+        $contexto = [
+            'codigo' => $codigo,
+            'modulo_origen' => $modulo,
+            'peticion' => $request ? [
+                'metodo' => $request->method(),
+                'url' => $request->fullUrl(),
+                'ip' => $request->ip(),
+                'parametros' => $request->except([
+                    'password',
+                    'contrasena',
+                    'password_confirmation',
+                    'token',
+                    'secret',
+                ]),
+            ] : null,
+            'traza' => $e->getTraceAsString(),
+        ];
+
         try {
-            Log::error(
+            Log::channel('daily')->error(
                 sprintf(
                     '[%s][%s] %s',
                     $modulo,
@@ -222,10 +207,25 @@ class ManejadorErrores
                 $contexto
             );
         } catch (Throwable) {
-            // No hacer nada: se conserva la excepción original.
+            /*
+             * El registro de errores nunca debe provocar una segunda excepción
+             * ni ocultar el error original.
+             */
+            try {
+                Log::error(
+                    sprintf(
+                        '[%s][%s] %s',
+                        $modulo,
+                        $codigo,
+                        $e->getMessage()
+                    ),
+                    $contexto
+                );
+            } catch (Throwable) {
+                // No hacer nada: se conserva la excepción original.
+            }
         }
     }
-}
 
     /**
      * Detecta el módulo de origen de la excepción mediante la interfaz del error,
