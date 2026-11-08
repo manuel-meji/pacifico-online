@@ -7,10 +7,12 @@ use RuntimeException;
 /**
  * Error de M4 con el formato estándar del núcleo (sección 5.5 del PC3):
  * {"error": {"codigo", "mensaje", "detalles"}}. Los códigos propios son los
- * ERR-M4-nnn de x-codigos-error del contrato v1.2.0.
+ * ERR-M4-nnn de x-codigos-error del contrato v1.3.0.
  *
- * Quien llama a M4 (otro módulo o un controlador de Inertia) la captura y
- * decide cómo mostrarla; toArray() da el cuerpo en el formato del núcleo.
+ * Quien llama a M4 por la interfaz PHP la captura y decide cómo mostrarla;
+ * toArray() da el cuerpo en el formato del núcleo. En la API /api/m4/v1 la
+ * convierte en respuesta el manejador de errores del núcleo (ManejadorErrores),
+ * con el estado HTTP de $http.
  */
 class ErrorInventarioException extends RuntimeException
 {
@@ -94,6 +96,20 @@ class ErrorInventarioException extends RuntimeException
             503,
             'Servicio temporalmente no disponible, intentar de nuevo.',
             array_filter(['modulo' => $modulo, 'motivo' => $motivo]),
+        );
+    }
+
+    /**
+     * Operación publicada en el contrato que v0.9.0 no implementa (alcance deseable).
+     * Se responde ERR-006 para que el consumidor la trate como no disponible.
+     */
+    public static function operacionNoImplementada(string $operacion): self
+    {
+        return new self(
+            'ERR-006',
+            503,
+            'Operación no disponible en esta versión de la plataforma.',
+            ['modulo' => 'M4', 'operacion' => $operacion, 'motivo' => 'alcance_deseable_no_implementado'],
         );
     }
 

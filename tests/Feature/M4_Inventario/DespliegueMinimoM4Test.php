@@ -162,10 +162,15 @@ class DespliegueMinimoM4Test extends TestCase
 
     // ---------------------------------------------------------------- disponibilidad
 
-    public function test_m4_no_expone_rutas_http_propias(): void
+    public function test_m4_expone_la_api_del_contrato_en_api_m4_v1(): void
     {
-        $this->get('/api/m4/v1/health')->assertNotFound();
-        $this->get('/api/m4/v1/existencias/disponibilidad?id_comercio=1&id_variacion=10')->assertNotFound();
+        $this->getJson('/api/m4/v1/health')->assertOk()->assertExactJson(['status' => 'ok', 'module' => 'm4-inventario']);
+        $this->getJson('/api/m4/v1/existencias/disponibilidad?id_comercio=1&id_variacion=10')
+            ->assertOk()
+            ->assertJsonPath('cantidad_disponible', 1);
+        $this->getJson('/api/m4/v1/existencias/disponibilidad?id_comercio=0&id_variacion=10')
+            ->assertStatus(422)
+            ->assertJsonPath('error.codigo', 'ERR-005');
     }
 
     public function test_la_disponibilidad_resta_lo_reservado_y_suma_ubicaciones(): void
