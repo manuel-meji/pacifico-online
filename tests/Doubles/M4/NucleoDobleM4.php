@@ -3,6 +3,8 @@
 namespace Tests\Doubles\M4;
 
 use App\Contracts\M4_Inventario\Dependencias\NucleoDependencia;
+use App\Services\Nucleo\ContextoComercio;
+use Closure;
 use InvalidArgumentException;
 
 /**
@@ -34,6 +36,28 @@ class NucleoDobleM4 implements NucleoDependencia
     public function comercioActual(): ?int
     {
         return $this->idComercio;
+    }
+
+    public function usuarioActual(): int
+    {
+        return $this->idUsuario;
+    }
+
+    /**
+     * Simula el ámbito del núcleo: con comercio, lo deja en ContextoComercio para que
+     * el Global Scope filtre; sin comercio (o consulta pública), modo sistema.
+     */
+    public function ejecutarEnAmbito(Closure $operacion, bool $publica = false): mixed
+    {
+        $contexto = app(ContextoComercio::class);
+
+        if ($this->idComercio === null || $publica) {
+            return $contexto->ejecutarComoSistema($operacion);
+        }
+
+        $contexto->establecer($this->idComercio);
+
+        return $operacion();
     }
 
     public function registrarAuditoria(string $accion, string $entidad, int $entidadId, array $detalles = []): void
