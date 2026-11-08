@@ -6,8 +6,13 @@ import Imagen from './Imagen';
 // Encabezado del portal: franja superior, logotipo, buscador, cuenta, carrito y menú de categorías.
 // `categorias` es la respuesta de GET /categorias (CategoriaPortal: id_categoria, nombre, icono_url, subcategorias).
 // La validación del término (RN-M1-08) la hace la vista de búsqueda, para mostrar el aviso junto a los resultados.
-export default function EncabezadoPortal({ categorias = [], terminoInicial = '', conSesion = false, onInicio, onBuscar, onCategoria, onMiCuenta }) {
+// `cantidadCarrito` son las unidades del carrito de M5; con null o 0 no se muestra la insignia.
+export default function EncabezadoPortal({ categorias = [], terminoInicial = '', conSesion = false, cantidadCarrito = null, onInicio, onBuscar, onCategoria, onMiCuenta }) {
   const [termino, setTermino] = useState(terminoInicial);
+  const conProductos = Number.isInteger(cantidadCarrito) && cantidadCarrito > 0;
+  const etiquetaCarrito = conProductos
+    ? `Carrito, ${cantidadCarrito} ${cantidadCarrito === 1 ? 'producto' : 'productos'}`
+    : 'Carrito';
 
   useEffect(() => { setTermino(terminoInicial); }, [terminoInicial]);
 
@@ -49,8 +54,15 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
               <span className="hidden sm:inline">{conSesion ? 'Mi cuenta' : 'Ingresar'}</span>
             </button>
             {/* El carrito es de M5 (app.html). */}
-            <a href="/app.html" className="flex min-h-[44px] items-center gap-1 transition hover:text-brandBlue" aria-label="Carrito">
-              <Icono nombre="carrito" className="h-6 w-6" />
+            <a href="/app.html" className="flex min-h-[44px] items-center gap-1 transition hover:text-brandBlue" aria-label={etiquetaCarrito}>
+              <span className={`relative ${conProductos ? 'mr-2.5' : ''}`}>
+                <Icono nombre="carrito" className="h-6 w-6" />
+                {conProductos && (
+                  <span aria-hidden="true" className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-brandDarkBlue px-1 text-[11px] font-bold leading-none text-white">
+                    {cantidadCarrito > 99 ? '99+' : cantidadCarrito}
+                  </span>
+                )}
+              </span>
               <span className="hidden sm:inline">Carrito</span>
             </a>
           </nav>
