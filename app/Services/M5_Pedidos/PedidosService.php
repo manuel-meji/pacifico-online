@@ -866,7 +866,12 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             if (! empty($linea->id_reserva)) {
                 try {
                     if (method_exists($inventario, 'confirmarReserva')) {
-                        $inventario->confirmarReserva((string) $linea->id_reserva);
+                        // Contrato M4 v1.3.0: confirmarReserva(id_reserva, id_pedido, id_subpedido).
+                        $inventario->confirmarReserva(
+                            (string) $linea->id_reserva,
+                            (int) $linea->subpedido->id_pedido,
+                            (int) $linea->id_subpedido,
+                        );
                     }
                 } catch (\Throwable) {
                 }
