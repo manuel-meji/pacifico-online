@@ -130,7 +130,31 @@ class ComercioClient
             redesSociales: $comercio['redes_sociales'] ?? [],
             politicas: $comercio['politicas'] ?? [],
             estado: $this->estado($comercio['estado'] ?? null),
+            banners: $this->imagenes($comercio['banners'] ?? []),
+            galeria: $this->imagenes($comercio['galeria'] ?? []),
         );
+    }
+
+    /**
+     * Banners o galería de M2: solo las imágenes con URL, con su texto alternativo.
+     *
+     * @param  list<array<string, mixed>>|null  $imagenes
+     * @return list<array{imagen_url: string, texto_alternativo: ?string}>
+     */
+    private function imagenes(?array $imagenes): array
+    {
+        $resultado = [];
+
+        foreach ($imagenes ?? [] as $imagen) {
+            if (is_string($imagen['imagen_url'] ?? null) && $imagen['imagen_url'] !== '') {
+                $resultado[] = [
+                    'imagen_url' => $imagen['imagen_url'],
+                    'texto_alternativo' => $imagen['texto_alternativo'] ?? null,
+                ];
+            }
+        }
+
+        return $resultado;
     }
 
     /**
