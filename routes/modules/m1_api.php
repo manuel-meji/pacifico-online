@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\M1_Portal\BusquedaController;
 use App\Http\Controllers\M1_Portal\ClienteController;
+use App\Http\Controllers\M1_Portal\ComercioController;
 use App\Http\Controllers\M1_Portal\DireccionClienteController;
 use App\Http\Controllers\M1_Portal\FichaProductoController;
 use App\Http\Middleware\EstablecerCliente;
@@ -28,6 +29,13 @@ Route::middleware(EstablecerCliente::class)->group(function (): void {
     Route::get('/productos/{id_producto}', [FichaProductoController::class, 'mostrar'])
         ->where('id_producto', '[1-9][0-9]*')
         ->name('productos.ficha');
+
+    // Página de comercios y CU-009 Ver micrositio. Públicas (security: []).
+    Route::get('/comercios', [ComercioController::class, 'listar'])->name('comercios');
+
+    Route::get('/comercios/{id_comercio}/micrositio', [ComercioController::class, 'micrositio'])
+        ->where('id_comercio', '[1-9][0-9]*')
+        ->name('comercios.micrositio');
 });
 
 Route::get('/categorias', [BusquedaController::class, 'listarCategorias'])->name('categorias');

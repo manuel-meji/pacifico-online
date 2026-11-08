@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: M1 Portal público y búsqueda — Contrato del módulo
-  version: 1.2.0
+  version: 1.3.0
   description: |
     Contrato formal del módulo M1 Portal público y búsqueda de Pacíficos Online
     (IF6100, II Ciclo 2026, subgrupo SG1).
@@ -307,6 +307,9 @@ paths:
       description: |
         Nuevo en 1.1.0. Página de comercios del portal. Toma el listado de
         M2.ListarComerciosHabilitados, que solo devuelve comercios activos.
+
+        Desde 1.3.0: una pagina o por_pagina que no sea un entero dentro del
+        rango responde 422 con ERR-005 y el detalle por campo.
       x-consumidores: [Frontend del portal]
       x-dependencias: [M2.ListarComerciosHabilitados 1.1.0]
       security: []
@@ -333,6 +336,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListadoComercios'
+        '422':
+          $ref: '#/components/responses/PaginacionInvalida'
         '503':
           $ref: '#/components/responses/DependenciaNoDisponible'
 
@@ -349,6 +354,12 @@ paths:
         sus productos de M3.buscarProductos (filtro id_comercio), con la
         disponibilidad agregada de M4. Responde 404 si M2 responde 404 (el
         comercio no existe o no está activo).
+
+        Desde 1.3.0: si M3 no responde, el micrositio se muestra igual con la
+        información del comercio, la lista de productos vacía y
+        productos_disponibles en false, para que el portal muestre un aviso.
+        Si M2 no responde, 503. Una pagina o por_pagina que no sea un entero
+        dentro del rango responde 422 con ERR-005.
       x-consumidores: [Frontend del portal]
       x-dependencias: [M2.ObtenerDatosComercioPublico 1.1.0, M3.buscarProductos 1.2.0, M4.consultarDisponibilidadProductoLote 1.1.0]
       security: []
@@ -377,6 +388,8 @@ paths:
                 $ref: '#/components/schemas/Micrositio'
         '404':
           $ref: '#/components/responses/RecursoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/PaginacionInvalida'
         '503':
           $ref: '#/components/responses/DependenciaNoDisponible'
 
@@ -982,6 +995,13 @@ components:
                     type: string
         productos:
           $ref: '#/components/schemas/ResultadoBusqueda'
+        productos_disponibles:
+          type: boolean
+          description: |
+            Nuevo en 1.3.0, opcional. false cuando M3 no respondió: productos
+            viene vacío y el portal muestra un aviso en lugar de "sin
+            productos". true cuando la lista viene de M3 (aunque esté vacía,
+            caso A2). Si no viene, se asume true.
 
     DatosCliente:
       description: |
@@ -1124,6 +1144,18 @@ components:
               description: En ERR-005, un mapa campo → mensaje.
 
   responses:
+    PaginacionInvalida:
+      description: Nuevo en 1.3.0. pagina o por_pagina no es un entero dentro del rango (pagina >= 1, por_pagina de 1 a 50).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-005
+              mensaje: Los datos enviados no son válidos.
+              detalles:
+                por_pagina: Debe estar entre 1 y 50.
     CriterioInvalido:
       description: El término está vacío o tiene menos de 2 caracteres y no se envió categoría (RN-M1-08).
       content:
@@ -1283,9 +1315,11 @@ x-interfaz-php:
       - firma: "obtenerFichaProducto(int $idProducto): array"
         excepciones: [RecursoNoEncontradoException, DependenciaNoDisponibleException]
       - firma: "listarComercios(int $pagina = 1, int $porPagina = 20): array"
-        excepciones: [DependenciaNoDisponibleException]
+        notas: Desde 1.3.0, pagina menor que 1 o por_pagina fuera de 1 a 50 lanza DatosInvalidosException.
+        excepciones: [DatosInvalidosException, DependenciaNoDisponibleException]
       - firma: "obtenerMicrositio(int $idComercio, int $pagina = 1, int $porPagina = 20): array"
-        excepciones: [RecursoNoEncontradoException, DependenciaNoDisponibleException]
+        notas: Desde 1.3.0, si M3 no responde devuelve el micrositio con productos vacíos y productos_disponibles en false. pagina o por_pagina fuera de rango lanza DatosInvalidosException.
+        excepciones: [RecursoNoEncontradoException, DatosInvalidosException, DependenciaNoDisponibleException]
       - firma: "registrarCliente(array $datos): int"
         notas: $datos sigue el esquema RegistroCliente (desde 1.2.0 con cedula y direccion). La contraseña se entrega al núcleo y M1 no la guarda.
         excepciones: [CorreoYaRegistradoException, DatosInvalidosException]
@@ -1390,3 +1424,16 @@ x-historial-versiones:
       vacío, lo que no afecta a quien lo lee. Los cambios de entrada solo
       afectan a POST y PUT /clientes, cuyo único consumidor es el frontend
       del propio M1. Por eso se publica como versión menor.
+  - version: 1.3.0
+    cambios:
+      - Micrositio agrega el campo opcional productos_disponibles (false cuando M3 no responde); en ese caso el micrositio se muestra con la información del comercio y la lista de productos vacía, en lugar de fallar (CU-009).
+      - GET /comercios y GET /comercios/{id_comercio}/micrositio responden 422 con ERR-005 (respuesta PaginacionInvalida) cuando pagina o por_pagina no es un entero dentro del rango.
+      - listarComercios y obtenerMicrositio de la interfaz PHP documentan DatosInvalidosException para la paginación fuera de rango.
+    solicitud_de_cambio: SC-07
+    nota_de_compatibilidad: |
+      Sin cambios en las firmas de la interfaz PHP. productos_disponibles es
+      un campo opcional nuevo: quien no lo lee no se ve afectado. La
+      respuesta 422 solo aplica a las rutas web de comercios y micrositio,
+      cuyo único consumidor es el frontend del propio M1; ningún otro módulo
+      llama a listarComercios ni a obtenerMicrositio. Por eso se publica como
+      versión menor.

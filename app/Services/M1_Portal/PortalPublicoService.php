@@ -307,25 +307,11 @@ class PortalPublicoService implements PortalPublicoContract
     {
         /** @var MicrositioDTO $micrositio */
         $micrositio = $this->servicio(self::SERVICIO_MICROSITIO)->obtenerMicrositio($idComercio, $pagina, $porPagina);
-        $comercio = $micrositio->comercio;
 
         return [
-            'comercio' => [
-                'id_comercio' => $comercio->idComercio,
-                'nombre_comercial' => $comercio->nombreComercial,
-                'descripcion' => $comercio->descripcion,
-                'logo_url' => $comercio->logotipo,
-                'banners' => [],
-                'galeria' => array_map(fn (string $imagen): array => [
-                    'imagen_url' => $imagen,
-                    'texto_alternativo' => $comercio->nombreComercial,
-                ], $comercio->imagenes),
-                'horarios' => $comercio->horarios,
-                'contacto' => $comercio->contacto,
-                'redes_sociales' => $comercio->redesSociales,
-                'politicas' => $comercio->politicas,
-            ],
+            'comercio' => $this->comercioMicrositio($micrositio->comercio),
             'productos' => $this->resultadoBusqueda($micrositio->productos),
+            'productos_disponibles' => $micrositio->productosDisponibles,
         ];
     }
 
@@ -437,6 +423,71 @@ class PortalPublicoService implements PortalPublicoContract
             'nombre_comercial' => $comercio->nombreComercial,
             'logotipo' => $comercio->logotipo,
         ];
+    }
+
+    /**
+     * Comercio del esquema Micrositio. Solo lleva los campos que declara el
+     * contrato (M2 puede mandar otros, como id_horario o id_banner). Los
+     * opcionales que M2 no manda quedan vacíos o en null (CU-009 A3).
+     *
+     * @return array<string, mixed>
+     */
+    private function comercioMicrositio(ComercioDTO $comercio): array
+    {
+        $galeria = $comercio->galeria;
+
+        // Comercio armado sin banners ni galería separados: se muestran sus
+        // imágenes como galería.
+        if ($comercio->banners === [] && $galeria === []) {
+            $galeria = array_map(fn (string $imagen): array => ['imagen_url' => $imagen, 'texto_alternativo' => null], $comercio->imagenes);
+        }
+
+        return [
+            'id_comercio' => $comercio->idComercio,
+            'nombre_comercial' => $comercio->nombreComercial,
+            'descripcion' => $comercio->descripcion,
+            'logo_url' => $comercio->logotipo,
+            'banners' => $this->imagenesMicrositio($comercio->banners, $comercio->nombreComercial),
+            'galeria' => $this->imagenesMicrositio($galeria, $comercio->nombreComercial),
+            'horarios' => $this->soloCampos($comercio->horarios, ['dia_semana', 'hora_apertura', 'hora_cierre', 'cerrado']),
+            'contacto' => [
+                'telefono' => $comercio->contacto['telefono'] ?? null,
+                'correo' => $comercio->contacto['correo'] ?? null,
+                'direccion' => $comercio->contacto['direccion'] ?? null,
+            ],
+            'redes_sociales' => $this->soloCampos($comercio->redesSociales, ['plataforma', 'url']),
+            'politicas' => $this->soloCampos($comercio->politicas, ['tipo', 'descripcion']),
+        ];
+    }
+
+    /**
+     * Banner o imagen de galería: texto_alternativo es texto en el contrato;
+     * si M2 no lo manda, se usa el nombre del comercio.
+     *
+     * @param  list<array<string, mixed>>  $imagenes
+     * @return list<array{imagen_url: string, texto_alternativo: string}>
+     */
+    private function imagenesMicrositio(array $imagenes, string $nombreComercial): array
+    {
+        return array_map(fn (array $imagen): array => [
+            'imagen_url' => $imagen['imagen_url'],
+            'texto_alternativo' => $imagen['texto_alternativo'] ?? $nombreComercial,
+        ], $imagenes);
+    }
+
+    /**
+     * Cada elemento de la lista solo con los campos indicados.
+     *
+     * @param  list<array<string, mixed>>  $elementos
+     * @param  list<string>  $campos
+     * @return list<array<string, mixed>>
+     */
+    private function soloCampos(array $elementos, array $campos): array
+    {
+        return array_values(array_map(
+            fn (array $elemento): array => array_intersect_key($elemento, array_flip($campos)),
+            $elementos,
+        ));
     }
 
     /**
