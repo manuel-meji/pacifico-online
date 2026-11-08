@@ -5,11 +5,13 @@ namespace App\Providers;
 use App\Contracts\M4_Inventario\Dependencias\CatalogoDependencia;
 use App\Contracts\M4_Inventario\Dependencias\ComerciosDependencia;
 use App\Contracts\M4_Inventario\Dependencias\NucleoDependencia;
+use App\Contracts\M4_Inventario\Dependencias\PedidosDependencia;
 use App\Contracts\M4_Inventario\Dependencias\VerificadorAutorizacionesInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Services\M4_Inventario\Dependencias\CatalogoReal;
 use App\Services\M4_Inventario\Dependencias\ComerciosReal;
 use App\Services\M4_Inventario\Dependencias\NucleoReal;
+use App\Services\M4_Inventario\Dependencias\PedidosReal;
 use App\Services\M4_Inventario\InventarioService;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
@@ -18,7 +20,7 @@ use InvalidArgumentException;
 /**
  * Despliegue mínimo de M4.
  *
- * 1. Elige, para cada dependencia de M4 (M2, M3 y el núcleo), entre el doble y
+ * 1. Elige, para cada dependencia de M4 (M2, M3, M5 y el núcleo), entre el doble y
  *    el servicio real según config/integraciones.php, clave m4. El servicio
  *    real se llama dentro del mismo proceso por la interfaz PHP del proveedor
  *    (sección 5.1 del PC3), nunca leyendo sus tablas.
@@ -37,6 +39,7 @@ class M4IntegracionesServiceProvider extends ServiceProvider
         'm2' => [ComerciosDependencia::class, ComerciosReal::class],
         'm3' => [CatalogoDependencia::class, CatalogoReal::class],
         'nucleo' => [NucleoDependencia::class, NucleoReal::class],
+        'm5' => [PedidosDependencia::class, PedidosReal::class],
     ];
 
     public function register(): void

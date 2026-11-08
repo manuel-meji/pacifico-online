@@ -6,59 +6,40 @@ use App\Contracts\M4_Inventario\Dependencias\CatalogoDependencia;
 use App\Contracts\M4_Inventario\Dependencias\ComerciosDependencia;
 use App\Contracts\M4_Inventario\Dependencias\NucleoDependencia;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Enums\M4_Inventario\MotivoCierre;
 use App\Enums\M4_Inventario\TipoMovimiento;
-use App\Events\M4_Inventario\ExistenciaAgotada;
-use App\Events\M4_Inventario\ExistenciaRepuesta;
-use App\Events\M4_Inventario\ExistenciaReservada;
 use App\Models\M4_Inventario\AjusteInventario;
 use App\Models\M4_Inventario\Existencia;
+use App\Models\M4_Inventario\Reserva;
 use App\Services\M4_Inventario\DTO\AjusteDTO;
 use App\Services\M4_Inventario\DTO\FiltroKardex;
 use App\Services\M4_Inventario\DTO\RegistroMovimientoDTO;
+use App\Services\M4_Inventario\DTO\ReservaSolicitudDTO;
 use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 use App\Services\M4_Inventario\Repositorios\ExistenciaRepositoryInterface;
-use Illuminate\Database\Query\Builder;
-use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use LogicException;
 
 /**
- * Implementación de InventarioModuleInterface (contrato openapi v1.3.0).
- * Despliegue mínimo del PC3: verificación de estado, consultas de disponibilidad,
- * reserva atómica bajo bloqueo pesimista SELECT … FOR UPDATE (ADR-002) y
- * liberación. Las demás operaciones del contrato se implementan en el PC4;
- * mientras tanto lanzan LogicException para que ningún consumidor reciba una
- * respuesta inventada.
+ * Fachada del módulo: implementación de InventarioModuleInterface (contrato openapi
+ * v1.3.0, 20 operaciones). Valida la forma de cada solicitud, abre el ámbito del
+ * núcleo y delega en los servicios de aplicación del diseño del PC3 (figura 4.2a/b):
+ *  - ReservaService: ciclo de vida de la reserva y vencimiento (ADR-002).
+ *  - RegistroMovimientoService y AjusteService: movimientos manuales y conteos.
+ *  - KardexService: kardex, kardex valorizado, costo de productos vendidos y auditoría.
+ * Responde siempre con los cuerpos de los schemas del contrato.
  *
- * Usa las tablas de las migraciones 2026_10_21_00000x_m4_* (sección 6.5):
- *  - existencias: disponible = cantidad_fisica − cantidad_reservada (no se maneja stock defectuoso).
- *  - reservas: estado en id_estado_reserva (1 activa, 2 confirmada, 3 consumida,
- *    4 liberada, 5 vencida); el trigger tr_reservas_transicion solo permite
- *    1→2, 1→4, 1→5, 2→3 y 2→4. Cada cambio de estado se agrega a historial.
+ * RN-12: cada operación corre dentro de NucleoDependencia::ejecutarEnAmbito y las
+ * consultas usan los modelos con el Global Scope del núcleo (PerteneceAComercio).
+ * El filtro por comercio lo aplica el núcleo, no una condición opcional de M4.
+ * Las consultas de disponibilidad son públicas (M1) y corren en modo sistema.
  *
- * Las dependencias de M2 y M3 llegan por interfaz y pueden ser el doble o el
- * servicio real según config/integraciones.php (ver M4IntegracionesServiceProvider).
- *
- * RN-12 (PC4): cada operación corre dentro de NucleoDependencia::ejecutarEnAmbito y
- * lee las existencias por ExistenciaRepositoryInterface, que usa los modelos con el
- * Global Scope del núcleo (PerteneceAComercio). El filtro por comercio lo aplica el
- * núcleo, no una condición opcional de M4.
+ * Las dependencias de M2, M3, M5 y el núcleo llegan por interfaz y pueden ser el doble
+ * o el servicio real según config/integraciones.php (ver M4IntegracionesServiceProvider).
  */
 class InventarioService implements InventarioModuleInterface
 {
     private const MAXIMO_LOTE = 100;
-
-    public const ESTADOS = [1 => 'activa', 2 => 'confirmada', 3 => 'consumida', 4 => 'liberada', 5 => 'vencida'];
-
-    private const ACTIVA = 1;
-
-    private const CONSUMIDA = 3;
-
-    private const LIBERADA = 4;
-
-    private const VENCIDA = 5;
 
     private const DISPONIBLE_SQL = 'cantidad_fisica - cantidad_reservada';
 
@@ -74,6 +55,7 @@ class InventarioService implements InventarioModuleInterface
         private readonly RegistroMovimientoService $movimientos,
         private readonly AjusteService $ajustes,
         private readonly PublicadorDisponibilidad $publicador,
+        private readonly ReservaService $reservas,
     ) {}
 
     // ------------------------------------------------------------------ estado
@@ -155,7 +137,7 @@ class InventarioService implements InventarioModuleInterface
         ), array_values($items));
     }
 
-    // ------------------------------------------------------------------ reservas
+    // ------------------------------------------------------------------ reservas (ReservaService)
 
     public function reservarExistencias(
         int $idComercio,
@@ -165,19 +147,6 @@ class InventarioService implements InventarioModuleInterface
         ?string $claveIdempotencia = null,
         ?int $expiracionMinutos = null,
     ): array {
-        return $this->nucleo->ejecutarEnAmbito(fn (): array => $this->reservarEnAmbito(
-            $idComercio, $idVariacion, $cantidad, $idUbicacion, $claveIdempotencia, $expiracionMinutos,
-        ));
-    }
-
-    private function reservarEnAmbito(
-        int $idComercio,
-        int $idVariacion,
-        int $cantidad,
-        ?int $idUbicacion,
-        ?string $claveIdempotencia,
-        ?int $expiracionMinutos,
-    ): array {
         $this->exigirPositivos(['id_comercio' => $idComercio, 'id_variacion' => $idVariacion, 'cantidad' => $cantidad]
             + ($idUbicacion !== null ? ['id_ubicacion' => $idUbicacion] : [])
             + ($expiracionMinutos !== null ? ['expiracion_minutos' => $expiracionMinutos] : []));
@@ -186,131 +155,78 @@ class InventarioService implements InventarioModuleInterface
             throw ErrorInventarioException::datosInvalidos(['Idempotency-Key' => 'Debe tener entre 1 y 100 caracteres.']);
         }
 
-        if ($claveIdempotencia !== null && ($previa = $this->reservaPorClave($idComercio, $claveIdempotencia)) !== null) {
-            return $this->repetirReserva($previa, $idVariacion, $cantidad);
-        }
+        $dto = new ReservaSolicitudDTO(
+            $idComercio, $idVariacion, $cantidad, $idUbicacion,
+            $expiracionMinutos ?? (int) config('integraciones.m4.reserva_minutos', 15),
+        );
 
-        if (! ($this->comercios->obtenerComercioActivo($idComercio)['activo'] ?? false)) {
-            throw ErrorInventarioException::comercioNoHabilitado();
-        }
-
-        $variacion = $this->catalogo->obtenerVariacion($idVariacion);
-
-        if ($variacion === null) {
-            throw ErrorInventarioException::variacionNoEncontrada();
-        }
-
-        if ($variacion['id_comercio'] !== $idComercio) {
-            throw ErrorInventarioException::recursoNoAccesible();
-        }
-
-        $habilitadas = $this->ubicacionesHabilitadas($idComercio);
-
-        if ($idUbicacion !== null && ! in_array($idUbicacion, $habilitadas, true)) {
-            throw ErrorInventarioException::ubicacionNoEncontrada();
-        }
-
-        $minutos = $expiracionMinutos ?? (int) config('integraciones.m4.reserva_minutos', 15);
-        $clave = $claveIdempotencia ?? (string) Str::uuid();
-
-        try {
-            [$idReserva, $antes, $despues] = DB::transaction(fn (): array => $this->crearReserva(
-                $idComercio, $idVariacion, $cantidad, $idUbicacion, $habilitadas, $clave, $minutos,
-            ));
-        } catch (UniqueConstraintViolationException $e) {
-            // Otra solicitud con la misma clave ganó la carrera: se devuelve su reserva.
-            $previa = $this->reservaPorClave($idComercio, $clave) ?? throw $e;
-
-            return $this->repetirReserva($previa, $idVariacion, $cantidad);
-        }
-
-        $reserva = $this->aReserva($this->filaReserva($idReserva));
-
-        // Los eventos se publican después de confirmar la transacción.
-        ExistenciaReservada::dispatch($reserva);
-        $this->publicarCambioDisponibilidad($idComercio, $variacion['id_producto'], $idVariacion, $antes, $despues);
-
-        return $reserva;
+        return $this->nucleo->ejecutarEnAmbito(
+            fn (): array => $this->reservas->reservar($dto, $claveIdempotencia)->reserva->aContrato()
+        );
     }
-
-    public function liberarReserva(string $idReserva, ?string $motivo = null): array
-    {
-        return $this->nucleo->ejecutarEnAmbito(fn (): array => $this->liberarEnAmbito($idReserva, $motivo));
-    }
-
-    private function liberarEnAmbito(string $idReserva, ?string $motivo): array
-    {
-        if (! Str::isUuid($idReserva)) {
-            throw ErrorInventarioException::reservaNoEncontrada();
-        }
-
-        $resultado = DB::transaction(function () use ($idReserva, $motivo): ?array {
-            $reserva = DB::table('reservas')->where('id_reserva', $idReserva)->lockForUpdate()->first();
-
-            if ($reserva === null) {
-                throw ErrorInventarioException::reservaNoEncontrada();
-            }
-
-            $this->exigirComercioDeSesion(
-                (int) DB::table('existencias')->where('id_existencia', $reserva->id_existencia)->value('id_comercio')
-            );
-
-            $estado = (int) $reserva->id_estado_reserva;
-
-            if ($estado === self::CONSUMIDA) {
-                throw ErrorInventarioException::reservaYaConsumida();
-            }
-
-            // Liberar de nuevo una reserva cerrada no vuelve a descontar.
-            if ($estado === self::LIBERADA || $estado === self::VENCIDA) {
-                return null;
-            }
-
-            $existencia = DB::table('existencias')
-                ->where('id_existencia', $reserva->id_existencia)
-                ->lockForUpdate()
-                ->first();
-
-            $antes = $this->disponibleTotal((int) $existencia->id_comercio, (int) $existencia->id_variacion);
-
-            $this->cerrarReserva($reserva, self::LIBERADA, $motivo ?? 'liberada');
-
-            return [
-                (int) $existencia->id_comercio,
-                (int) $existencia->id_producto,
-                (int) $existencia->id_variacion,
-                $antes,
-                $this->disponibleTotal((int) $existencia->id_comercio, (int) $existencia->id_variacion),
-            ];
-        });
-
-        if ($resultado !== null) {
-            $this->publicarCambioDisponibilidad(...$resultado);
-        }
-
-        return $this->aReserva($this->filaReserva($idReserva));
-    }
-
-    // ------------------------------------------------------------------ operaciones del PC4
 
     public function obtenerReserva(string $idReserva): array
     {
-        $this->pendiente('obtenerReserva');
+        return $this->nucleo->ejecutarEnAmbito(fn (): array => $this->reservas->mostrar($idReserva)->aContrato());
     }
 
     public function confirmarReserva(string $idReserva, int $idPedido, int $idSubpedido): array
     {
-        $this->pendiente('confirmarReserva');
+        $this->exigirPositivos(['id_pedido' => $idPedido, 'id_subpedido' => $idSubpedido]);
+
+        return $this->nucleo->ejecutarEnAmbito(
+            fn (): array => $this->reservas->confirmar($idReserva, $idPedido, $idSubpedido)->aContrato()
+        );
+    }
+
+    /**
+     * El motivo del contrato es pago_rechazado, pedido_cancelado o solicitud_m5. Si un
+     * consumidor manda otro texto se registra como solicitud_m5 para no dejar la
+     * reserva comprometida.
+     */
+    public function liberarReserva(string $idReserva, ?string $motivo = null): array
+    {
+        $cierre = MotivoCierre::tryFrom((string) $motivo) ?? MotivoCierre::SolicitudM5;
+
+        return $this->nucleo->ejecutarEnAmbito(fn (): array => $this->reservas->liberar($idReserva, $cierre)->aContrato());
     }
 
     public function confirmarSalidaPorReserva(string $idReserva, int $idPedido, int $idSubpedido): array
     {
-        $this->pendiente('confirmarSalidaPorReserva');
+        $this->exigirPositivos(['id_pedido' => $idPedido, 'id_subpedido' => $idSubpedido]);
+
+        return $this->nucleo->ejecutarEnAmbito(
+            fn (): array => $this->reservas->registrarSalida($idReserva, $idPedido, $idSubpedido)->aContrato()
+        );
     }
 
     public function registrarReingresoPorReserva(string $idReserva, array $solicitud): array
     {
-        $this->pendiente('registrarReingresoPorReserva');
+        $errores = [];
+
+        foreach (['id_pedido', 'id_subpedido'] as $campo) {
+            if (! is_int($solicitud[$campo] ?? null) || $solicitud[$campo] < 1) {
+                $errores[$campo] = 'Debe ser un entero mayor o igual a 1.';
+            }
+        }
+
+        $justificacion = trim((string) ($solicitud['justificacion'] ?? ''));
+
+        if ($justificacion === '' || mb_strlen($justificacion) > 255) {
+            $errores['justificacion'] = 'Es obligatoria y admite hasta 255 caracteres.';
+        }
+
+        if ($errores !== []) {
+            throw ErrorInventarioException::datosInvalidos($errores);
+        }
+
+        return $this->nucleo->ejecutarEnAmbito(function () use ($idReserva, $solicitud, $justificacion): array {
+            $movimiento = $this->reservas->registrarReingreso(
+                $idReserva, $solicitud['id_pedido'], $solicitud['id_subpedido'], (string) ($solicitud['id_recepcion'] ?? ''), $justificacion,
+            );
+
+            return $movimiento->aContrato($this->reservas->mostrar($idReserva)->id_existencia);
+        });
     }
 
     // ------------------------------------------------------------------ existencias y movimientos
@@ -488,15 +404,10 @@ class InventarioService implements InventarioModuleInterface
 
     public function solicitarReserva(int $variacionId, int $cantidad, int $pedidoId): array
     {
-        $variacion = $this->catalogo->obtenerVariacion($variacionId);
-
-        if ($variacion === null) {
-            throw ErrorInventarioException::variacionNoEncontrada();
-        }
-
+        $variacion = $this->catalogo->obtenerVariacion($variacionId) ?? throw ErrorInventarioException::variacionNoEncontrada();
         $reserva = $this->reservarExistencias($variacion['id_comercio'], $variacionId, $cantidad);
 
-        DB::table('reservas')->where('id_reserva', $reserva['id_reserva'])->update(['id_pedido' => $pedidoId]);
+        $this->nucleo->ejecutarEnAmbito(fn () => Reserva::query()->whereKey($reserva['id_reserva'])->update(['id_pedido' => $pedidoId]));
 
         return [
             'reserva_id' => $reserva['id_reserva'],
@@ -513,116 +424,6 @@ class InventarioService implements InventarioModuleInterface
         throw new LogicException(
             'Fuera del despliegue mínimo: la salida por despacho usa confirmarSalidaPorReserva (id_reserva UUID) y registra kardex.'
         );
-    }
-
-    // ------------------------------------------------------------------ reserva atómica
-
-    /**
-     * Selección, comprobación de stock y reserva en una sola transacción bajo
-     * SELECT … FOR UPDATE sobre las filas de existencias de la variación (ADR-002).
-     *
-     * @param  list<int>  $habilitadas
-     * @return array{0: string, 1: int, 2: int} id_reserva y disponible total antes y después.
-     */
-    private function crearReserva(
-        int $idComercio,
-        int $idVariacion,
-        int $cantidad,
-        ?int $idUbicacion,
-        array $habilitadas,
-        string $clave,
-        int $minutos,
-    ): array {
-        $filas = DB::table('existencias')
-            ->where('id_comercio', $idComercio)
-            ->where('id_variacion', $idVariacion)
-            ->orderBy('id_existencia')
-            ->lockForUpdate()
-            ->get();
-
-        if ($filas->isEmpty()) {
-            throw ErrorInventarioException::existenciaNoEncontrada();
-        }
-
-        $antes = $this->disponibleTotal($idComercio, $idVariacion);
-
-        // Se liberan exactamente una vez las reservas activas que ya vencieron.
-        $this->vencerReservas($filas->pluck('id_existencia')->all());
-
-        $candidatas = DB::table('existencias')
-            ->whereIn('id_existencia', $filas->pluck('id_existencia'))
-            ->when($idUbicacion !== null, fn ($q) => $q->where('id_ubicacion', $idUbicacion))
-            ->when($idUbicacion === null, fn ($q) => $q->whereIn('id_ubicacion', $habilitadas))
-            ->orderBy('id_existencia')
-            ->get();
-
-        if ($candidatas->isEmpty()) {
-            throw ErrorInventarioException::existenciaNoEncontrada();
-        }
-
-        $elegida = $candidatas->first(fn (object $e): bool => $this->disponible($e) >= $cantidad)
-            ?? throw ErrorInventarioException::existenciaInsuficiente();
-
-        DB::table('existencias')
-            ->where('id_existencia', $elegida->id_existencia)
-            ->update([
-                'cantidad_reservada' => DB::raw('cantidad_reservada + '.$cantidad),
-                'updated_at' => Carbon::now(),
-            ]);
-
-        $ahora = Carbon::now();
-        $idReserva = (string) Str::uuid();
-
-        DB::table('reservas')->insert([
-            'id_reserva' => $idReserva,
-            'id_comercio' => $idComercio,
-            'id_existencia' => $elegida->id_existencia,
-            'id_estado_reserva' => self::ACTIVA,
-            'cantidad' => $cantidad,
-            'fecha_creacion' => $ahora,
-            'fecha_vencimiento' => $ahora->copy()->addMinutes($minutos),
-            'clave_idempotencia' => $clave,
-            'historial' => json_encode([['estado' => 'activa', 'fecha' => $ahora->toIso8601String(), 'motivo' => 'creada']]),
-        ]);
-
-        return [$idReserva, $antes, $this->disponibleTotal($idComercio, $idVariacion)];
-    }
-
-    /**
-     * @param  list<int|string>  $idsExistencia
-     */
-    private function vencerReservas(array $idsExistencia): void
-    {
-        $vencidas = DB::table('reservas')
-            ->whereIn('id_existencia', $idsExistencia)
-            ->where('id_estado_reserva', self::ACTIVA)
-            ->where('fecha_vencimiento', '<=', Carbon::now())
-            ->lockForUpdate()
-            ->get();
-
-        foreach ($vencidas as $reserva) {
-            $this->cerrarReserva($reserva, self::VENCIDA, 'vencida');
-        }
-    }
-
-    /**
-     * Cierra la reserva (liberada o vencida) y devuelve su cantidad a la existencia.
-     */
-    private function cerrarReserva(object $reserva, int $estado, string $motivo): void
-    {
-        DB::table('existencias')
-            ->where('id_existencia', $reserva->id_existencia)
-            ->update([
-                'cantidad_reservada' => DB::raw('cantidad_reservada - '.(float) $reserva->cantidad),
-                'updated_at' => Carbon::now(),
-            ]);
-
-        $historial = json_decode($reserva->historial ?: '[]', true) ?: [];
-        $historial[] = ['estado' => self::ESTADOS[$estado], 'fecha' => Carbon::now()->toIso8601String(), 'motivo' => $motivo];
-
-        DB::table('reservas')
-            ->where('id_reserva', $reserva->id_reserva)
-            ->update(['id_estado_reserva' => $estado, 'historial' => json_encode($historial)]);
     }
 
     // ------------------------------------------------------------------ auxiliares
@@ -673,100 +474,6 @@ class InventarioService implements InventarioModuleInterface
             'fecha_ajuste' => $ajuste->created_at->toIso8601String(),
             'id_autorizador' => $ajuste->movimiento?->id_autorizador,
             'fecha_autorizacion' => $ajuste->movimiento?->fecha_autorizacion?->toIso8601String(),
-        ];
-    }
-
-    private function reservaPorClave(int $idComercio, string $clave): ?object
-    {
-        return $this->consultaReservas()
-            ->where('r.id_comercio', $idComercio)
-            ->where('r.clave_idempotencia', $clave)
-            ->first();
-    }
-
-    /**
-     * Misma clave con los mismos datos: la misma reserva. Con otros datos: ERR-M4-003.
-     *
-     * @return array<string, mixed>
-     */
-    private function repetirReserva(object $previa, int $idVariacion, int $cantidad): array
-    {
-        if ((int) $previa->id_variacion !== $idVariacion || (int) $previa->cantidad !== $cantidad) {
-            throw ErrorInventarioException::claveIdempotenciaReutilizada();
-        }
-
-        return $this->aReserva($previa);
-    }
-
-    private function filaReserva(string $idReserva): object
-    {
-        return $this->consultaReservas()->where('r.id_reserva', $idReserva)->first();
-    }
-
-    private function consultaReservas(): Builder
-    {
-        return DB::table('reservas as r')
-            ->join('existencias as e', 'e.id_existencia', '=', 'r.id_existencia')
-            ->select('r.*', 'e.id_variacion', 'e.id_ubicacion');
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function ubicacionesHabilitadas(int $idComercio): array
-    {
-        $sedes = $this->comercios->obtenerSedesComercio($idComercio)['sedes'] ?? [];
-
-        return array_values(array_map(
-            fn (array $sede): int => (int) $sede['id_sede'],
-            array_filter($sedes, fn (array $sede): bool => (bool) ($sede['habilitada'] ?? false)),
-        ));
-    }
-
-    private function disponible(object $existencia): int
-    {
-        return (int) ((float) $existencia->cantidad_fisica - (float) $existencia->cantidad_reservada);
-    }
-
-    private function disponibleTotal(int $idComercio, int $idVariacion): int
-    {
-        return $this->existencias->disponibleTotal($idComercio, $idVariacion);
-    }
-
-    private function publicarCambioDisponibilidad(int $idComercio, int $idProducto, int $idVariacion, int $antes, int $despues): void
-    {
-        if ($antes > 0 && $despues <= 0) {
-            ExistenciaAgotada::dispatch($idComercio, $idProducto, $idVariacion);
-        } elseif ($antes <= 0 && $despues > 0) {
-            ExistenciaRepuesta::dispatch($idComercio, $idProducto, $idVariacion, $despues);
-        }
-    }
-
-    /**
-     * Reserva en la forma del schema Reserva del contrato.
-     *
-     * @return array<string, mixed>
-     */
-    private function aReserva(object $fila): array
-    {
-        $estado = self::ESTADOS[(int) $fila->id_estado_reserva];
-        $historial = json_decode($fila->historial ?: '[]', true) ?: [];
-        $cierre = in_array($estado, ['consumida', 'liberada', 'vencida'], true) ? end($historial) : false;
-
-        return [
-            'id_reserva' => $fila->id_reserva,
-            'id_comercio' => (int) $fila->id_comercio,
-            'id_existencia' => (int) $fila->id_existencia,
-            'id_variacion' => (int) $fila->id_variacion,
-            'id_ubicacion' => (int) $fila->id_ubicacion,
-            'cantidad' => (int) $fila->cantidad,
-            'estado_reserva' => $estado,
-            'id_pedido' => $fila->id_pedido !== null ? (int) $fila->id_pedido : null,
-            'id_subpedido' => $fila->id_subpedido !== null ? (int) $fila->id_subpedido : null,
-            'fecha_creacion' => Carbon::parse($fila->fecha_creacion)->toIso8601String(),
-            'fecha_expiracion' => Carbon::parse($fila->fecha_vencimiento)->toIso8601String(),
-            'fecha_resolucion' => $cierre ? $cierre['fecha'] : null,
-            'motivo_cierre' => $cierre ? $cierre['motivo'] : null,
         ];
     }
 

@@ -5,6 +5,7 @@ use App\Http\Controllers\M4_Inventario\EstadoController;
 use App\Http\Controllers\M4_Inventario\ExistenciaController;
 use App\Http\Controllers\M4_Inventario\KardexController;
 use App\Http\Controllers\M4_Inventario\MovimientoController;
+use App\Http\Controllers\M4_Inventario\ReservaController;
 use App\Http\Middleware\EstablecerComercio;
 use App\Http\Middleware\RequiereRol;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,12 @@ Route::prefix('api/m4/v1')
                 Route::post('ajustes', [AjusteController::class, 'registrar'])->name('ajustes');
                 Route::get('kardex', [KardexController::class, 'consultar'])->name('kardex');
                 Route::get('kardex/valorizado', [KardexController::class, 'valorizado'])->name('kardex.valorizado');
+                Route::post('reservas', [ReservaController::class, 'reservar'])->name('reservas');
+                Route::get('reservas/{id_reserva}', [ReservaController::class, 'mostrar'])->name('reservas.mostrar');
+                Route::post('reservas/{id_reserva}/confirmar', [ReservaController::class, 'confirmar'])->name('reservas.confirmar');
+                Route::post('reservas/{id_reserva}/liberar', [ReservaController::class, 'liberar'])->name('reservas.liberar');
+                Route::post('reservas/{id_reserva}/salida', [ReservaController::class, 'registrarSalida'])->name('reservas.salida');
+                Route::post('reservas/{id_reserva}/reingreso', [ReservaController::class, 'registrarReingreso'])->name('reservas.reingreso');
                 Route::get('subpedidos/{id_subpedido}/costos-productos-vendidos', [KardexController::class, 'costosProductosVendidos'])
                     ->whereNumber('id_subpedido')->name('subpedidos.costos');
             });

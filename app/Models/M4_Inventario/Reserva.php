@@ -3,10 +3,19 @@
 namespace App\Models\M4_Inventario;
 
 use App\Enums\M4_Inventario\EstadoReservaCodigo;
+use App\Enums\M4_Inventario\MotivoCierre;
 use App\Models\Nucleo\Concerns\PerteneceAComercio;
+use App\Services\M4_Inventario\Dominio\EstadosReserva\EstadoActiva;
+use App\Services\M4_Inventario\Dominio\EstadosReserva\EstadoConfirmada;
+use App\Services\M4_Inventario\Dominio\EstadosReserva\EstadoConsumida;
+use App\Services\M4_Inventario\Dominio\EstadosReserva\EstadoLiberada;
+use App\Services\M4_Inventario\Dominio\EstadosReserva\EstadoReserva;
+use App\Services\M4_Inventario\Dominio\EstadosReserva\EstadoVencida;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Reserva temporal de unidades de una existencia (tabla reservas). La clave es un
@@ -66,6 +75,81 @@ class Reserva extends Model
     public function estadoCodigo(): EstadoReservaCodigo
     {
         return $this->id_estado_reserva;
+    }
+
+    /**
+     * Reserva ACTIVA nueva sobre la existencia, con su vencimiento y su clave de idempotencia.
+     */
+    public static function crearActiva(Existencia $existencia, int $cantidad, int $minutos, string $clave): self
+    {
+        $ahora = Carbon::now();
+
+        $reserva = new self([
+            'id_reserva' => (string) Str::uuid(),
+            'id_comercio' => $existencia->id_comercio,
+            'id_existencia' => $existencia->id_existencia,
+            'id_estado_reserva' => EstadoReservaCodigo::Activa,
+            'cantidad' => $cantidad,
+            'fecha_creacion' => $ahora,
+            'fecha_vencimiento' => $ahora->copy()->addMinutes($minutos),
+            'clave_idempotencia' => $clave,
+            'historial' => [['estado' => 'activa', 'fecha' => $ahora->toIso8601String(), 'motivo' => 'creada']],
+        ]);
+        $reserva->setRelation('existencia', $existencia);
+
+        return $reserva;
+    }
+
+    /** Estado actual como objeto del patrón State. */
+    public function estado(): EstadoReserva
+    {
+        return match ($this->estadoCodigo()) {
+            EstadoReservaCodigo::Activa => new EstadoActiva,
+            EstadoReservaCodigo::Confirmada => new EstadoConfirmada,
+            EstadoReservaCodigo::Consumida => new EstadoConsumida,
+            EstadoReservaCodigo::Liberada => new EstadoLiberada,
+            EstadoReservaCodigo::Vencida => new EstadoVencida,
+        };
+    }
+
+    public function confirmar(int $idPedido, int $idSubpedido): void
+    {
+        $this->estado()->confirmar($this, $idPedido, $idSubpedido);
+    }
+
+    public function consumir(): void
+    {
+        $this->estado()->consumir($this);
+    }
+
+    public function liberar(MotivoCierre $motivo): void
+    {
+        $this->estado()->liberar($this, $motivo);
+    }
+
+    public function vencer(): void
+    {
+        $this->estado()->vencer($this);
+    }
+
+    /** Solo una reserva ACTIVA vence; CONFIRMADA conserva sus unidades sin plazo (RN-M4-010). */
+    public function estaVencida(DateTimeInterface $ahora): bool
+    {
+        return $this->estadoCodigo() === EstadoReservaCodigo::Activa && $this->fecha_vencimiento <= $ahora;
+    }
+
+    public function vinculoCoincide(int $idPedido, int $idSubpedido): bool
+    {
+        return $this->id_pedido === $idPedido && $this->id_subpedido === $idSubpedido;
+    }
+
+    /** Lo usan los estados: cambia el código y agrega la transición al historial. */
+    public function cambiarA(EstadoReservaCodigo $estado, string $motivo): void
+    {
+        $historial = $this->historial ?? [];
+        $historial[] = ['estado' => $estado->codigo(), 'fecha' => Carbon::now()->toIso8601String(), 'motivo' => $motivo];
+        $this->id_estado_reserva = $estado;
+        $this->historial = $historial;
     }
 
     /**
