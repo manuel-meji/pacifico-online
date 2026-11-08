@@ -4,11 +4,9 @@ use App\Services\M1_Portal\Dobles\CarritoFake;
 use App\Services\M1_Portal\Dobles\CatalogoFake;
 use App\Services\M1_Portal\Dobles\ComerciosStub;
 use App\Services\M1_Portal\Dobles\InventarioStub;
-use App\Services\M4_Inventario\Dobles\AutorizacionesStub as M4AutorizacionesStub;
 use App\Services\M4_Inventario\Dobles\CatalogoStub as M4CatalogoStub;
 use App\Services\M4_Inventario\Dobles\ComerciosStub as M4ComerciosStub;
 use App\Services\M4_Inventario\Dobles\NucleoStub as M4NucleoStub;
-use App\Services\M4_Inventario\Dobles\PedidosStub as M4PedidosStub;
 use App\Services\M5_Pedidos\Dobles\CatalogoStub as M5CatalogoStub;
 use App\Services\M5_Pedidos\Dobles\ComerciosStub as M5ComerciosStub;
 use App\Services\M5_Pedidos\Dobles\InventarioStub as M5InventarioStub;
@@ -89,36 +87,9 @@ return [
             'modo' => env('M4_NUCLEO_MODO', 'doble'),
             'doble' => M4NucleoStub::class,
         ],
-        'm5' => [
-            'modo' => env('M4_M5_MODO', 'doble'),
-            'doble' => M4PedidosStub::class,
-        ],
 
         // Minutos de vigencia de una reserva si el solicitante no indica otro valor.
         'reserva_minutos' => (int) env('M4_RESERVA_MINUTOS', 15),
-
-        // Clases de los eventos de M2 y M3 que escucha M4. M2 publica hoy solo
-        // ComercioAprobado y M3 aún no publica ProductoPublicado: si usan otros
-        // nombres, se cambian aquí (InventarioServiceProvider los registra).
-        'eventos' => [
-            'comercio_aprobado' => 'App\\Events\\M2_Comercios\\ComercioAprobado',
-            'comercio_suspendido' => 'App\\Events\\M2_Comercios\\ComercioSuspendido',
-            'comercio_reactivado' => 'App\\Events\\M2_Comercios\\ComercioReactivado',
-            'producto_publicado' => 'App\\Events\\M3_Catalogo\\ProductoPublicado',
-        ],
-
-        // Verificador de autorizaciones de ajustes (RN-M4-011). El núcleo aún no
-        // publica el flujo de autorizaciones: se usa el doble con las autorizaciones
-        // registradas aquí (una sola vez cada una). Ver AutorizacionesStub.
-        'autorizaciones' => [
-            'doble' => M4AutorizacionesStub::class,
-            'registradas' => [
-                'autorizacion-ajuste-0001' => [
-                    'operacion' => 'ajuste', 'id_comercio' => 104, 'id_variacion' => 501, 'ubicaciones' => [12], 'cantidad' => 2,
-                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-09T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
-                ],
-            ],
-        ],
     ],
 
     /*

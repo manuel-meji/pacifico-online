@@ -55,13 +55,6 @@ class DoblesM4Test extends TestCase
         ]);
     }
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        // PC4: M4 consulta el bloqueo local del comercio (RN-M4-009) antes de llamar a M2.
-        $this->crearEsquemaInventario();
-    }
-
     private function inventario(): InventarioModuleInterface
     {
         return app(InventarioModuleInterface::class);
@@ -206,7 +199,7 @@ class DoblesM4Test extends TestCase
 
         $catalogo = app(CatalogoDependencia::class);
 
-        $this->assertSame(['id_variacion' => 501, 'id_producto' => 301, 'id_comercio' => 104, 'sku' => 'CAM-PAC-AZ-M'], $catalogo->obtenerVariacion(501));
+        $this->assertSame(['id_variacion' => 501, 'id_producto' => 301, 'id_comercio' => 104], $catalogo->obtenerVariacion(501));
         $this->assertNull($catalogo->obtenerVariacion(999));
     }
 
