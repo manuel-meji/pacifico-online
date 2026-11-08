@@ -22,10 +22,8 @@ use InvalidArgumentException;
  *    real se llama dentro del mismo proceso por la interfaz PHP del proveedor
  *    (sección 5.1 del PC3), nunca leyendo sus tablas.
  * 2. Enlaza InventarioModuleInterface con el servicio real de M4.
- *
- * M4 no expone rutas HTTP propias: el frontend usa Inertia, así que los
- * controladores de cada pantalla llaman a InventarioModuleInterface en el
- * servidor y le pasan los datos a la página.
+ * 3. Registra la API del contrato en /api/m4/v1 (routes/modules/m4_inventario_api.php),
+ *    que usa el frontend React de la plataforma (SC-07: React + API en lugar de Inertia).
  */
 class M4IntegracionesServiceProvider extends ServiceProvider
 {
@@ -47,6 +45,11 @@ class M4IntegracionesServiceProvider extends ServiceProvider
         foreach (self::DEPENDENCIAS as $proveedor => [$interfaz, $real]) {
             $this->app->bind($interfaz, fn (Application $app): object => $this->resolver($app, $proveedor, $real));
         }
+    }
+
+    public function boot(): void
+    {
+        $this->loadRoutesFrom(base_path('routes/modules/m4_inventario_api.php'));
     }
 
     /**
