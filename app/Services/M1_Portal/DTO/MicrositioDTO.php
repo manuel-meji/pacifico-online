@@ -13,5 +13,7 @@ class MicrositioDTO
     public function __construct(
         public ComercioDTO $comercio,
         public ResultadoBusquedaDTO $productos,
+        /** false cuando M3 no respondió y productos viene vacío (contrato 1.3.0). */
+        public bool $productosDisponibles = true,
     ) {}
 }
