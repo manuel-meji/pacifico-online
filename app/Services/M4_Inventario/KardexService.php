@@ -6,11 +6,13 @@ use App\Enums\M4_Inventario\EfectoStock;
 use App\Enums\M4_Inventario\EstadoReservaCodigo;
 use App\Enums\M4_Inventario\TipoMovimiento;
 use App\Models\M4_Inventario\Existencia;
+use App\Models\M4_Inventario\Existencia as ExistenciaModelo;
 use App\Models\M4_Inventario\LineaKardex;
 use App\Models\M4_Inventario\MovimientoInventario;
 use App\Models\M4_Inventario\Reserva;
 use App\Services\M4_Inventario\Dominio\Valoracion\MetodoValoracion;
 use App\Services\M4_Inventario\DTO\DatosMovimiento;
+use App\Services\M4_Inventario\DTO\FiltroAuditoria;
 use App\Services\M4_Inventario\DTO\FiltroKardex;
 use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 use App\Services\M4_Inventario\Repositorios\MovimientoRepositoryInterface;
@@ -166,6 +168,45 @@ class KardexService
             'variaciones' => $variaciones,
             'costo_total' => round(array_sum(array_column($variaciones, 'costo_total')), 2),
         ];
+    }
+
+    /**
+     * Consulta de auditoría de solo lectura (RN-M4-015, CU-M4-12): existencias de cada
+     * comercio y, si se pidió un periodo, su kardex. Debe correr con el acceso auditado
+     * del núcleo (modo sistema); la fachada lo garantiza y registra la consulta.
+     *
+     * @return array{datos: list<array{id_comercio: int, existencias: list<array<string, mixed>>, kardex: list<array<string, mixed>>}>}
+     */
+    public function consultarAuditoria(FiltroAuditoria $filtro): array
+    {
+        $datos = [];
+
+        foreach ($filtro->idsComercio as $idComercio) {
+            $kardex = [];
+
+            if ($filtro->desde !== null) {
+                $kardex = $this->lineas(new FiltroKardex($idComercio, desde: $filtro->desde, hasta: $filtro->hasta))
+                    ->orderBy('m.fecha_hora')
+                    ->orderBy('kardex_inventario.id_kardex')
+                    ->get(['kardex_inventario.*'])
+                    ->map(fn (LineaKardex $linea): array => $linea->aContrato())
+                    ->all();
+            }
+
+            $datos[] = [
+                'id_comercio' => $idComercio,
+                'existencias' => ExistenciaModelo::query()
+                    ->where('id_comercio', $idComercio)
+                    ->orderBy('id_variacion')
+                    ->orderBy('id_ubicacion')
+                    ->get()
+                    ->map(fn (ExistenciaModelo $e): array => $e->aContrato())
+                    ->all(),
+                'kardex' => $kardex,
+            ];
+        }
+
+        return ['datos' => $datos];
     }
 
     /**

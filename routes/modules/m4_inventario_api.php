@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\M4_Inventario\AjusteController;
+use App\Http\Controllers\M4_Inventario\AuditoriaController;
 use App\Http\Controllers\M4_Inventario\EstadoController;
 use App\Http\Controllers\M4_Inventario\ExistenciaController;
 use App\Http\Controllers\M4_Inventario\KardexController;
@@ -53,4 +54,9 @@ Route::prefix('api/m4/v1')
                 Route::get('subpedidos/{id_subpedido}/costos-productos-vendidos', [KardexController::class, 'costosProductosVendidos'])
                     ->whereNumber('id_subpedido')->name('subpedidos.costos');
             });
+
+        // Soporte/Auditoría (RN-M4-015): el núcleo concede el acceso auditado al Encargado de plataforma.
+        Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class.':encargado_plataforma'])
+            ->get('auditoria/inventario', [AuditoriaController::class, 'consultar'])
+            ->name('auditoria');
     });

@@ -12,6 +12,7 @@ use App\Models\M4_Inventario\AjusteInventario;
 use App\Models\M4_Inventario\Existencia;
 use App\Models\M4_Inventario\Reserva;
 use App\Services\M4_Inventario\DTO\AjusteDTO;
+use App\Services\M4_Inventario\DTO\FiltroAuditoria;
 use App\Services\M4_Inventario\DTO\FiltroKardex;
 use App\Services\M4_Inventario\DTO\RegistroMovimientoDTO;
 use App\Services\M4_Inventario\DTO\ReservaSolicitudDTO;
@@ -366,9 +367,28 @@ class InventarioService implements InventarioModuleInterface
         });
     }
 
+    /**
+     * Solo el rol de auditoría de la plataforma (Encargado de plataforma, con el acceso
+     * auditado del núcleo). Con sesión de un comercio responde ERR-002 (403).
+     */
     public function consultarInventarioAuditoria(array $idsComercio, ?string $fechaInicio = null, ?string $fechaFin = null): array
     {
-        $this->pendiente('consultarInventarioAuditoria');
+        $filtro = FiltroAuditoria::crear($idsComercio, $fechaInicio, $fechaFin);
+
+        if ($this->nucleo->comercioActual() !== null) {
+            throw ErrorInventarioException::accesoDenegado('La consulta de auditoría es exclusiva del rol de Soporte/Auditoría de la plataforma.');
+        }
+
+        $resultado = $this->nucleo->ejecutarEnAmbito(fn (): array => $this->kardex->consultarAuditoria($filtro));
+
+        $this->nucleo->registrarAuditoria('consulta_auditoria_inventario', 'existencias', 0, [
+            'modulo' => 'M4',
+            'ids_comercio' => $filtro->idsComercio,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+        ]);
+
+        return $resultado;
     }
 
     public function obtenerCostoProductosVendidos(int $idSubpedido): array
@@ -379,11 +399,6 @@ class InventarioService implements InventarioModuleInterface
             $idSubpedido,
             $this->nucleo->comercioActual() !== null,
         ));
-    }
-
-    private function pendiente(string $operacion): never
-    {
-        throw new LogicException("Operación {$operacion} del contrato M4 v1.3.0: se implementa en el PC4.");
     }
 
     // ------------------------------------------------------------------ interfaz anterior

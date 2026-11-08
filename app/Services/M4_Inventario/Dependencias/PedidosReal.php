@@ -18,7 +18,11 @@ class PedidosReal implements PedidosDependencia
     {
         try {
             $subpedido = app(SubpedidosServiceInterface::class)->obtenerSubpedido($idSubpedido);
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            if ($this->codigo($e) === 'ERR-004') {
+                return null; // M5 no tiene ese subpedido.
+            }
+
             throw ErrorInventarioException::dependenciaNoDisponible('M5');
         }
 
@@ -32,5 +36,14 @@ class PedidosReal implements PedidosDependencia
             'id_comercio' => (int) $subpedido['id_comercio'],
             'estado_subpedido' => strtolower((string) ($subpedido['estado_subpedido'] ?? '')),
         ];
+    }
+
+    private function codigo(Throwable $e): ?string
+    {
+        if (method_exists($e, 'getCodigo')) {
+            return $e->getCodigo();
+        }
+
+        return property_exists($e, 'codigo') ? (string) $e->codigo : null;
     }
 }
