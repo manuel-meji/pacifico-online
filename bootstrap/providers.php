@@ -1,6 +1,7 @@
 <?php
 
 use App\Providers\AppServiceProvider;
+use App\Providers\InventarioServiceProvider;
 use App\Providers\M1IntegracionesServiceProvider;
 use App\Providers\M2ComerciosServiceProvider;
 use App\Providers\M4IntegracionesServiceProvider;
@@ -12,6 +13,7 @@ return [
     M1IntegracionesServiceProvider::class,
     M2ComerciosServiceProvider::class,
     M4IntegracionesServiceProvider::class,
+    InventarioServiceProvider::class,
     M5IntegracionesServiceProvider::class,
     M6_PagosServiceProvider::class,
 ];

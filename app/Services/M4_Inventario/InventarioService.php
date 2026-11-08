@@ -9,7 +9,9 @@ use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Events\M4_Inventario\ExistenciaAgotada;
 use App\Events\M4_Inventario\ExistenciaRepuesta;
 use App\Events\M4_Inventario\ExistenciaReservada;
+use App\Models\M4_Inventario\Existencia;
 use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
+use App\Services\M4_Inventario\Repositorios\ExistenciaRepositoryInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -33,6 +35,11 @@ use LogicException;
  *
  * Las dependencias de M2 y M3 llegan por interfaz y pueden ser el doble o el
  * servicio real según config/integraciones.php (ver M4IntegracionesServiceProvider).
+ *
+ * RN-12 (PC4): cada operación corre dentro de NucleoDependencia::ejecutarEnAmbito y
+ * lee las existencias por ExistenciaRepositoryInterface, que usa los modelos con el
+ * Global Scope del núcleo (PerteneceAComercio). El filtro por comercio lo aplica el
+ * núcleo, no una condición opcional de M4.
  */
 class InventarioService implements InventarioModuleInterface
 {
@@ -54,6 +61,7 @@ class InventarioService implements InventarioModuleInterface
         private readonly ComerciosDependencia $comercios,
         private readonly CatalogoDependencia $catalogo,
         private readonly NucleoDependencia $nucleo,
+        private readonly ExistenciaRepositoryInterface $existencias,
     ) {}
 
     // ------------------------------------------------------------------ estado
@@ -83,27 +91,18 @@ class InventarioService implements InventarioModuleInterface
         $this->exigirPositivos(['id_comercio' => $idComercio, 'id_variacion' => $idVariacion]
             + ($idUbicacion !== null ? ['id_ubicacion' => $idUbicacion] : []));
 
-        $consulta = DB::table('existencias')
-            ->where('id_comercio', $idComercio)
-            ->where('id_variacion', $idVariacion);
-
-        if ($idUbicacion !== null) {
-            $consulta->where('id_ubicacion', $idUbicacion);
-        }
-
-        $fila = $consulta
-            ->selectRaw('COALESCE(SUM('.self::DISPONIBLE_SQL.'), 0) AS disponible, COALESCE(SUM(stock_minimo), 0) AS minimo, COUNT(*) AS filas')
-            ->first();
-
-        $disponible = (int) $fila->disponible;
+        $resumen = $this->nucleo->ejecutarEnAmbito(
+            fn (): array => $this->existencias->resumenVariacion($idComercio, $idVariacion, $idUbicacion),
+            publica: true,
+        );
 
         return [
             'id_comercio' => $idComercio,
             'id_variacion' => $idVariacion,
             'id_ubicacion' => $idUbicacion,
-            'cantidad_disponible' => $disponible,
-            'estado_disponibilidad' => $disponible > 0 ? 'disponible' : 'agotado',
-            'bajo_stock' => (int) $fila->filas > 0 && $disponible <= (int) $fila->minimo,
+            'cantidad_disponible' => $resumen['disponible'],
+            'estado_disponibilidad' => $resumen['disponible'] > 0 ? 'disponible' : 'agotado',
+            'bajo_stock' => $resumen['filas'] > 0 && $resumen['disponible'] <= $resumen['minimo'],
         ];
     }
 
@@ -122,11 +121,10 @@ class InventarioService implements InventarioModuleInterface
     {
         $this->exigirPositivos(['id_comercio' => $idComercio, 'id_producto' => $idProducto]);
 
-        $disponible = (int) DB::table('existencias')
-            ->where('id_comercio', $idComercio)
-            ->where('id_producto', $idProducto)
-            ->selectRaw('COALESCE(SUM('.self::DISPONIBLE_SQL.'), 0) AS disponible')
-            ->value('disponible');
+        $disponible = $this->nucleo->ejecutarEnAmbito(
+            fn (): int => $this->existencias->disponibleProducto($idComercio, $idProducto),
+            publica: true,
+        );
 
         return [
             'id_comercio' => $idComercio,
@@ -154,6 +152,19 @@ class InventarioService implements InventarioModuleInterface
         ?int $idUbicacion = null,
         ?string $claveIdempotencia = null,
         ?int $expiracionMinutos = null,
+    ): array {
+        return $this->nucleo->ejecutarEnAmbito(fn (): array => $this->reservarEnAmbito(
+            $idComercio, $idVariacion, $cantidad, $idUbicacion, $claveIdempotencia, $expiracionMinutos,
+        ));
+    }
+
+    private function reservarEnAmbito(
+        int $idComercio,
+        int $idVariacion,
+        int $cantidad,
+        ?int $idUbicacion,
+        ?string $claveIdempotencia,
+        ?int $expiracionMinutos,
     ): array {
         $this->exigirPositivos(['id_comercio' => $idComercio, 'id_variacion' => $idVariacion, 'cantidad' => $cantidad]
             + ($idUbicacion !== null ? ['id_ubicacion' => $idUbicacion] : [])
@@ -211,6 +222,11 @@ class InventarioService implements InventarioModuleInterface
     }
 
     public function liberarReserva(string $idReserva, ?string $motivo = null): array
+    {
+        return $this->nucleo->ejecutarEnAmbito(fn (): array => $this->liberarEnAmbito($idReserva, $motivo));
+    }
+
+    private function liberarEnAmbito(string $idReserva, ?string $motivo): array
     {
         if (! Str::isUuid($idReserva)) {
             throw ErrorInventarioException::reservaNoEncontrada();
@@ -339,10 +355,14 @@ class InventarioService implements InventarioModuleInterface
 
     public function consultarExistencias(int $variacionId): int
     {
-        $disponible = (int) DB::table('existencias')
-            ->where('id_variacion', $variacionId)
-            ->selectRaw('COALESCE(SUM('.self::DISPONIBLE_SQL.'), 0) AS disponible')
-            ->value('disponible');
+        $disponible = $this->nucleo->ejecutarEnAmbito(
+            fn (): int => (int) Existencia::query()
+                ->where('id_variacion', $variacionId)
+                ->toBase()
+                ->selectRaw('COALESCE(SUM('.self::DISPONIBLE_SQL.'), 0) AS disponible')
+                ->value('disponible'),
+            publica: true,
+        );
 
         return max(0, $disponible);
     }
@@ -542,11 +562,7 @@ class InventarioService implements InventarioModuleInterface
 
     private function disponibleTotal(int $idComercio, int $idVariacion): int
     {
-        return (int) DB::table('existencias')
-            ->where('id_comercio', $idComercio)
-            ->where('id_variacion', $idVariacion)
-            ->selectRaw('COALESCE(SUM('.self::DISPONIBLE_SQL.'), 0) AS disponible')
-            ->value('disponible');
+        return $this->existencias->disponibleTotal($idComercio, $idVariacion);
     }
 
     private function publicarCambioDisponibilidad(int $idComercio, int $idProducto, int $idVariacion, int $antes, int $despues): void
