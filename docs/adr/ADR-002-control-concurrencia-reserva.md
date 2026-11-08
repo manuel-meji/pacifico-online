@@ -5,7 +5,7 @@
 
 ## ADR-002: Bloqueo Pesimista para el Control de Concurrencia en la Reserva de Existencias
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado
 - **Fecha:** 2026-11-06
 - **Decisores:** Comité de Arquitectura e Integración
 - **Módulos Afectados:** M4 (Inventario), M5 (Carrito y Pedidos)
