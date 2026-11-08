@@ -38,6 +38,7 @@ class CatalogoReal implements CatalogoDependencia
             'id_variacion' => $idVariacion,
             'id_producto' => $idProducto,
             'id_comercio' => $idComercio,
+            'sku' => isset($variacion['sku']) ? (string) $variacion['sku'] : null,
         ];
     }
 }

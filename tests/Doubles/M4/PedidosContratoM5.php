@@ -3,6 +3,7 @@
 namespace Tests\Doubles\M4;
 
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
+use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
 use LogicException;
 
 /**
@@ -10,10 +11,13 @@ use LogicException;
  * usará antes de registrar la salida por despacho (CU-M4-07): pedido pagado y subpedido del mismo
  * comercio con una línea que lleva el id_reserva. Las firmas siguen x-operacion-interfaz-php de M5.
  *
+ * PC4: implementa también SubpedidosServiceInterface, la interfaz vigente de M5 que usa
+ * PedidosReal (obtenerSubpedido está ahí, no en PedidosServiceInterface).
+ *
  * Errores: ERR-005 (id inválido), ERR-004 (no existe) y ERR-003 (subpedido de otro comercio).
  * La variante PedidosNoDisponible simula que M5 no responde (ERR-006).
  */
-class PedidosContratoM5 implements PedidosServiceInterface
+class PedidosContratoM5 implements PedidosServiceInterface, SubpedidosServiceInterface
 {
     /** @return array<string, mixed> PedidoMaestro con sus subpedidos. */
     public function obtenerPedido(int $idPedido): array
@@ -63,6 +67,16 @@ class PedidosContratoM5 implements PedidosServiceInterface
     }
 
     public function agregarItemCarrito(int $idCliente, array $datos): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M4.');
+    }
+
+    public function confirmarEntregaSubpedido(int $idSubpedido, array $datosEntrega = []): array
+    {
+        throw new LogicException('Fuera del alcance del doble de M4.');
+    }
+
+    public function cancelarSubpedidoParcial(int $idSubpedido, array $datosCancelacion = []): array
     {
         throw new LogicException('Fuera del alcance del doble de M4.');
     }

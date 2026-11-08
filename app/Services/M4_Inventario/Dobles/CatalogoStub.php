@@ -25,6 +25,7 @@ class CatalogoStub implements CatalogoDependencia
             'id_variacion' => $idVariacion,
             'id_producto' => 1,
             'id_comercio' => self::COMERCIO,
+            'sku' => "VAR-{$idVariacion}",
         ];
     }
 }
