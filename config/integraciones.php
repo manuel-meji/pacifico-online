@@ -4,6 +4,7 @@ use App\Services\M1_Portal\Dobles\CarritoFake;
 use App\Services\M1_Portal\Dobles\CatalogoFake;
 use App\Services\M1_Portal\Dobles\ComerciosStub;
 use App\Services\M1_Portal\Dobles\InventarioStub;
+use App\Services\M4_Inventario\Dobles\AutorizacionesStub as M4AutorizacionesStub;
 use App\Services\M4_Inventario\Dobles\CatalogoStub as M4CatalogoStub;
 use App\Services\M4_Inventario\Dobles\ComerciosStub as M4ComerciosStub;
 use App\Services\M4_Inventario\Dobles\NucleoStub as M4NucleoStub;
@@ -90,6 +91,19 @@ return [
 
         // Minutos de vigencia de una reserva si el solicitante no indica otro valor.
         'reserva_minutos' => (int) env('M4_RESERVA_MINUTOS', 15),
+
+        // Verificador de autorizaciones de ajustes (RN-M4-011). El núcleo aún no
+        // publica el flujo de autorizaciones: se usa el doble con las autorizaciones
+        // registradas aquí (una sola vez cada una). Ver AutorizacionesStub.
+        'autorizaciones' => [
+            'doble' => M4AutorizacionesStub::class,
+            'registradas' => [
+                'autorizacion-ajuste-0001' => [
+                    'operacion' => 'ajuste', 'id_comercio' => 104, 'id_variacion' => 501, 'ubicaciones' => [12], 'cantidad' => 2,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-09T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+            ],
+        ],
     ],
 
     /*

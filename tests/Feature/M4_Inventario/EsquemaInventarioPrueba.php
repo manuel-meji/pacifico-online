@@ -3,6 +3,7 @@
 namespace Tests\Feature\M4_Inventario;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Crea en SQLite las tablas de M4 con las mismas columnas y restricciones de
@@ -144,6 +145,18 @@ CREATE TABLE estados_comercio_inventario (
 );
 SQL
         );
+    }
+
+    /**
+     * Tablas del núcleo (usuarios y bitácora de auditoría) para las pruebas que usan
+     * el núcleo real: M4 registra en su bitácora las operaciones sensibles. La
+     * bitácora tiene llave foránea a comercios (M2); en la base de prueba de M4 no
+     * se crean las tablas de M2, así que se desactivan las llaves foráneas.
+     */
+    protected function crearEsquemaNucleo(): void
+    {
+        $this->artisan('migrate', ['--path' => 'database/migrations/Nucleo', '--force' => true]);
+        Schema::disableForeignKeyConstraints();
     }
 
     /**

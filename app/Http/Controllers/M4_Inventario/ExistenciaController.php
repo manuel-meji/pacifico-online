@@ -4,6 +4,7 @@ namespace App\Http\Controllers\M4_Inventario;
 
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\M4_Inventario\FijarStockMinimoRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -60,5 +61,31 @@ class ExistenciaController extends Controller
         $peticion->validate(['items' => ['required', 'array']]);
 
         return response()->json($this->inventario->consultarDisponibilidadProductoLote($peticion->input('items')));
+    }
+
+    /** GET /existencias (listarExistencias). Encargado del comercio. */
+    public function listar(Request $peticion): JsonResponse
+    {
+        $datos = $peticion->validate([
+            'id_comercio' => ['required', 'integer'],
+            'id_ubicacion' => ['nullable', 'integer'],
+            'id_variacion' => ['nullable', 'integer'],
+            'bajo_minimo' => ['nullable', 'in:true,false,1,0'],
+            'pagina' => ['nullable', 'integer'],
+            'por_pagina' => ['nullable', 'integer'],
+        ]);
+
+        $filtros = array_filter(
+            array_diff_key($datos, ['id_comercio' => true]),
+            fn ($valor): bool => $valor !== null && $valor !== '',
+        );
+
+        return response()->json($this->inventario->listarExistencias((int) $datos['id_comercio'], $filtros));
+    }
+
+    /** PUT /existencias/{id_existencia}/stock-minimo (fijarStockMinimo). Encargado del comercio. */
+    public function fijarStockMinimo(int $idExistencia, FijarStockMinimoRequest $solicitud): JsonResponse
+    {
+        return response()->json($this->inventario->fijarStockMinimo($idExistencia, $solicitud->stockMinimo()));
     }
 }
