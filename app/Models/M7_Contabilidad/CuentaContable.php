@@ -2,13 +2,20 @@
 
 namespace App\Models\M7_Contabilidad;
 
+use App\Models\Nucleo\Concerns\PerteneceAComercio;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Cuenta contable del plan de cuentas de un comercio.
+ * Aislamiento por comercio: trait PerteneceAComercio del Núcleo (RN-12 / ADR-006).
+ */
 class CuentaContable extends Model
 {
+    use PerteneceAComercio;
+
     public const TIPOS = ['ACTIVO', 'PASIVO', 'PATRIMONIO', 'INGRESO', 'GASTO'];
 
     protected $table = 'cuentas_contables';
@@ -42,11 +49,6 @@ class CuentaContable extends Model
         return $this->hasMany(self::class, 'id_cuenta_padre', 'id_cuenta_contable');
     }
 
-    public function scopeDeComercio($query, int $idComercio)
-    {
-        return $query->where('id_comercio', $idComercio);
-    }
-
     public function scopeActivas($query)
     {
         return $query->where('activa', true);
@@ -62,6 +64,10 @@ class CuentaContable extends Model
         return self::naturalezaDeTipo((string) $this->tipo);
     }
 
+    /**
+     * Nota: DB::table no pasa por el FiltroComercioScope. Es seguro porque
+     * la cuenta ($this) ya se obtuvo con el aislamiento aplicado.
+     */
     public function tieneMovimientos(): bool
     {
         if (! $this->exists) {

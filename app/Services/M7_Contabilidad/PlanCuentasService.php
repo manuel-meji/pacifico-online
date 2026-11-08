@@ -8,14 +8,19 @@ use InvalidArgumentException;
 
 /**
  * Gestión del plan de cuentas (RF-001 / CU-001).
- * El aislamiento por comercio (RS-002) se garantiza filtrando siempre por id_comercio;
- * la verificación de permisos del usuario la hace el controlador con el Núcleo (RS-003).
+ * El aislamiento por comercio (RS-002) lo aplica el Núcleo mediante el trait
+ * PerteneceAComercio (FiltroComercioScope + verificación de escritura, RN-12 / ADR-006).
+ * El filtro explícito por id_comercio evita que $idComercio se ignore cuando el
+ * Núcleo desactiva el filtro (modo sistema o acceso auditado).
+ * La verificación de permisos del usuario la hace el controlador con el Núcleo (RS-003).
  */
 class PlanCuentasService
 {
     public function listar(int $idComercio, bool $soloActivas = false): Collection
     {
-        $consulta = CuentaContable::query()->deComercio($idComercio)->orderBy('codigo');
+        $consulta = CuentaContable::query()
+            ->where('id_comercio', $idComercio)
+            ->orderBy('codigo');
 
         if ($soloActivas) {
             $consulta->activas();
@@ -27,7 +32,7 @@ class PlanCuentasService
     public function obtener(int $idComercio, int $idCuenta): CuentaContable
     {
         return CuentaContable::query()
-            ->deComercio($idComercio)
+            ->where('id_comercio', $idComercio)
             ->where('id_cuenta_contable', $idCuenta)
             ->firstOrFail();
     }
@@ -49,7 +54,7 @@ class PlanCuentasService
         $normalizados = $this->validarDatos($idComercio, $datos, $padre);
 
         $existe = CuentaContable::query()
-            ->deComercio($idComercio)
+            ->where('id_comercio', $idComercio)
             ->where('codigo', $normalizados['codigo'])
             ->exists();
 

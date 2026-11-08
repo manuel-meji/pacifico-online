@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\M7_Contabilidad\CentroCosto;
 use App\Models\M7_Contabilidad\CuentaContable;
+use App\Services\Nucleo\ContextoComercio;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -15,6 +16,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Comercios a sembrar: variable M7_SEED_COMERCIOS en .env (ej. "1,2"). Por defecto "1".
  * No lee tablas de M2 (frontera de datos). Es idempotente: se puede ejecutar varias veces.
+ *
+ * Corre sin contexto de usuario, por eso la siembra se ejecuta mediante
+ * app(ContextoComercio::class)->ejecutarComoSistema() (RN-12 / ADR-006).
+ * En modo sistema el Núcleo no asigna ni valida id_comercio, así que se pasa
+ * explícito en las condiciones del updateOrCreate.
  */
 class M7_PlanCuentasSeeder extends Seeder
 {
@@ -55,28 +61,30 @@ class M7_PlanCuentasSeeder extends Seeder
 
     public function sembrarComercio(int $idComercio): void
     {
-        DB::transaction(function () use ($idComercio) {
-            $porCodigo = [];
+        app(ContextoComercio::class)->ejecutarComoSistema(function () use ($idComercio): void {
+            DB::transaction(function () use ($idComercio): void {
+                $porCodigo = [];
 
-            foreach (self::PLAN_BASE as [$codigo, $nombre, $tipo, $codigoPadre]) {
-                $padre = $codigoPadre !== null ? $porCodigo[$codigoPadre] : null;
+                foreach (self::PLAN_BASE as [$codigo, $nombre, $tipo, $codigoPadre]) {
+                    $padre = $codigoPadre !== null ? $porCodigo[$codigoPadre] : null;
 
-                $porCodigo[$codigo] = CuentaContable::updateOrCreate(
-                    ['id_comercio' => $idComercio, 'codigo' => $codigo],
-                    [
-                        'nombre' => $nombre,
-                        'tipo' => $tipo,
-                        'nivel' => $padre ? $padre->nivel + 1 : 1,
-                        'id_cuenta_padre' => $padre?->getKey(),
-                        'activa' => true,
-                    ]
+                    $porCodigo[$codigo] = CuentaContable::updateOrCreate(
+                        ['id_comercio' => $idComercio, 'codigo' => $codigo],
+                        [
+                            'nombre' => $nombre,
+                            'tipo' => $tipo,
+                            'nivel' => $padre ? $padre->nivel + 1 : 1,
+                            'id_cuenta_padre' => $padre?->getKey(),
+                            'activa' => true,
+                        ]
+                    );
+                }
+
+                CentroCosto::updateOrCreate(
+                    ['id_comercio' => $idComercio, 'codigo' => 'GEN'],
+                    ['nombre' => 'General', 'activo' => true]
                 );
-            }
-
-            CentroCosto::updateOrCreate(
-                ['id_comercio' => $idComercio, 'codigo' => 'GEN'],
-                ['nombre' => 'General', 'activo' => true]
-            );
+            });
         });
     }
 }
