@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Aviso, Encabezado, NavegacionCuentaContext } from './components/componentes';
+import { PortalContext } from './components/PaginaPortal';
 import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
-import { registrarCliente } from './services/m1Api';
+import { listarCategorias, registrarCliente } from './services/m1Api';
 import { cerrarSesion, iniciarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
+import BusquedaView from './views/BusquedaView';
 import CrearCuentaView from './views/CrearCuentaView';
 import FichaComercioView from './views/FichaComercioView';
 import IniciarSesionView from './views/IniciarSesionView';
@@ -12,20 +14,63 @@ import FichaProductoView from './views/FichaProductoView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
 
-// Título de la pestaña por pantalla. La ficha de comercio conserva el título de m1.html.
+// Título de la pestaña por pantalla.
 const titulos = {
   inicio: 'Pacíficos Online · Inicio',
+  busqueda: 'Pacíficos Online · Búsqueda',
+  producto: 'Pacíficos Online · Producto',
+  comercio: 'Pacíficos Online · Comercio',
   ingresar: 'Pacíficos Online · M1 Iniciar sesión',
   crear: 'Pacíficos Online · M1 Crear cuenta',
   perfil: 'Pacíficos Online · M1 Mi cuenta',
 };
 
+// Parámetros de las pantallas del portal que viajan en la URL (?pantalla=producto&id=1520, etc.).
+// Los nombres de la búsqueda son los del contrato de buscarProductos.
+const PARAMETROS_NUMERICOS = ['id', 'id_categoria', 'precio_minimo', 'precio_maximo', 'pagina', 'por_pagina'];
+const PARAMETROS_TEXTO = ['q', 'orden'];
 
-export default function M1App({ pantalla: pantallaInicial = 'comercio', simular = null }) {
+export function leerParametros(busqueda = window.location.search) {
+  const url = new URLSearchParams(busqueda);
+  const parametros = {};
+  PARAMETROS_NUMERICOS.forEach((clave) => {
+    const valor = Number(url.get(clave));
+    if (url.get(clave) !== null && url.get(clave) !== '' && Number.isFinite(valor)) parametros[clave] = valor;
+  });
+  PARAMETROS_TEXTO.forEach((clave) => {
+    if (url.get(clave)) parametros[clave] = url.get(clave);
+  });
+  return parametros;
+}
+
+function urlDe(pantalla, parametros) {
+  const url = new URLSearchParams();
+  url.set('pantalla', pantalla);
+  Object.entries(parametros).forEach(([clave, valor]) => {
+    if (valor !== null && valor !== undefined && valor !== '') url.set(clave, valor);
+  });
+  // ?simular= (registro e ingreso sin backend) se conserva al navegar.
+  const simular = new URLSearchParams(window.location.search).get('simular');
+  if (simular) url.set('simular', simular);
+  return `${window.location.pathname}?${url.toString()}`;
+}
+
+export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = null }) {
   const [pantalla, setPantalla] = useState(pantallaInicial);
+  const [parametros, setParametros] = useState(() => leerParametros());
   // Persona con sesión ({ id_usuario, nombre, correo, rol, id_comercio }) o null. Viene de GET /api/user.
   const [usuario, setUsuario] = useState(null);
   const [errorCierre, setErrorCierre] = useState(false);
+  // Menú de GET /categorias, compartido por el encabezado y los filtros. Si falla, el menú no se muestra.
+  const [categorias, setCategorias] = useState([]);
+
+  useEffect(() => {
+    let activo = true;
+    listarCategorias().then((respuesta) => {
+      if (activo && respuesta.ok) setCategorias(respuesta.datos);
+    });
+    return () => { activo = false; };
+  }, []);
 
   // Al cargar se consulta la sesión. 401 es "sin sesión"; cualquier otro fallo (por ejemplo sin conexión)
   // se ignora en silencio para no bloquear el portal.
@@ -37,22 +82,25 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
     return () => { activo = false; };
   }, []);
 
-  function navegar(destino) {
-    if (destino === pantalla) return;
+  // Cambia de pantalla y deja los parámetros en la URL, así funcionan el botón Atrás y recargar la página.
+  // Con { reemplazar: true } (cambios de filtros) no se agrega una entrada nueva al historial.
+  function navegar(destino, nuevosParametros = {}, { reemplazar = false } = {}) {
+    if (destino === pantalla && JSON.stringify(nuevosParametros) === JSON.stringify(parametros)) return;
     setErrorCierre(false);
 
-    window.history.pushState(
-      { pantallaM1: destino },
-      '',
-      window.location.href
-    );
+    const estado = { pantallaM1: destino, parametrosM1: nuevosParametros };
+    if (reemplazar) window.history.replaceState(estado, '', urlDe(destino, nuevosParametros));
+    else window.history.pushState(estado, '', urlDe(destino, nuevosParametros));
 
     setPantalla(destino);
+    setParametros(nuevosParametros);
+    if (!reemplazar) window.scrollTo({ top: 0 });
   }
 
   useEffect(() => {
     function manejarHistorial(evento) {
       setPantalla(evento.state?.pantallaM1 || pantallaInicial);
+      setParametros(evento.state?.parametrosM1 ?? leerParametros());
     }
 
     window.addEventListener('popstate', manejarHistorial);
@@ -103,27 +151,18 @@ export default function M1App({ pantalla: pantallaInicial = 'comercio', simular 
     navegar('ingresar');
   }
 
-  if (pantalla === 'inicio') {
-    // Con sesión, "Mi cuenta" del encabezado del portal lleva a perfil (donde está "Cerrar sesión").
-    return <InicioView onIr={(destino) => navegar(usuario && destino === 'ingresar' ? 'perfil' : destino)} />;
-  }
+  const portal = useMemo(() => ({ ir: navegar, categorias, usuario }), [categorias, usuario, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (pantalla === 'producto') {
-    return <FichaProductoView />;
-  }
+  // Pantallas del portal público (encabezado con buscador y categorías).
+  if (!['ingresar', 'crear', 'perfil'].includes(pantalla)) {
+    const { id, ...criterio } = parametros;
+    let vista;
+    if (pantalla === 'busqueda') vista = <BusquedaView criterio={criterio} />;
+    else if (pantalla === 'producto') vista = <FichaProductoView key={id} idProducto={id} />;
+    else if (pantalla === 'comercio') vista = <FichaComercioView key={id} idComercio={id} criterio={criterio} />;
+    else vista = <InicioView />;
 
-  if (pantalla === 'comercio') {
-    return (
-      <FichaComercioView
-        idComercio={7}
-        simular={simular}
-        onVerProducto={() => navegar('producto')}
-      />
-    );
-  }
-
-  if (pantalla !== 'ingresar' && pantalla !== 'crear' && pantalla !== 'perfil') {
-    return <FichaComercioView idComercio={7} simular={simular} />;
+    return <PortalContext.Provider value={portal}>{vista}</PortalContext.Provider>;
   }
 
   

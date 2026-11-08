@@ -2,15 +2,15 @@
 
 namespace App\Services\M5_Pedidos\Dobles;
 
-use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Services\M4_Inventario\Dobles\InventarioDobleBase;
 use Illuminate\Support\Str;
 
 /**
  * Doble de prueba formal (Stub) para M4 Inventario Multiempresa.
- * Implementa App\Contracts\M4_Inventario\InventarioModuleInterface
- * (que a su vez extiende InventarioServiceInterface).
+ * Extiende InventarioDobleBase de M4, que implementa InventarioModuleInterface
+ * con las 20 operaciones del contrato v1.3.0 (las no simuladas responden ERR-006).
  */
-class InventarioStub implements InventarioModuleInterface
+class InventarioStub extends InventarioDobleBase
 {
     public const STOCK_POR_DEFECTO = 10;
 
@@ -191,10 +191,12 @@ class InventarioStub implements InventarioModuleInterface
      *
      * @return array<string, mixed>
      */
-    public function confirmarReserva(string $idReserva): array
+    public function confirmarReserva(string $idReserva, int $idPedido, int $idSubpedido): array
     {
         return [
             'id_reserva' => $idReserva,
+            'id_pedido' => $idPedido,
+            'id_subpedido' => $idSubpedido,
             'estado' => 'confirmada',
             'fecha_confirmacion' => now()->toIso8601String(),
         ];

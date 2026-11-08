@@ -1,32 +1,49 @@
-# M1 Portal público · Ficha de comercio (prototipo)
+# M1 Portal público
 
-Pantalla del CU-009 *Consultar información pública de un comercio* (micrositio), con React y Tailwind como el prototipo de M5.
-Ruta prevista en el contrato de M1: `GET /m1/comercios/{idComercio}/micrositio`.
+Pantallas del portal con React y Tailwind, conectadas a la API real de M1 (`/api/m1/v1`, contrato
+`contracts/m1-portal/v1/openapi.yaml` 1.3.0). Se abren con `m1.html` (o `inicio.html`) para no tocar
+`src/main.jsx`, que es de M5.
+
+| Pantalla | URL | Endpoint |
+|---|---|---|
+| Página principal | `m1.html` | `GET /destacados` (y `GET /comercios` si no hay comercios destacados) |
+| Búsqueda | `m1.html?pantalla=busqueda&q=cafe` o `&id_categoria=10` | `GET /productos/busqueda` |
+| Ficha de producto | `m1.html?pantalla=producto&id=1520` | `GET /productos/{id_producto}` |
+| Micrositio | `m1.html?pantalla=comercio&id=34` | `GET /comercios/{id_comercio}/micrositio` y, con filtros, `GET /productos/busqueda` con `id_comercio` |
+| Menú de categorías (todas) | | `GET /categorias` |
+
+Los parámetros de búsqueda en la URL usan los nombres del contrato (`q`, `id_categoria`, `precio_minimo`,
+`precio_maximo`, `orden`, `pagina`, `por_pagina`). Así funcionan el botón Atrás y recargar la página.
 
 | Archivo | Contenido |
 |---|---|
-| `views/FichaComercioView.jsx` | Pantalla: banner y datos del comercio, pestañas Productos / Información, categorías, filtros, orden, paginación y estados alternativos |
-| `components/EncabezadoPortal.jsx` | Encabezado del portal (logotipo, buscador, cuenta, carrito, barra de categorías), con la estructura del prototipo de ficha de producto |
-| `components/TarjetaProducto.jsx` | Tarjeta de producto (ProductoResumenDTO) con etiqueta de agotado; reutilizable en búsqueda y destacados |
-| `components/FiltrosComercio.jsx` | Barra lateral: tipo de producto, marca, precio y disponibilidad |
-| `components/Paginacion.jsx`, `components/InfoComercio.jsx` | Paginación y datos públicos del comercio (horarios, contacto, redes, políticas) |
-| `components/IconoComercio.jsx` | Íconos SVG con los trazos de Lucide (sin emojis, según `design.md`), usados por la ficha de comercio |
-| `services/micrositio.js` | Doble de `obtenerMicrositio`: filtra, ordena, pagina y simula M2, M3 y M4 |
-| `services/datosMockComercio.js` | Datos de ejemplo con la forma de ComercioPublico (M2) y ProductoResumenDTO (M1) |
-| `tema.css`, `assets/logo-pacificos.png` | Paleta de la marca (brandBlue, brandDarkBlue, brandGreen, brandLightBg) y logotipo |
-| `M1App.jsx`, `main.jsx` | Entrada del módulo; se abre con `m1.html` para no tocar `src/main.jsx` (M5) |
+| `M1App.jsx`, `main.jsx` | Entrada, navegación con parámetros en la URL y menú de categorías compartido |
+| `services/m1Api.js` | Cliente HTTP de `/api/m1/v1` (CSRF de Sanctum y formato de error del núcleo) |
+| `services/useConsulta.js` | Estado de cada llamada: cargando, actualizando, listo o error, con reintento |
+| `services/formato.js` | Colones, días de la semana y texto de atributos de una variación |
+| `components/PaginaPortal.jsx` | Marco común (encabezado, contenido y pie) y contexto de navegación |
+| `components/EncabezadoPortal.jsx` | Logotipo, buscador, cuenta, carrito (M5) y menú de categorías |
+| `components/EstadosVista.jsx` | Estados de carga, vacío y error (422, 404, 503 con Reintentar) |
+| `components/ListadoProductos.jsx` | Orden, cantidad por página, filtros en celular, cuadrícula y paginación |
+| `components/FiltrosComercio.jsx` | Filtros de búsqueda y micrositio: buscar en el comercio, categoría y precio |
+| `components/TarjetaProducto.jsx`, `components/Imagen.jsx` | Tarjeta de ProductoResumen; imagen con ícono de respaldo si no carga |
+| `components/CarruselComercios.jsx`, `components/InfoComercio.jsx`, `components/Paginacion.jsx` | Comercios en fila, información pública del comercio y paginación |
+| `views/InicioView.jsx`, `views/BusquedaView.jsx`, `views/FichaProductoView.jsx`, `views/FichaComercioView.jsx` | Las cuatro pantallas |
+
+## Comportamiento
+- Errores con el formato del núcleo: 422 ERR-005 muestra el mensaje del campo; 404 ERR-004, "no disponible";
+  503 ERR-006 (o sin conexión), "no disponible temporalmente" con Reintentar.
+- Búsqueda (RN-M1-08): sin categoría, el término necesita 2 caracteres; si no, se avisa sin llamar a la API.
+- Micrositio: sin filtros muestra los productos del comercio paginados. El buscador del comercio y la categoría
+  usan la búsqueda con `id_comercio`; precio y orden se habilitan solo con término o categoría (RN-M1-08).
+  Si M3 no responde (`productos_disponibles: false`), se muestra el comercio con un aviso.
+- Ficha: una variación solo se compra si `comprable` es true; si no, "Agotado" y el botón deshabilitado.
+  "Agregar al carrito" abre M5: `/app.html?agregar=<id_variacion>&cantidad=1`.
+- Portada: la sección que venga en `secciones_no_disponibles` se oculta y el resto sigue.
 
 ## Ejecutar
-Desde `frontend/`: `npm install` y `npm run dev`, luego abrir `http://localhost:5173/m1.html`.
-
-## Simular alternativas
-`?simular=suspendido` (M2 404), `?simular=vacio` (sin productos), `?simular=sininventario` (M4 sin respuesta).
-
-## Pendiente
-- Cambiar `services/micrositio.js` por la llamada real al backend de M1 cuando exista.
-- Unificar `EncabezadoPortal` y `TarjetaProducto` con las demás pantallas de M1.
-- Filtros y orden: el contrato de `obtenerMicrositio` solo tiene paginación; salen de la búsqueda con el comercio fijo o de un cambio de versión.
-- Etiqueta de oferta y precio anterior: solo si M3 publica ese dato en su contrato.
+Backend: `php artisan serve`. Desde `frontend/`: `npm install` y `npm run dev`; abrir `http://localhost:5173/m1.html`.
+El servidor de Vite pasa `/api`, `/sanctum`, `/login` y `/logout` al backend.
 
 ## Iniciar sesión y Crear cuenta (prototipo)
 

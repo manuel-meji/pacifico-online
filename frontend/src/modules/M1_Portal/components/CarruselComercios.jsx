@@ -1,67 +1,34 @@
+import Icono from './IconoComercio';
+import Imagen from './Imagen';
 
-import { comerciosTemporales } from '../services/datosMockPortal';
-
-export default function CarruselComercios({ onVerComercio }) {  
-  const comercios = comerciosTemporales.filter(
-    (comercio) => comercio.habilitado === true
-  );
-
+// Comercios en fila horizontal (destacados de GET /destacados o página de GET /comercios).
+// Cada comercio trae { id_comercio, nombre_comercial, logotipo } según el contrato.
+export default function CarruselComercios({ comercios, titulo, descripcion, onVerComercio }) {
   return (
-    <section className="mt-12">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-brandDarkBlue">
-          Explorá nuestros comercios
-        </h2>
-
-        <p className="mt-2 text-sm text-gray-600">
-          Conocé los comercios que forman parte de Pacíficos Online.
-        </p>
+    <section className="mt-10">
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold text-brandDarkBlue">{titulo}</h2>
+        {descripcion && <p className="mt-1 text-sm text-gray-600">{descripcion}</p>}
       </div>
 
-      <div className="flex gap-5 overflow-x-auto pb-5">
+      <ul className="flex gap-4 overflow-x-auto pb-4">
         {comercios.map((comercio) => (
-          <article
-            key={comercio.idComercio}
-            className="w-64 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
-          >
-            <div className="flex h-40 items-center justify-center bg-blue-50">
-              <span className="px-4 text-center text-lg font-semibold text-brandDarkBlue">
-                {comercio.nombre}
+          <li key={comercio.id_comercio} className="w-52 shrink-0 sm:w-60">
+            <button type="button" onClick={() => onVerComercio?.(comercio.id_comercio)}
+              className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-gray-100 bg-white text-left shadow-sm transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue">
+              <span className="grid h-32 w-full place-items-center bg-blue-50">
+                <Imagen src={comercio.logotipo} className="h-20 w-20 rounded-full object-cover" icono="tienda" claseIcono="h-10 w-10 text-brandDarkBlue" />
               </span>
-            </div>
-
-            <div className="p-5">
-              <span className="text-xs font-semibold text-brandGreen">
-                {comercio.categoria}
+              <span className="flex flex-1 flex-col p-4">
+                <span className="line-clamp-2 font-bold text-gray-800">{comercio.nombre_comercial}</span>
+                <span className="mt-auto inline-flex items-center gap-1 pt-3 text-sm font-semibold text-brandBlue">
+                  Conocer comercio <Icono nombre="derecha" className="h-4 w-4" />
+                </span>
               </span>
-
-              <h3 className="mt-2 text-lg font-bold text-gray-800">
-                {comercio.nombre}
-              </h3>
-
-              <p className="mt-2 min-h-12 text-sm text-gray-600">
-                {comercio.descripcion}
-              </p>
-
-              
-{comercio.nombre === 'TecnoPacífico' ? (
-  <button
-    type="button"
-    onClick={() => onVerComercio?.()}
-    className="mt-4 inline-block text-sm font-semibold text-brandDarkBlue hover:underline"
-  >
-    Conocer comercio →
-  </button>
-) : (
-  <span className="mt-4 inline-block text-sm text-gray-400">
-    Próximamente
-  </span>
-)}
-
-            </div>
-          </article>
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }

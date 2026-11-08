@@ -1,4 +1,4 @@
-// Cliente HTTP de M1 Portal público (contrato contracts/m1-portal/v1/openapi.yaml, versión 1.2.0).
+// Cliente HTTP de M1 Portal público (contrato contracts/m1-portal/v1/openapi.yaml, versión 1.3.0).
 // Las rutas de M1 viven en el grupo web de Laravel: los POST, PUT y DELETE llevan el token CSRF
 // de Sanctum (cookie XSRF-TOKEN → cabecera X-XSRF-TOKEN), igual que el cliente de M5.
 // Los errores llegan en el formato del núcleo: { error: { codigo, mensaje, detalles } }.
@@ -106,4 +106,52 @@ export function agregarDireccion(idCliente, datos) {
 // (también si se intenta desmarcar la principal).
 export function actualizarDireccion(idCliente, idDireccionCliente, datos) {
   return llamar(`/clientes/${idCliente}/direcciones/${idDireccionCliente}`, { method: 'PUT', body: JSON.stringify(datos) });
+}
+
+// ---------------------------------------------------------------------------
+// Navegación del portal (rutas públicas, sin sesión). Todas devuelven { ok, datos } o
+// { ok: false, estado, error } con el formato del núcleo, igual que las de clientes.
+// ---------------------------------------------------------------------------
+
+// Arma "?a=1&b=2" con los parámetros que tienen valor (omite null, undefined y '').
+function consulta(parametros) {
+  const pares = Object.entries(parametros).filter(([, valor]) => valor !== null && valor !== undefined && valor !== '');
+  return pares.length ? `?${new URLSearchParams(pares).toString()}` : '';
+}
+
+// GET /productos/busqueda (buscarProductos). `criterio` usa los nombres del contrato:
+// { q, id_categoria, id_comercio, id_marca, precio_minimo, precio_maximo, orden, pagina, por_pagina }.
+// 200 → ResultadoBusqueda · 422 ERR-005 (RN-M1-08 u otro parámetro inválido) · 503 ERR-006.
+export function buscarProductos(criterio = {}) {
+  return llamar(`/productos/busqueda${consulta(criterio)}`);
+}
+
+// GET /categorias (listarCategoriasPortal). Menú del portal: principales con sus subcategorías.
+// 200 → CategoriaPortal[] · 503 ERR-006.
+export function listarCategorias() {
+  return llamar('/categorias');
+}
+
+// GET /productos/{id_producto} (obtenerFichaProducto).
+// 200 → FichaProducto · 404 ERR-004 (no existe o su comercio no está activo) · 503 ERR-006.
+export function obtenerFichaProducto(idProducto) {
+  return llamar(`/productos/${idProducto}`);
+}
+
+// GET /destacados (listarDestacados). limite de 1 a 24 (por defecto 8; fuera de rango el backend lo ajusta).
+// 200 → Destacados. Si M2 o M3 no responden, la sección viene vacía y se nombra en secciones_no_disponibles.
+export function listarDestacados(limite = 8) {
+  return llamar(`/destacados${consulta({ limite })}`);
+}
+
+// GET /comercios (listarComercios). pagina >= 1, por_pagina de 1 a 50.
+// 200 → ListadoComercios · 422 ERR-005 · 503 ERR-006.
+export function listarComercios(pagina = 1, porPagina = 20) {
+  return llamar(`/comercios${consulta({ pagina, por_pagina: porPagina })}`);
+}
+
+// GET /comercios/{id_comercio}/micrositio (obtenerMicrositio, CU-009).
+// 200 → Micrositio (productos_disponibles false si M3 no respondió) · 404 ERR-004 · 422 ERR-005 · 503 ERR-006.
+export function obtenerMicrositio(idComercio, pagina = 1, porPagina = 20) {
+  return llamar(`/comercios/${idComercio}/micrositio${consulta({ pagina, por_pagina: porPagina })}`);
 }

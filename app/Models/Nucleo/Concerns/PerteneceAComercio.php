@@ -16,7 +16,7 @@ trait PerteneceAComercio
 {
     public static function bootPerteneceAComercio(): void
     {
-        static::addGlobalScope(new FiltroComercioScope());
+        static::addGlobalScope(new FiltroComercioScope);
 
         static::creating(function (Model $modelo): void {
             VerificaAmbitoEscritura::alCrear($modelo, 'id_comercio', app(ContextoComercio::class));
