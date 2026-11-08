@@ -1,14 +1,22 @@
-// Cliente HTTP de M6 (contrato contratos/m6-pagos-facturacion.yaml).
-// Los errores llegan en el formato estándar del núcleo: { codigo, mensaje }.
-const BASE = '/api/m6';
+// Cliente HTTP de M6 (rutas de routes/modules/m6_pagos_api.php, prefijo /api/m6/v1).
+// Los errores llegan en el formato estándar del núcleo: { error: { codigo, mensaje, detalles } }.
+const BASE = '/api/m6/v1';
 
 async function llamar(ruta, opciones = {}) {
   const resp = await fetch(`${BASE}${ruta}`, {
     ...opciones,
-    headers: { 'Content-Type': 'application/json', ...(opciones.headers || {}) },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(opciones.headers || {}) },
   });
   const cuerpo = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw Object.assign(new Error(cuerpo.mensaje || 'Error de M6'), { codigo: cuerpo.codigo, mensaje: cuerpo.mensaje });
+  if (!resp.ok) {
+    const error = cuerpo.error ?? {};
+    throw Object.assign(new Error(error.mensaje || 'Error de M6'), {
+      codigo: error.codigo,
+      mensaje: error.mensaje,
+      motivo: error.detalles?.motivo,
+      estadoHttp: resp.status,
+    });
+  }
   return cuerpo;
 }
 

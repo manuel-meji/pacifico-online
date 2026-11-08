@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import FormularioPago from '../components/FormularioPago';
+   // @vitest-environment jsdom
+ import { describe, it, expect, vi, afterEach } from 'vitest';
+   import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+   import FormularioPago from '../components/FormularioPago';
 
+    afterEach(cleanup);
 const pedido = { id_pedido: 8942, estado: 'confirmado', monto_total: 59840, subpedidos: [{ id_subpedido: 1, comercio: 'Comercio B', subtotal: 59840 }] };
 
 describe('FormularioPago', () => {

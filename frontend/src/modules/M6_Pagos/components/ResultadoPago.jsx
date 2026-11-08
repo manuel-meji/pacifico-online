@@ -20,7 +20,7 @@ export default function ResultadoPago({ pago, onOtroMedio, onVerFactura }) {
       <dl className="rounded-lg bg-brandLightBg p-3 text-left text-sm">
         <div className="flex justify-between"><dt>Pago</dt><dd className="font-mono">{pago.id}</dd></div>
         <div className="flex justify-between"><dt>Estado</dt><dd className="font-semibold">{pago.estado}</dd></div>
-        <div className="flex justify-between"><dt>Monto</dt><dd>₡{Number(pago.monto_total).toLocaleString('es-CR')}</dd></div>
+        <div className="flex justify-between"><dt>Monto</dt><dd>₡{Number(pago.monto_total).toLocaleString('es-CR', { minimumFractionDigits: 2 })}</dd></div>
       </dl>
       {pago.estado === 'rechazado' && (
         <button onClick={onOtroMedio} className="w-full rounded-lg border border-gray-300 py-2 text-sm font-semibold">Elegir otro medio de pago</button>
