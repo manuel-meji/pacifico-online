@@ -21,7 +21,7 @@ export default function HistorialComercioView({ idComercio, api = { consultarHis
           <thead className="bg-brandLightBg"><tr><th className="p-3">Pago</th><th className="p-3">Medio</th><th className="p-3">Monto</th><th className="p-3">Estado</th></tr></thead>
           <tbody className="divide-y divide-gray-100">
             {datos.pagos.map((p) => (
-              <tr key={p.id}><td className="p-3 font-mono">{p.id}</td><td className="p-3">{p.medio_pago}</td><td className="p-3">₡{Number(p.monto_total).toLocaleString('es-CR')}</td><td className="p-3">{p.estado}</td></tr>
+              <tr key={p.id}><td className="p-3 font-mono">{p.id}</td><td className="p-3">{p.medio_pago}</td><td className="p-3">   ₡{Number(p.monto_total).toLocaleString('es-CR', { minimumFractionDigits: 2 })}</td><td className="p-3">{p.estado}</td></tr>
             ))}
           </tbody>
         </table>
