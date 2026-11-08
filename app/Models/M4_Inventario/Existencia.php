@@ -3,6 +3,7 @@
 namespace App\Models\M4_Inventario;
 
 use App\Models\Nucleo\Concerns\PerteneceAComercio;
+use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 use Database\Factories\M4_Inventario\ExistenciaFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -77,10 +78,34 @@ class Existencia extends Model
         return $this->cantidad_fisica - $this->cantidad_reservada;
     }
 
-    /** RN-M4-010: disponible en o bajo el mínimo configurado (sin mínimo no hay alerta). */
+    /** RN-M4-004: disponible en o bajo el mínimo configurado (sin mínimo no hay alerta). */
     public function bajoMinimo(): bool
     {
         return $this->stock_minimo > 0 && $this->disponible() <= $this->stock_minimo;
+    }
+
+    /** Entrada física: suma unidades y fija el costo promedio que calculó la estrategia. */
+    public function aplicarEntrada(int $cantidad, float $costoPromedio): void
+    {
+        $this->cantidad_fisica += $cantidad;
+        $this->costo_promedio = $costoPromedio;
+    }
+
+    /**
+     * Salida física manual o ajuste a la baja. No puede tocar unidades comprometidas
+     * por reservas ACTIVA o CONFIRMADA (ERR-M4-001).
+     */
+    public function disminuirFisica(int $cantidad): void
+    {
+        $this->verificarSuficiente($cantidad);
+        $this->cantidad_fisica -= $cantidad;
+    }
+
+    private function verificarSuficiente(int $cantidad): void
+    {
+        if ($this->disponible() < $cantidad) {
+            throw ErrorInventarioException::existenciaInsuficiente();
+        }
     }
 
     public function valorInventario(): float

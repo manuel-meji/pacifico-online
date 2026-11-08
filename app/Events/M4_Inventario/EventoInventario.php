@@ -2,14 +2,17 @@
 
 namespace App\Events\M4_Inventario;
 
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Support\Str;
 
 /**
  * Base de los eventos que publica M4 (catálogo 4.3 del PC3, v1.0.0).
  * Cada evento lleva id_evento (UUID) para que los consumidores sean idempotentes.
+ * ShouldDispatchAfterCommit: si se publica dentro de una transacción, Laravel lo
+ * entrega después del commit (un rollback no deja eventos de cambios que no ocurrieron).
  */
-abstract class EventoInventario
+abstract class EventoInventario implements ShouldDispatchAfterCommit
 {
     use Dispatchable;
 

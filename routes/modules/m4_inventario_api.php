@@ -1,7 +1,12 @@
 <?php
 
+use App\Http\Controllers\M4_Inventario\AjusteController;
 use App\Http\Controllers\M4_Inventario\EstadoController;
 use App\Http\Controllers\M4_Inventario\ExistenciaController;
+use App\Http\Controllers\M4_Inventario\KardexController;
+use App\Http\Controllers\M4_Inventario\MovimientoController;
+use App\Http\Middleware\EstablecerComercio;
+use App\Http\Middleware\RequiereRol;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -27,4 +32,18 @@ Route::prefix('api/m4/v1')
         Route::post('existencias/disponibilidad/lote', [ExistenciaController::class, 'disponibilidadLote'])->name('disponibilidad.lote');
         Route::get('existencias/disponibilidad/producto', [ExistenciaController::class, 'disponibilidadProducto'])->name('disponibilidad.producto');
         Route::post('existencias/disponibilidad/producto/lote', [ExistenciaController::class, 'disponibilidadProductoLote'])->name('disponibilidad.producto.lote');
+
+        // Panel del comercio. El Encargado de plataforma entra con acceso auditado (núcleo).
+        Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class.':encargado_comercio,encargado_plataforma'])
+            ->group(function (): void {
+                Route::get('existencias', [ExistenciaController::class, 'listar'])->name('existencias');
+                Route::put('existencias/{id_existencia}/stock-minimo', [ExistenciaController::class, 'fijarStockMinimo'])
+                    ->whereNumber('id_existencia')->name('existencias.stock_minimo');
+                Route::post('movimientos', [MovimientoController::class, 'registrar'])->name('movimientos');
+                Route::post('ajustes', [AjusteController::class, 'registrar'])->name('ajustes');
+                Route::get('kardex', [KardexController::class, 'consultar'])->name('kardex');
+                Route::get('kardex/valorizado', [KardexController::class, 'valorizado'])->name('kardex.valorizado');
+                Route::get('subpedidos/{id_subpedido}/costos-productos-vendidos', [KardexController::class, 'costosProductosVendidos'])
+                    ->whereNumber('id_subpedido')->name('subpedidos.costos');
+            });
     });

@@ -77,6 +77,43 @@ class ErrorInventarioException extends RuntimeException
     }
 
     /**
+     * ERR-002: el rol o la autorización no permiten la operación.
+     *
+     * @param  array<string, mixed>|null  $detalles
+     */
+    public static function accesoDenegado(?string $mensaje = null, ?array $detalles = null): self
+    {
+        return new self('ERR-002', 403, $mensaje ?? 'No se encuentra autorizado para realizar esta acción.', $detalles);
+    }
+
+    public static function rangoFechasInvalido(): self
+    {
+        return new self('ERR-M4-012', 422, 'El rango de fechas no es válido.', [
+            'fecha_inicio' => 'Use el formato AAAA-MM-DD; fecha_fin no puede ser anterior a fecha_inicio.',
+        ]);
+    }
+
+    public static function conteoDesactualizado(): self
+    {
+        return new self('ERR-M4-016', 409, 'El conteo físico está desactualizado; vuelve a contar.');
+    }
+
+    public static function ajusteBajoComprometido(): self
+    {
+        return new self('ERR-M4-017', 409, 'El ajuste dejaría el stock por debajo de lo comprometido.');
+    }
+
+    public static function subpedidoSinRegistros(): self
+    {
+        return new self('ERR-M4-018', 404, 'No hay registros del subpedido en inventario.');
+    }
+
+    public static function salidasPendientes(): self
+    {
+        return new self('ERR-M4-019', 409, 'Las salidas del subpedido aún no están confirmadas; reintenta más tarde.');
+    }
+
+    /**
      * ERR-005: parámetros inválidos, con el mapa campo → mensaje.
      *
      * @param  array<string, string>  $detalles

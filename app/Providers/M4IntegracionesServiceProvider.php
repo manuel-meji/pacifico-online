@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\M4_Inventario\Dependencias\CatalogoDependencia;
 use App\Contracts\M4_Inventario\Dependencias\ComerciosDependencia;
 use App\Contracts\M4_Inventario\Dependencias\NucleoDependencia;
+use App\Contracts\M4_Inventario\Dependencias\VerificadorAutorizacionesInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Services\M4_Inventario\Dependencias\CatalogoReal;
 use App\Services\M4_Inventario\Dependencias\ComerciosReal;
@@ -45,6 +46,11 @@ class M4IntegracionesServiceProvider extends ServiceProvider
         foreach (self::DEPENDENCIAS as $proveedor => [$interfaz, $real]) {
             $this->app->bind($interfaz, fn (Application $app): object => $this->resolver($app, $proveedor, $real));
         }
+
+        // El núcleo aún no ofrece el verificador de autorizaciones: solo hay doble.
+        $this->app->bind(VerificadorAutorizacionesInterface::class, fn (Application $app): object => $app->make(
+            $app['config']->get('integraciones.m4.autorizaciones.doble')
+        ));
     }
 
     public function boot(): void

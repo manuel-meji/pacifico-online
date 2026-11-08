@@ -6,10 +6,15 @@ use App\Contracts\M4_Inventario\Dependencias\CatalogoDependencia;
 use App\Contracts\M4_Inventario\Dependencias\ComerciosDependencia;
 use App\Contracts\M4_Inventario\Dependencias\NucleoDependencia;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Enums\M4_Inventario\TipoMovimiento;
 use App\Events\M4_Inventario\ExistenciaAgotada;
 use App\Events\M4_Inventario\ExistenciaRepuesta;
 use App\Events\M4_Inventario\ExistenciaReservada;
+use App\Models\M4_Inventario\AjusteInventario;
 use App\Models\M4_Inventario\Existencia;
+use App\Services\M4_Inventario\DTO\AjusteDTO;
+use App\Services\M4_Inventario\DTO\FiltroKardex;
+use App\Services\M4_Inventario\DTO\RegistroMovimientoDTO;
 use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 use App\Services\M4_Inventario\Repositorios\ExistenciaRepositoryInterface;
 use Illuminate\Database\Query\Builder;
@@ -57,11 +62,18 @@ class InventarioService implements InventarioModuleInterface
 
     private const DISPONIBLE_SQL = 'cantidad_fisica - cantidad_reservada';
 
+    /** @var array<int, string|null> SKU por variación, consultado a M3 una vez por petición. */
+    private array $skus = [];
+
     public function __construct(
         private readonly ComerciosDependencia $comercios,
         private readonly CatalogoDependencia $catalogo,
         private readonly NucleoDependencia $nucleo,
         private readonly ExistenciaRepositoryInterface $existencias,
+        private readonly KardexService $kardex,
+        private readonly RegistroMovimientoService $movimientos,
+        private readonly AjusteService $ajustes,
+        private readonly PublicadorDisponibilidad $publicador,
     ) {}
 
     // ------------------------------------------------------------------ estado
@@ -301,19 +313,79 @@ class InventarioService implements InventarioModuleInterface
         $this->pendiente('registrarReingresoPorReserva');
     }
 
+    // ------------------------------------------------------------------ existencias y movimientos
+
     public function listarExistencias(int $idComercio, array $filtros = []): array
     {
-        $this->pendiente('listarExistencias');
+        $this->exigirPositivos(['id_comercio' => $idComercio]
+            + array_map('intval', array_intersect_key($filtros, ['id_ubicacion' => 0, 'id_variacion' => 0])));
+        [$pagina, $porPagina] = FiltroKardex::paginacion($filtros);
+
+        return $this->nucleo->ejecutarEnAmbito(function () use ($idComercio, $filtros, $pagina, $porPagina): array {
+            $this->exigirComercioDeSesion($idComercio);
+
+            $resultado = Existencia::query()
+                ->where('id_comercio', $idComercio)
+                ->when(isset($filtros['id_ubicacion']), fn ($q) => $q->where('id_ubicacion', (int) $filtros['id_ubicacion']))
+                ->when(isset($filtros['id_variacion']), fn ($q) => $q->where('id_variacion', (int) $filtros['id_variacion']))
+                ->when(filter_var($filtros['bajo_minimo'] ?? false, FILTER_VALIDATE_BOOLEAN), fn ($q) => $q
+                    ->where('stock_minimo', '>', 0)
+                    ->whereRaw(self::DISPONIBLE_SQL.' <= stock_minimo'))
+                ->orderBy('id_variacion')
+                ->orderBy('id_ubicacion')
+                ->paginate($porPagina, ['*'], 'pagina', $pagina);
+
+            return [
+                'datos' => array_map(fn (Existencia $e): array => $e->aContrato($this->sku($e->id_variacion)), $resultado->items()),
+                'paginacion' => [
+                    'pagina' => $resultado->currentPage(),
+                    'por_pagina' => $resultado->perPage(),
+                    'total' => $resultado->total(),
+                    'total_paginas' => max(1, $resultado->lastPage()),
+                ],
+            ];
+        });
     }
 
     public function fijarStockMinimo(int $idExistencia, int $stockMinimo): array
     {
-        $this->pendiente('fijarStockMinimo');
+        $this->exigirPositivos(['id_existencia' => $idExistencia]);
+
+        if ($stockMinimo < 0) {
+            throw ErrorInventarioException::datosInvalidos(['stock_minimo' => 'Debe ser un entero mayor o igual a 0.']);
+        }
+
+        return $this->nucleo->ejecutarEnAmbito(function () use ($idExistencia, $stockMinimo): array {
+            $existencia = DB::transaction(function () use ($idExistencia, $stockMinimo): Existencia {
+                $existencia = $this->existencias->bloquearPorId($idExistencia) ?? throw $this->noEncontrada(
+                    ErrorInventarioException::existenciaNoEncontrada()
+                );
+                $anterior = $existencia->stock_minimo;
+                $existencia->stock_minimo = $stockMinimo;
+                $this->existencias->guardar($existencia);
+                $this->publicador->alertarSiBajoMinimo($existencia);
+
+                $this->nucleo->registrarAuditoria('fijar_stock_minimo', 'existencias', $existencia->id_existencia, [
+                    'modulo' => 'M4', 'id_comercio' => $existencia->id_comercio, 'anterior' => $anterior, 'nuevo' => $stockMinimo,
+                ]);
+
+                return $existencia;
+            });
+
+            return $existencia->aContrato($this->sku($existencia->id_variacion));
+        });
     }
 
     public function registrarMovimientoManual(array $solicitud): array
     {
-        $this->pendiente('registrarMovimientoManual');
+        $dto = RegistroMovimientoDTO::desdeSolicitud($solicitud);
+
+        return $this->nucleo->ejecutarEnAmbito(function () use ($dto): array {
+            $this->exigirComercioDeSesion($dto->idComercio);
+            [$movimiento, $idExistencia] = $this->movimientos->registrarMovimientoManual($dto, $this->nucleo->usuarioActual());
+
+            return $movimiento->aContrato($idExistencia);
+        });
     }
 
     /**
@@ -326,17 +398,56 @@ class InventarioService implements InventarioModuleInterface
 
     public function registrarAjusteInventario(array $solicitud): array
     {
-        $this->pendiente('registrarAjusteInventario');
+        $dto = AjusteDTO::desdeSolicitud($solicitud);
+
+        return $this->nucleo->ejecutarEnAmbito(function () use ($dto): array {
+            $this->exigirComercioDeSesion($dto->idComercio);
+
+            return $this->aAjuste($this->ajustes->registrarAjuste($dto, $this->nucleo->usuarioActual()));
+        });
     }
+
+    // ------------------------------------------------------------------ kardex
 
     public function consultarKardex(int $idComercio, int $idVariacion, array $filtros = []): array
     {
-        $this->pendiente('consultarKardex');
+        $this->exigirPositivos(['id_comercio' => $idComercio, 'id_variacion' => $idVariacion]
+            + (isset($filtros['id_ubicacion']) ? ['id_ubicacion' => (int) $filtros['id_ubicacion']] : []));
+        [$pagina, $porPagina] = FiltroKardex::paginacion($filtros);
+        [$desde, $hasta] = FiltroKardex::periodo($filtros['fecha_inicio'] ?? null, $filtros['fecha_fin'] ?? null);
+
+        return $this->nucleo->ejecutarEnAmbito(function () use ($idComercio, $idVariacion, $filtros, $pagina, $porPagina, $desde, $hasta): array {
+            $this->exigirComercioDeSesion($idComercio);
+
+            return $this->kardex->consultar(new FiltroKardex(
+                $idComercio,
+                $idVariacion,
+                isset($filtros['id_ubicacion']) ? (int) $filtros['id_ubicacion'] : null,
+                $desde,
+                $hasta,
+                null,
+                $pagina,
+                $porPagina,
+            ));
+        });
     }
 
     public function obtenerKardexValorizado(int $idComercio, string $fechaInicio, string $fechaFin, array $filtros = []): array
     {
-        $this->pendiente('obtenerKardexValorizado');
+        $this->exigirPositivos(['id_comercio' => $idComercio]);
+        [$desde, $hasta] = FiltroKardex::periodo($fechaInicio, $fechaFin, obligatorio: true);
+        [$pagina, $porPagina] = FiltroKardex::paginacion($filtros);
+        $tipo = $filtros['tipo_movimiento'] ?? null;
+
+        if ($tipo !== null && TipoMovimiento::tryFrom((string) $tipo) === null) {
+            throw ErrorInventarioException::datosInvalidos(['tipo_movimiento' => 'No es un tipo de movimiento del contrato.']);
+        }
+
+        return $this->nucleo->ejecutarEnAmbito(function () use ($idComercio, $desde, $hasta, $tipo, $pagina, $porPagina): array {
+            $this->exigirComercioDeSesion($idComercio);
+
+            return $this->kardex->valorizado(new FiltroKardex($idComercio, null, null, $desde, $hasta, $tipo, $pagina, $porPagina));
+        });
     }
 
     public function consultarInventarioAuditoria(array $idsComercio, ?string $fechaInicio = null, ?string $fechaFin = null): array
@@ -346,7 +457,12 @@ class InventarioService implements InventarioModuleInterface
 
     public function obtenerCostoProductosVendidos(int $idSubpedido): array
     {
-        $this->pendiente('ObtenerCostoProductosVendidos');
+        $this->exigirPositivos(['id_subpedido' => $idSubpedido]);
+
+        return $this->nucleo->ejecutarEnAmbito(fn (): array => $this->kardex->costosProductosVendidos(
+            $idSubpedido,
+            $this->nucleo->comercioActual() !== null,
+        ));
     }
 
     private function pendiente(string $operacion): never
@@ -510,6 +626,55 @@ class InventarioService implements InventarioModuleInterface
     }
 
     // ------------------------------------------------------------------ auxiliares
+
+    /**
+     * Recurso que no se encontró dentro del ámbito: con sesión de comercio puede ser
+     * de otro comercio y se responde ERR-003 (RN-12); sin sesión, el código propio.
+     */
+    private function noEncontrada(ErrorInventarioException $propio): ErrorInventarioException
+    {
+        return $this->nucleo->comercioActual() !== null ? ErrorInventarioException::recursoNoAccesible() : $propio;
+    }
+
+    /** SKU de la variación según M3; si M3 no responde, la existencia se lista sin SKU. */
+    private function sku(int $idVariacion): ?string
+    {
+        if (! array_key_exists($idVariacion, $this->skus)) {
+            try {
+                $this->skus[$idVariacion] = $this->catalogo->obtenerVariacion($idVariacion)['sku'] ?? null;
+            } catch (ErrorInventarioException) {
+                $this->skus[$idVariacion] = null;
+            }
+        }
+
+        return $this->skus[$idVariacion];
+    }
+
+    /**
+     * Esquema Ajuste del contrato.
+     *
+     * @return array<string, mixed>
+     */
+    private function aAjuste(AjusteInventario $ajuste): array
+    {
+        $ajuste->loadMissing(['motivo', 'movimiento']);
+
+        return [
+            'id_ajuste' => $ajuste->id_ajuste,
+            'id_comercio' => $ajuste->id_comercio,
+            'id_existencia' => $ajuste->id_existencia,
+            'id_movimiento' => $ajuste->id_movimiento,
+            'motivo_ajuste' => $ajuste->motivo?->codigo,
+            'cantidad_sistema' => $ajuste->cantidad_sistema,
+            'cantidad_contada' => $ajuste->cantidad_contada,
+            'diferencia' => $ajuste->diferencia($ajuste->cantidad_sistema),
+            'id_usuario' => $ajuste->id_usuario,
+            'justificacion' => $ajuste->justificacion,
+            'fecha_ajuste' => $ajuste->created_at->toIso8601String(),
+            'id_autorizador' => $ajuste->movimiento?->id_autorizador,
+            'fecha_autorizacion' => $ajuste->movimiento?->fecha_autorizacion?->toIso8601String(),
+        ];
+    }
 
     private function reservaPorClave(int $idComercio, string $clave): ?object
     {
