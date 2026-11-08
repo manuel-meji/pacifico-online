@@ -316,9 +316,12 @@ class InventarioService implements InventarioModuleInterface
         $this->pendiente('registrarMovimientoManual');
     }
 
+    /**
+     * Alcance deseable (transferencias entre ubicaciones): no implementado en v0.9.0.
+     */
     public function registrarTransferencia(array $solicitud): array
     {
-        $this->pendiente('registrarTransferencia');
+        throw ErrorInventarioException::operacionNoImplementada('registrarTransferencia');
     }
 
     public function registrarAjusteInventario(array $solicitud): array
