@@ -1,0 +1,370 @@
+<?php
+
+namespace Tests\Feature\M1_Portal;
+
+use App\Models\M1_Portal\ComercioDestacado;
+use App\Models\M1_Portal\ProductoDestacado;
+use App\Services\M1_Portal\Dobles\DatosPrueba;
+use App\Services\M1_Portal\DTO\ComercioDTO;
+use App\Services\M1_Portal\DTO\DestacadosDTO;
+use App\Services\M1_Portal\DTO\Disponibilidad;
+use App\Services\M1_Portal\DTO\ProductoResumenDTO;
+use App\Services\M1_Portal\Integraciones\CachePortal;
+use App\Services\M1_Portal\PortadaService;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
+use Tests\Doubles\M1\CatalogoNoDisponible;
+use Tests\Doubles\M1\ComerciosNoDisponible;
+use Tests\Doubles\M1\InventarioNoDisponible;
+use Tests\Feature\M1_Portal\Concerns\ValidaEsquemaContrato;
+
+/**
+ * Página principal: PortadaService con las tablas de destacados de M1 y los
+ * dobles de M2, M3 y M4, y la ruta GET /destacados contra el contrato.
+ *
+ * Las migraciones de destacados tienen CHECK de PostgreSQL que no corren en
+ * el SQLite de las pruebas, así que se crea una versión simple de las dos
+ * tablas con las mismas columnas.
+ */
+class PortadaServiceTest extends PruebaM1
+{
+    use ValidaEsquemaContrato;
+
+    private const AHORA = '2026-11-10 12:00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        foreach (['productos_destacados' => 'id_producto', 'comercios_destacados' => 'id_comercio'] as $nombre => $campo) {
+            Schema::create($nombre, function (Blueprint $tabla) use ($campo): void {
+                $tabla->id($campo.'_destacado');
+                $tabla->unsignedBigInteger($campo);
+                $tabla->smallInteger('posicion');
+                $tabla->timestamp('fecha_inicio');
+                $tabla->timestamp('fecha_fin');
+                $tabla->boolean('activo')->default(true);
+                $tabla->timestamps();
+            });
+        }
+
+        Carbon::setTestNow(self::AHORA);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
+    // ---------------------------------------------------------------
+    // Vigencia y orden (RN-M1-11)
+    // ---------------------------------------------------------------
+
+    public function test_los_productos_salen_en_el_orden_de_posicion(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAFE_MOLIDO, 3);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 1);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 2);
+
+        $this->assertSame(
+            [DatosPrueba::PRODUCTO_JARRON, DatosPrueba::PRODUCTO_CAMISA_LINO, DatosPrueba::PRODUCTO_CAFE_MOLIDO],
+            $this->idsProductos($this->destacados()),
+        );
+    }
+
+    public function test_los_comercios_salen_en_el_orden_de_posicion(): void
+    {
+        $this->destacarComercio(DatosPrueba::COMERCIO_ARTESANIAS_GUAITIL, 2);
+        $this->destacarComercio(DatosPrueba::COMERCIO_CAFE_NICOYANO, 1);
+
+        $this->assertSame(
+            [DatosPrueba::COMERCIO_CAFE_NICOYANO, DatosPrueba::COMERCIO_ARTESANIAS_GUAITIL],
+            $this->idsComercios($this->destacados()),
+        );
+    }
+
+    public function test_solo_salen_los_destacados_activos_y_dentro_de_su_periodo(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1, activo: false);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAFE_MOLIDO, 2, inicio: '2026-10-01 00:00:00', fin: '2026-11-10 11:59:59');
+        $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 3, inicio: '2026-11-10 12:00:01', fin: '2026-12-01 00:00:00');
+        $this->destacarComercio(DatosPrueba::COMERCIO_LA_CEIBA, 1, activo: false);
+        $this->destacarComercio(DatosPrueba::COMERCIO_CAFE_NICOYANO, 2, fin: '2026-11-09 00:00:00');
+
+        $destacados = $this->destacados();
+
+        $this->assertSame([], $destacados->productos);
+        $this->assertSame([], $destacados->comercios);
+        $this->assertSame([], $destacados->seccionesNoDisponibles);
+    }
+
+    public function test_las_fechas_de_inicio_y_fin_estan_incluidas(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1, inicio: self::AHORA, fin: '2026-12-01 00:00:00');
+        $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 2, inicio: '2026-11-01 00:00:00', fin: self::AHORA);
+
+        $this->assertSame([DatosPrueba::PRODUCTO_CAMISA_LINO, DatosPrueba::PRODUCTO_JARRON], $this->idsProductos($this->destacados()));
+    }
+
+    public function test_sin_destacados_vigentes_las_secciones_vienen_vacias_sin_error(): void
+    {
+        $destacados = $this->destacados();
+
+        $this->assertEquals(new DestacadosDTO([], [], []), $destacados);
+    }
+
+    // ---------------------------------------------------------------
+    // Productos publicados de comercios activos (RN-M1-05, RN-M1-06)
+    // ---------------------------------------------------------------
+
+    public function test_los_productos_traen_el_comercio_y_la_disponibilidad(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_SOMBRERO_AGOTADO, 2);
+
+        $productos = $this->destacados()->productos;
+
+        $this->assertSame('Tienda La Ceiba', $productos[0]->nombreComercio);
+        $this->assertSame(Disponibilidad::Disponible, $productos[0]->disponibilidad);
+        $this->assertSame(Disponibilidad::Agotado, $productos[1]->disponibilidad);
+    }
+
+    public function test_se_omiten_los_productos_y_comercios_que_m3_y_m2_no_devuelven(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_DE_COMERCIO_SUSPENDIDO, 1);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_INEXISTENTE, 2);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 3);
+        $this->destacarComercio(DatosPrueba::COMERCIO_SUSPENDIDO, 1);
+        $this->destacarComercio(DatosPrueba::COMERCIO_INEXISTENTE, 2);
+        $this->destacarComercio(DatosPrueba::COMERCIO_LA_CEIBA, 3);
+
+        $destacados = $this->destacados();
+
+        $this->assertSame([DatosPrueba::PRODUCTO_JARRON], $this->idsProductos($destacados));
+        $this->assertSame([DatosPrueba::COMERCIO_LA_CEIBA], $this->idsComercios($destacados));
+    }
+
+    // ---------------------------------------------------------------
+    // Límite
+    // ---------------------------------------------------------------
+
+    public function test_el_limite_recorta_cada_seccion(): void
+    {
+        $this->destacarTodo();
+
+        $destacados = app(PortadaService::class)->listarDestacados(2);
+
+        $this->assertCount(2, $destacados->productos);
+        $this->assertCount(2, $destacados->comercios);
+    }
+
+    public function test_los_omitidos_no_dejan_huecos_dentro_del_limite(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_DE_COMERCIO_SUSPENDIDO, 1);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 2);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 3);
+        $this->destacarComercio(DatosPrueba::COMERCIO_SUSPENDIDO, 1);
+        $this->destacarComercio(DatosPrueba::COMERCIO_LA_CEIBA, 2);
+        $this->destacarComercio(DatosPrueba::COMERCIO_CAFE_NICOYANO, 3);
+
+        $destacados = app(PortadaService::class)->listarDestacados(2);
+
+        $this->assertSame([DatosPrueba::PRODUCTO_CAMISA_LINO, DatosPrueba::PRODUCTO_JARRON], $this->idsProductos($destacados));
+        $this->assertSame([DatosPrueba::COMERCIO_LA_CEIBA, DatosPrueba::COMERCIO_CAFE_NICOYANO], $this->idsComercios($destacados));
+    }
+
+    public function test_un_limite_fuera_de_rango_se_ajusta_de_1_a_24(): void
+    {
+        $this->destacarTodo();
+
+        $this->assertCount(1, app(PortadaService::class)->listarDestacados(0)->productos);
+        $this->assertCount(1, app(PortadaService::class)->listarDestacados(-5)->comercios);
+        $this->assertCount(3, app(PortadaService::class)->listarDestacados(500)->productos);
+
+        $cache = app(CachePortal::class);
+        $this->assertNotNull($cache->obtener(sprintf(PortadaService::CLAVE_DESTACADOS, 1)));
+        $this->assertNotNull($cache->obtener(sprintf(PortadaService::CLAVE_DESTACADOS, PortadaService::LIMITE_MAXIMO)));
+    }
+
+    // ---------------------------------------------------------------
+    // M2, M3 o M4 no responden (RNF-M1-05)
+    // ---------------------------------------------------------------
+
+    public function test_si_m3_no_responde_los_productos_vienen_vacios_y_se_informa(): void
+    {
+        $this->destacarTodo();
+        config(['integraciones.m1.m3.doble' => CatalogoNoDisponible::class]);
+
+        $destacados = $this->destacados();
+
+        $this->assertSame([], $destacados->productos);
+        $this->assertSame(['productos'], $destacados->seccionesNoDisponibles);
+        $this->assertCount(3, $destacados->comercios);
+    }
+
+    public function test_si_m2_no_responde_los_comercios_vienen_vacios_y_se_informa(): void
+    {
+        $this->destacarTodo();
+        config(['integraciones.m1.m2.doble' => ComerciosNoDisponible::class]);
+
+        $destacados = $this->destacados();
+
+        $this->assertSame([], $destacados->comercios);
+        $this->assertSame(['comercios'], $destacados->seccionesNoDisponibles);
+        // Los productos siguen saliendo con lo que entregó M3.
+        $this->assertCount(3, $destacados->productos);
+    }
+
+    public function test_si_m2_y_m3_no_responden_la_portada_no_falla(): void
+    {
+        $this->destacarTodo();
+        config([
+            'integraciones.m1.m2.doble' => ComerciosNoDisponible::class,
+            'integraciones.m1.m3.doble' => CatalogoNoDisponible::class,
+        ]);
+
+        $this->assertEquals(new DestacadosDTO([], [], ['comercios', 'productos']), $this->destacados());
+    }
+
+    public function test_si_m4_no_responde_los_productos_salen_como_agotados(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1);
+        config(['integraciones.m1.m4.doble' => InventarioNoDisponible::class]);
+
+        $destacados = $this->destacados();
+
+        $this->assertSame(Disponibilidad::Agotado, $destacados->productos[0]->disponibilidad);
+        $this->assertSame([], $destacados->seccionesNoDisponibles);
+    }
+
+    // ---------------------------------------------------------------
+    // Caché
+    // ---------------------------------------------------------------
+
+    public function test_el_resultado_completo_se_guarda_en_la_cache(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1);
+        $primero = $this->destacados();
+
+        ProductoDestacado::query()->delete();
+
+        $this->assertEquals($primero, $this->destacados());
+    }
+
+    public function test_un_resultado_con_una_seccion_no_disponible_no_se_guarda(): void
+    {
+        $this->destacarTodo();
+        config(['integraciones.m1.m3.doble' => CatalogoNoDisponible::class]);
+
+        $this->destacados();
+
+        $this->assertNull(app(CachePortal::class)->obtener(sprintf(PortadaService::CLAVE_DESTACADOS, PortadaService::LIMITE_POR_DEFECTO)));
+    }
+
+    // ---------------------------------------------------------------
+    // Ruta contra el contrato
+    // ---------------------------------------------------------------
+
+    public function test_get_destacados_responde_200_con_el_esquema_destacados(): void
+    {
+        $this->destacarTodo();
+
+        $respuesta = $this->getJson(route('api.m1.v1.destacados'))->assertOk();
+
+        $this->assertCumpleEsquema('Destacados', $respuesta->json());
+        $respuesta->assertJsonPath('secciones_no_disponibles', []);
+        $respuesta->assertJsonPath('comercios.0', [
+            'id_comercio' => DatosPrueba::COMERCIO_LA_CEIBA,
+            'nombre_comercial' => 'Tienda La Ceiba',
+            'logotipo' => 'https://cdn.pacificos.example/comercios/34/logo.png',
+        ]);
+        $respuesta->assertJsonPath('productos.0.comercio', ['id_comercio' => DatosPrueba::COMERCIO_LA_CEIBA, 'nombre_comercial' => 'Tienda La Ceiba']);
+    }
+
+    public function test_get_destacados_aplica_el_limite_y_ajusta_los_valores_invalidos(): void
+    {
+        $this->destacarTodo();
+
+        $this->getJson(route('api.m1.v1.destacados', ['limite' => 2]))->assertOk()->assertJsonCount(2, 'productos')->assertJsonCount(2, 'comercios');
+        $this->getJson(route('api.m1.v1.destacados', ['limite' => 0]))->assertOk()->assertJsonCount(1, 'productos');
+        $this->getJson(route('api.m1.v1.destacados', ['limite' => 500]))->assertOk()->assertJsonCount(3, 'productos');
+        $this->getJson(route('api.m1.v1.destacados', ['limite' => 'abc']))->assertOk()->assertJsonCount(3, 'productos');
+    }
+
+    public function test_get_destacados_con_m2_y_m3_caidos_responde_200_con_las_secciones_no_disponibles(): void
+    {
+        $this->destacarTodo();
+        config([
+            'integraciones.m1.m2.doble' => ComerciosNoDisponible::class,
+            'integraciones.m1.m3.doble' => CatalogoNoDisponible::class,
+        ]);
+
+        $respuesta = $this->getJson(route('api.m1.v1.destacados'))->assertOk();
+
+        $this->assertCumpleEsquema('Destacados', $respuesta->json());
+        $respuesta->assertExactJson(['comercios' => [], 'productos' => [], 'secciones_no_disponibles' => ['comercios', 'productos']]);
+    }
+
+    // ---------------------------------------------------------------
+    // Ayudantes
+    // ---------------------------------------------------------------
+
+    private function destacados(): DestacadosDTO
+    {
+        return app(PortadaService::class)->listarDestacados(PortadaService::LIMITE_POR_DEFECTO);
+    }
+
+    /**
+     * Tres productos y tres comercios activos, todos vigentes.
+     */
+    private function destacarTodo(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAFE_MOLIDO, 2);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 3);
+        $this->destacarComercio(DatosPrueba::COMERCIO_LA_CEIBA, 1);
+        $this->destacarComercio(DatosPrueba::COMERCIO_CAFE_NICOYANO, 2);
+        $this->destacarComercio(DatosPrueba::COMERCIO_ARTESANIAS_GUAITIL, 3);
+    }
+
+    private function destacarProducto(int $idProducto, int $posicion, bool $activo = true, string $inicio = '2026-11-01 00:00:00', string $fin = '2026-11-30 23:59:59'): void
+    {
+        ProductoDestacado::query()->create([
+            'id_producto' => $idProducto,
+            'posicion' => $posicion,
+            'fecha_inicio' => $inicio,
+            'fecha_fin' => $fin,
+            'activo' => $activo,
+        ]);
+    }
+
+    private function destacarComercio(int $idComercio, int $posicion, bool $activo = true, string $inicio = '2026-11-01 00:00:00', string $fin = '2026-11-30 23:59:59'): void
+    {
+        ComercioDestacado::query()->create([
+            'id_comercio' => $idComercio,
+            'posicion' => $posicion,
+            'fecha_inicio' => $inicio,
+            'fecha_fin' => $fin,
+            'activo' => $activo,
+        ]);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function idsProductos(DestacadosDTO $destacados): array
+    {
+        return array_map(fn (ProductoResumenDTO $producto): int => $producto->idProducto, $destacados->productos);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function idsComercios(DestacadosDTO $destacados): array
+    {
+        return array_map(fn (ComercioDTO $comercio): int => $comercio->idComercio, $destacados->comercios);
+    }
+}

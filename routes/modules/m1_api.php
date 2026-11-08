@@ -5,6 +5,7 @@ use App\Http\Controllers\M1_Portal\ClienteController;
 use App\Http\Controllers\M1_Portal\ComercioController;
 use App\Http\Controllers\M1_Portal\DireccionClienteController;
 use App\Http\Controllers\M1_Portal\FichaProductoController;
+use App\Http\Controllers\M1_Portal\PortadaController;
 use App\Http\Middleware\EstablecerCliente;
 use Illuminate\Support\Facades\Route;
 
@@ -25,6 +26,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(EstablecerCliente::class)->group(function (): void {
     Route::get('/productos/busqueda', [BusquedaController::class, 'buscar'])->name('productos.busqueda');
+
+    // Página principal: comercios y productos destacados. Pública (security: []).
+    Route::get('/destacados', [PortadaController::class, 'listar'])->name('destacados');
 
     Route::get('/productos/{id_producto}', [FichaProductoController::class, 'mostrar'])
         ->where('id_producto', '[1-9][0-9]*')
