@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Aviso, Encabezado, NavegacionCuentaContext } from './components/componentes';
 import { PortalContext } from './components/PaginaPortal';
+import { obtenerCantidadCarrito } from './services/carritoApi';
 import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
 import { listarCategorias, registrarCliente } from './services/m1Api';
 import { cerrarSesion, iniciarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
@@ -82,6 +83,35 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     return () => { activo = false; };
   }, []);
 
+  // Unidades del carrito de M5 para la insignia del encabezado. Solo se consulta con sesión de cliente
+  // (sin sesión M5 no tiene a quién asociar el carrito). Se refresca al cambiar de pantalla y al volver
+  // a la pestaña, por ejemplo después de agregar productos en el carrito de M5 (app.html).
+  const [cantidadCarrito, setCantidadCarrito] = useState(null);
+  const esCliente = usuario?.rol === 'cliente';
+
+  useEffect(() => {
+    if (!esCliente) {
+      setCantidadCarrito(null);
+      return undefined;
+    }
+
+    let activo = true;
+    const actualizar = () => {
+      obtenerCantidadCarrito().then((respuesta) => {
+        if (activo) setCantidadCarrito(respuesta.ok ? respuesta.cantidad : null);
+      });
+    };
+    const alVolver = () => { if (document.visibilityState === 'visible') actualizar(); };
+
+    actualizar();
+    document.addEventListener('visibilitychange', alVolver);
+
+    return () => {
+      activo = false;
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, [esCliente, pantalla]);
+
   // Cambia de pantalla y deja los parámetros en la URL, así funcionan el botón Atrás y recargar la página.
   // Con { reemplazar: true } (cambios de filtros) no se agrega una entrada nueva al historial.
   function navegar(destino, nuevosParametros = {}, { reemplazar = false } = {}) {
@@ -151,7 +181,7 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     navegar('ingresar');
   }
 
-  const portal = useMemo(() => ({ ir: navegar, categorias, usuario }), [categorias, usuario, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
+  const portal = useMemo(() => ({ ir: navegar, categorias, usuario, cantidadCarrito }), [categorias, usuario, cantidadCarrito, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pantallas del portal público (encabezado con buscador y categorías).
   if (!['ingresar', 'crear', 'perfil'].includes(pantalla)) {
