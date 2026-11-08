@@ -6,10 +6,10 @@ namespace App\Policies\M2_Comercios;
 
 use App\Enums\Nucleo\RolUsuario;
 use App\Exceptions\Nucleo\ErrorNucleoException;
-use Illuminate\Contracts\Auth\Authenticatable;
 use App\Models\M2_Comercios\Comercio;
 use App\Models\Nucleo\Usuario;
 use App\Models\Nucleo\VerificaRol;
+use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
  * Autorización HTTP de las consultas de M2 (x-autorizacion del contrato v1.2.1).
@@ -25,7 +25,6 @@ use App\Models\Nucleo\VerificaRol;
  */
 class ComercioPolicy
 {
-
     use VerificaRol;
 
     // --- CU-0001 a CU-0007: edición del micrositio
@@ -39,6 +38,24 @@ class ComercioPolicy
      * Estado, sedes y datos fiscales: plataforma, cualquier comercio;
      * encargado del comercio, solo el suyo; cliente, 403.
      */
+    /** CU-0017 (diseño): solo el Encargado de la plataforma suspende comercios. */
+    public function suspender(Usuario $usuario, Comercio $comercio): bool
+    {
+        return $this->esEncargadoPlataforma($usuario);
+    }
+
+    /** CU-0018 (diseño): solo el Encargado de la plataforma reactiva comercios. */
+    public function reactivar(Usuario $usuario, Comercio $comercio): bool
+    {
+        return $this->esEncargadoPlataforma($usuario);
+    }
+
+    /** Listado y ficha administrativa de comercios (panel de la plataforma). */
+    public function administrar(Usuario $usuario, Comercio $comercio): bool
+    {
+        return $this->esEncargadoPlataforma($usuario);
+    }
+
     public function consultarComercio(Authenticatable $usuario, int $idComercio): void
     {
         $rol = $this->rolActivo($usuario);

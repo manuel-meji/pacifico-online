@@ -324,9 +324,15 @@ class IntegracionesTest extends PruebaM1
     public function test_carrito_convierte_una_variacion_no_vendible_en_datos_invalidos_con_su_detalle(): void
     {
         try {
-            app(CarritoClient::class)->agregarItem(DatosPrueba::CLIENTE_CARRITO_VACIO, DatosPrueba::VARIACION_JARRON_NO_VENDIBLE, 1);
+            app(CarritoClient::class)->agregarItem(
+                DatosPrueba::CLIENTE_CARRITO_VACIO,
+                DatosPrueba::VARIACION_JARRON_NO_VENDIBLE,
+                1
+            );
+
             $this->fail('M5 debió rechazar una variación que no está a la venta.');
         } catch (DatosInvalidosException $excepcion) {
+            $this->assertSame('ERR-005', $excepcion->codigo());
             $this->assertArrayHasKey('id_variacion', $excepcion->detalles());
         }
     }

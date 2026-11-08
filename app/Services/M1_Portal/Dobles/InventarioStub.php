@@ -2,7 +2,7 @@
 
 namespace App\Services\M1_Portal\Dobles;
 
-use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Services\M4_Inventario\Dobles\InventarioDobleBase;
 use LogicException;
 
 /**
@@ -15,7 +15,7 @@ use LogicException;
  * Son consultas públicas: no aplican el filtro por comercio de RN-12. Una
  * variación o producto sin existencia registrada se devuelve agotado, sin error.
  */
-class InventarioStub implements InventarioModuleInterface
+class InventarioStub extends InventarioDobleBase
 {
     private const MAXIMO_LOTE = 100;
 

@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { Alerta, Boton, Encabezado, ModalConCampo } from '../components/componentes';
 import { colones } from '../services/calculos';
+import { nombreComercio } from '../services/nombres';
 import {
   cancelarSubpedido, confirmarPago, despacharSubpedido, entregarSubpedido, listarPedidos,
 } from '../services/m5Api';
@@ -30,7 +31,7 @@ function agruparSubpedidos(pedidos) {
   pedidos.forEach((p) => {
     (p.subpedidos ?? []).forEach((s) => {
       const id = Number(s.id_comercio);
-      if (!grupos.has(id)) grupos.set(id, { id_comercio: id, nombre: s.nombre_comercio ?? `Comercio #${id}`, subpedidos: [] });
+      if (!grupos.has(id)) grupos.set(id, { id_comercio: id, nombre: nombreComercio(s), subpedidos: [] });
       grupos.get(id).subpedidos.push({ ...s, pedido: p });
     });
   });

@@ -1,18 +1,18 @@
 # M4 Inventario: despliegue mínimo
 
-Despliegue mínimo de M4 en el ambiente de integración, con cambio de doble a implementación real por configuración (contrato `openapi` v1.2.0).
+Despliegue mínimo de M4 en el ambiente de integración, con cambio de doble a implementación real por configuración (contrato `openapi` v1.3.0).
 
 ## Cómo se usa M4
 
-M4 no expone rutas HTTP propias. El frontend usa Inertia: el controlador de cada pantalla llama a `InventarioModuleInterface` en el servidor y le pasa los datos a la página. Los demás módulos también llaman a M4 por esa interfaz, dentro del mismo proceso (sección 5.1 del PC3). El contrato OpenAPI documenta las operaciones; cada `operationId` corresponde a un método de la interfaz.
+M4 no publica la API `/api/m4/v1` del contrato. El frontend usa Inertia: el controlador de cada pantalla llama a `InventarioModuleInterface` en el servidor y le pasa los datos a la página. Los demás módulos también llaman a M4 por esa interfaz, dentro del mismo proceso (sección 5.1 del PC3). El contrato OpenAPI documenta las operaciones; cada `operationId` corresponde a un método de la interfaz.
 
 ## Qué incluye
 
 - `InventarioService` real sobre las tablas de las migraciones `2026_10_21_00000x_m4_*`:
-  - Consultas de disponibilidad: individual, en lote, por producto y por producto en lote. Disponible = `cantidad_fisica − cantidad_reservada − cantidad_defectuosa`.
+  - Consultas de disponibilidad: individual, en lote, por producto y por producto en lote. Disponible = `cantidad_fisica − cantidad_reservada` (no se maneja stock defectuoso; migración `2026_11_02_000008`).
   - Reserva atómica con `SELECT … FOR UPDATE` (ADR-002), con clave de idempotencia y vencimiento de las reservas activas al reservar de nuevo.
   - Liberación de reservas, idempotente.
-- `InventarioModuleInterface`, que extiende `InventarioServiceInterface`; M1 y M5 siguen funcionando sin cambios.
+- `InventarioService` tiene las 20 operaciones del contrato (x-interfaz-php v1.3.0); las que no son del despliegue mínimo lanzan `LogicException` hasta que se implementen en el PC4. `InventarioModuleInterface` todavía declara 6: pasa a 20 cuando los dobles de M1 y M5 extiendan `InventarioDobleBase` (`app/Services/M4_Inventario/Dobles`), que ya declara las 20 firmas. `InventarioModuleInterface` extiende `InventarioServiceInterface` (interfaz anterior), que se conserva para que M1 y M5 compilen; `AppServiceProvider` la enlaza con `InventarioService`. `confirmarSalidaPorDespacho` lanza `LogicException` y el recorrido integrado de M1 y M5 con M4 no se ha probado.
 - Interfaces de lo que M4 necesita de otros módulos, en `app/Contracts/M4_Inventario/Dependencias`: `ComerciosDependencia` (M2), `CatalogoDependencia` (M3) y `NucleoDependencia`.
 - Eventos `ExistenciaReservada`, `ExistenciaAgotada` y `ExistenciaRepuesta` (v1.0.0), en `app/Events/M4_Inventario`, publicados después del commit.
 - Errores con el formato del núcleo (`ErrorInventarioException`, códigos `ERR-M4-nnn`). Quien llama a M4 la captura; `toArray()` da el cuerpo `{error: {codigo, mensaje, detalles}}`.
@@ -36,6 +36,7 @@ Para usar otro doble (por ejemplo, los dobles de prueba de M2, M3 y núcleo), ca
 
 ```bash
 php artisan test --filter=DespliegueMinimoM4Test
+php artisan test --filter=ConcurrenciaReservaStockTest   # requiere DB_CONNECTION=pgsql en el .env
 ```
 
 ## Fuera de este despliegue

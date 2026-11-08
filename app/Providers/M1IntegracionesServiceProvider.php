@@ -8,6 +8,7 @@ use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Contracts\M5_Pedidos\CarritoServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
+use App\Contracts\Nucleo\ResuelveClienteInterface;
 use App\Events\M4_Inventario\ExistenciaAgotada;
 use App\Events\M4_Inventario\ExistenciaRepuesta;
 use App\Listeners\M1_Portal\EventosComercioListener;
@@ -18,6 +19,7 @@ use App\Services\M1_Portal\Integraciones\ComercioClient;
 use App\Services\M1_Portal\Integraciones\InventarioClient;
 use App\Services\M1_Portal\PortalPublicoService;
 use App\Services\M1_Portal\PortalService;
+use App\Services\M1_Portal\ResolvedorCliente;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -78,6 +80,11 @@ class M1IntegracionesServiceProvider extends ServiceProvider
         // Fachada de M1: lo que reciben M5, M6, el núcleo y los controladores
         // de M1 cuando piden PortalPublicoContract.
         $this->app->bind(PortalPublicoContract::class, PortalPublicoService::class);
+
+        // Lo que pide el middleware EstablecerCliente del núcleo para fijar el
+        // ámbito de cliente de la petición (tareas 18 y 23 del PC4). Solo tiene
+        // efecto en las rutas que aplican ese middleware.
+        $this->app->bind(ResuelveClienteInterface::class, ResolvedorCliente::class);
 
         foreach (self::INTERFACES as $proveedor => $interfaz) {
             $this->app->when(self::CONSUMIDORES_M1)

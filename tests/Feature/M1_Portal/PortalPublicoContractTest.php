@@ -24,7 +24,7 @@ use Symfony\Component\Yaml\Yaml;
 use Tests\Doubles\M1\PortalPublicoFake;
 
 /**
- * La interfaz PHP de M1 coincide con lo publicado en el contrato v1.1.0
+ * La interfaz PHP de M1 coincide con lo publicado en el contrato v1.2.0
  * (contracts/m1-portal/v1/openapi.yaml, x-interfaz-php), las excepciones
  * llevan los códigos del contrato y el doble que usan M5, M6 y el núcleo se
  * comporta como el contrato describe.
@@ -134,23 +134,51 @@ class PortalPublicoContractTest extends PruebaM1
 
     public function test_m5_recibe_las_direcciones_con_la_principal_primero(): void
     {
-        $direcciones = (new PortalPublicoFake)->listarDireccionesCliente(PortalPublicoFake::CLIENTE_CON_DIRECCIONES);
+        $direcciones = (new PortalPublicoFake)->listarDireccionesCliente(
+            PortalPublicoFake::CLIENTE_CON_DIRECCIONES
+        );
 
-        $this->assertSame(PortalPublicoFake::DIRECCION_PRINCIPAL, $direcciones[0]['id_direccion_cliente']);
-        $this->assertTrue($direcciones[0]['es_principal']);
         $this->assertCount(2, $direcciones);
+
+        $this->assertSame(
+            PortalPublicoFake::DIRECCION_PRINCIPAL,
+            $direcciones[0]['id_direccion_cliente']
+        );
+        $this->assertTrue($direcciones[0]['es_principal']);
+
+        $this->assertSame(
+            PortalPublicoFake::DIRECCION_SECUNDARIA,
+            $direcciones[1]['id_direccion_cliente']
+        );
+        $this->assertFalse($direcciones[1]['es_principal']);
+    }
+
+    public function test_m5_obtiene_una_direccion_perteneciente_al_cliente(): void
+    {
+        $direccion = (new PortalPublicoFake)->obtenerDireccionCliente(
+            PortalPublicoFake::CLIENTE_CON_DIRECCIONES,
+            PortalPublicoFake::DIRECCION_PRINCIPAL,
+        );
+
+        $this->assertSame(PortalPublicoFake::DIRECCION_PRINCIPAL, $direccion['id_direccion_cliente']);
+        $this->assertSame(PortalPublicoFake::CLIENTE_CON_DIRECCIONES, $direccion['id_cliente']);
+        $this->assertSame('Casa', $direccion['alias_direccion']);
+        $this->assertTrue($direccion['es_principal']);
     }
 
     public function test_m5_no_puede_usar_la_direccion_de_otro_cliente(): void
     {
-        $this->expectException(DireccionNoEncontradaException::class);
+        try {
+            (new PortalPublicoFake)->obtenerDireccionCliente(
+                PortalPublicoFake::CLIENTE_CON_DIRECCIONES,
+                PortalPublicoFake::DIRECCION_DE_OTRO_CLIENTE,
+            );
 
-        (new PortalPublicoFake)->obtenerDireccionCliente(
-            PortalPublicoFake::CLIENTE_CON_DIRECCIONES,
-            PortalPublicoFake::DIRECCION_DE_OTRO_CLIENTE,
-        );
+            $this->fail('Se esperaba una excepción al consultar una dirección de otro cliente.');
+        } catch (DireccionNoEncontradaException $excepcion) {
+            $this->assertSame('ERR-004', $excepcion->codigo());
+        }
     }
-
     public function test_el_nucleo_obtiene_el_cliente_de_una_cuenta_y_err_004_si_no_tiene(): void
     {
         $fake = new PortalPublicoFake;
@@ -279,3 +307,4 @@ class PortalPublicoContractTest extends PruebaM1
         return ($tipo->allowsNull() && $tipo->getName() !== 'mixed' ? '?' : '').$tipo->getName();
     }
 }
+

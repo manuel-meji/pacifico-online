@@ -11,7 +11,7 @@ function validar(f) {
   return errores;
 }
 
-// Iniciar sesión. onIngresar(datos) simula el ingreso del núcleo y devuelve { ok } o { ok:false, error }.
+// Iniciar sesión. onIngresar({ correo, contrasena }) usa el ingreso real del núcleo y devuelve { ok, datos } o { ok:false, error }.
 export default function IniciarSesionView({ onIngresar, onIrCrear }) {
   const [f, setF] = useState({ correo: '', contrasena: '' });
   const [errores, setErrores] = useState({});
@@ -26,11 +26,21 @@ export default function IniciarSesionView({ onIngresar, onIrCrear }) {
     setErrores(errs);
     if (Object.keys(errs).length) { document.getElementById(errs.correo ? 'correo' : 'contrasena')?.focus(); return; }
     setEnviando(true);
-    const respuesta = await onIngresar({ correo_electronico: f.correo.trim(), contrasena: f.contrasena });
+    const respuesta = await onIngresar({ correo: f.correo.trim(), contrasena: f.contrasena });
     setEnviando(false);
-    setResultado(respuesta.ok
-      ? { tipo: 'exito', texto: 'Ingresó correctamente (simulado).' }
-      : { tipo: 'error', texto: respuesta.error.mensaje });
+    if (respuesta.ok) {
+      // Los clientes son redirigidos al inicio por M1App; aquí solo llegan los roles sin panel todavía.
+      setResultado({ tipo: 'exito', texto: 'Ingresó correctamente. Su rol todavía no tiene un panel disponible en el portal.' });
+      return;
+    }
+    // 422 ERR-005: el mensaje del campo llega en error.detalles.correo (arreglo); se muestra junto al correo.
+    const mensajeCorreo = respuesta.error.detalles?.correo?.[0];
+    if (mensajeCorreo) {
+      setErrores({ correo: mensajeCorreo });
+      document.getElementById('correo')?.focus();
+      return;
+    }
+    setResultado({ tipo: 'error', texto: respuesta.error.mensaje });
   }
 
   return (

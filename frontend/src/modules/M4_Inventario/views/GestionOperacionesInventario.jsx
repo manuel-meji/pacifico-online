@@ -172,18 +172,18 @@ export default function GestionOperacionesInventario({ api, existencias, alCambi
           </Campo>
 
           {existencia && (
-            <dl className="grid grid-cols-4 gap-1 rounded-lg bg-brandLightBg p-2 text-center text-xs" aria-label="Existencia actual">
-              {[['Física', existencia.cantidad_fisica], ['Reservada', existencia.cantidad_reservada], ['Defectuosa', existencia.cantidad_defectuosa], ['Disponible', disponible(existencia)]].map(([n, v], i) => (
+            <dl className="grid grid-cols-3 gap-1 rounded-lg bg-brandLightBg p-2 text-center text-xs" aria-label="Existencia actual">
+              {[['Física', existencia.cantidad_fisica], ['Reservada', existencia.cantidad_reservada], ['Disponible', disponible(existencia)]].map(([n, v], i) => (
                 <div key={n} className="min-w-0">
                   <dt className="truncate text-gray-500">{n}</dt>
-                  <dd className={`text-base font-bold ${i === 3 ? 'text-brandDarkBlue' : 'text-gray-800'}`}>{v}</dd>
+                  <dd className={`text-base font-bold ${i === 2 ? 'text-brandDarkBlue' : 'text-gray-800'}`}>{v}</dd>
                 </div>
               ))}
             </dl>
           )}
 
           {operacion !== 'entrada' && (
-            <p className="text-xs text-gray-500">Solo se pueden usar las unidades disponibles: las reservadas por pedidos y las defectuosas no salen ni se trasladan.</p>
+            <p className="text-xs text-gray-500">Solo se pueden usar las unidades disponibles: las reservadas por pedidos no salen ni se trasladan.</p>
           )}
 
           {operacion === 'transferencia' && (

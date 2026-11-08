@@ -10,25 +10,31 @@ use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Contracts\Nucleo\ServicioIdentidadInterface;
 use App\Enums\Nucleo\RolUsuario;
 use App\Events\M2_Comercios\ComercioAprobado;
+use App\Events\M2_Comercios\ComercioReactivado;
+use App\Events\M2_Comercios\ComercioSuspendido;
 use App\Exceptions\Nucleo\ErrorNucleoException;
+use App\Models\M2_Comercios\BannerComercio;
 use App\Models\M2_Comercios\Comercio;
 use App\Models\M2_Comercios\ComisionComercio;
 use App\Models\M2_Comercios\ComisionSubpedido;
 use App\Models\M2_Comercios\ContactoComercio;
 use App\Models\M2_Comercios\DocumentoComercio;
-use App\Models\M2_Comercios\PublicidadComercio;
-use App\Models\M2_Comercios\BannerComercio;
-use App\Models\M2_Comercios\ImagenGaleriaComercio;
-use Illuminate\Support\Facades\Log;
 use App\Models\M2_Comercios\HorarioComercio;
+use App\Models\M2_Comercios\ImagenGaleriaComercio;
 use App\Models\M2_Comercios\Micrositio;
 use App\Models\M2_Comercios\PoliticaComercio;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use App\Models\M2_Comercios\PublicidadComercio;
+use App\Models\M2_Comercios\SedeComercio;
 use App\Models\M2_Comercios\SolicitudComercio;
-use Illuminate\Support\Str;
+use App\Models\M2_Comercios\SuspensionComercio;
+use App\Services\Nucleo\ContextoComercio;
+use Closure;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Fachada de M2 (patrón Facade, sección 7 del PC3): implementa las 8 operaciones
@@ -61,6 +67,16 @@ class ComerciosService implements ComerciosServiceInterface
      * cuando se usa, no en el constructor: PedidosService de M5 depende a su vez
      * de ComerciosServiceInterface, y pedirlo al construir crea un ciclo infinito.
      */
+    /**
+     * Las consultas públicas y entre módulos leen el micrositio de cualquier comercio
+     * habilitado (datos públicos), así que corren sin el filtro de PerteneceAComercio.
+     * La autorización de cada vía la aplican el controlador y los consumidores.
+     */
+    private function comoSistema(Closure $consulta): mixed
+    {
+        return app(ContextoComercio::class)->ejecutarComoSistema($consulta);
+    }
+
     private function subpedidos(): SubpedidosServiceInterface
     {
         return app(SubpedidosServiceInterface::class);
@@ -68,119 +84,125 @@ class ComerciosService implements ComerciosServiceInterface
 
     public function listarComerciosHabilitados(int $pagina = 1, int $porPagina = 20, bool $destacado = false): array
     {
-        $errores = [];
-        if ($pagina < 1) {
-            $errores['pagina'] = ['Debe ser un entero mayor o igual a 1.'];
-        }
-        if ($porPagina < 1 || $porPagina > self::MAXIMO_POR_PAGINA) {
-            $errores['por_pagina'] = ['Debe estar entre 1 y '.self::MAXIMO_POR_PAGINA.'.'];
-        }
-        $this->exigirValidos($errores);
+        return $this->comoSistema(function () use ($pagina, $porPagina, $destacado): array {
+            $errores = [];
+            if ($pagina < 1) {
+                $errores['pagina'] = ['Debe ser un entero mayor o igual a 1.'];
+            }
+            if ($porPagina < 1 || $porPagina > self::MAXIMO_POR_PAGINA) {
+                $errores['por_pagina'] = ['Debe estar entre 1 y '.self::MAXIMO_POR_PAGINA.'.'];
+            }
+            $this->exigirValidos($errores);
 
-        $consulta = Comercio::query()->habilitados()->with(['micrositio', 'publicidades']);
+            $consulta = Comercio::query()->habilitados()->with(['micrositio', 'publicidades']);
 
-        if ($destacado) {
-            // Contrato: los destacados se ordenan por el inicio de la publicidad vigente, la más reciente primero.
-            $consulta->destacados()->orderByDesc(
-                PublicidadComercio::query()
-                    ->selectRaw('MAX(inicio)')
-                    ->whereColumn('publicidad_comercio.id_comercio', 'comercios.id_comercio')
-                    ->vigentes()
-            );
-        }
-        $consulta->orderBy('nombre_comercial');
+            if ($destacado) {
+                // Contrato: los destacados se ordenan por el inicio de la publicidad vigente, la más reciente primero.
+                $consulta->destacados()->orderByDesc(
+                    PublicidadComercio::query()
+                        ->selectRaw('MAX(inicio)')
+                        ->whereColumn('publicidad_comercio.id_comercio', 'comercios.id_comercio')
+                        ->vigentes()
+                );
+            }
+            $consulta->orderBy('nombre_comercial');
 
-        $total = (clone $consulta)->count();
-        $comercios = $consulta->forPage($pagina, $porPagina)->get();
+            $total = (clone $consulta)->count();
+            $comercios = $consulta->forPage($pagina, $porPagina)->get();
 
-        return [
-            'pagina' => $pagina,
-            'por_pagina' => $porPagina,
-            'total' => $total,
-            'comercios' => $comercios->map(fn (Comercio $c): array => $this->resumen($c))->values()->all(),
-        ];
+            return [
+                'pagina' => $pagina,
+                'por_pagina' => $porPagina,
+                'total' => $total,
+                'comercios' => $comercios->map(fn (Comercio $c): array => $this->resumen($c))->values()->all(),
+            ];
+        });
     }
 
     public function obtenerResumenComerciosLote(array $idsComercio): array
     {
-        $ids = array_values($idsComercio);
-        $errores = [];
-        if ($ids === [] || count($ids) > self::MAXIMO_LOTE) {
-            $errores['ids_comercio'] = ['Debe tener entre 1 y '.self::MAXIMO_LOTE.' identificadores.'];
-        } elseif (array_filter($ids, fn ($id): bool => ! is_int($id)) !== []) {
-            $errores['ids_comercio'] = ['Todos los identificadores deben ser enteros.'];
-        } elseif (count(array_unique($ids)) !== count($ids)) {
-            $errores['ids_comercio'] = ['Los identificadores no se pueden repetir.'];
-        }
-        $this->exigirValidos($errores);
-
-        $encontrados = Comercio::query()->habilitados()
-            ->with(['micrositio', 'publicidades'])
-            ->whereIn('id_comercio', $ids)
-            ->get()
-            ->keyBy('id_comercio');
-
-        // Se omiten los inexistentes o no habilitados y se conserva el orden de la solicitud.
-        $comercios = [];
-        foreach ($ids as $id) {
-            if ($encontrados->has($id)) {
-                $comercios[] = $this->resumen($encontrados->get($id));
+        return $this->comoSistema(function () use ($idsComercio): array {
+            $ids = array_values($idsComercio);
+            $errores = [];
+            if ($ids === [] || count($ids) > self::MAXIMO_LOTE) {
+                $errores['ids_comercio'] = ['Debe tener entre 1 y '.self::MAXIMO_LOTE.' identificadores.'];
+            } elseif (array_filter($ids, fn ($id): bool => ! is_int($id)) !== []) {
+                $errores['ids_comercio'] = ['Todos los identificadores deben ser enteros.'];
+            } elseif (count(array_unique($ids)) !== count($ids)) {
+                $errores['ids_comercio'] = ['Los identificadores no se pueden repetir.'];
             }
-        }
+            $this->exigirValidos($errores);
 
-        return ['comercios' => $comercios];
+            $encontrados = Comercio::query()->habilitados()
+                ->with(['micrositio', 'publicidades'])
+                ->whereIn('id_comercio', $ids)
+                ->get()
+                ->keyBy('id_comercio');
+
+            // Se omiten los inexistentes o no habilitados y se conserva el orden de la solicitud.
+            $comercios = [];
+            foreach ($ids as $id) {
+                if ($encontrados->has($id)) {
+                    $comercios[] = $this->resumen($encontrados->get($id));
+                }
+            }
+
+            return ['comercios' => $comercios];
+        });
     }
 
     public function obtenerDatosComercioPublico(int $idComercio): array
     {
-        $c = Comercio::query()->habilitados()
-            ->with(['micrositio', 'banners', 'galeria', 'horarios', 'contactos', 'politicas'])
-            ->find($idComercio);
+        return $this->comoSistema(function () use ($idComercio): array {
+            $c = Comercio::query()->habilitados()
+                ->with(['micrositio', 'banners', 'galeria', 'horarios', 'contactos', 'politicas'])
+                ->find($idComercio);
 
-        if ($c === null) {
-            throw $this->noEncontrado('El comercio no existe o no está habilitado.');
-        }
-
-        $contacto = ['telefono' => null, 'correo' => null, 'direccion' => null];
-        $redes = [];
-        foreach ($c->contactos as $medio) {
-            if (in_array($medio->tipo, ContactoComercio::TIPOS_CONTACTO, true)) {
-                $contacto[$medio->tipo] ??= $medio->valor;
-            } elseif (in_array($medio->tipo, ContactoComercio::TIPOS_RED_SOCIAL, true)) {
-                $redes[] = ['plataforma' => $medio->tipo, 'url' => $medio->valor];
+            if ($c === null) {
+                throw $this->noEncontrado('El comercio no existe o no está habilitado.');
             }
-        }
 
-        return [
-            'id_comercio' => $c->id_comercio,
-            'nombre_comercial' => $c->nombre_comercial,
-            'descripcion' => $c->micrositio?->descripcion,
-            'logo_url' => $this->url($c->micrositio?->logotipo),
-            'banners' => $c->banners->where('activo', true)->sortBy('orden')->map(fn ($b): array => [
-                'id_banner' => $b->id_banner,
-                'imagen_url' => $this->url($b->ruta),
-                'texto_alternativo' => $b->texto_alternativo,
-            ])->values()->all(),
-            'galeria' => $c->galeria->sortBy('orden')->map(fn ($i): array => [
-                'id_imagen' => $i->id_imagen,
-                'imagen_url' => $this->url($i->ruta),
-                'texto_alternativo' => $i->texto_alternativo,
-            ])->values()->all(),
-            'horarios' => $c->horarios->sortBy('dia_semana')->map(fn ($h): array => [
-                'id_horario' => $h->id_horario,
-                'dia_semana' => $h->dia_semana,
-                'hora_apertura' => $h->hora_apertura ? substr((string) $h->hora_apertura, 0, 5) : null,
-                'hora_cierre' => $h->hora_cierre ? substr((string) $h->hora_cierre, 0, 5) : null,
-                'cerrado' => $h->cerrado,
-            ])->values()->all(),
-            'contacto' => $contacto,
-            'redes_sociales' => $redes,
-            'politicas' => $c->politicas->map(fn ($p): array => [
-                'tipo' => $p->tipo,
-                'descripcion' => $p->contenido,
-            ])->values()->all(),
-            'estado' => $c->estado,
-        ];
+            $contacto = ['telefono' => null, 'correo' => null, 'direccion' => null];
+            $redes = [];
+            foreach ($c->contactos as $medio) {
+                if (in_array($medio->tipo, ContactoComercio::TIPOS_CONTACTO, true)) {
+                    $contacto[$medio->tipo] ??= $medio->valor;
+                } elseif (in_array($medio->tipo, ContactoComercio::TIPOS_RED_SOCIAL, true)) {
+                    $redes[] = ['plataforma' => $medio->tipo, 'url' => $medio->valor];
+                }
+            }
+
+            return [
+                'id_comercio' => $c->id_comercio,
+                'nombre_comercial' => $c->nombre_comercial,
+                'descripcion' => $c->micrositio?->descripcion,
+                'logo_url' => $this->url($c->micrositio?->logotipo),
+                'banners' => $c->banners->where('activo', true)->sortBy('orden')->map(fn ($b): array => [
+                    'id_banner' => $b->id_banner,
+                    'imagen_url' => $this->url($b->ruta),
+                    'texto_alternativo' => $b->texto_alternativo,
+                ])->values()->all(),
+                'galeria' => $c->galeria->sortBy('orden')->map(fn ($i): array => [
+                    'id_imagen' => $i->id_imagen,
+                    'imagen_url' => $this->url($i->ruta),
+                    'texto_alternativo' => $i->texto_alternativo,
+                ])->values()->all(),
+                'horarios' => $c->horarios->sortBy('dia_semana')->map(fn ($h): array => [
+                    'id_horario' => $h->id_horario,
+                    'dia_semana' => $h->dia_semana,
+                    'hora_apertura' => $h->hora_apertura ? substr((string) $h->hora_apertura, 0, 5) : null,
+                    'hora_cierre' => $h->hora_cierre ? substr((string) $h->hora_cierre, 0, 5) : null,
+                    'cerrado' => $h->cerrado,
+                ])->values()->all(),
+                'contacto' => $contacto,
+                'redes_sociales' => $redes,
+                'politicas' => $c->politicas->map(fn ($p): array => [
+                    'tipo' => $p->tipo,
+                    'descripcion' => $p->contenido,
+                ])->values()->all(),
+                'estado' => $c->estado,
+            ];
+        });
     }
 
     public function obtenerComercioActivo(int $idComercio): array
@@ -199,32 +221,43 @@ class ComerciosService implements ComerciosServiceInterface
     {
         $c = $this->buscar($idComercio);
 
-        // Supuesto del PC3: id_sede = id_ubicacion de M4. La tabla de sedes se agrega
-        // cuando M4 lo confirme; mientras tanto la lista va vacía.
-        return ['id_comercio' => $c->id_comercio, 'sedes' => []];
+        // id_sede = id_ubicacion de M4 (confirmado por M4 el 6/11). Se devuelven todas las
+        // sedes con su indicador habilitada, para que M4 distinga una sede ajena de una
+        // deshabilitada.
+        return [
+            'id_comercio' => $c->id_comercio,
+            'sedes' => $c->sedes()->orderBy('id_sede')->get()->map(fn (SedeComercio $sede): array => [
+                'id_sede' => $sede->id_sede,
+                'nombre' => $sede->nombre,
+                'direccion' => $sede->direccion,
+                'habilitada' => $sede->habilitada,
+            ])->values()->all(),
+        ];
     }
 
     public function obtenerPoliticasEnvio(int $idComercio): array
     {
-        $c = $this->buscar($idComercio);
-        $politicas = $c->politicas()->get();
+        return $this->comoSistema(function () use ($idComercio): array {
+            $c = $this->buscar($idComercio);
+            $politicas = $c->politicas()->get();
 
-        $tarifas = $politicas->where('tipo', 'envio')
-            ->flatMap(fn ($p): array => $p->configuracion_envio ?? [])
-            ->map(fn (array $t): array => [
-                'zona' => (string) ($t['zona'] ?? ''),
-                'costo' => (float) ($t['costo'] ?? 0),
-                'moneda' => (string) ($t['moneda'] ?? 'CRC'),
-            ])->values()->all();
+            $tarifas = $politicas->where('tipo', 'envio')
+                ->flatMap(fn ($p): array => $p->configuracion_envio ?? [])
+                ->map(fn (array $t): array => [
+                    'zona' => (string) ($t['zona'] ?? ''),
+                    'costo' => (float) ($t['costo'] ?? 0),
+                    'moneda' => (string) ($t['moneda'] ?? 'CRC'),
+                ])->values()->all();
 
-        return [
-            'id_comercio' => $c->id_comercio,
-            'politicas' => $politicas->map(fn ($p): array => [
-                'tipo' => $p->tipo,
-                'descripcion' => $p->contenido,
-            ])->values()->all(),
-            'tarifas' => $tarifas,
-        ];
+            return [
+                'id_comercio' => $c->id_comercio,
+                'politicas' => $politicas->map(fn ($p): array => [
+                    'tipo' => $p->tipo,
+                    'descripcion' => $p->contenido,
+                ])->values()->all(),
+                'tarifas' => $tarifas,
+            ];
+        });
     }
 
     public function obtenerDatosFiscalesComercio(int $idComercio): array
@@ -274,15 +307,17 @@ class ComerciosService implements ComerciosServiceInterface
      */
     public function obtenerMicrositio(int $comercioId): array
     {
-        $c = $this->buscar($comercioId);
+        return $this->comoSistema(function () use ($comercioId): array {
+            $c = $this->buscar($comercioId);
 
-        return [
-            'id_comercio' => $c->id_comercio,
-            'nombre_comercial' => $c->nombre_comercial,
-            'estado' => $c->estado,
-            'activo' => $c->estaActivo(),
-            'logo_url' => $this->url($c->micrositio?->logotipo),
-        ];
+            return [
+                'id_comercio' => $c->id_comercio,
+                'nombre_comercial' => $c->nombre_comercial,
+                'estado' => $c->estado,
+                'activo' => $c->estaActivo(),
+                'logo_url' => $this->url($c->micrositio?->logotipo),
+            ];
+        });
     }
 
     /**
@@ -300,451 +335,452 @@ class ComerciosService implements ComerciosServiceInterface
     }
 
     // --- CU-0001 a CU-0007: edición del micrositio
-public function consultar(int $idComercio): array
-{
-    $comercio = Comercio::query()
-        ->with([
-            'micrositio',
-            'banners',
-            'galeria',
-            'horarios',
-            'contactos',
-            'politicas',
-        ])
-        ->find($idComercio);
-
-    if ($comercio === null) {
-        throw $this->noEncontrado('El comercio no existe.');
-    }
-
-    return [
-        'id_comercio' => $comercio->id_comercio,
-        'nombre_comercial' => $comercio->nombre_comercial,
-        'descripcion' => $comercio->micrositio?->descripcion,
-        'logotipo' => $comercio->micrositio?->logotipo,
-
-        'banners' => $comercio->banners
-            ->sortBy('orden')
-            ->values()
-            ->map(fn ($banner): array => [
-                'id_banner' => $banner->id_banner,
-                'ruta' => $banner->ruta,
-                'texto_alternativo' => $banner->texto_alternativo,
-                'orden' => $banner->orden,
-                'activo' => $banner->activo,
+    public function consultar(int $idComercio): array
+    {
+        $comercio = Comercio::query()
+            ->with([
+                'micrositio',
+                'banners',
+                'galeria',
+                'horarios',
+                'contactos',
+                'politicas',
             ])
-            ->all(),
+            ->find($idComercio);
 
-        'galeria' => $comercio->galeria
-            ->sortBy('orden')
-            ->values()
-            ->map(fn ($imagen): array => [
-                'id_imagen' => $imagen->id_imagen,
-                'ruta' => $imagen->ruta,
-                'texto_alternativo' => $imagen->texto_alternativo,
-                'orden' => $imagen->orden,
-            ])
-            ->all(),
+        if ($comercio === null) {
+            throw $this->noEncontrado('El comercio no existe.');
+        }
 
-        'horarios' => $comercio->horarios
-            ->sortBy('dia_semana')
-            ->values()
-            ->map(fn ($horario): array => [
-                'id_horario' => $horario->id_horario,
-                'dia_semana' => $horario->dia_semana,
-                'hora_apertura' => $horario->hora_apertura
-                    ? substr((string) $horario->hora_apertura, 0, 5)
-                    : null,
-                'hora_cierre' => $horario->hora_cierre
-                    ? substr((string) $horario->hora_cierre, 0, 5)
-                    : null,
-                'cerrado' => $horario->cerrado,
-            ])
-            ->all(),
+        return [
+            'id_comercio' => $comercio->id_comercio,
+            'nombre_comercial' => $comercio->nombre_comercial,
+            'descripcion' => $comercio->micrositio?->descripcion,
+            'logotipo' => $comercio->micrositio?->logotipo,
 
-        'contactos' => $comercio->contactos
-            ->map(fn ($contacto): array => [
-                'id_contacto' => $contacto->id_contacto,
-                'tipo' => $contacto->tipo,
-                'valor' => $contacto->valor,
-            ])
-            ->values()
-            ->all(),
+            'banners' => $comercio->banners
+                ->sortBy('orden')
+                ->values()
+                ->map(fn ($banner): array => [
+                    'id_banner' => $banner->id_banner,
+                    'ruta' => $banner->ruta,
+                    'texto_alternativo' => $banner->texto_alternativo,
+                    'orden' => $banner->orden,
+                    'activo' => $banner->activo,
+                ])
+                ->all(),
 
-        'politicas' => $comercio->politicas
-            ->map(fn ($politica): array => [
-                'id_politica' => $politica->id_politica,
-                'tipo' => $politica->tipo,
-                'contenido' => $politica->contenido,
-                'configuracion_envio' => $politica->configuracion_envio,
-            ])
-            ->values()
-            ->all(),
-    ];
-}
+            'galeria' => $comercio->galeria
+                ->sortBy('orden')
+                ->values()
+                ->map(fn ($imagen): array => [
+                    'id_imagen' => $imagen->id_imagen,
+                    'ruta' => $imagen->ruta,
+                    'texto_alternativo' => $imagen->texto_alternativo,
+                    'orden' => $imagen->orden,
+                ])
+                ->all(),
 
-public function actualizarInformacion(
-    int $idComercio,
-    ?string $descripcion
-): Micrositio {
-    $this->buscar($idComercio);
+            'horarios' => $comercio->horarios
+                ->sortBy('dia_semana')
+                ->values()
+                ->map(fn ($horario): array => [
+                    'id_horario' => $horario->id_horario,
+                    'dia_semana' => $horario->dia_semana,
+                    'hora_apertura' => $horario->hora_apertura
+                        ? substr((string) $horario->hora_apertura, 0, 5)
+                        : null,
+                    'hora_cierre' => $horario->hora_cierre
+                        ? substr((string) $horario->hora_cierre, 0, 5)
+                        : null,
+                    'cerrado' => $horario->cerrado,
+                ])
+                ->all(),
 
-    $micrositio = Micrositio::query()->firstOrCreate([
-        'id_comercio' => $idComercio,
-    ]);
+            'contactos' => $comercio->contactos
+                ->map(fn ($contacto): array => [
+                    'id_contacto' => $contacto->id_contacto,
+                    'tipo' => $contacto->tipo,
+                    'valor' => $contacto->valor,
+                ])
+                ->values()
+                ->all(),
 
-    $micrositio->descripcion = $descripcion;
-    $micrositio->save();
-
-    return $micrositio;
-}
-
-public function guardarLogotipo(
-    int $idComercio,
-    UploadedFile $archivo
-): Micrositio {
-    $this->buscar($idComercio);
-
-    $micrositio = Micrositio::query()->firstOrCreate([
-        'id_comercio' => $idComercio,
-    ]);
-
-    $ruta = Storage::disk('public')->putFile(
-        "m2/comercios/{$idComercio}/logotipo",
-        $archivo
-    );
-
-    $micrositio->cambiarLogotipo(
-        Storage::disk('public')->url($ruta)
-    );
-
-    return $micrositio;
-}
-
-public function guardarHorarios(int $idComercio, array $horarios): array
-{
-    $this->buscar($idComercio);
-
-    $errores = [];
-    $dias = [];
-
-    if (count($horarios) !== 7) {
-        $errores['horarios'] = [
-            'Se deben indicar los horarios de los 7 días.',
+            'politicas' => $comercio->politicas
+                ->map(fn ($politica): array => [
+                    'id_politica' => $politica->id_politica,
+                    'tipo' => $politica->tipo,
+                    'contenido' => $politica->contenido,
+                    'configuracion_envio' => $politica->configuracion_envio,
+                ])
+                ->values()
+                ->all(),
         ];
     }
 
-    foreach ($horarios as $indice => $horario) {
-        $dia = (int) ($horario['dia_semana'] ?? 0);
-        $cerrado = (bool) ($horario['cerrado'] ?? false);
+    public function actualizarInformacion(
+        int $idComercio,
+        ?string $descripcion
+    ): Micrositio {
+        $this->buscar($idComercio);
 
-        if ($dia < 1 || $dia > 7) {
-            $errores["horarios.{$indice}.dia_semana"] = [
-                'El día de la semana debe estar entre 1 y 7.',
+        $micrositio = Micrositio::query()->firstOrCreate([
+            'id_comercio' => $idComercio,
+        ]);
+
+        $micrositio->descripcion = $descripcion;
+        $micrositio->save();
+
+        return $micrositio;
+    }
+
+    public function guardarLogotipo(
+        int $idComercio,
+        UploadedFile $archivo
+    ): Micrositio {
+        $this->buscar($idComercio);
+
+        $micrositio = Micrositio::query()->firstOrCreate([
+            'id_comercio' => $idComercio,
+        ]);
+
+        $ruta = Storage::disk('public')->putFile(
+            "m2/comercios/{$idComercio}/logotipo",
+            $archivo
+        );
+
+        $micrositio->cambiarLogotipo(
+            Storage::disk('public')->url($ruta)
+        );
+
+        return $micrositio;
+    }
+
+    public function guardarHorarios(int $idComercio, array $horarios): array
+    {
+        $this->buscar($idComercio);
+
+        $errores = [];
+        $dias = [];
+
+        if (count($horarios) !== 7) {
+            $errores['horarios'] = [
+                'Se deben indicar los horarios de los 7 días.',
             ];
         }
 
-        if (in_array($dia, $dias, true)) {
-            $errores["horarios.{$indice}.dia_semana"] = [
-                'No se pueden repetir días de la semana.',
-            ];
-        }
+        foreach ($horarios as $indice => $horario) {
+            $dia = (int) ($horario['dia_semana'] ?? 0);
+            $cerrado = (bool) ($horario['cerrado'] ?? false);
 
-        $dias[] = $dia;
-
-        if (! $cerrado) {
-            $apertura = $horario['hora_apertura'] ?? null;
-            $cierre = $horario['hora_cierre'] ?? null;
-
-            if ($apertura === null || $cierre === null) {
-                $errores["horarios.{$indice}"] = [
-                    'Un día abierto debe indicar hora de apertura y cierre.',
-                ];
-            } elseif ($apertura >= $cierre) {
-                $errores["horarios.{$indice}.hora_apertura"] = [
-                    'La hora de apertura debe ser anterior a la hora de cierre.',
+            if ($dia < 1 || $dia > 7) {
+                $errores["horarios.{$indice}.dia_semana"] = [
+                    'El día de la semana debe estar entre 1 y 7.',
                 ];
             }
+
+            if (in_array($dia, $dias, true)) {
+                $errores["horarios.{$indice}.dia_semana"] = [
+                    'No se pueden repetir días de la semana.',
+                ];
+            }
+
+            $dias[] = $dia;
+
+            if (! $cerrado) {
+                $apertura = $horario['hora_apertura'] ?? null;
+                $cierre = $horario['hora_cierre'] ?? null;
+
+                if ($apertura === null || $cierre === null) {
+                    $errores["horarios.{$indice}"] = [
+                        'Un día abierto debe indicar hora de apertura y cierre.',
+                    ];
+                } elseif ($apertura >= $cierre) {
+                    $errores["horarios.{$indice}.hora_apertura"] = [
+                        'La hora de apertura debe ser anterior a la hora de cierre.',
+                    ];
+                }
+            }
         }
+
+        $this->exigirValidos($errores);
+
+        return DB::transaction(function () use ($idComercio, $horarios): array {
+            HorarioComercio::query()
+                ->where('id_comercio', $idComercio)
+                ->delete();
+
+            $resultado = [];
+
+            foreach ($horarios as $datos) {
+                if ((bool) $datos['cerrado']) {
+                    $datos['hora_apertura'] = null;
+                    $datos['hora_cierre'] = null;
+                }
+
+                $horario = new HorarioComercio;
+
+                $horario->actualizar([
+                    ...$datos,
+                    'id_comercio' => $idComercio,
+                ]);
+
+                $resultado[] = $horario->toArray();
+            }
+
+            return $resultado;
+        });
     }
 
-    $this->exigirValidos($errores);
+    public function guardarContactos(int $idComercio, array $contactos): array
+    {
+        $this->buscar($idComercio);
 
-    return DB::transaction(function () use ($idComercio, $horarios): array {
-        HorarioComercio::query()
-            ->where('id_comercio', $idComercio)
-            ->delete();
+        return DB::transaction(function () use ($idComercio, $contactos): array {
+            ContactoComercio::query()
+                ->where('id_comercio', $idComercio)
+                ->delete();
 
-        $resultado = [];
+            $resultado = [];
 
-        foreach ($horarios as $datos) {
-            if ((bool) $datos['cerrado']) {
-                $datos['hora_apertura'] = null;
-                $datos['hora_cierre'] = null;
+            foreach ($contactos as $datos) {
+                $contacto = new ContactoComercio;
+
+                $contacto->actualizar([
+                    ...$datos,
+                    'id_comercio' => $idComercio,
+                ]);
+
+                $resultado[] = $contacto->toArray();
             }
 
-            $horario = new HorarioComercio();
+            return $resultado;
+        });
+    }
 
-            $horario->actualizar([
-                ...$datos,
-                'id_comercio' => $idComercio,
-            ]);
+    public function guardarPoliticas(int $idComercio, array $politicas): array
+    {
+        $this->buscar($idComercio);
 
-            $resultado[] = $horario->toArray();
-        }
+        return DB::transaction(function () use ($idComercio, $politicas): array {
+            PoliticaComercio::query()
+                ->where('id_comercio', $idComercio)
+                ->delete();
 
-        return $resultado;
-    });
-}
+            $resultado = [];
 
-public function guardarContactos(int $idComercio, array $contactos): array
-{
-    $this->buscar($idComercio);
+            foreach ($politicas as $datos) {
+                if (($datos['tipo'] ?? null) !== 'envio') {
+                    $datos['configuracion_envio'] = null;
+                }
 
-    return DB::transaction(function () use ($idComercio, $contactos): array {
-        ContactoComercio::query()
-            ->where('id_comercio', $idComercio)
-            ->delete();
+                $politica = new PoliticaComercio;
 
-        $resultado = [];
+                $politica->actualizar([
+                    ...$datos,
+                    'id_comercio' => $idComercio,
+                ]);
 
-        foreach ($contactos as $datos) {
-            $contacto = new ContactoComercio();
-
-            $contacto->actualizar([
-                ...$datos,
-                'id_comercio' => $idComercio,
-            ]);
-
-            $resultado[] = $contacto->toArray();
-        }
-
-        return $resultado;
-    });
-}
-
-public function guardarPoliticas(int $idComercio, array $politicas): array
-{
-    $this->buscar($idComercio);
-
-    return DB::transaction(function () use ($idComercio, $politicas): array {
-        PoliticaComercio::query()
-            ->where('id_comercio', $idComercio)
-            ->delete();
-
-        $resultado = [];
-
-        foreach ($politicas as $datos) {
-            if (($datos['tipo'] ?? null) !== 'envio') {
-                $datos['configuracion_envio'] = null;
+                $resultado[] = $politica->toArray();
             }
 
-            $politica = new PoliticaComercio();
+            return $resultado;
+        });
+    }
 
-            $politica->actualizar([
-                ...$datos,
-                'id_comercio' => $idComercio,
-            ]);
+    public function gestionarBanners(int $idComercio, array $banners): array
+    {
+        $this->buscar($idComercio);
 
-            $resultado[] = $politica->toArray();
-        }
+        $existentes = BannerComercio::query()
+            ->where('id_comercio', $idComercio)
+            ->get()
+            ->keyBy('id_banner');
 
-        return $resultado;
-    });
-}
+        $rutasEliminar = [];
 
-public function gestionarBanners(int $idComercio, array $banners): array
-{
-    $this->buscar($idComercio);
+        $resultado = DB::transaction(function () use (
+            $idComercio,
+            $banners,
+            $existentes,
+            &$rutasEliminar
+        ): array {
+            $idsConservados = [];
+            $resultado = [];
 
-    $existentes = BannerComercio::query()
-        ->where('id_comercio', $idComercio)
-        ->get()
-        ->keyBy('id_banner');
+            foreach ($banners as $datos) {
+                $idBanner = $datos['id_banner'] ?? null;
 
-    $rutasEliminar = [];
+                if ($idBanner !== null) {
+                    $banner = $existentes->get($idBanner);
 
-    $resultado = DB::transaction(function () use (
-        $idComercio,
-        $banners,
-        $existentes,
-        &$rutasEliminar
-    ): array {
-        $idsConservados = [];
-        $resultado = [];
+                    if ($banner === null) {
+                        throw $this->noEncontrado(
+                            'El banner no existe o no pertenece al comercio.'
+                        );
+                    }
 
-        foreach ($banners as $datos) {
-            $idBanner = $datos['id_banner'] ?? null;
+                    $idsConservados[] = (int) $idBanner;
+                    $ruta = $banner->ruta;
+                } else {
+                    $banner = new BannerComercio;
+                    $ruta = null;
+                }
 
-            if ($idBanner !== null) {
-                $banner = $existentes->get($idBanner);
+                if (
+                    isset($datos['imagen'])
+                    && $datos['imagen'] instanceof UploadedFile
+                ) {
+                    $rutaNueva = Storage::disk('public')->putFile(
+                        "m2/comercios/{$idComercio}/banners",
+                        $datos['imagen']
+                    );
 
-                if ($banner === null) {
-                    throw $this->noEncontrado(
-                        'El banner no existe o no pertenece al comercio.'
+                    if ($ruta !== null) {
+                        $rutasEliminar[] = $ruta;
+                    }
+
+                    $ruta = Storage::disk('public')->url($rutaNueva);
+                }
+
+                if ($ruta === null) {
+                    throw ErrorNucleoException::paraModulo(
+                        self::MODULO,
+                        'ERR-005',
+                        422,
+                        'El banner nuevo debe incluir una imagen.',
+                        [
+                            'imagen' => [
+                                'La imagen es obligatoria para un banner nuevo.',
+                            ],
+                        ]
                     );
                 }
 
-                $idsConservados[] = (int) $idBanner;
-                $ruta = $banner->ruta;
-            } else {
-                $banner = new BannerComercio();
-                $ruta = null;
+                $banner->actualizar([
+                    'id_comercio' => $idComercio,
+                    'ruta' => $ruta,
+                    'texto_alternativo' => $datos['texto_alternativo'],
+                    'orden' => $datos['orden'],
+                    'activo' => $datos['activo'],
+                ]);
+
+                $resultado[] = $banner->toArray();
             }
 
-            if (
-                isset($datos['imagen'])
-                && $datos['imagen'] instanceof UploadedFile
-            ) {
-                $rutaNueva = Storage::disk('public')->putFile(
-                    "m2/comercios/{$idComercio}/banners",
-                    $datos['imagen']
-                );
-
-                if ($ruta !== null) {
-                    $rutasEliminar[] = $ruta;
+            foreach ($existentes as $idBanner => $bannerExistente) {
+                if (! in_array((int) $idBanner, $idsConservados, true)) {
+                    $rutasEliminar[] = $bannerExistente->ruta;
+                    $bannerExistente->delete();
                 }
-
-                $ruta = Storage::disk('public')->url($rutaNueva);
             }
 
-            if ($ruta === null) {
-                throw ErrorNucleoException::paraModulo(
-                    self::MODULO,
-                    'ERR-005',
-                    422,
-                    'El banner nuevo debe incluir una imagen.',
-                    [
-                        'imagen' => [
-                            'La imagen es obligatoria para un banner nuevo.',
-                        ],
-                    ]
-                );
-            }
+            return $resultado;
+        });
 
-            $banner->actualizar([
-                'id_comercio' => $idComercio,
-                'ruta' => $ruta,
-                'texto_alternativo' => $datos['texto_alternativo'],
-                'orden' => $datos['orden'],
-                'activo' => $datos['activo'],
-            ]);
-
-            $resultado[] = $banner->toArray();
-        }
-
-        foreach ($existentes as $idBanner => $bannerExistente) {
-            if (! in_array((int) $idBanner, $idsConservados, true)) {
-                $rutasEliminar[] = $bannerExistente->ruta;
-                $bannerExistente->delete();
-            }
+        foreach (array_unique($rutasEliminar) as $ruta) {
+            $this->eliminarArchivoPublico($ruta);
         }
 
         return $resultado;
-    });
-
-    foreach (array_unique($rutasEliminar) as $ruta) {
-        $this->eliminarArchivoPublico($ruta);
     }
 
-    return $resultado;
-}
+    public function gestionarGaleria(int $idComercio, array $galeria): array
+    {
+        $this->buscar($idComercio);
 
-public function gestionarGaleria(int $idComercio, array $galeria): array
-{
-    $this->buscar($idComercio);
+        $existentes = ImagenGaleriaComercio::query()
+            ->where('id_comercio', $idComercio)
+            ->get()
+            ->keyBy('id_imagen');
 
-    $existentes = ImagenGaleriaComercio::query()
-        ->where('id_comercio', $idComercio)
-        ->get()
-        ->keyBy('id_imagen');
+        $rutasEliminar = [];
 
-    $rutasEliminar = [];
+        $resultado = DB::transaction(function () use (
+            $idComercio,
+            $galeria,
+            $existentes,
+            &$rutasEliminar
+        ): array {
+            $idsConservados = [];
+            $resultado = [];
 
-    $resultado = DB::transaction(function () use (
-        $idComercio,
-        $galeria,
-        $existentes,
-        &$rutasEliminar
-    ): array {
-        $idsConservados = [];
-        $resultado = [];
+            foreach ($galeria as $datos) {
+                $idImagen = $datos['id_imagen'] ?? null;
 
-        foreach ($galeria as $datos) {
-            $idImagen = $datos['id_imagen'] ?? null;
+                if ($idImagen !== null) {
+                    $imagen = $existentes->get($idImagen);
 
-            if ($idImagen !== null) {
-                $imagen = $existentes->get($idImagen);
+                    if ($imagen === null) {
+                        throw $this->noEncontrado(
+                            'La imagen no existe o no pertenece al comercio.'
+                        );
+                    }
 
-                if ($imagen === null) {
-                    throw $this->noEncontrado(
-                        'La imagen no existe o no pertenece al comercio.'
+                    $idsConservados[] = (int) $idImagen;
+                    $ruta = $imagen->ruta;
+                } else {
+                    $imagen = new ImagenGaleriaComercio;
+                    $ruta = null;
+                }
+
+                if (
+                    isset($datos['imagen'])
+                    && $datos['imagen'] instanceof UploadedFile
+                ) {
+                    $rutaNueva = Storage::disk('public')->putFile(
+                        "m2/comercios/{$idComercio}/galeria",
+                        $datos['imagen']
+                    );
+
+                    if ($ruta !== null) {
+                        $rutasEliminar[] = $ruta;
+                    }
+
+                    $ruta = Storage::disk('public')->url($rutaNueva);
+                }
+
+                if ($ruta === null) {
+                    throw ErrorNucleoException::paraModulo(
+                        self::MODULO,
+                        'ERR-005',
+                        422,
+                        'La imagen nueva de la galería debe incluir un archivo.',
+                        [
+                            'imagen' => [
+                                'La imagen es obligatoria para un elemento nuevo.',
+                            ],
+                        ]
                     );
                 }
 
-                $idsConservados[] = (int) $idImagen;
-                $ruta = $imagen->ruta;
-            } else {
-                $imagen = new ImagenGaleriaComercio();
-                $ruta = null;
+                $imagen->actualizar([
+                    'id_comercio' => $idComercio,
+                    'ruta' => $ruta,
+                    'texto_alternativo' => $datos['texto_alternativo'],
+                    'orden' => $datos['orden'],
+                ]);
+
+                $resultado[] = $imagen->toArray();
             }
 
-            if (
-                isset($datos['imagen'])
-                && $datos['imagen'] instanceof UploadedFile
-            ) {
-                $rutaNueva = Storage::disk('public')->putFile(
-                    "m2/comercios/{$idComercio}/galeria",
-                    $datos['imagen']
-                );
-
-                if ($ruta !== null) {
-                    $rutasEliminar[] = $ruta;
+            foreach ($existentes as $idImagen => $imagenExistente) {
+                if (! in_array((int) $idImagen, $idsConservados, true)) {
+                    $rutasEliminar[] = $imagenExistente->ruta;
+                    $imagenExistente->delete();
                 }
-
-                $ruta = Storage::disk('public')->url($rutaNueva);
             }
 
-            if ($ruta === null) {
-                throw ErrorNucleoException::paraModulo(
-                    self::MODULO,
-                    'ERR-005',
-                    422,
-                    'La imagen nueva de la galería debe incluir un archivo.',
-                    [
-                        'imagen' => [
-                            'La imagen es obligatoria para un elemento nuevo.',
-                        ],
-                    ]
-                );
-            }
+            return $resultado;
+        });
 
-            $imagen->actualizar([
-                'id_comercio' => $idComercio,
-                'ruta' => $ruta,
-                'texto_alternativo' => $datos['texto_alternativo'],
-                'orden' => $datos['orden'],
-            ]);
-
-            $resultado[] = $imagen->toArray();
-        }
-
-        foreach ($existentes as $idImagen => $imagenExistente) {
-            if (! in_array((int) $idImagen, $idsConservados, true)) {
-                $rutasEliminar[] = $imagenExistente->ruta;
-                $imagenExistente->delete();
-            }
+        foreach (array_unique($rutasEliminar) as $ruta) {
+            $this->eliminarArchivoPublico($ruta);
         }
 
         return $resultado;
-    });
-
-    foreach (array_unique($rutasEliminar) as $ruta) {
-        $this->eliminarArchivoPublico($ruta);
     }
 
-    return $resultado;
-}
     private function buscar(int $idComercio): Comercio
     {
         return Comercio::query()->find($idComercio)
@@ -938,122 +974,227 @@ public function gestionarGaleria(int $idComercio, array $galeria): array
     }
 
     // --- CU-0012 y CU-0013: solicitud de incorporación
-public function registrarSolicitud(array $datos, array $documentos): SolicitudComercio
-{
-    return DB::transaction(function () use ($datos, $documentos): SolicitudComercio {
-        if (Comercio::query()
-            ->where('cedula_juridica', $datos['cedula_juridica'])
-            ->exists()) {
-            $this->exigirValidos([
-                'cedula_juridica' => ['Ya existe un comercio con esta cédula jurídica.'],
-            ]);
-        }
-
-        $comercio = Comercio::create([
-            'nombre_comercial' => $datos['nombre_comercial'],
-            'cedula_juridica' => $datos['cedula_juridica'],
-            'razon_social' => $datos['razon_social'],
-            'direccion_fiscal' => $datos['direccion_fiscal'],
-            'inscrito_como_contribuyente' => $datos['inscrito_como_contribuyente'],
-            'estado' => Comercio::PENDIENTE,
-        ]);
-
-        $solicitud = SolicitudComercio::create([
-            'id_comercio' => $comercio->id_comercio,
-            'nombre_encargado' => $datos['nombre_encargado'],
-            'correo_encargado' => $datos['correo_encargado'],
-            'telefono_encargado' => $datos['telefono_encargado'] ?? null,
-            'estado' => SolicitudComercio::PENDIENTE,
-            'requiere_documentos' => $documentos !== [],
-            'motivo_rechazo' => null,
-            'fecha_reenvio' => null,
-        ]);
-
-        foreach ($documentos as $documento) {
-            /** @var UploadedFile $archivo */
-            $archivo = $documento['archivo'];
-
-            $cifrado = Crypt::encryptString($archivo->getContent());
-
-            $ruta = 'm2/documentos/'
-                .$comercio->id_comercio.'/'
-                .Str::uuid().'.enc';
-
-            Storage::disk('local')->put($ruta, $cifrado);
-
-            DocumentoComercio::create([
-                'id_comercio' => $comercio->id_comercio,
-                'tipo' => $documento['tipo'],
-                'ruta_cifrada' => $ruta,
-                'fecha_vencimiento' => $documento['fecha_vencimiento'],
-                'resultado' => 'pendiente',
-                'observacion' => null,
-            ]);
-        }
-
-        return $solicitud;
-    });
-}
-
-public function corregirSolicitud(int $idSolicitud, array $datos): SolicitudComercio
-{
-    return DB::transaction(function () use ($idSolicitud, $datos): SolicitudComercio {
-        $solicitud = SolicitudComercio::query()
-            ->lockForUpdate()
-            ->find($idSolicitud)
-            ?? throw $this->noEncontrado('La solicitud no existe.');
-
-        $comercio = $solicitud->comercio()
-            ->lockForUpdate()
-            ->first()
-            ?? throw $this->noEncontrado('La solicitud no existe.');
-
-        if (
-            $comercio->cedula_juridica !== $datos['cedula_juridica']
-            || mb_strtolower($solicitud->correo_encargado)
-                !== mb_strtolower($datos['correo_encargado'])
-        ) {
-            throw $this->noEncontrado('La solicitud no existe.');
-        }
-
-        if ($solicitud->estado !== SolicitudComercio::RECHAZADA) {
-            $this->exigirValidos([
-                'estado' => ['Solo se puede corregir una solicitud rechazada.'],
-            ]);
-        }
-
-        foreach (
-            [
-                'nombre_comercial',
-                'razon_social',
-                'direccion_fiscal',
-                'inscrito_como_contribuyente',
-            ] as $campo
-        ) {
-            if (array_key_exists($campo, $datos)) {
-                $comercio->{$campo} = $datos[$campo];
+    public function registrarSolicitud(array $datos, array $documentos): SolicitudComercio
+    {
+        return DB::transaction(function () use ($datos, $documentos): SolicitudComercio {
+            if (Comercio::query()
+                ->where('cedula_juridica', $datos['cedula_juridica'])
+                ->exists()) {
+                $this->exigirValidos([
+                    'cedula_juridica' => ['Ya existe un comercio con esta cédula jurídica.'],
+                ]);
             }
+
+            $comercio = Comercio::create([
+                'nombre_comercial' => $datos['nombre_comercial'],
+                'cedula_juridica' => $datos['cedula_juridica'],
+                'razon_social' => $datos['razon_social'],
+                'direccion_fiscal' => $datos['direccion_fiscal'],
+                'inscrito_como_contribuyente' => $datos['inscrito_como_contribuyente'],
+                'estado' => Comercio::PENDIENTE,
+            ]);
+
+            $solicitud = SolicitudComercio::create([
+                'id_comercio' => $comercio->id_comercio,
+                'nombre_encargado' => $datos['nombre_encargado'],
+                'correo_encargado' => $datos['correo_encargado'],
+                'telefono_encargado' => $datos['telefono_encargado'] ?? null,
+                'estado' => SolicitudComercio::PENDIENTE,
+                'requiere_documentos' => $documentos !== [],
+                'motivo_rechazo' => null,
+                'fecha_reenvio' => null,
+            ]);
+
+            foreach ($documentos as $documento) {
+                /** @var UploadedFile $archivo */
+                $archivo = $documento['archivo'];
+
+                $cifrado = Crypt::encryptString($archivo->getContent());
+
+                $ruta = 'm2/documentos/'
+                    .$comercio->id_comercio.'/'
+                    .Str::uuid().'.enc';
+
+                Storage::disk('local')->put($ruta, $cifrado);
+
+                DocumentoComercio::create([
+                    'id_comercio' => $comercio->id_comercio,
+                    'tipo' => $documento['tipo'],
+                    'ruta_cifrada' => $ruta,
+                    'fecha_vencimiento' => $documento['fecha_vencimiento'],
+                    'resultado' => 'pendiente',
+                    'observacion' => null,
+                ]);
+            }
+
+            return $solicitud;
+        });
+    }
+
+    public function corregirSolicitud(int $idSolicitud, array $datos): SolicitudComercio
+    {
+        return DB::transaction(function () use ($idSolicitud, $datos): SolicitudComercio {
+            $solicitud = SolicitudComercio::query()
+                ->lockForUpdate()
+                ->find($idSolicitud)
+                ?? throw $this->noEncontrado('La solicitud no existe.');
+
+            $comercio = $solicitud->comercio()
+                ->lockForUpdate()
+                ->first()
+                ?? throw $this->noEncontrado('La solicitud no existe.');
+
+            if (
+                $comercio->cedula_juridica !== $datos['cedula_juridica']
+                || mb_strtolower($solicitud->correo_encargado)
+                    !== mb_strtolower($datos['correo_encargado'])
+            ) {
+                throw $this->noEncontrado('La solicitud no existe.');
+            }
+
+            if ($solicitud->estado !== SolicitudComercio::RECHAZADA) {
+                $this->exigirValidos([
+                    'estado' => ['Solo se puede corregir una solicitud rechazada.'],
+                ]);
+            }
+
+            foreach (
+                [
+                    'nombre_comercial',
+                    'razon_social',
+                    'direccion_fiscal',
+                    'inscrito_como_contribuyente',
+                ] as $campo
+            ) {
+                if (array_key_exists($campo, $datos)) {
+                    $comercio->{$campo} = $datos[$campo];
+                }
+            }
+
+            $comercio->estado = Comercio::PENDIENTE;
+            $comercio->save();
+
+            if (array_key_exists('nombre_encargado', $datos)) {
+                $solicitud->nombre_encargado = $datos['nombre_encargado'];
+            }
+
+            if (array_key_exists('telefono_encargado', $datos)) {
+                $solicitud->telefono_encargado = $datos['telefono_encargado'];
+            }
+
+            $solicitud->estado = SolicitudComercio::PENDIENTE;
+            $solicitud->motivo_rechazo = null;
+            $solicitud->fecha_reenvio = now();
+            $solicitud->save();
+
+            return $solicitud;
+        });
+    }
+    // --- CU-0017 y CU-0018: suspender y reactivar comercios (Diego) ---
+
+    /** CU-0017 (diseño, Ds-02). RN-004: solo un comercio Activo. RN-005: motivo obligatorio. */
+    public function suspenderComercio(int $idComercio, string $motivo): SuspensionComercio
+    {
+        $motivo = trim($motivo);
+        if ($motivo === '') {
+            $this->exigirValidos(['motivo' => ['El motivo de la suspensión es obligatorio.']]);
         }
+        $idUsuario = auth()->id() ?? throw ErrorNucleoException::sesionInvalida();
 
-        $comercio->estado = Comercio::PENDIENTE;
-        $comercio->save();
+        return DB::transaction(function () use ($idComercio, $motivo, $idUsuario): SuspensionComercio {
+            $comercio = Comercio::query()->lockForUpdate()->find($idComercio)
+                ?? throw $this->noEncontrado('El comercio no existe.');
 
-        if (array_key_exists('nombre_encargado', $datos)) {
-            $solicitud->nombre_encargado = $datos['nombre_encargado'];
+            if (! $comercio->estaActivo()) {
+                $this->exigirValidos(['estado' => ['Solo se puede suspender un comercio Activo.']]);
+            }
+
+            $comercio->suspender();
+            $suspension = $comercio->suspensiones()->create([
+                'id_usuario' => $idUsuario,
+                'motivo' => $motivo,
+                'fecha_suspension' => now(),
+            ]);
+
+            $this->nucleo->registrarAuditoria('suspender_comercio', 'comercio', $comercio->id_comercio, [
+                'modulo' => 'M2', 'motivo' => $motivo,
+            ]);
+
+            ComercioSuspendido::dispatch((string) Str::uuid(), now(), $comercio->id_comercio, Comercio::SUSPENDIDO, $motivo);
+
+            return $suspension;
+        });
+    }
+
+    /** CU-0018. Solo un comercio Suspendido; cierra la suspensión abierta. RN-017: comisión y membresía se mantienen. */
+    public function reactivarComercio(int $idComercio): Comercio
+    {
+        return DB::transaction(function () use ($idComercio): Comercio {
+            $comercio = Comercio::query()->lockForUpdate()->find($idComercio)
+                ?? throw $this->noEncontrado('El comercio no existe.');
+
+            if (! $comercio->estaSuspendido()) {
+                $this->exigirValidos(['estado' => ['Solo se puede reactivar un comercio Suspendido.']]);
+            }
+
+            $comercio->suspensiones()->whereNull('fecha_reactivacion')->get()
+                ->each(fn (SuspensionComercio $suspension) => $suspension->cerrar());
+            $comercio->activar();
+
+            $this->nucleo->registrarAuditoria('reactivar_comercio', 'comercio', $comercio->id_comercio, ['modulo' => 'M2']);
+
+            ComercioReactivado::dispatch((string) Str::uuid(), now(), $comercio->id_comercio, Comercio::ACTIVO, $comercio->nombre_comercial);
+
+            return $comercio;
+        });
+    }
+
+    /** Panel de la plataforma: todos los comercios, en cualquier estado. */
+    public function listarComercios(?string $estado, int $pagina, int $porPagina): array
+    {
+        $errores = [];
+        if ($estado !== null && ! in_array($estado, Comercio::ESTADOS, true)) {
+            $errores['estado'] = ['El estado no es válido.'];
         }
-
-        if (array_key_exists('telefono_encargado', $datos)) {
-            $solicitud->telefono_encargado = $datos['telefono_encargado'];
+        if ($pagina < 1) {
+            $errores['pagina'] = ['Debe ser un entero mayor o igual a 1.'];
         }
+        if ($porPagina < 1 || $porPagina > self::MAXIMO_POR_PAGINA) {
+            $errores['por_pagina'] = ['Debe estar entre 1 y '.self::MAXIMO_POR_PAGINA.'.'];
+        }
+        $this->exigirValidos($errores);
 
-        $solicitud->estado = SolicitudComercio::PENDIENTE;
-        $solicitud->motivo_rechazo = null;
-        $solicitud->fecha_reenvio = now();
-        $solicitud->save();
+        $consulta = Comercio::query()->when($estado !== null, fn ($q) => $q->where('estado', $estado));
+        $total = (clone $consulta)->count();
+        $comercios = $consulta->orderBy('nombre_comercial')->forPage($pagina, $porPagina)->get();
 
-        return $solicitud;
-    });
-}
+        return [
+            'pagina' => $pagina,
+            'por_pagina' => $porPagina,
+            'total' => $total,
+            'comercios' => $comercios->map(fn (Comercio $c): array => $this->fichaComercio($c))->values()->all(),
+        ];
+    }
+
+    /** Ficha administrativa de un comercio (diseño: ComerciosController::consultar). */
+    public function consultarComercio(int $idComercio): array
+    {
+        return $this->fichaComercio($this->buscar($idComercio));
+    }
+
+    /** @return array<string, mixed> */
+    private function fichaComercio(Comercio $c): array
+    {
+        return [
+            'id_comercio' => $c->id_comercio,
+            'nombre_comercial' => $c->nombre_comercial,
+            'cedula_juridica' => $c->cedula_juridica,
+            'razon_social' => $c->razon_social,
+            'estado' => $c->estado,
+            'motivo_estado' => $c->motivoEstado(),
+        ];
+    }
+
     private function noEncontrado(string $mensaje): ErrorNucleoException
     {
         return ErrorNucleoException::paraModulo(self::MODULO, 'ERR-004', 404, $mensaje);
@@ -1074,23 +1215,23 @@ public function corregirSolicitud(int $idSolicitud, array $datos): SolicitudCome
     }
 
     private function eliminarArchivoPublico(?string $ruta): void
-{
-    if ($ruta === null || $ruta === '') {
-        return;
+    {
+        if ($ruta === null || $ruta === '') {
+            return;
+        }
+
+        $path = parse_url($ruta, PHP_URL_PATH);
+
+        if (! is_string($path) || $path === '') {
+            return;
+        }
+
+        $path = ltrim($path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        Storage::disk('public')->delete($path);
     }
-
-    $path = parse_url($ruta, PHP_URL_PATH);
-
-    if (! is_string($path) || $path === '') {
-        return;
-    }
-
-    $path = ltrim($path, '/');
-
-    if (str_starts_with($path, 'storage/')) {
-        $path = substr($path, strlen('storage/'));
-    }
-
-    Storage::disk('public')->delete($path);
-}
 }

@@ -38,6 +38,7 @@ class MicrositioTest extends TestCase
         ];
 
         try {
+            $this->enAmbitoDe($comercio->id_comercio);
             $this->comercios->guardarHorarios(
                 $comercio->id_comercio,
                 $horarios
@@ -62,6 +63,8 @@ class MicrositioTest extends TestCase
             'hora_cierre' => null,
         ];
 
+        $this->enAmbitoDe($comercio->id_comercio);
+
         $resultado = $this->comercios->guardarHorarios(
             $comercio->id_comercio,
             $horarios
@@ -81,6 +84,8 @@ class MicrositioTest extends TestCase
     public function test_politica_de_envio_devuelve_las_tarifas_guardadas(): void
     {
         $comercio = $this->crearComercio();
+
+        $this->enAmbitoDe($comercio->id_comercio);
 
         $this->comercios->guardarPoliticas(
             $comercio->id_comercio,
@@ -131,6 +136,8 @@ class MicrositioTest extends TestCase
         $comercio = $this->crearComercio();
 
         $archivo = UploadedFile::fake()->image('logo.png');
+
+        $this->enAmbitoDe($comercio->id_comercio);
 
         $micrositio = $this->comercios->guardarLogotipo(
             $comercio->id_comercio,

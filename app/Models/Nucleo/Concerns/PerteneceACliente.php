@@ -16,7 +16,7 @@ trait PerteneceACliente
 {
     public static function bootPerteneceACliente(): void
     {
-        static::addGlobalScope(new FiltroClienteScope());
+        static::addGlobalScope(new FiltroClienteScope);
 
         static::creating(function (Model $modelo): void {
             VerificaAmbitoEscritura::alCrear($modelo, 'id_cliente', app(ContextoCliente::class));

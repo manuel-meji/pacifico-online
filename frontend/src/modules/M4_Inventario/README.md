@@ -7,24 +7,30 @@ Prototipo en React + Tailwind CSS de las pantallas de M4 (contrato v1.2.0):
 
 Opera desde 360 px de ancho sin desplazamiento horizontal.
 
-## Correrlo solo
+## Ejecutarlo
+Requiere Node.js. Desde la carpeta `frontend/` del repositorio:
+
     npm install
-    npm run dev          # abre http://localhost:5173/m4.html
-    # estados de error: /m4.html?simular=suspendido (ERR-M4-015) y /m4.html?simular=m2 (ERR-006)
+    npm run dev
 
-`package.json` y `vite.config.js` usan las mismas versiones que `frontend/` del repositorio (React 18, Vite 8, Tailwind 4.3).
-No hay dependencias nuevas: los íconos son SVG de Lucide en `components/iconos.jsx`.
+Luego abrir `http://localhost:5173/m4.html` (Vite abre `app.html` por defecto).
+Estados de error: `/m4.html?simular=suspendido` (ERR-M4-015) y `/m4.html?simular=m2` (ERR-006).
 
-## Llevarlo al repositorio único (mismo esquema que M1)
-Copiar solo:
-- `src/modules/M4_Inventario/` → `frontend/src/modules/M4_Inventario/`
-- `m4.html` → `frontend/m4.html`
+No agrega dependencias ni modifica archivos compartidos: usa React, Tailwind y Vite del `package.json` de `frontend/`.
+Tiene su propia entrada (`frontend/m4.html` → `main.jsx`) y su `tema.css` con la paleta oficial de `design.md`, igual que
+M1 con `m1.html` y `M1_Portal/tema.css`. Los íconos son SVG de Lucide en `components/iconos.jsx`.
+`npm run build` del Comité hoy compila solo `app.html`; incluir `m4.html` en `build.rollupOptions.input` de
+`vite.config.js` es decisión del Comité.
 
-No se reemplaza ningún archivo compartido. `frontend/src/index.css`, `src/main.jsx`, `package.json` y `vite.config.js`
-del Comité quedan como están: el módulo trae su propia entrada (`main.jsx`) y su `tema.css` con la paleta oficial de
-`design.md`, igual que `M1_Portal/tema.css`. Con `npm run dev` se abre en `/m4.html`, como `/m1.html`.
-Si el Comité quiere incluir M4 en `npm run build`, basta con agregar `m4.html` a `build.rollupOptions.input` de su
-`vite.config.js` (hoy solo compila `app.html`, también para M1). Esa decisión es del Comité.
+## Verlo con doble clic (sin instalar nada)
+En `frontend/prototipos/M4_Inventario/` hay copias compiladas en un solo HTML, igual que las de M5:
+- `1_Abrir_prototipo.html`: flujo normal.
+- `2_Abrir_prototipo_comercio_suspendido.html`: comercio suspendido (ERR-M4-015).
+- `3_Abrir_prototipo_sin_conexion_M2.html`: M2 no responde (ERR-006).
+
+Las versiones 2 y 3 fijan `window.SIMULAR_M4` en el `<head>`. Si cambia el código hay que volver a generarlas: el
+`build:single` del Comité compila solo `app.html`, así que se genera aparte desde `m4.html` con el mismo
+`vite-plugin-singlefile` y se copia el resultado sobre los tres archivos.
 
 ## Datos de prueba
 Son los de `tests/Doubles/M4/DatosPruebaM4.php` (sección 9): comercio 104 (Activo), sedes 12 (Bodega central) y 13
@@ -34,7 +40,7 @@ subpedido 9101) y 9002 (pago pendiente, subpedido 9102), las reservas `RESERVA_P
 `?simular=suspendido`.
 
 Los saldos son coherentes: cada existencia es el último saldo de su Kardex, y `cantidad_reservada` es la suma de sus
-reservas activas o confirmadas. Variación 501 en la Bodega central: física 40 − reservada 2 − defectuosa 2 = 36 disponibles,
+reservas activas o confirmadas. Variación 501 en la Bodega central: física 40 − reservada 2 = 38 disponibles,
 igual que la última línea de su Kardex.
 
 ## Relación con el código del subgrupo
@@ -94,4 +100,4 @@ H1 a H6 (revisión heurística) y H7 a H12 (evaluación por tareas) están aplic
 - `views/FichaInventarioKardex.jsx`: existencia por ubicación y Kardex paginado en tarjetas.
 - `components/componentes.jsx`, `components/iconos.jsx`: tarjeta, aviso, campo, botón, insignias e íconos.
 - `services/inventarioApi.js`, `services/errores.js`, `services/datosMock.js`: doble de la API, errores del contrato y datos de prueba.
-- `m4.html` (raíz de `frontend/`): página de entrada.
+- `frontend/m4.html`: página de entrada.

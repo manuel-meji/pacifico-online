@@ -3,8 +3,7 @@
 namespace App\Services\M1_Portal;
 
 use App\Contracts\M1_Portal\Exceptions\ClienteNoAccesibleException;
-use App\Contracts\M1_Portal\Exceptions\ClienteNoEncontradoException;
-use App\Contracts\M1_Portal\PortalPublicoContract;
+use App\Services\Nucleo\ContextoCliente;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Authenticatable;
 
@@ -12,6 +11,12 @@ use Illuminate\Contracts\Auth\Authenticatable;
  * Regla de acceso de las rutas web de clientes (RN-M1-16, RNF-M1-08): cada
  * persona compradora solo ve y edita sus propios datos, y ninguna cuenta de
  * comercio ni de la plataforma puede consultar clientes.
+ *
+ * Usa el aislamiento del núcleo (tarea 23 del PC4, RN-12, ADR-006): el
+ * cliente de la sesión es el que fijó el middleware EstablecerCliente en
+ * ContextoCliente. Si la ruta no aplica ese middleware o la cuenta no es de
+ * un cliente, el contexto queda vacío y se niega el acceso (falla cerrado).
+ * El modo sistema y el acceso auditado del núcleo no abren estos datos.
  *
  * Solo la usan los controladores de M1. La interfaz PHP (M5, M6, núcleo) no
  * pasa por aquí porque no lleva sesión de usuario.
@@ -21,13 +26,13 @@ use Illuminate\Contracts\Auth\Authenticatable;
  */
 class AccesoCliente
 {
-    public function __construct(private PortalPublicoContract $portal) {}
+    public function __construct(private ContextoCliente $contexto) {}
 
     /**
      * id_cliente de la persona con sesión.
      *
      * @throws AuthenticationException si no hay sesión (ERR-001, 401).
-     * @throws ClienteNoAccesibleException si la cuenta no es de un cliente.
+     * @throws ClienteNoAccesibleException si la petición no tiene ámbito de cliente.
      */
     public function idClienteDeSesion(?Authenticatable $usuario): int
     {
@@ -35,11 +40,7 @@ class AccesoCliente
             throw new AuthenticationException;
         }
 
-        try {
-            return $this->portal->obtenerIdClientePorUsuario((int) $usuario->getAuthIdentifier());
-        } catch (ClienteNoEncontradoException $excepcion) {
-            throw new ClienteNoAccesibleException(anterior: $excepcion);
-        }
+        return $this->contexto->idActual() ?? throw new ClienteNoAccesibleException;
     }
 
     /**

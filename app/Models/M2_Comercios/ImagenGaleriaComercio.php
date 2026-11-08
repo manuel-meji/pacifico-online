@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\M2_Comercios;
 
+use App\Models\Nucleo\Concerns\PerteneceAComercio;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ImagenGaleriaComercio extends Model
 {
+    use PerteneceAComercio;
+
     protected $table = 'galeria_comercio';
 
     protected $primaryKey = 'id_imagen';
@@ -23,7 +26,7 @@ class ImagenGaleriaComercio extends Model
 
     protected $casts = ['orden' => 'integer'];
 
-    // --- CU-0005: administrar galería 
+    // --- CU-0005: administrar galería
     public function actualizar(array $datos): void
     {
         $this->fill($datos);
