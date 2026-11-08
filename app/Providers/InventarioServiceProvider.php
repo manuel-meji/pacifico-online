@@ -8,6 +8,8 @@ use App\Events\M5_Pedidos\SubpedidoCancelado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Events\M6_Pagos\PagoRechazado;
 use App\Jobs\M4_Inventario\VencerReservasJob;
+use App\Listeners\M4_Inventario\ProcesarEventosCatalogoListener;
+use App\Listeners\M4_Inventario\ProcesarEventosComercioListener;
 use App\Listeners\M4_Inventario\ProcesarEventosPedidoListener;
 use App\Services\M4_Inventario\Dominio\Valoracion\MetodoValoracion;
 use App\Services\M4_Inventario\Dominio\Valoracion\PromedioPonderado;
@@ -45,6 +47,13 @@ class InventarioServiceProvider extends ServiceProvider
         Event::listen(PedidoCancelado::class, [$listener, 'alCancelarPedido']);
         Event::listen(SubpedidoDespachado::class, [$listener, 'alDespacharSubpedido']);
         Event::listen(SubpedidoCancelado::class, [$listener, 'alCancelarSubpedido']);
+
+        // M2 y M3: por nombre de clase configurable (config/integraciones.php, m4.eventos).
+        $eventos = config('integraciones.m4.eventos');
+        Event::listen($eventos['comercio_aprobado'], [ProcesarEventosComercioListener::class, 'alAprobarComercio']);
+        Event::listen($eventos['comercio_suspendido'], [ProcesarEventosComercioListener::class, 'alSuspenderComercio']);
+        Event::listen($eventos['comercio_reactivado'], [ProcesarEventosComercioListener::class, 'alReactivarComercio']);
+        Event::listen($eventos['producto_publicado'], [ProcesarEventosCatalogoListener::class, 'alPublicarProducto']);
 
         // RNF-M4-007: vencimiento de reservas cada 60 s (php artisan schedule:work).
         $this->callAfterResolving(Schedule::class, function (Schedule $programa): void {

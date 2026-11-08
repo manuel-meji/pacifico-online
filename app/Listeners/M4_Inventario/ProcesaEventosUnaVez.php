@@ -62,4 +62,22 @@ trait ProcesaEventosUnaVez
             Log::notice("M4 {$nombreEvento}: la reserva {$idReserva} no se modificó ({$e->codigo}: {$e->getMessage()}).");
         }
     }
+
+    /**
+     * El evento trae los campos del catálogo 4.3 que M4 usa; si no, se ignora y queda en el log.
+     *
+     * @param  list<string>  $campos
+     */
+    protected function cargaValida(object $evento, string $nombreEvento, array $campos): bool
+    {
+        foreach ($campos as $campo) {
+            if (! isset($evento->{$campo})) {
+                Log::notice("M4 ignoró {$nombreEvento}: falta {$campo} en la carga útil.");
+
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

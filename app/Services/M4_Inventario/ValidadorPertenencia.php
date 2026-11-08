@@ -4,6 +4,7 @@ namespace App\Services\M4_Inventario;
 
 use App\Contracts\M4_Inventario\Dependencias\CatalogoDependencia;
 use App\Contracts\M4_Inventario\Dependencias\ComerciosDependencia;
+use App\Models\M4_Inventario\EstadoComercioInventario;
 use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 
 /**
@@ -18,9 +19,16 @@ class ValidadorPertenencia
         private readonly CatalogoDependencia $catalogo,
     ) {}
 
-    /** RN-M4-009: solo un comercio Activo registra movimientos (ERR-M4-015). */
+    /**
+     * RN-M4-009: solo un comercio Activo registra movimientos (ERR-M4-015). Si M2 ya
+     * avisó por evento que el comercio está suspendido, no hace falta consultarlo.
+     */
     public function validarComercioActivo(int $idComercio): void
     {
+        if (EstadoComercioInventario::query()->whereKey($idComercio)->value('bloqueado')) {
+            throw ErrorInventarioException::comercioNoHabilitado();
+        }
+
         if (! ($this->comercios->obtenerComercioActivo($idComercio)['activo'] ?? false)) {
             throw ErrorInventarioException::comercioNoHabilitado();
         }

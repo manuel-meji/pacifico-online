@@ -97,6 +97,16 @@ return [
         // Minutos de vigencia de una reserva si el solicitante no indica otro valor.
         'reserva_minutos' => (int) env('M4_RESERVA_MINUTOS', 15),
 
+        // Clases de los eventos de M2 y M3 que escucha M4. M2 publica hoy solo
+        // ComercioAprobado y M3 aún no publica ProductoPublicado: si usan otros
+        // nombres, se cambian aquí (InventarioServiceProvider los registra).
+        'eventos' => [
+            'comercio_aprobado' => 'App\\Events\\M2_Comercios\\ComercioAprobado',
+            'comercio_suspendido' => 'App\\Events\\M2_Comercios\\ComercioSuspendido',
+            'comercio_reactivado' => 'App\\Events\\M2_Comercios\\ComercioReactivado',
+            'producto_publicado' => 'App\\Events\\M3_Catalogo\\ProductoPublicado',
+        ],
+
         // Verificador de autorizaciones de ajustes (RN-M4-011). El núcleo aún no
         // publica el flujo de autorizaciones: se usa el doble con las autorizaciones
         // registradas aquí (una sola vez cada una). Ver AutorizacionesStub.

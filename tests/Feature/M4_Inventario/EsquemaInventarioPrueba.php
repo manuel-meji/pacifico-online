@@ -16,6 +16,10 @@ trait EsquemaInventarioPrueba
 {
     protected function crearEsquemaInventario(): void
     {
+        if (Schema::hasTable('existencias')) {
+            return;
+        }
+
         DB::unprepared(<<<'SQL'
 CREATE TABLE estados_reserva (
     id_estado_reserva integer PRIMARY KEY,
