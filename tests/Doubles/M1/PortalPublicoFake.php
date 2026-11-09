@@ -263,6 +263,39 @@ class PortalPublicoFake implements PortalPublicoContract
         throw $this->fueraDeAlcance();
     }
 
+    /** Variación con 20 % de descuento vigente (12 990 → 10 392). */
+    public const VARIACION_CON_PROMOCION = 15201;
+
+    /** Variación sin promoción (precio normal 12 990). */
+    public const VARIACION_SIN_PROMOCION = 15203;
+
+    /** Variación que M3 no encuentra: se omite de la respuesta. */
+    public const VARIACION_INEXISTENTE = 88888;
+
+    /**
+     * Precios vigentes (contrato 1.4.0) con datos fijos, para M5.
+     */
+    public function obtenerPreciosVigentes(array $idsVariacion): array
+    {
+        if (count($idsVariacion) > 100 || array_filter($idsVariacion, fn (mixed $id): bool => ! is_int($id) || $id < 1) !== []) {
+            throw new DatosInvalidosException(['ids_variacion' => 'Debe tener entre 1 y 100 enteros mayores o iguales a 1.']);
+        }
+
+        $precios = [
+            self::VARIACION_CON_PROMOCION => ['precio_base' => 12990.0, 'precio_final' => 10392.0, 'id_promocion' => 1, 'fin_promocion' => '2026-11-30T23:59:59+00:00'],
+            self::VARIACION_SIN_PROMOCION => ['precio_base' => 12990.0, 'precio_final' => 12990.0, 'id_promocion' => null, 'fin_promocion' => null],
+        ];
+
+        $resultado = [];
+        foreach ($idsVariacion as $id) {
+            if (isset($precios[$id])) {
+                $resultado[$id] = ['id_variacion' => $id, ...$precios[$id]];
+            }
+        }
+
+        return $resultado;
+    }
+
     /**
      * Una sola dirección principal por cliente, como exige la base de datos.
      *

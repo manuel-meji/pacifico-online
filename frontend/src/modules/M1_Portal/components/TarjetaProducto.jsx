@@ -1,4 +1,4 @@
-import { colones } from '../services/formato';
+import { colones, textoDescuento } from '../services/formato';
 import Icono from './IconoComercio';
 import Imagen from './Imagen';
 
@@ -19,14 +19,44 @@ export function BadgeAgotado() {
   );
 }
 
+// Etiqueta de una promoción vigente (contrato 1.4.0): "-20 %" o "Precio especial".
+export function BadgePromocion({ promocion }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+      <Icono nombre="etiqueta" className="h-3.5 w-3.5" /> {textoDescuento(promocion)}
+    </span>
+  );
+}
+
 // Precio de un ProductoResumen: "Desde ₡X" si sus variaciones cuestan distinto (precio_hasta > precio).
+// Con una promoción para todo el producto (precio_promocional), el normal va tachado. Si la promoción es
+// solo de algunas variaciones, el precio de cada una se ve en la ficha.
 export function PrecioProducto({ producto, className = 'text-base' }) {
   const rango = producto.precio_hasta != null && producto.precio_hasta > producto.precio;
+  const promocional = producto.promocion?.precio_promocional;
   return (
-    <p className={`font-extrabold text-brandDarkBlue ${className}`}>
-      {rango && <span className="text-xs font-normal text-gray-500">Desde </span>}
-      {colones(producto.precio)}
-    </p>
+    <div className={className}>
+      {promocional != null ? (
+        <p className="flex flex-wrap items-baseline gap-x-2">
+          <span className="font-extrabold text-red-700">
+            {rango && <span className="text-xs font-normal text-gray-500">Desde </span>}
+            {colones(promocional)}
+          </span>
+          <span className="text-xs text-gray-500 line-through">{colones(producto.precio)}</span>
+        </p>
+      ) : (
+        <p className="font-extrabold text-brandDarkBlue">
+          {rango && <span className="text-xs font-normal text-gray-500">Desde </span>}
+          {colones(producto.precio)}
+        </p>
+      )}
+      {producto.promocion && (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          <BadgePromocion promocion={producto.promocion} />
+          {producto.promocion.alcance === 'variaciones' && <span className="text-xs text-gray-500">en algunas opciones</span>}
+        </div>
+      )}
+    </div>
   );
 }
 

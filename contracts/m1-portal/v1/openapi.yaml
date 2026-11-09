@@ -57,6 +57,8 @@ servers:
   - url: /api/m1/v1
     description: Ruta base del módulo en el ambiente de integración (propuesta SG1)
 tags:
+  - name: Promociones
+    description: Nuevo en 1.4.0 (SC-08). Promociones de los comercios y sección del portal.
   - name: Búsqueda
     description: Búsqueda de productos de los comercios habilitados.
   - name: Destacados
@@ -951,6 +953,304 @@ paths:
         '422':
           $ref: '#/components/responses/DatosInvalidos'
 
+  /promociones:
+    get:
+      tags: [Promociones]
+      operationId: listarPromocionesVigentes
+      summary: Promociones vigentes de la sección del portal
+      description: |
+        Nuevo en 1.4.0 (SC-08). Las promociones que rebajan el precio ahora
+        (activas, no ocultas y dentro de su periodo), en el orden que decide la
+        plataforma (las sin orden van al final, por fecha de inicio). Cada una
+        trae su producto, solo si M3 lo publica y su comercio está activo.
+      x-consumidores: [Frontend del portal]
+      x-dependencias: [M3.buscarProductos (filtro ids), M2.ObtenerResumenComerciosLote, M4.consultarDisponibilidadProductoLote]
+      security: []
+      responses:
+        '200':
+          description: Promociones vigentes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PromocionVigente'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /comercio/promociones:
+    post:
+      tags: [Promociones]
+      operationId: crearPromocion
+      summary: El comercio crea una promoción para uno de sus productos
+      description: |
+        Nuevo en 1.4.0 (SC-08). Rol encargado_comercio; el comercio sale de la
+        sesión (RN-12). Solo dos tipos: porcentaje (mayor que 0 y menor que
+        100) o precio_fijo (menor que el precio normal de cada variación
+        afectada). Fecha y hora de inicio y de fin obligatorias: se puede
+        programar por adelantado y se activa y desactiva sola. Al producto
+        completo o a variaciones específicas.
+
+        - 404 ERR-004 si el producto no existe, no está publicado o es de otro comercio.
+        - 409 ERR-M1-004 si el producto o una de sus variaciones ya tiene otra
+          promoción activa en fechas que se cruzan.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      x-dependencias: [M3.obtenerProducto (comercio y precios de las variaciones)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosPromocion'
+      responses:
+        '201':
+          description: Promoción creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoPromocion'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+    get:
+      tags: [Promociones]
+      operationId: listarPromocionesComercio
+      summary: Promociones del comercio de la sesión
+      description: Nuevo en 1.4.0 (SC-08). Solo las del comercio de la sesión (RN-12), de la más reciente a la más antigua.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoPromocion'
+      responses:
+        '200':
+          description: Promociones del comercio.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /comercio/promociones/{id_promocion}:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    put:
+      tags: [Promociones]
+      operationId: actualizarPromocion
+      summary: Modificar una promoción del comercio
+      description: |
+        Nuevo en 1.4.0 (SC-08). Una promoción programada (no ha empezado) se
+        reemplaza completa con DatosPromocion, sin cambiar el producto. Una que
+        ya empezó solo acepta {fecha_fin}, para adelantar el fin (entre el
+        momento actual y el fin vigente); cualquier otro campo responde 422.
+        Una finalizada o desactivada responde 409 ERR-M1-005.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/DatosPromocion'
+                - $ref: '#/components/schemas/AdelantoPromocion'
+      responses:
+        '200':
+          description: Promoción actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoPromocion'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /comercio/promociones/{id_promocion}/desactivar:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    post:
+      tags: [Promociones]
+      operationId: desactivarPromocion
+      summary: Desactivar una promoción del comercio
+      description: |
+        Nuevo en 1.4.0 (SC-08). Deja de rebajar el precio de inmediato y no se
+        puede reactivar. 409 ERR-M1-005 si ya terminó o ya estaba desactivada.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Promoción desactivada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoPromocion'
+
+  /administracion/promociones:
+    get:
+      tags: [Promociones]
+      operationId: listarPromocionesAdministracion
+      summary: Promociones de todos los comercios
+      description: Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Filtros opcionales por estado y comercio.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoPromocion'
+        - name: id_comercio
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Promociones.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/promociones/{id_promocion}/orden:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    put:
+      tags: [Promociones]
+      operationId: ordenarPromocion
+      summary: Posición de una promoción en la sección del portal
+      description: Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. 1 va primero; null la manda al final.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrdenPromocion'
+      responses:
+        '200':
+          description: Promoción con su nueva posición.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/promociones/{id_promocion}/ocultar:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    post:
+      tags: [Promociones]
+      operationId: ocultarPromocion
+      summary: Ocultar una promoción que incumple las políticas
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma, con motivo
+        obligatorio. Mientras está oculta no se muestra ni rebaja el precio
+        (el carrito vuelve al precio normal). Sigue contando para los traslapes.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OcultamientoPromocion'
+      responses:
+        '200':
+          description: Promoción oculta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/promociones/{id_promocion}/mostrar:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    post:
+      tags: [Promociones]
+      operationId: mostrarPromocion
+      summary: Volver a mostrar una promoción oculta
+      description: Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Vuelve a rebajar el precio si sigue dentro de su periodo.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Promoción visible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+
 components:
   securitySchemes:
     sesionNucleo:
@@ -1006,6 +1306,20 @@ components:
       schema:
         type: integer
         minimum: 1
+    IdPromocion:
+      name: id_promocion
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    EstadoPromocion:
+      name: estado
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [programada, vigente, finalizada, desactivada, oculta]
     EstadoSolicitudDestacado:
       name: estado
       in: query
@@ -1064,6 +1378,8 @@ components:
           $ref: '#/components/schemas/Disponibilidad'
         comercio:
           $ref: '#/components/schemas/ComercioResumen'
+        promocion:
+          $ref: '#/components/schemas/PromocionResumen'
 
     ResultadoBusqueda:
       type: object
@@ -1169,6 +1485,16 @@ components:
         comprable:
           type: boolean
           description: true solo si M3 declara la variación disponible para la venta y M4 informa unidades.
+        precio_promocional:
+          type: number
+          description: Nuevo en 1.4.0, solo si la variación tiene una promoción vigente. Precio con la promoción, a 2 decimales.
+        id_promocion:
+          type: integer
+          description: Nuevo en 1.4.0, solo si la variación tiene una promoción vigente.
+        fin_promocion:
+          type: string
+          format: date-time
+          description: Nuevo en 1.4.0, solo si la variación tiene una promoción vigente.
 
     FichaProducto:
       type: object
@@ -1438,6 +1764,172 @@ components:
               type: integer
         - $ref: '#/components/schemas/DatosDireccionCliente'
 
+    DatosPromocion:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Cuerpo de crearPromocion y de actualizarPromocion para
+        una programada. Con alcance variaciones, la lista de id_variacion del
+        producto; con alcance producto, se omite.
+      required: [id_producto, titulo, tipo, valor, alcance, fecha_inicio, fecha_fin]
+      properties:
+        id_producto:
+          type: integer
+          minimum: 1
+        titulo:
+          type: string
+          minLength: 1
+          maxLength: 120
+        descripcion:
+          type: string
+          maxLength: 500
+          nullable: true
+        tipo:
+          type: string
+          enum: [porcentaje, precio_fijo]
+        valor:
+          type: number
+          description: Porcentaje mayor que 0 y menor que 100, o precio fijo menor que el precio normal de cada variación afectada. Hasta 2 decimales.
+        alcance:
+          type: string
+          enum: [producto, variaciones]
+        variaciones:
+          type: array
+          items:
+            type: integer
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+          description: Posterior a fecha_inicio y al momento actual.
+    AdelantoPromocion:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de actualizarPromocion para una que ya empezó.
+      required: [fecha_fin]
+      properties:
+        fecha_fin:
+          type: string
+          format: date-time
+    Promocion:
+      type: object
+      description: Nuevo en 1.4.0. Promoción de un comercio.
+      required: [id_promocion, id_comercio, id_producto, titulo, tipo, valor, alcance, variaciones, fecha_inicio, fecha_fin, estado]
+      properties:
+        id_promocion:
+          type: integer
+        id_comercio:
+          type: integer
+        id_producto:
+          type: integer
+        titulo:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        tipo:
+          type: string
+          enum: [porcentaje, precio_fijo]
+        valor:
+          type: number
+        alcance:
+          type: string
+          enum: [producto, variaciones]
+        variaciones:
+          type: array
+          items:
+            type: integer
+          description: Vacía con alcance producto.
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+        estado:
+          type: string
+          enum: [programada, vigente, finalizada, desactivada, oculta]
+        orden:
+          type: integer
+          nullable: true
+        motivo_ocultamiento:
+          type: string
+          nullable: true
+    PromocionResumen:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Promoción vigente de un producto, en ProductoResumen
+        (solo si tiene una). precio_promocional es el precio desde con la
+        promoción cuando aplica a todo el producto; con variaciones
+        específicas va null y el precio de cada una está en la ficha.
+      required: [id_promocion, titulo, tipo, valor, alcance, fecha_fin]
+      properties:
+        id_promocion:
+          type: integer
+        titulo:
+          type: string
+        tipo:
+          type: string
+          enum: [porcentaje, precio_fijo]
+        valor:
+          type: number
+        alcance:
+          type: string
+          enum: [producto, variaciones]
+        precio_promocional:
+          type: number
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date-time
+    PromocionVigente:
+      description: Nuevo en 1.4.0. Promoción de la sección del portal con su producto.
+      allOf:
+        - $ref: '#/components/schemas/Promocion'
+        - type: object
+          required: [producto]
+          properties:
+            producto:
+              $ref: '#/components/schemas/ProductoResumen'
+    OrdenPromocion:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de ordenarPromocion.
+      required: [orden]
+      properties:
+        orden:
+          type: integer
+          minimum: 1
+          maximum: 32767
+          nullable: true
+    OcultamientoPromocion:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de ocultarPromocion.
+      required: [motivo]
+      properties:
+        motivo:
+          type: string
+          minLength: 1
+          maxLength: 500
+    PrecioVigente:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Precio de una variación con su promoción vigente, como
+        lo entrega PortalPublicoContract::obtenerPreciosVigentes (M5).
+      required: [id_variacion, precio_base, precio_final, id_promocion, fin_promocion]
+      properties:
+        id_variacion:
+          type: integer
+        precio_base:
+          type: number
+        precio_final:
+          type: number
+        id_promocion:
+          type: integer
+          nullable: true
+        fin_promocion:
+          type: string
+          format: date-time
+          nullable: true
     TarifaDestacado:
       type: object
       description: Nuevo en 1.4.0. Tarifa fija de un periodo de producto destacado.
@@ -1741,6 +2233,21 @@ components:
               codigo: ERR-M1-002
               mensaje: El comercio ya tiene el máximo de 3 productos destacados activos en ese periodo.
               detalles: null
+    ConflictoPromocion:
+      description: |
+        Nuevo en 1.4.0. Errores propios del negocio de M1 para promociones:
+        ERR-M1-004 si el producto o una de sus variaciones ya tiene otra
+        promoción activa en fechas que se cruzan; ERR-M1-005 si la promoción ya
+        terminó o fue desactivada y no se puede modificar.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-M1-004
+              mensaje: El producto o una de sus variaciones ya tiene otra promoción activa en esas fechas.
+              detalles: null
     DatosInvalidos:
       description: Faltan datos obligatorios o tienen un formato incorrecto.
       content:
@@ -1774,6 +2281,8 @@ x-interfaz-php:
       - CorreoYaRegistradoException (ERR-M1-001)
       - LimiteDestacadosException (ERR-M1-002, desde 1.4.0; solo en las rutas web de destacados)
       - ConflictoDestacadoException (ERR-M1-003, desde 1.4.0; solo en las rutas web de destacados)
+      - TraslapePromocionException (ERR-M1-004, desde 1.4.0; solo en las rutas web de promociones)
+      - PromocionNoModificableException (ERR-M1-005, desde 1.4.0; solo en las rutas web de promociones)
   doble_de_prueba: tests/Doubles/M1/PortalPublicoFake.php
   metodos:
     - firma: "obtenerCliente(int $idCliente): array"
@@ -1804,6 +2313,15 @@ x-interfaz-php:
       excepciones:
         - ClienteNoEncontradoException (equivale a ERR-004). Se lanza si la cuenta no tiene un cliente asociado.
       notas: La usa el middleware EstablecerCliente del núcleo para registrar el id_cliente en ContextoCliente sin leer la tabla clientes. Sin sesión de usuario.
+    - firma: "obtenerPreciosVigentes(array $idsVariacion): array"
+      desde: 1.4.0
+      consumidores: [M5]
+      retorna: Arreglo indexado por id_variacion con la estructura del esquema PrecioVigente. precio_final es el precio_base si la variación no tiene una promoción vigente. Las que M3 no encuentra se omiten.
+      parametros: Entre 1 y 100 id_variacion enteros mayores o iguales a 1.
+      excepciones:
+        - DatosInvalidosException (equivale a ERR-005) si la lista no es válida.
+        - DependenciaNoDisponibleException (equivale a ERR-006) si M3 no responde.
+      notas: M5 la usa al agregar al carrito y al confirmar el pedido para cobrar el precio rebajado; la comisión se calcula sobre ese precio. Sin sesión de usuario. Va en PortalPublicoContract porque M5 ya la consume ahí y su doble PortalStub ya la implementa.
   metodos_de_uso_interno:
     descripcion: |
       Los usan los controladores de M1, que son una capa delgada sobre la
@@ -1970,11 +2488,17 @@ x-historial-versiones:
       - Máximo 3 destacados activos por comercio al aprobar o al destacar desde la administración (ERR-M1-002) y sin destacar dos veces el mismo producto en fechas que se cruzan (ERR-M1-003).
       - Nueva interfaz PHP ComercialPortalContract (x-interfaz-php-comercial) con listarCargosDestacado, para quien liquida al comercio. PortalPublicoContract no agrega métodos.
       - Nuevos códigos propios ERR-M1-002 y ERR-M1-003 (409) y respuesta RolSinPermiso (403, ERR-002 del núcleo).
+      - Promociones de los comercios (M1 es el dueño de los datos) - porcentaje o precio fijo, con fecha y hora de inicio y fin, al producto completo o a variaciones específicas, sin traslapes (ERR-M1-004). Rutas web nuevas - listarPromocionesVigentes, crearPromocion, listarPromocionesComercio, actualizarPromocion, desactivarPromocion (ERR-M1-005), listarPromocionesAdministracion, ordenarPromocion, ocultarPromocion y mostrarPromocion.
+      - ProductoResumen agrega el campo opcional promocion (PromocionResumen) y VariacionFicha los campos opcionales precio_promocional, id_promocion y fin_promocion; solo vienen cuando hay una promoción vigente.
+      - Nuevo método de la interfaz PHP para M5 - obtenerPreciosVigentes (esquema PrecioVigente).
     solicitud_de_cambio: SC-08
     nota_de_compatibilidad: |
       Sin cambios en el esquema Destacados ni en la firma de listarDestacados,
       salvo el valor por defecto del límite. Un consumidor que pida más de 12
       recibe hasta 12, sin error, porque el límite ya se ajustaba al rango.
-      Las operaciones de destacados pagados son rutas nuevas y la interfaz
-      nueva va aparte, así que ningún consumidor actual de PortalPublicoContract
-      tiene que cambiar. Por eso se publica como versión menor.
+      Las operaciones de destacados pagados y de promociones son rutas nuevas,
+      los campos de promoción son opcionales y solo aparecen con una promoción
+      vigente, y ComercialPortalContract va aparte. obtenerPreciosVigentes se
+      agrega a PortalPublicoContract; el único que la implementa fuera de M1
+      es el doble PortalStub de M5, que ya la tiene con la misma firma. Por
+      eso se publica como versión menor.

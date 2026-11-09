@@ -134,9 +134,32 @@ class CatalogoFake implements CatalogoServiceInterface
         throw new LogicException('Fuera del alcance del doble de M1.');
     }
 
+    /**
+     * Variación con su precio y su producto, con la estructura de
+     * CatalogoServiceInterface::obtenerVariacion de M3. La usa M1 para los
+     * precios con promoción (contrato M1 1.4.0). null si no existe.
+     *
+     * @return array<string, mixed>|null
+     */
     public function obtenerVariacion(int $variacionId): ?array
     {
-        throw new LogicException('Fuera del alcance del doble de M1.');
+        $encontrada = DatosPrueba::buscarVariacion($variacionId);
+
+        if ($encontrada === null) {
+            return null;
+        }
+
+        ['producto' => $producto, 'variacion' => $variacion] = $encontrada;
+
+        return [
+            ...$variacion,
+            'id_producto' => $producto['id_producto'],
+            'producto' => [
+                'id_producto' => $producto['id_producto'],
+                'id_comercio' => $producto['id_comercio'],
+                'nombre' => $producto['nombre'],
+            ],
+        ];
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Services\M1_Portal\Integraciones;
 
 use App\Contracts\M1_Portal\Exceptions\CriterioInvalidoException;
+use App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException;
 use App\Contracts\M1_Portal\Exceptions\RecursoNoEncontradoException;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Services\M1_Portal\DTO\CategoriaDTO;
@@ -108,6 +109,38 @@ class CatalogoClient
         }
 
         return array_values(array_filter(array_map(fn (int $id): ?ProductoResumenDTO => $encontrados[$id] ?? null, $ids)));
+    }
+
+    /**
+     * Precio normal, producto y comercio de varias variaciones, con
+     * CatalogoServiceInterface::obtenerVariacion de M3 (una llamada por
+     * variación). Las que M3 no encuentra se omiten.
+     *
+     * @param  list<int>  $idsVariacion
+     * @return array<int, array{id_variacion: int, id_producto: int, id_comercio: int, precio: float}> Por id_variacion.
+     *
+     * @throws DependenciaNoDisponibleException si M3 no responde.
+     */
+    public function obtenerVariaciones(array $idsVariacion): array
+    {
+        $resultado = [];
+
+        foreach (array_values(array_unique($idsVariacion)) as $idVariacion) {
+            $variacion = $this->llamar('M3', fn (): ?array => $this->contrato->obtenerVariacion($idVariacion));
+
+            if (! is_array($variacion) || ! isset($variacion['precio'], $variacion['id_producto'])) {
+                continue;
+            }
+
+            $resultado[$idVariacion] = [
+                'id_variacion' => $idVariacion,
+                'id_producto' => (int) $variacion['id_producto'],
+                'id_comercio' => (int) ($variacion['producto']['id_comercio'] ?? 0),
+                'precio' => (float) $variacion['precio'],
+            ];
+        }
+
+        return $resultado;
     }
 
     /**
