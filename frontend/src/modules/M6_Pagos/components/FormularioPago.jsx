@@ -23,15 +23,26 @@ export default function FormularioPago({ pedido, onResultado, api = { procesarPa
   const elegirMedio = (m) => { setMedio(m); setToken(TOKENS_SIMULADOR[m][0].token); setErrores({}); };
 
   async function enviar() {
-    const r = validarSolicitudPago({ pedido, montoIngresado: pedido.monto_total, medioPago: medio, token });
+    const datosPago = {
+      id_pedido: pedido.id_pedido,
+      medio_pago: medio,
+      monto_total: pedido.monto_total,
+      token_medio_pago: token,
+    };
+
+    const r = validarSolicitudPago({
+      pedido,
+      montoIngresado: pedido.monto_total,
+      medioPago: medio,
+      token,
+      datosPago,
+    });
+
     setErrores(r.errores);
     if (!r.valido) return;
     setEnviando(true); setErrorServidor(null);
     try {
-      const pago = await api.procesarPago(
-        { id_pedido: pedido.id_pedido, medio_pago: medio, monto_total: pedido.monto_total, token_medio_pago: token },
-        clave,
-      );
+      const pago = await api.procesarPago(datosPago, clave);
       onResultado?.(pago);
     } catch (e) {
       setErrorServidor(e.mensaje || e.message);
