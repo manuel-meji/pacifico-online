@@ -1,12 +1,12 @@
 # M1 Portal público
 
 Pantallas del portal con React y Tailwind, conectadas a la API real de M1 (`/api/m1/v1`, contrato
-`contracts/m1-portal/v1/openapi.yaml` 1.3.0). Se abren con `m1.html` (o `inicio.html`) para no tocar
+`contracts/m1-portal/v1/openapi.yaml` 1.4.0). Se abren con `m1.html` (o `inicio.html`) para no tocar
 `src/main.jsx`, que es de M5.
 
 | Pantalla | URL | Endpoint |
 |---|---|---|
-| Página principal | `m1.html` | `GET /destacados` (y `GET /comercios` si no hay comercios destacados) |
+| Página principal | `m1.html` | `GET /destacados?limite=12` (y `GET /comercios` si no hay comercios destacados) y `GET /promociones` |
 | Búsqueda | `m1.html?pantalla=busqueda&q=cafe` o `&id_categoria=10` | `GET /productos/busqueda` |
 | Ficha de producto | `m1.html?pantalla=producto&id=1520` | `GET /productos/{id_producto}` |
 | Micrositio | `m1.html?pantalla=comercio&id=34` | `GET /comercios/{id_comercio}/micrositio` y, con filtros, `GET /productos/busqueda` con `id_comercio` |
@@ -20,13 +20,13 @@ Los parámetros de búsqueda en la URL usan los nombres del contrato (`q`, `id_c
 | `M1App.jsx`, `main.jsx` | Entrada, navegación con parámetros en la URL y menú de categorías compartido |
 | `services/m1Api.js` | Cliente HTTP de `/api/m1/v1` (CSRF de Sanctum y formato de error del núcleo) |
 | `services/useConsulta.js` | Estado de cada llamada: cargando, actualizando, listo o error, con reintento |
-| `services/formato.js` | Colones, días de la semana y texto de atributos de una variación |
+| `services/formato.js` | Colones (con 2 decimales solo si los tiene), descuento de una promoción, fecha corta, días de la semana y texto de atributos |
 | `components/PaginaPortal.jsx` | Marco común (encabezado, contenido y pie) y contexto de navegación |
 | `components/EncabezadoPortal.jsx` | Logotipo, buscador, cuenta, carrito (M5) y menú de categorías |
 | `components/EstadosVista.jsx` | Estados de carga, vacío y error (422, 404, 503 con Reintentar) |
 | `components/ListadoProductos.jsx` | Orden, cantidad por página, filtros en celular, cuadrícula y paginación |
 | `components/FiltrosComercio.jsx` | Filtros de búsqueda y micrositio: buscar en el comercio, categoría y precio |
-| `components/TarjetaProducto.jsx`, `components/Imagen.jsx` | Tarjeta de ProductoResumen; imagen con ícono de respaldo si no carga |
+| `components/TarjetaProducto.jsx`, `components/Imagen.jsx` | Tarjeta de ProductoResumen con precio rebajado y etiqueta de promoción; imagen con ícono de respaldo si no carga |
 | `components/CarruselComercios.jsx`, `components/InfoComercio.jsx`, `components/Paginacion.jsx` | Comercios en fila, información pública del comercio y paginación |
 | `views/InicioView.jsx`, `views/BusquedaView.jsx`, `views/FichaProductoView.jsx`, `views/FichaComercioView.jsx` | Las cuatro pantallas |
 
@@ -38,6 +38,14 @@ Los parámetros de búsqueda en la URL usan los nombres del contrato (`q`, `id_c
   usan la búsqueda con `id_comercio`; precio y orden se habilitan solo con término o categoría (RN-M1-08).
   Si M3 no responde (`productos_disponibles: false`), se muestra el comercio con un aviso.
 - Ficha: una variación solo se compra si `comprable` es true; si no, "Agotado" y el botón deshabilitado.
+- Portada (contrato 1.4.0): hasta 12 productos destacados, máximo 3 por comercio, sin agotados y rotados cada
+  15 minutos (lo decide el backend). La sección "Promociones" usa `GET /promociones` y se oculta si no hay o si falla.
+- Promociones (contrato 1.4.0): los campos solo vienen con una promoción vigente.
+  - En `ProductoResumen.promocion`, si aplica a todo el producto, la tarjeta muestra `precio_promocional` en rojo,
+    con el normal tachado, y la etiqueta "-N %" o "Precio especial". Si es solo de algunas variaciones, muestra la
+    etiqueta con "en algunas opciones" y el precio de cada una se ve en la ficha.
+  - En la ficha, `VariacionFicha.precio_promocional` y `fin_promocion` muestran el precio rebajado y
+    "Precio de promoción hasta el …". El carrito (M5) cobra ese precio con `obtenerPreciosVigentes`.
   "Agregar al carrito" abre M5: `/app.html?agregar=<id_variacion>&cantidad=1`.
 - Portada: la sección que venga en `secciones_no_disponibles` se oculta y el resto sigue.
 
