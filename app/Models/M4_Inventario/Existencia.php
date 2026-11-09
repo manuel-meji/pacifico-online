@@ -140,7 +140,9 @@ class Existencia extends Model
      */
     public function aContrato(?string $sku = null): array
     {
-        return [
+        // sku y fecha_actualizacion son opcionales y no anulables en el contrato: si M3 no
+        // devolvió el SKU o la fila nunca se actualizó, el campo no se envía (DEF-M4-07).
+        return array_filter([
             'id_existencia' => $this->id_existencia,
             'id_comercio' => $this->id_comercio,
             'id_producto' => $this->id_producto,
@@ -154,6 +156,6 @@ class Existencia extends Model
             'bajo_minimo' => $this->bajoMinimo(),
             'fecha_actualizacion' => $this->updated_at?->toIso8601String(),
             'valor_inventario' => $this->valorInventario(),
-        ];
+        ], fn (mixed $valor, string $campo): bool => $valor !== null || ! in_array($campo, ['sku', 'fecha_actualizacion'], true), ARRAY_FILTER_USE_BOTH);
     }
 }
