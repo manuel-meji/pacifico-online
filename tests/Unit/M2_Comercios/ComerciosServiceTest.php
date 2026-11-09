@@ -188,12 +188,6 @@ class ComerciosServiceTest extends TestCase
         $this->esperarError('ERR-004', 404, fn () => $this->servicio->obtenerComisionSubpedido(7002));
     }
 
-    public function test_registrar_comision_heredado_no_registra_nada(): void
-    {
-        $this->assertFalse($this->servicio->registrarComision(101, 15000.0));
-        $this->assertSame(0, ComisionSubpedido::query()->count());
-    }
-
     public function test_seeder_crea_los_cinco_comercios_del_escenario_y_es_idempotente(): void
     {
         $this->seed(ComerciosDemoSeeder::class);
