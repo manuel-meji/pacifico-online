@@ -99,6 +99,14 @@ return [
             'expire' => 60,
             'throttle' => 60,
         ],
+        // Invitación del Encargado del comercio (POST /crear-contrasena). Plazo en minutos,
+        // 4320 = 72 horas; se cambia con INVITACION_EXPIRA_MINUTOS sin tocar el código.
+        'invitaciones' => [
+            'provider' => 'users',
+            'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'restablecimientos_contrasena'),
+            'expire' => (int) env('INVITACION_EXPIRA_MINUTOS', 4320),
+            'throttle' => 60,
+        ],
     ],
 
     /*

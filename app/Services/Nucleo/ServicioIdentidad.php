@@ -68,7 +68,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
         }
 
         if ($rolEnum === RolUsuario::EncargadoComercio) {
-            $token = Password::broker()->createToken($usuario);
+            $token = Password::broker('invitaciones')->createToken($usuario);
             $usuario->notify(new InvitacionEncargadoComercio($token));
         }
 

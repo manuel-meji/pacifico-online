@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Nucleo\CrearContrasenaController;
 use App\Http\Controllers\Nucleo\SesionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\EstablecerCliente;
@@ -23,6 +24,11 @@ Route::get('/', function () {
 Route::post('/login', [SesionController::class, 'login'])
     ->middleware('throttle:login')
     ->name('login');
+
+// Invitación del Encargado del comercio: define su contraseña con el token del correo.
+Route::post('/crear-contrasena', CrearContrasenaController::class)
+    ->middleware('throttle:6,1')
+    ->name('crear-contrasena');
 
 Route::post('/logout', [SesionController::class, 'logout'])
     ->middleware('auth:sanctum')
