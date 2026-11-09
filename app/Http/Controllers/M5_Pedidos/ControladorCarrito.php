@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Services\M5_Pedidos\PedidosService;
+use App\Services\Nucleo\ContextoCliente;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -42,11 +43,11 @@ class ControladorCarrito extends Controller
 
     public function obtenerCarrito(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = $this->resolverIdCliente($request);
         $carrito = (new Carrito)->obtenerOCrearCarrito($clienteId);
         $carrito->load('items');
 
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios, $this->m1Portal);
         $totalGeneral = (float) ($desglose['resumen']['total'] ?? 0.0);
 
         if ($totalGeneral > 0.0) {
@@ -58,8 +59,8 @@ class ControladorCarrito extends Controller
 
     public function agregarAlCarrito(Request $request, ?int $variacionId = null, ?int $cant = null): JsonResponse
     {
-        // 1. Obtener clienteId del token autenticado o del request
-        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
+        // 1. Obtener clienteId de la sesión mediante M1 (obtenerIdClientePorUsuario) o del request
+        $clienteId = $this->resolverIdCliente($request);
 
         $idVariacion = $variacionId ?? (int) $request->input('id_variacion');
         $cantidad = $cant ?? (int) $request->input('cantidad', 1);
@@ -120,7 +121,7 @@ class ControladorCarrito extends Controller
 
         // 6. Recalcular costos mediante el servicio centralizado (B1)
         $carrito->load('items');
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios, $this->m1Portal);
         $carrito->recalcularTotales((float) $desglose['resumen']['total']);
 
         // 7. Retornar respuesta exitosa (formato Carrito según OpenAPI + campos aditivos B2)
@@ -132,6 +133,10 @@ class ControladorCarrito extends Controller
 
     public function actualizarCantidad(Request $request, int $itemId): JsonResponse
     {
+        if ($request->user() !== null) {
+            $this->resolverIdCliente($request);
+        }
+
         $nuevaCantidad = (int) $request->input('cantidad', 1);
 
         if ($nuevaCantidad <= 0) {
@@ -145,6 +150,11 @@ class ControladorCarrito extends Controller
 
         $item = ItemCarrito::find($itemId);
         if (! $item) {
+            return $this->errorRespuesta('ERR-004', 'Ítem no encontrado en el carrito', null, 404);
+        }
+
+        $carrito = Carrito::with('items')->find($item->id_carrito);
+        if (! $carrito) {
             return $this->errorRespuesta('ERR-004', 'Ítem no encontrado en el carrito', null, 404);
         }
 
@@ -171,7 +181,7 @@ class ControladorCarrito extends Controller
         $item->actualizarCantidad($nuevaCantidad);
 
         $carrito = Carrito::with('items')->find($item->id_carrito);
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios, $this->m1Portal);
         if ($carrito) {
             $carrito->recalcularTotales((float) $desglose['resumen']['total']);
         }
@@ -185,6 +195,9 @@ class ControladorCarrito extends Controller
     public function eliminarItem(Request|int $requestOrId, ?int $itemId = null, ?int $id_item_carrito = null): JsonResponse
     {
         if ($requestOrId instanceof Request) {
+            if ($requestOrId->user() !== null) {
+                $this->resolverIdCliente($requestOrId);
+            }
             $targetItemId = (int) ($id_item_carrito ?? $itemId ?? $requestOrId->route('id_item_carrito') ?? $requestOrId->route('itemId') ?? $requestOrId->input('id_item_carrito') ?? $requestOrId->input('itemId'));
         } else {
             $targetItemId = $itemId !== null ? (int) $itemId : (int) ($id_item_carrito ?? $requestOrId);
@@ -196,10 +209,15 @@ class ControladorCarrito extends Controller
         }
 
         $carritoId = $item->id_carrito;
+        $carrito = Carrito::with('items')->find($carritoId);
+        if (! $carrito) {
+            return $this->errorRespuesta('ERR-004', 'Ítem no encontrado en el carrito', null, 404);
+        }
+
         $item->delete();
 
         $carrito = Carrito::with('items')->find($carritoId);
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios, $this->m1Portal);
         if ($carrito) {
             $carrito->recalcularTotales((float) $desglose['resumen']['total']);
         }
@@ -212,7 +230,7 @@ class ControladorCarrito extends Controller
 
     public function vaciarCarrito(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = $this->resolverIdCliente($request);
         $carrito = Carrito::where('id_cliente', $clienteId)->first();
 
         if ($carrito) {
@@ -231,7 +249,7 @@ class ControladorCarrito extends Controller
 
     public function agruparItemPorComercio(?Carrito $carrito = null): array
     {
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios, $this->m1Portal);
 
         return $desglose['grupos_comercio'];
     }
@@ -266,7 +284,7 @@ class ControladorCarrito extends Controller
         }
 
         if ($desglose === null) {
-            $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios);
+            $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios, $this->m1Portal);
             if (empty($grupos)) {
                 $grupos = $desglose['grupos_comercio'];
             }
@@ -343,13 +361,38 @@ class ControladorCarrito extends Controller
 
     public function listarDirecciones(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = $this->resolverIdCliente($request);
         $direcciones = $this->obtenerDireccionesCliente($clienteId);
 
         return response()->json([
             'id_cliente' => $clienteId,
             'direcciones' => $direcciones,
         ], 200);
+    }
+
+    /**
+     * Obtiene el id_cliente real asociado a la cuenta autenticada del núcleo
+     * mediante PortalPublicoContract::obtenerIdClientePorUsuario, o usa el
+     * parámetro de respaldo cuando no hay sesión iniciada.
+     */
+    public function resolverIdCliente(Request $request): int
+    {
+        $usuario = $request->user();
+
+        if ($usuario !== null) {
+            $idUsuario = (int) ($usuario->id_usuario ?? $usuario->id ?? 0);
+
+            if ($idUsuario > 0 && $this->m1Portal && method_exists($this->m1Portal, 'obtenerIdClientePorUsuario')) {
+                $idCliente = (int) $this->m1Portal->obtenerIdClientePorUsuario($idUsuario);
+                if (app()->bound(ContextoCliente::class)) {
+                    app(ContextoCliente::class)->establecer($idCliente);
+                }
+
+                return $idCliente;
+            }
+        }
+
+        return (int) $request->input('id_cliente', 1);
     }
 
     private function consultarStockVariacion(int $comercioId, int $idVariacion, int $ubicacionId = 1): int

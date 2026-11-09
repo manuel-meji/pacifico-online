@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\M5_Pedidos\Contratos;
 
+use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
@@ -14,8 +15,10 @@ use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Models\Nucleo\Usuario;
 use App\Services\M5_Pedidos\Dobles\ComerciosStub;
 use Illuminate\Support\Facades\Event;
+use Tests\Doubles\M1\PortalPublicoFake;
 use Tests\TestCase;
 
 /**
@@ -27,6 +30,8 @@ interface PortalClienteConsumerInterface extends PortalServiceInterface
     public function obtenerCliente(int $idCliente): array;
 
     public function obtenerDireccionCliente(int $idCliente, int $idDireccionCliente): array;
+
+    public function obtenerPreciosVigentes(array $idsVariacion): array;
 }
 
 class M5_ConsumidorContratoTest extends TestCase
@@ -121,6 +126,63 @@ class M5_ConsumidorContratoTest extends TestCase
         $pedido = PedidoMaestro::find($pedidoId);
         $this->assertSame(42, (int) $pedido->id_cliente);
         $this->assertSame(99, (int) $pedido->id_direccion_cliente);
+    }
+
+    public function test_consumidor_m1_obtiene_id_cliente_por_usuario_con_portal_publico_contract(): void
+    {
+        $this->app->instance(PortalPublicoContract::class, new PortalPublicoFake);
+
+        $usuario = new Usuario;
+        $usuario->forceFill(['id_usuario' => PortalPublicoFake::USUARIO_CON_CLIENTE]);
+
+        $response = $this->actingAs($usuario)
+            ->postJson("{$this->prefix}/carrito/items", [
+                'id_variacion' => 101,
+                'cantidad' => 1,
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertSame(PortalPublicoFake::CLIENTE_CON_DIRECCIONES, $response->json('id_cliente'));
+    }
+
+    public function test_consumidor_m1_aplica_precios_vigentes_de_promocion_en_checkout_y_subpedido_m2(): void
+    {
+        $mockM1 = $this->createMock(PortalClienteConsumerInterface::class);
+        $mockM1->expects($this->once())
+            ->method('obtenerPreciosVigentes')
+            ->with([101])
+            ->willReturn([
+                [
+                    'id_variacion' => 101,
+                    'precio_base' => 10000.00,
+                    'precio_final' => 8000.00,
+                    'id_promocion' => 9,
+                    'fin_promocion' => '2026-11-30T23:59:59-06:00',
+                ],
+            ]);
+
+        $this->app->instance(PortalServiceInterface::class, $mockM1);
+
+        $carrito = (new Carrito)->obtenerOCrearCarrito(42);
+        (new ItemCarrito)->crearItemCarrito($carrito->id_carrito, 101, 2);
+
+        $response = $this->postJson("{$this->prefix}/pedidos", [
+            'id_cliente' => 42,
+            'id_direccion_cliente' => 1,
+        ]);
+
+        $response->assertStatus(201);
+        $pedidoId = (int) $response->json('id_pedido');
+
+        $subpedido = Subpedido::where('id_pedido', $pedidoId)->first();
+        $this->assertNotNull($subpedido);
+        $this->assertEqualsWithDelta(16000.00, (float) $subpedido->subtotal, 0.001);
+
+        $linea = PedidoLinea::where('id_subpedido', $subpedido->id_subpedido)->first();
+        $this->assertNotNull($linea);
+        $this->assertEqualsWithDelta(8000.00, (float) $linea->precio_unitario, 0.001);
+        $this->assertEqualsWithDelta(4000.00, (float) $linea->descuento, 0.001);
+        $this->assertSame(9, (int) $linea->id_promocion);
     }
 
     // =========================================================================

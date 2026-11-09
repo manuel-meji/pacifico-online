@@ -2,6 +2,8 @@
 
 namespace App\Models\M5_Pedidos;
 
+use App\Http\Controllers\M5_Pedidos\ControladorCarrito;
+use App\Services\Nucleo\ContextoCliente;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -80,6 +82,16 @@ class PedidoMaestro extends Model
         }
 
         try {
+            if (app()->bound(ContextoCliente::class)) {
+                $idContexto = app(ContextoCliente::class)->idActual();
+                if ($idContexto !== null) {
+                    return $idContexto;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
             if (session()->isStarted() && session()->has('id_cliente')) {
                 return (int) session('id_cliente');
             }
@@ -88,6 +100,10 @@ class PedidoMaestro extends Model
 
         try {
             if (auth()->check() && ! isset(auth()->user()->id_comercio)) {
+                if (request() !== null) {
+                    return app(ControladorCarrito::class)->resolverIdCliente(request());
+                }
+
                 return (int) (auth()->user()?->id_usuario ?? auth()->id());
             }
         } catch (\Throwable) {
