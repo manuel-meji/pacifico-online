@@ -21,8 +21,6 @@ use App\Exceptions\Nucleo\ErrorNucleoException;
  *
  * Extender esta clase (en lugar de implementar ComerciosServiceInterface) hace
  * que el doble siga funcionando cuando la interfaz pase a las 8 operaciones.
- * Los dos métodos del borrador viejo también responden ERR-006 aquí, así que
- * ningún doble necesita declararlos (propuesta de M1, 6/11).
  */
 abstract class ComerciosDobleBase implements ComerciosServiceInterface
 {
@@ -62,22 +60,6 @@ abstract class ComerciosDobleBase implements ComerciosServiceInterface
     }
 
     public function obtenerComisionSubpedido(int $idSubpedido): array
-    {
-        throw $this->noSimulada(__FUNCTION__);
-    }
-
-    /**
-     * @deprecated Se elimina junto con la interfaz preliminar (PR 2 de M2, 9/11).
-     */
-    public function obtenerMicrositio(int $comercioId): array
-    {
-        throw $this->noSimulada(__FUNCTION__);
-    }
-
-    /**
-     * @deprecated Se elimina junto con la interfaz preliminar (PR 2 de M2, 9/11).
-     */
-    public function registrarComision(int $pedidoId, float $subtotalPedido): bool
     {
         throw $this->noSimulada(__FUNCTION__);
     }

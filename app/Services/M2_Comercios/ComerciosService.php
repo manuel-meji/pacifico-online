@@ -301,43 +301,6 @@ class ComerciosService implements ComerciosServiceInterface
         ];
     }
 
-    // ------------------------------------------------------------------
-    // Métodos heredados del borrador del Comité. Se eliminan cuando la
-    // interfaz pase a las 8 operaciones del contrato (segundo PR de M2).
-    // ------------------------------------------------------------------
-
-    /**
-     * @deprecated Usar obtenerDatosComercioPublico (micrositio) u obtenerComercioActivo (estado).
-     */
-    public function obtenerMicrositio(int $comercioId): array
-    {
-        return $this->comoSistema(function () use ($comercioId): array {
-            $c = $this->buscar($comercioId);
-
-            return [
-                'id_comercio' => $c->id_comercio,
-                'nombre_comercial' => $c->nombre_comercial,
-                'estado' => $c->estado,
-                'activo' => $c->estaActivo(),
-                'logo_url' => $this->url($c->micrositio?->logotipo),
-            ];
-        });
-    }
-
-    /**
-     * @deprecated La comisión no se registra por llamada síncrona: M2 la calcula al
-     *             consumir el evento SubpedidoDespachado de M5 (contrato v1.2.1, RN-010)
-     *             y M7 la consulta con obtenerComisionSubpedido. No registra nada.
-     */
-    public function registrarComision(int $pedidoId, float $subtotalPedido): bool
-    {
-        Log::warning('M2: registrarComision está en desuso; la comisión se registra con el evento SubpedidoDespachado.', [
-            'id_pedido' => $pedidoId,
-        ]);
-
-        return false;
-    }
-
     // --- CU-0001 a CU-0007: edición del micrositio
     public function consultar(int $idComercio): array
     {
