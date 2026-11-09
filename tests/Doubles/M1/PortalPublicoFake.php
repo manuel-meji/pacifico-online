@@ -238,7 +238,7 @@ class PortalPublicoFake implements PortalPublicoContract
         throw $this->fueraDeAlcance();
     }
 
-    public function listarDestacados(int $limite = 8): array
+    public function listarDestacados(int $limite = 12): array
     {
         throw $this->fueraDeAlcance();
     }

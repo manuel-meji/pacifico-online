@@ -11,6 +11,7 @@ use App\Services\M1_Portal\DTO\Disponibilidad;
 use App\Services\M1_Portal\DTO\ProductoResumenDTO;
 use App\Services\M1_Portal\Integraciones\CachePortal;
 use App\Services\M1_Portal\PortadaService;
+use App\Services\M1_Portal\ReglasDestacados;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -127,9 +128,10 @@ class PortadaServiceTest extends PruebaM1
 
         $productos = $this->destacados()->productos;
 
+        // Desde 1.4.0 el agotado no se muestra (ver test_los_productos_agotados_no_se_muestran).
+        $this->assertCount(1, $productos);
         $this->assertSame('Tienda La Ceiba', $productos[0]->nombreComercio);
         $this->assertSame(Disponibilidad::Disponible, $productos[0]->disponibilidad);
-        $this->assertSame(Disponibilidad::Agotado, $productos[1]->disponibilidad);
     }
 
     public function test_se_omiten_los_productos_y_comercios_que_m3_y_m2_no_devuelven(): void
@@ -176,17 +178,70 @@ class PortadaServiceTest extends PruebaM1
         $this->assertSame([DatosPrueba::COMERCIO_LA_CEIBA, DatosPrueba::COMERCIO_CAFE_NICOYANO], $this->idsComercios($destacados));
     }
 
-    public function test_un_limite_fuera_de_rango_se_ajusta_de_1_a_24(): void
+    public function test_un_limite_fuera_de_rango_se_ajusta_de_1_a_12(): void
     {
         $this->destacarTodo();
 
+        $this->assertSame(12, PortadaService::LIMITE_POR_DEFECTO);
+        $this->assertSame(12, PortadaService::LIMITE_MAXIMO);
         $this->assertCount(1, app(PortadaService::class)->listarDestacados(0)->productos);
         $this->assertCount(1, app(PortadaService::class)->listarDestacados(-5)->comercios);
         $this->assertCount(3, app(PortadaService::class)->listarDestacados(500)->productos);
 
         $cache = app(CachePortal::class);
-        $this->assertNotNull($cache->obtener(sprintf(PortadaService::CLAVE_DESTACADOS, 1)));
-        $this->assertNotNull($cache->obtener(sprintf(PortadaService::CLAVE_DESTACADOS, PortadaService::LIMITE_MAXIMO)));
+        $this->assertNotNull($cache->obtener($this->claveCache(1)));
+        $this->assertNotNull($cache->obtener($this->claveCache(PortadaService::LIMITE_MAXIMO)));
+    }
+
+    // ---------------------------------------------------------------
+    // Reglas de la portada desde 1.4.0 (SC-08)
+    // ---------------------------------------------------------------
+
+    public function test_los_productos_agotados_no_se_muestran(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_SOMBRERO_AGOTADO, 1);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 2);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_TAZA_SIN_EXISTENCIA, 3);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 4);
+
+        $destacados = $this->destacados();
+
+        $this->assertSame([DatosPrueba::PRODUCTO_CAMISA_LINO, DatosPrueba::PRODUCTO_JARRON], $this->idsProductos($destacados));
+        foreach ($destacados->productos as $producto) {
+            $this->assertSame(Disponibilidad::Disponible, $producto->disponibilidad);
+        }
+    }
+
+    public function test_un_destacado_agotado_reaparece_solo_al_recuperar_existencias(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1);
+        $cache = app(CachePortal::class);
+
+        // M4 avisa que se agotó (evento ExistenciaAgotada): deja de mostrarse.
+        $cache->marcarAgotado(DatosPrueba::PRODUCTO_CAMISA_LINO, null);
+        $this->assertSame([], $this->idsProductos($this->destacados()));
+
+        // M4 avisa que se repuso (evento ExistenciaRepuesta): vuelve sin que nadie lo reactive.
+        $cache->quitarAgotado(DatosPrueba::PRODUCTO_CAMISA_LINO, null);
+        Carbon::setTestNow(Carbon::parse(self::AHORA)->addSeconds(6));
+
+        $this->assertSame([DatosPrueba::PRODUCTO_CAMISA_LINO], $this->idsProductos($this->destacados()));
+    }
+
+    public function test_los_productos_de_un_comercio_suspendido_no_se_muestran_aunque_tengan_existencias(): void
+    {
+        $this->destacarProducto(DatosPrueba::PRODUCTO_DE_COMERCIO_SUSPENDIDO, 1);
+
+        $this->assertSame([], $this->destacados()->productos);
+    }
+
+    public function test_los_productos_que_m3_ya_no_publica_no_se_muestran(): void
+    {
+        // Un producto desactivado por el comercio no lo devuelve M3.
+        $this->destacarProducto(DatosPrueba::PRODUCTO_INEXISTENTE, 1);
+        $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 2);
+
+        $this->assertSame([DatosPrueba::PRODUCTO_CAMISA_LINO], $this->idsProductos($this->destacados()));
     }
 
     // ---------------------------------------------------------------
@@ -229,7 +284,7 @@ class PortadaServiceTest extends PruebaM1
         $this->assertEquals(new DestacadosDTO([], [], ['comercios', 'productos']), $this->destacados());
     }
 
-    public function test_si_m4_no_responde_los_productos_salen_como_agotados(): void
+    public function test_si_m4_no_responde_los_productos_salen_como_agotados_sin_ocultarse(): void
     {
         $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1);
         config(['integraciones.m1.m4.doble' => InventarioNoDisponible::class]);
@@ -261,7 +316,7 @@ class PortadaServiceTest extends PruebaM1
 
         $this->destacados();
 
-        $this->assertNull(app(CachePortal::class)->obtener(sprintf(PortadaService::CLAVE_DESTACADOS, PortadaService::LIMITE_POR_DEFECTO)));
+        $this->assertNull(app(CachePortal::class)->obtener($this->claveCache(PortadaService::LIMITE_POR_DEFECTO)));
     }
 
     // ---------------------------------------------------------------
@@ -311,6 +366,11 @@ class PortadaServiceTest extends PruebaM1
     // ---------------------------------------------------------------
     // Ayudantes
     // ---------------------------------------------------------------
+
+    private function claveCache(int $limite): string
+    {
+        return PortadaService::clave($limite, app(ReglasDestacados::class)->turno(Carbon::now()));
+    }
 
     private function destacados(): DestacadosDTO
     {

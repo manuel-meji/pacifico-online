@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: M1 Portal público y búsqueda — Contrato del módulo
-  version: 1.3.0
+  version: 1.4.0
   description: |
     Contrato formal del módulo M1 Portal público y búsqueda de Pacíficos Online
     (IF6100, II Ciclo 2026, subgrupo SG1).
@@ -215,6 +215,18 @@ paths:
         M2.ObtenerResumenComerciosLote. Ambos omiten los productos no publicados y
         los comercios no activos, que tampoco se muestran aquí. El orden de la
         respuesta es el de la columna posicion de M1.
+
+        Desde 1.4.0 (SC-08), en la sección de productos:
+        - Cada comercio tiene como máximo 3 productos destacados activos; si la
+          selección tiene más, se muestran los 3 de menor posicion.
+        - Un producto agotado (M4) no se muestra y vuelve a aparecer solo cuando
+          recupera existencias dentro de su periodo. Tampoco se muestran los
+          productos que el comercio desactivó (M3 los omite) ni los de comercios
+          suspendidos (M2). Si M4 no responde, no se oculta ninguno y salen con
+          disponibilidad Agotado.
+        - Se muestran hasta 12. Si hay más, se rotan por turnos de 15 minutos:
+          cada turno avanza tantas posiciones como el límite, tomando la lista
+          como circular, así todos aparecen el mismo tiempo.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-01, RN-M1-05, RN-M1-06]
       x-dependencias: [M3.buscarProductos 1.2.0 (filtro ids), M2.ObtenerResumenComerciosLote 1.1.0, M4.consultarDisponibilidadProductoLote 1.1.0]
@@ -223,12 +235,15 @@ paths:
         - name: limite
           in: query
           required: false
-          description: Cantidad máxima de comercios y de productos.
+          description: |
+            Cantidad máxima de comercios y de productos. Desde 1.4.0 el máximo
+            y el valor por defecto son 12; un valor fuera de rango se ajusta al
+            más cercano, sin error.
           schema:
             type: integer
             minimum: 1
-            maximum: 24
-            default: 8
+            maximum: 12
+            default: 12
       responses:
         '200':
           description: Destacados vigentes.
@@ -1309,7 +1324,7 @@ x-interfaz-php:
       - firma: "buscarProductos(?string $termino, ?int $idCategoria = null, ?int $idComercio = null, int $pagina = 1, int $porPagina = 20, ?int $idMarca = null, ?float $precioMinimo = null, ?float $precioMaximo = null, ?string $orden = null): array"
         notas: Los filtros de 1.1.0 se agregan al final como opcionales, así las llamadas de 1.0.0 siguen funcionando.
         excepciones: [CriterioInvalidoException, DependenciaNoDisponibleException]
-      - firma: "listarDestacados(int $limite = 8): array"
+      - firma: "listarDestacados(int $limite = 12): array"
       - firma: "listarCategoriasPortal(): array"
         excepciones: [DependenciaNoDisponibleException]
       - firma: "obtenerFichaProducto(int $idProducto): array"
@@ -1437,3 +1452,14 @@ x-historial-versiones:
       cuyo único consumidor es el frontend del propio M1; ningún otro módulo
       llama a listarComercios ni a obtenerMicrositio. Por eso se publica como
       versión menor.
+  - version: 1.4.0
+    cambios:
+      - GET /destacados muestra hasta 12 productos y comercios (limite por defecto y máximo 12, antes 8 y 24); un valor mayor se ajusta a 12 sin error.
+      - Productos destacados con máximo 3 por comercio, sin los agotados (reaparecen solos al recuperar existencias) y rotados por turnos de 15 minutos cuando hay más de 12.
+      - listarDestacados de la interfaz PHP cambia su valor por defecto de 8 a 12.
+    solicitud_de_cambio: SC-08
+    nota_de_compatibilidad: |
+      Sin cambios en el esquema Destacados ni en la firma de listarDestacados,
+      salvo el valor por defecto del límite. Un consumidor que pida más de 12
+      recibe hasta 12, sin error, porque el límite ya se ajustaba al rango.
+      Por eso se publica como versión menor.

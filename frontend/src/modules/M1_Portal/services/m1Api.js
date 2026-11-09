@@ -138,9 +138,10 @@ export function obtenerFichaProducto(idProducto) {
   return llamar(`/productos/${idProducto}`);
 }
 
-// GET /destacados (listarDestacados). limite de 1 a 24 (por defecto 8; fuera de rango el backend lo ajusta).
+// GET /destacados (listarDestacados). limite de 1 a 12 (por defecto 12; fuera de rango el backend lo ajusta).
+// Productos: máximo 3 por comercio, sin agotados y rotados cada 15 minutos si hay más de 12 (contrato 1.4.0).
 // 200 → Destacados. Si M2 o M3 no responden, la sección viene vacía y se nombra en secciones_no_disponibles.
-export function listarDestacados(limite = 8) {
+export function listarDestacados(limite = 12) {
   return llamar(`/destacados${consulta({ limite })}`);
 }
 

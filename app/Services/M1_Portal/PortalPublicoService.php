@@ -233,7 +233,7 @@ class PortalPublicoService implements PortalPublicoContract
         return $this->resultadoBusqueda($this->servicio(self::SERVICIO_BUSQUEDA)->buscar($criterio));
     }
 
-    public function listarDestacados(int $limite = 8): array
+    public function listarDestacados(int $limite = PortadaService::LIMITE_POR_DEFECTO): array
     {
         try {
             /** @var DestacadosDTO $destacados */

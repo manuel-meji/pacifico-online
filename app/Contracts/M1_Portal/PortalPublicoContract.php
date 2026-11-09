@@ -102,9 +102,13 @@ interface PortalPublicoContract
      * Si M2 o M3 fallan, la sección viene vacía y se nombra en
      * secciones_no_disponibles; no lanza excepción.
      *
+     * Desde 1.4.0: hasta 12 por sección (por defecto 12); productos con
+     * máximo 3 por comercio, sin los agotados y rotados por turnos de 15
+     * minutos si hay más que el límite.
+     *
      * @return array{comercios: list<array<string, mixed>>, productos: list<array<string, mixed>>, secciones_no_disponibles: list<string>} Esquema Destacados.
      */
-    public function listarDestacados(int $limite = 8): array;
+    public function listarDestacados(int $limite = 12): array;
 
     /**
      * Categorías del menú con sus subcategorías (GET /categorias). Solo las

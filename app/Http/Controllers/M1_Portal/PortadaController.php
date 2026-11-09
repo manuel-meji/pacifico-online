@@ -17,7 +17,7 @@ class PortadaController extends Controller
 
     /**
      * GET /api/m1/v1/destacados (listarDestacados). Si limite falta o no es
-     * un entero se usa 8; si está fuera de 1 a 24, PortadaService lo ajusta.
+     * un entero se usa 12; si está fuera de 1 a 12, PortadaService lo ajusta.
      */
     public function listar(Request $request): JsonResponse
     {
