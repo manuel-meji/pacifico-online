@@ -838,6 +838,34 @@ class ComerciosService implements ComerciosServiceInterface
 
     // --- CU-0022: verificar documentos comerciales (Jorge) ---
 
+    /**
+     * CU-0022: contenido original de un documento de la solicitud, para que el
+     * Encargado de la plataforma lo revise. Los archivos se guardan cifrados (RN-002)
+     * y sin su tipo, así que el tipo se detecta del contenido descifrado.
+     *
+     * @return array{contenido: string, tipo: string}
+     */
+    public function obtenerArchivoDocumento(int $idSolicitud, int $idDocumento): array
+    {
+        $solicitud = SolicitudComercio::query()->find($idSolicitud)
+            ?? throw $this->noEncontrado('La solicitud no existe.');
+        $documento = $solicitud->documentos()->find($idDocumento)
+            ?? throw $this->noEncontrado('El documento no existe en el comercio de la solicitud.');
+
+        $cifrado = Storage::disk('local')->get($documento->ruta_cifrada)
+            ?? throw $this->noEncontrado('El archivo del documento no está disponible.');
+        $contenido = Crypt::decryptString($cifrado);
+
+        $this->nucleo->registrarAuditoria('consultar_documento_comercio', 'documento_comercio', $documento->id_documento_comercio, [
+            'modulo' => 'M2', 'id_solicitud' => $solicitud->id_solicitud,
+        ]);
+
+        return [
+            'contenido' => $contenido,
+            'tipo' => (new \finfo(FILEINFO_MIME_TYPE))->buffer($contenido) ?: 'application/octet-stream',
+        ];
+    }
+
     public function evaluarDocumento(int $idSolicitud, int $idDocumento, string $resultado, ?string $observacion): DocumentoComercio
     {
         $this->exigirValidos(in_array($resultado, ['valido', 'invalido'], true)

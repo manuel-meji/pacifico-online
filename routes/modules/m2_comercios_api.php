@@ -85,5 +85,7 @@ Route::prefix('api/m2/v1')
                 ->whereNumber('idSolicitud')->name('solicitudes.rechazar');
             Route::post('solicitudes/{idSolicitud}/documentos/{idDocumento}/evaluar', [Solicitudes::class, 'evaluarDocumento'])
                 ->whereNumber(['idSolicitud', 'idDocumento'])->name('solicitudes.documentos.evaluar');
+            Route::get('solicitudes/{idSolicitud}/documentos/{idDocumento}/archivo', [Solicitudes::class, 'verArchivoDocumento'])
+                ->whereNumber(['idSolicitud', 'idDocumento'])->name('solicitudes.documentos.archivo');
         });
     });
