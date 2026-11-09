@@ -109,6 +109,31 @@ class EventosYModoRealTest extends PruebaM1
         app(CatalogoClient::class);
     }
 
+    /**
+     * M1 usa M2 en modo real desde que M2 publicó su interfaz 1.2.1 (#186).
+     * Si M2 quita o renombra una de estas operaciones, esta prueba avisa antes
+     * de que el portal falle con ERR-006.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function operacionesDeM2(): array
+    {
+        return [
+            'listarComerciosHabilitados' => ['listarComerciosHabilitados'],
+            'obtenerResumenComerciosLote' => ['obtenerResumenComerciosLote'],
+            'obtenerDatosComercioPublico' => ['obtenerDatosComercioPublico'],
+        ];
+    }
+
+    #[DataProvider('operacionesDeM2')]
+    public function test_la_interfaz_publicada_de_m2_tiene_las_operaciones_que_usa_m1(string $operacion): void
+    {
+        $this->assertTrue(
+            method_exists(ComerciosServiceInterface::class, $operacion),
+            "ComerciosServiceInterface ya no publica {$operacion}, que usa ComercioClient de M1.",
+        );
+    }
+
     public function test_los_demas_modulos_siguen_recibiendo_los_servicios_reales(): void
     {
         $this->assertInstanceOf(ComerciosService::class, app(ComerciosServiceInterface::class));
