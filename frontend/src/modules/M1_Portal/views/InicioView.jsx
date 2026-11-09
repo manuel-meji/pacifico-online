@@ -4,7 +4,8 @@ import TarjetaProducto from '../components/TarjetaProducto';
 import { CargandoTarjetas, ErrorVista, Vacio } from '../components/EstadosVista';
 import Icono from '../components/IconoComercio';
 import Imagen from '../components/Imagen';
-import { listarComercios, listarDestacados } from '../services/m1Api';
+import { fechaCorta } from '../services/formato';
+import { listarComercios, listarDestacados, listarPromociones } from '../services/m1Api';
 import useConsulta from '../services/useConsulta';
 
 // La portada muestra hasta 12 destacados (contrato M1 1.4.0); en la cuadrícula de 4 columnas son 3 filas.
@@ -22,6 +23,8 @@ export default function InicioView() {
   const mostrarProductos = destacados.estado === 'listo' && !noDisponibles.includes('productos');
   const sinComerciosDestacados = mostrarComercios && datos.comercios.length === 0;
   const comercios = useConsulta(() => listarComercios(1, LIMITE_DESTACADOS), [], sinComerciosDestacados);
+  // Sección de promociones vigentes (contrato 1.4.0). Si falla o no hay, la sección no se muestra.
+  const promociones = useConsulta(() => listarPromociones(), []);
 
   return (
     <PaginaPortal>
@@ -56,6 +59,25 @@ export default function InicioView() {
       {sinComerciosDestacados && comercios.estado === 'listo' && comercios.datos.comercios.length > 0 && (
         <CarruselComercios comercios={comercios.datos.comercios} titulo="Explorá nuestros comercios" descripcion="Conocé los comercios que forman parte de Pacíficos Online."
           onVerComercio={(id) => ir('comercio', { id })} />
+      )}
+
+      {promociones.estado === 'listo' && promociones.datos.length > 0 && (
+        <section className="mt-10" aria-labelledby="titulo-promociones">
+          <h2 id="titulo-promociones" className="mb-1 flex items-center gap-2 text-2xl font-bold text-brandDarkBlue">
+            <Icono nombre="etiqueta" className="h-6 w-6 text-red-600" /> Promociones
+          </h2>
+          <p className="mb-4 text-sm text-gray-600">Precios rebajados por los comercios, por tiempo limitado.</p>
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {promociones.datos.map((promo) => (
+              <li key={promo.id_promocion} className="min-w-0">
+                <p className="mb-1 truncate text-xs font-semibold text-red-700" title={promo.titulo}>
+                  {promo.titulo} · hasta el {fechaCorta(promo.fecha_fin)}
+                </p>
+                <TarjetaProducto producto={promo.producto} onAbrir={() => ir('producto', { id: promo.producto.id_producto })} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {mostrarProductos && (

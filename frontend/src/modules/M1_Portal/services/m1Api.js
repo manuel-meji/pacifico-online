@@ -145,6 +145,12 @@ export function listarDestacados(limite = 12) {
   return llamar(`/destacados${consulta({ limite })}`);
 }
 
+// GET /promociones (listarPromocionesVigentes, contrato 1.4.0). Promociones que rebajan el precio ahora,
+// en el orden que decide la plataforma, cada una con su producto (ProductoResumen con promocion).
+export function listarPromociones() {
+  return llamar('/promociones');
+}
+
 // GET /comercios (listarComercios). pagina >= 1, por_pagina de 1 a 50.
 // 200 → ListadoComercios · 422 ERR-005 · 503 ERR-006.
 export function listarComercios(pagina = 1, porPagina = 20) {

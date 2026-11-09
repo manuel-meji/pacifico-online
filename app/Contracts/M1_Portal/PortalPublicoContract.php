@@ -198,4 +198,19 @@ interface PortalPublicoContract
      * @throws DatosInvalidosException ERR-005.
      */
     public function actualizarDireccionCliente(int $idCliente, int $idDireccionCliente, array $datos): array;
+
+    /**
+     * Precio con la promoción vigente de cada variación (desde 1.4.0, SC-08).
+     * Lo usa M5 al agregar al carrito y al confirmar el pedido, para cobrar el
+     * precio rebajado. precio_final es el precio_base si la variación no tiene
+     * una promoción vigente (id_promocion y fin_promocion en null). Las
+     * variaciones que M3 no encuentra se omiten. Sin sesión de usuario.
+     *
+     * @param  list<int>  $idsVariacion  Entre 1 y 100 enteros mayores o iguales a 1.
+     * @return array<int, array{id_variacion: int, precio_base: float, precio_final: float, id_promocion: int|null, fin_promocion: string|null}> Por id_variacion.
+     *
+     * @throws DatosInvalidosException ERR-005 si la lista no es válida.
+     * @throws DependenciaNoDisponibleException ERR-006 si M3 no responde.
+     */
+    public function obtenerPreciosVigentes(array $idsVariacion): array;
 }

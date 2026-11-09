@@ -5,7 +5,7 @@ import { CargandoBloque, ErrorVista } from '../components/EstadosVista';
 import Icono from '../components/IconoComercio';
 import Imagen from '../components/Imagen';
 import { obtenerFichaProducto } from '../services/m1Api';
-import { colones, textoAtributos } from '../services/formato';
+import { colones, fechaCorta, textoAtributos } from '../services/formato';
 import useConsulta from '../services/useConsulta';
 
 // M5 agrega al carrito desde un enlace: /app.html?agregar=<id_variacion>&cantidad=<n>
@@ -92,7 +92,17 @@ function Ficha({ ficha, onVerComercio, onVerProducto }) {
           {variacion && (
             <div className="my-5 rounded-lg border-l-4 border-brandGreen bg-gray-50 p-4">
               <span className="text-xs font-semibold uppercase text-gray-500">Precio</span>
-              <p className="text-3xl font-extrabold text-brandDarkBlue">{colones(variacion.precio)}</p>
+              {variacion.precio_promocional != null ? (
+                <>
+                  <p className="flex flex-wrap items-baseline gap-x-3">
+                    <span className="text-3xl font-extrabold text-red-700">{colones(variacion.precio_promocional)}</span>
+                    <span className="text-base text-gray-500 line-through">{colones(variacion.precio)}</span>
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-red-700">Precio de promoción hasta el {fechaCorta(variacion.fin_promocion)}</p>
+                </>
+              ) : (
+                <p className="text-3xl font-extrabold text-brandDarkBlue">{colones(variacion.precio)}</p>
+              )}
               <div className="mt-2">{variacion.disponibilidad === 'Disponible' && comprable ? <BadgeDisponible /> : <BadgeAgotado />}</div>
             </div>
           )}

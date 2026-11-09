@@ -5,6 +5,7 @@ namespace App\Services\M1_Portal;
 use App\Contracts\M1_Portal\Exceptions\DatosInvalidosException;
 use App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException;
 use App\Contracts\M1_Portal\PortalPublicoContract;
+use App\Models\M1_Portal\Promocion;
 use App\Services\M1_Portal\DTO\CategoriaDTO;
 use App\Services\M1_Portal\DTO\ClienteDTO;
 use App\Services\M1_Portal\DTO\ComercioDTO;
@@ -42,6 +43,8 @@ class PortalPublicoService implements PortalPublicoContract
     public const SERVICIO_PORTADA = PortadaService::class;
 
     public const SERVICIO_CLIENTE = ClienteService::class;
+
+    public const SERVICIO_PROMOCIONES = PromocionesService::class;
 
     /**
      * Campos obligatorios y largo máximo de DatosCliente (contrato 1.2.0),
@@ -87,6 +90,14 @@ class PortalPublicoService implements PortalPublicoContract
      * (chk_direcciones_cliente_telefono).
      */
     private const FORMATO_TELEFONO_DESTINATARIO = '/^[0-9 +-]+$/';
+
+    /**
+     * Promociones vigentes de los productos que se están armando, por
+     * id_producto (contrato 1.4.0). Se cargan una vez por respuesta.
+     *
+     * @var array<int, list<Promocion>>
+     */
+    private array $promociones = [];
 
     public function __construct(private Container $contenedor) {}
 
@@ -244,7 +255,7 @@ class PortalPublicoService implements PortalPublicoContract
 
         return [
             'comercios' => array_map(fn (ComercioDTO $comercio): array => $this->comercioListado($comercio), $destacados->comercios),
-            'productos' => array_map(fn (ProductoResumenDTO $producto): array => $this->productoResumen($producto), $destacados->productos),
+            'productos' => $this->resumenes($destacados->productos),
             'secciones_no_disponibles' => array_values($destacados->seccionesNoDisponibles),
         ];
     }
@@ -313,6 +324,11 @@ class PortalPublicoService implements PortalPublicoContract
             'productos' => $this->resultadoBusqueda($micrositio->productos),
             'productos_disponibles' => $micrositio->productosDisponibles,
         ];
+    }
+
+    public function obtenerPreciosVigentes(array $idsVariacion): array
+    {
+        return $this->servicio(self::SERVICIO_PROMOCIONES)->preciosVigentes($idsVariacion);
     }
 
     // ---------------------------------------------------------------
@@ -385,7 +401,7 @@ class PortalPublicoService implements PortalPublicoContract
             'pagina' => $resultado->pagina,
             'por_pagina' => $resultado->porPagina,
             'total_resultados' => $resultado->totalResultados,
-            'productos' => array_map(fn (ProductoResumenDTO $producto): array => $this->productoResumen($producto), $resultado->productos),
+            'productos' => $this->resumenes($resultado->productos),
         ];
     }
 
@@ -396,7 +412,7 @@ class PortalPublicoService implements PortalPublicoContract
      */
     private function productoResumen(ProductoResumenDTO $producto): array
     {
-        return [
+        $resumen = [
             'id_producto' => $producto->idProducto,
             'nombre' => $producto->nombre,
             'imagen_principal' => $producto->imagenPrincipal,
@@ -409,6 +425,39 @@ class PortalPublicoService implements PortalPublicoContract
                 'nombre_comercial' => $producto->nombreComercio,
             ],
         ];
+
+        // Desde 1.4.0, solo si tiene una promoción vigente (PromocionResumen).
+        $promocion = isset($this->promociones[$producto->idProducto])
+            ? $this->servicio(self::SERVICIO_PROMOCIONES)->promocionDeResumen($producto, $this->promociones[$producto->idProducto])
+            : null;
+
+        if ($promocion !== null) {
+            $resumen['promocion'] = $promocion;
+        }
+
+        return $resumen;
+    }
+
+    /**
+     * Lista de ProductoResumen con sus promociones vigentes, cargadas en una
+     * sola consulta.
+     *
+     * @param  list<ProductoResumenDTO>  $productos
+     * @return list<array<string, mixed>>
+     */
+    private function resumenes(array $productos): array
+    {
+        $this->cargarPromociones(array_map(fn (ProductoResumenDTO $producto): int => $producto->idProducto, $productos));
+
+        return array_map(fn (ProductoResumenDTO $producto): array => $this->productoResumen($producto), $productos);
+    }
+
+    /**
+     * @param  list<int>  $idsProducto
+     */
+    private function cargarPromociones(array $idsProducto): void
+    {
+        $this->promociones = $this->servicio(self::SERVICIO_PROMOCIONES)->vigentesPorProducto($idsProducto) + $this->promociones;
     }
 
     /**
@@ -497,6 +546,10 @@ class PortalPublicoService implements PortalPublicoContract
      */
     private function fichaProducto(FichaProductoDTO $ficha): array
     {
+        $this->cargarPromociones([$ficha->idProducto]);
+        $promocionesFicha = $this->promociones[$ficha->idProducto] ?? [];
+        $promociones = $this->servicio(self::SERVICIO_PROMOCIONES);
+
         return [
             'id_producto' => $ficha->idProducto,
             'nombre' => $ficha->nombre,
@@ -512,12 +565,14 @@ class PortalPublicoService implements PortalPublicoContract
                 'atributos' => $variacion->atributos,
                 'disponibilidad' => $variacion->disponibilidad->value,
                 'comprable' => $variacion->comprable,
+                // Desde 1.4.0, solo si tiene una promoción vigente.
+                ...$promociones->promocionDeVariacion($variacion, $promocionesFicha),
             ], $ficha->variaciones),
             'comercio' => [
                 'id_comercio' => $ficha->comercio->idComercio,
                 'nombre_comercial' => $ficha->comercio->nombreComercial,
             ],
-            'relacionados' => array_map(fn (ProductoResumenDTO $producto): array => $this->productoResumen($producto), $ficha->relacionados),
+            'relacionados' => $this->resumenes($ficha->relacionados),
         ];
     }
 

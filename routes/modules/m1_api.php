@@ -7,6 +7,7 @@ use App\Http\Controllers\M1_Portal\DestacadosController;
 use App\Http\Controllers\M1_Portal\DireccionClienteController;
 use App\Http\Controllers\M1_Portal\FichaProductoController;
 use App\Http\Controllers\M1_Portal\PortadaController;
+use App\Http\Controllers\M1_Portal\PromocionesController;
 use App\Http\Middleware\EstablecerCliente;
 use App\Http\Middleware\EstablecerComercio;
 use App\Http\Middleware\RequiereRol;
@@ -57,12 +58,27 @@ Route::get('/categorias', [BusquedaController::class, 'listarCategorias'])->name
 */
 Route::get('/destacados/tarifas', [DestacadosController::class, 'tarifas'])->name('destacados.tarifas');
 
+// Promociones vigentes de la sección del portal (contrato 1.4.0, SC-08). Pública.
+Route::get('/promociones', [PromocionesController::class, 'vigentes'])->name('promociones');
+
 Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class.':encargado_comercio'])
     ->prefix('comercio')
     ->name('comercio.')
     ->group(function (): void {
         Route::post('/destacados/solicitudes', [DestacadosController::class, 'solicitar'])->name('destacados.solicitar');
         Route::get('/destacados/solicitudes', [DestacadosController::class, 'solicitudesDelComercio'])->name('destacados.solicitudes');
+
+        // Promociones del comercio (contrato 1.4.0, SC-08).
+        Route::post('/promociones', [PromocionesController::class, 'crear'])->name('promociones.crear');
+        Route::get('/promociones', [PromocionesController::class, 'delComercio'])->name('promociones.listar');
+
+        Route::put('/promociones/{id_promocion}', [PromocionesController::class, 'actualizar'])
+            ->where('id_promocion', '[1-9][0-9]*')
+            ->name('promociones.actualizar');
+
+        Route::post('/promociones/{id_promocion}/desactivar', [PromocionesController::class, 'desactivar'])
+            ->where('id_promocion', '[1-9][0-9]*')
+            ->name('promociones.desactivar');
     });
 
 Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class.':encargado_plataforma'])
@@ -84,6 +100,21 @@ Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class
         Route::put('/destacados/tarifas/{periodo_dias}', [DestacadosController::class, 'definirTarifa'])
             ->where('periodo_dias', '[0-9]+')
             ->name('destacados.tarifas.definir');
+
+        // Sección de promociones del portal: orden y ocultar por políticas (contrato 1.4.0, SC-08).
+        Route::get('/promociones', [PromocionesController::class, 'administracion'])->name('promociones.listar');
+
+        Route::put('/promociones/{id_promocion}/orden', [PromocionesController::class, 'ordenar'])
+            ->where('id_promocion', '[1-9][0-9]*')
+            ->name('promociones.ordenar');
+
+        Route::post('/promociones/{id_promocion}/ocultar', [PromocionesController::class, 'ocultar'])
+            ->where('id_promocion', '[1-9][0-9]*')
+            ->name('promociones.ocultar');
+
+        Route::post('/promociones/{id_promocion}/mostrar', [PromocionesController::class, 'mostrar'])
+            ->where('id_promocion', '[1-9][0-9]*')
+            ->name('promociones.mostrar');
     });
 
 // CU-010 Registrar cliente. Pública (autorregistro); máximo 10 intentos por
