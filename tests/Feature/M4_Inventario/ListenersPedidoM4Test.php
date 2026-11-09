@@ -6,6 +6,7 @@ use App\Contracts\M4_Inventario\Dependencias\PedidosDependencia;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Events\M5_Pedidos\PedidoCancelado;
 use App\Events\M5_Pedidos\PedidoConfirmado;
+use App\Events\M5_Pedidos\SubpedidoCancelado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Events\M6_Pagos\PagoRechazado;
 use App\Services\M4_Inventario\Dobles\PedidosStub;
@@ -96,5 +97,21 @@ class ListenersPedidoM4Test extends TestCase
         $this->assertSame('liberada', $this->estado($pagada));
         $this->assertSame('liberada', $this->estado($cancelada));
         $this->assertSame(0, (int) DB::table('existencias')->value('cantidad_reservada'));
+    }
+
+    public function test_subpedido_cancelado_libera_solo_sus_reservas_una_vez(): void
+    {
+        $delSubpedido = $this->reservar();
+        $deOtro = $this->reservar();
+        $evento = $this->evento(SubpedidoCancelado::class, [
+            'id_evento' => (string) Str::uuid(), 'id_pedido' => 9001, 'id_subpedido' => 9101, 'reservas' => [$delSubpedido],
+        ]);
+
+        event($evento);
+        event($evento); // reenvío del mismo id_evento: no se aplica dos veces
+
+        $this->assertSame('liberada', $this->estado($delSubpedido));
+        $this->assertSame('activa', $this->estado($deOtro));
+        $this->assertSame(1, (int) DB::table('existencias')->value('cantidad_reservada'));
     }
 }
