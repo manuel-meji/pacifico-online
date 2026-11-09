@@ -4,9 +4,9 @@
 
 ### 1. Identificación
 - **Código de Solicitud:** SC-08
-- **Fecha:** 2026.11.08 (actualizada el 2026.11.09 con lo construido en las fases 1 a 3)
+- **Fecha:** 2026.11.08 (actualizada el 2026.11.10 con lo construido en las fases 1 a 4)
 - **Módulo Solicitante:** M1
-- **Persona Solicitante:** [Nombre de la persona solicitante]
+- **Persona Solicitante:** Daniel Gatgens
 
 ---
 
@@ -43,13 +43,19 @@
      - Cada comercio crea y gestiona sus propias promociones. Una programada se edita completa (sin cambiar el producto); una que ya empezó solo puede adelantar su fin o desactivarse; una terminada o desactivada ya no se modifica.
      - La administración decide el orden en que se muestran en el portal y puede ocultar una promoción que incumpla las políticas, con motivo. Mientras está oculta no se muestra ni rebaja el precio, y sigue contando para los traslapes. El portal muestra automáticamente las vigentes.
      - El precio con descuento se calcula a 2 decimales y nunca es mayor que el precio normal. El descuento lo asume el comercio. La comisión se calcula sobre el precio que realmente pagó el cliente, con el descuento aplicado.
-  4. **Noticias de la plataforma** (en desarrollo). Contenido informativo que publica únicamente la administración (comercios nuevos, campañas de temporada, avisos de mantenimiento, cambios en políticas), con título, contenido, imagen y fecha de publicación. Una noticia puede enlazar promociones, pero es una entidad aparte. Los comercios no publican noticias. Esta sección se completa cuando se publique la parte de noticias del contrato.
+  4. **Noticias de la plataforma** (construido).
+     - Contenido informativo distinto de las promociones: comercios nuevos, campañas de temporada, avisos de mantenimiento y cambios en políticas.
+     - Las publica únicamente la administración (rol `encargado_plataforma`); los comercios no publican noticias.
+     - Cada noticia tiene título, resumen, contenido, imagen (URL) y fecha de publicación, que se fija al publicar (`fecha_inicio`). `fecha_fin` indica hasta cuándo se muestra; si no se indica, un año. El slug se genera a partir del título.
+     - Estados: borrador → publicada → archivada. El portal muestra solo las publicadas y vigentes, de la más reciente a la más antigua y paginadas. Una archivada no se modifica (`ERR-M1-006`).
+     - Puede enlazar hasta 10 promociones (tabla `noticia_promociones`), pero es una entidad aparte. El portal muestra solo las promociones enlazadas que estén vigentes y visibles.
 
   **Operaciones nuevas del contrato:**
   - **API HTTP `/api/m1/v1`**, con la sesión y los roles del núcleo:
     - Públicas:
       - `GET /destacados/tarifas` (listarTarifasDestacado)
       - `GET /promociones` (listarPromocionesVigentes)
+      - `GET /noticias` (listarNoticias) y `GET /noticias/{slug}` (obtenerNoticia)
       - En `ProductoResumen` (búsqueda, destacados, micrositio, relacionados) se agrega el campo opcional `promocion`, y en `VariacionFicha` los campos opcionales `precio_promocional`, `id_promocion` y `fin_promocion`. Solo vienen cuando hay una promoción vigente, así que las respuestas sin promoción no cambian.
     - Rol `encargado_comercio`, con aislamiento por comercio (RN-12; el comercio sale de la sesión, nunca del cuerpo):
       - `POST` y `GET /comercio/destacados/solicitudes` (solicitarDestacado, listarSolicitudesDestacado)
@@ -63,6 +69,8 @@
       - `PUT /administracion/destacados/tarifas/{periodo_dias}` (definirTarifaDestacado)
       - `GET /administracion/promociones` (listarPromocionesAdministracion)
       - `PUT /administracion/promociones/{id}/orden`, `POST .../ocultar` y `POST .../mostrar`
+      - `POST` y `GET /administracion/noticias` (crearNoticia, listarNoticiasAdministracion)
+      - `PUT /administracion/noticias/{id_noticia}` (actualizarNoticia), `POST .../publicar` (publicarNoticia) y `POST .../archivar` (archivarNoticia)
   - **Interfaz PHP `PortalPublicoContract`**: agrega `obtenerPreciosVigentes(array $idsVariacion): array`, que usa M5 para cobrar el precio rebajado. Por cada variación devuelve `precio_base`, `precio_final`, `id_promocion` y `fin_promocion` (esquema `PrecioVigente`). Va en esta interfaz porque M5 ya la consume ahí y su doble `PortalStub` ya la implementa con la misma firma.
   - **Interfaz PHP nueva `ComercialPortalContract`** (`x-interfaz-php-comercial`), aparte de `PortalPublicoContract` para no obligar a sus implementaciones a agregar métodos:
     - `listarCargosDestacado(int $idComercio, string $desde, string $hasta): array`, para quien liquida al comercio.
@@ -71,11 +79,13 @@
     - `ERR-M1-003`: el producto ya está destacado o tiene una solicitud pendiente, o la solicitud ya fue resuelta.
     - `ERR-M1-004`: el producto o una de sus variaciones ya tiene otra promoción activa en fechas que se cruzan.
     - `ERR-M1-005`: la promoción ya terminó o fue desactivada y no se puede modificar.
+    - `ERR-M1-006`: la noticia no se puede modificar en su estado actual (archivada o ya publicada).
     - Además, las rutas con rol responden 403 con `ERR-002` del núcleo (respuesta `RolSinPermiso`).
 
   **Base de datos de M1** (migraciones aplicadas en la base compartida):
   - `2026_11_08_000001` a `000004`: tablas `tarifas_destacado`, `solicitudes_destacado` y `cargos_destacado`; `productos_destacados` agrega `id_comercio`, `origen` (`solicitud` o `plataforma`) e `id_solicitud_destacado`.
   - `2026_11_09_000001` y `000002`: tablas `promociones` y `promocion_variaciones`.
+  - `2026_11_10_000001`: tabla `noticia_promociones` (enlace entre `noticias_portal`, que ya existía, y `promociones`).
   - Las aprobaciones de destacados de un mismo comercio y las promociones de un mismo producto se serializan con un bloqueo consultivo de PostgreSQL, para que dos operaciones simultáneas no pasen el máximo de 3 ni creen traslapes.
   - La tabla `promociones_portal` (pieza de carrusel sin descuento) queda en desuso. No se elimina porque la base de datos es compartida.
 - **Origen del cambio:**
@@ -108,9 +118,9 @@
 - **Artefactos actualizados:**
   - `contracts/m1-portal/v1/openapi.yaml`, `app/Contracts/M1_Portal/PortalPublicoContract.php`, `app/Contracts/M1_Portal/ComercialPortalContract.php` y las excepciones de `app/Contracts/M1_Portal/Exceptions/`.
   - Migraciones de `database/migrations/M1_Portal_y_Busqueda`.
-  - Servicios (`ReglasDestacados`, `PortadaService`, `DestacadosService`, `PromocionesService`), controladores y rutas de M1, con sus dobles (`PortalPublicoFake`, `ComercialPortalFake`, `CatalogoFake`) y pruebas (`PortadaServiceTest`, `ReglasDestacadosTest`, `DestacadosPagadosTest`, `PromocionesTest`).
-  - `frontend/src/modules/M1_Portal`: portada con 12 destacados, sección de promociones y precio rebajado en tarjetas y ficha.
-- **Esfuerzo estimado:** [Por estimar]
+  - Servicios (`ReglasDestacados`, `PortadaService`, `DestacadosService`, `PromocionesService`, `NoticiasService`), controladores y rutas de M1, con sus dobles (`PortalPublicoFake`, `ComercialPortalFake`, `CatalogoFake`) y pruebas (`PortadaServiceTest`, `ReglasDestacadosTest`, `DestacadosPagadosTest`, `PromocionesTest`, `NoticiasTest`).
+  - `frontend/src/modules/M1_Portal`: portada con 12 destacados, secciones de promociones y noticias, detalle de noticia y precio rebajado en tarjetas y ficha.
+- **Esfuerzo estimado:** 1 día
 
 ---
 
