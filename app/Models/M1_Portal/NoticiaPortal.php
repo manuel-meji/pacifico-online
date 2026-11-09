@@ -7,6 +7,7 @@ use Carbon\CarbonInterface;
 use Database\Factories\M1_Portal\NoticiaPortalFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Tabla noticias_portal: noticias o avisos de la administración (borrador,
@@ -26,6 +27,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $estado_noticia
  * @property CarbonInterface $fecha_inicio
  * @property CarbonInterface $fecha_fin
+ *
+ * Contrato 1.4.0 (SC-08): fecha_inicio es la fecha de publicación (se fija al
+ * publicar) y fecha_fin, hasta cuándo se muestra en el portal. En un borrador,
+ * fecha_inicio solo cumple la restricción NOT NULL y no se muestra.
  */
 class NoticiaPortal extends Model
 {
@@ -37,6 +42,11 @@ class NoticiaPortal extends Model
     public const ESTADO_PUBLICADA = 'publicada';
 
     public const ESTADO_ARCHIVADA = 'archivada';
+
+    /**
+     * @var list<string>
+     */
+    public const ESTADOS = [self::ESTADO_BORRADOR, self::ESTADO_PUBLICADA, self::ESTADO_ARCHIVADA];
 
     protected $table = 'noticias_portal';
 
@@ -96,5 +106,63 @@ class NoticiaPortal extends Model
             estado: $this->estado_noticia,
             fechaPublicacion: $this->fecha_inicio,
         );
+    }
+
+    /**
+     * Promociones que enlaza la noticia (tabla noticia_promociones, de M1).
+     *
+     * @return HasMany<NoticiaPromocion, $this>
+     */
+    public function enlacesPromociones(): HasMany
+    {
+        return $this->hasMany(NoticiaPromocion::class, 'id_noticia_portal', 'id_noticia_portal');
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function idsPromocion(): array
+    {
+        return $this->enlacesPromociones->pluck('id_promocion')->sort()->values()->all();
+    }
+
+    /**
+     * Esquema Noticia (administración).
+     *
+     * @return array<string, mixed>
+     */
+    public function aRespuesta(): array
+    {
+        return [
+            'id_noticia' => $this->id_noticia_portal,
+            'titulo' => $this->titulo_noticia,
+            'slug' => $this->slug_noticia,
+            'resumen' => $this->resumen_noticia,
+            'contenido' => $this->contenido_noticia,
+            'imagen_url' => $this->imagen_url,
+            'estado' => $this->estado_noticia,
+            'fecha_publicacion' => $this->estado_noticia === self::ESTADO_BORRADOR ? null : $this->fecha_inicio->toIso8601String(),
+            'fecha_fin' => $this->fecha_fin->toIso8601String(),
+            'visible_en_portal' => $this->estaPublicada(),
+            'ids_promocion' => $this->idsPromocion(),
+            'id_usuario_autor' => $this->id_usuario_autor,
+        ];
+    }
+
+    /**
+     * Esquema NoticiaResumen (portal).
+     *
+     * @return array<string, mixed>
+     */
+    public function aResumen(): array
+    {
+        return [
+            'id_noticia' => $this->id_noticia_portal,
+            'titulo' => $this->titulo_noticia,
+            'slug' => $this->slug_noticia,
+            'resumen' => $this->resumen_noticia,
+            'imagen_url' => $this->imagen_url,
+            'fecha_publicacion' => $this->fecha_inicio->toIso8601String(),
+        ];
     }
 }

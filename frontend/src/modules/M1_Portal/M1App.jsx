@@ -12,6 +12,7 @@ import IniciarSesionView from './views/IniciarSesionView';
 import InicioView from './views/InicioView';
 import PerfilView from './views/PerfilView';
 import FichaProductoView from './views/FichaProductoView';
+import NoticiaView from './views/NoticiaView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
 
@@ -21,6 +22,7 @@ const titulos = {
   busqueda: 'Pacíficos Online · Búsqueda',
   producto: 'Pacíficos Online · Producto',
   comercio: 'Pacíficos Online · Comercio',
+  noticia: 'Pacíficos Online · Noticia',
   ingresar: 'Pacíficos Online · M1 Iniciar sesión',
   crear: 'Pacíficos Online · M1 Crear cuenta',
   perfil: 'Pacíficos Online · M1 Mi cuenta',
@@ -29,7 +31,7 @@ const titulos = {
 // Parámetros de las pantallas del portal que viajan en la URL (?pantalla=producto&id=1520, etc.).
 // Los nombres de la búsqueda son los del contrato de buscarProductos.
 const PARAMETROS_NUMERICOS = ['id', 'id_categoria', 'precio_minimo', 'precio_maximo', 'pagina', 'por_pagina'];
-const PARAMETROS_TEXTO = ['q', 'orden'];
+const PARAMETROS_TEXTO = ['q', 'orden', 'slug'];
 
 export function leerParametros(busqueda = window.location.search) {
   const url = new URLSearchParams(busqueda);
@@ -190,6 +192,7 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     if (pantalla === 'busqueda') vista = <BusquedaView criterio={criterio} />;
     else if (pantalla === 'producto') vista = <FichaProductoView key={id} idProducto={id} />;
     else if (pantalla === 'comercio') vista = <FichaComercioView key={id} idComercio={id} criterio={criterio} />;
+    else if (pantalla === 'noticia') vista = <NoticiaView key={criterio.slug} slug={criterio.slug} />;
     else vista = <InicioView />;
 
     return <PortalContext.Provider value={portal}>{vista}</PortalContext.Provider>;

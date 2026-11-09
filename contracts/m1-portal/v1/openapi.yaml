@@ -57,6 +57,8 @@ servers:
   - url: /api/m1/v1
     description: Ruta base del módulo en el ambiente de integración (propuesta SG1)
 tags:
+  - name: Noticias
+    description: Nuevo en 1.4.0 (SC-08). Noticias de la plataforma; las publica solo la administración.
   - name: Promociones
     description: Nuevo en 1.4.0 (SC-08). Promociones de los comercios y sección del portal.
   - name: Búsqueda
@@ -978,6 +980,72 @@ paths:
         '503':
           $ref: '#/components/responses/DependenciaNoDisponible'
 
+  /noticias:
+    get:
+      tags: [Noticias]
+      operationId: listarNoticias
+      summary: Noticias publicadas de la plataforma
+      description: |
+        Nuevo en 1.4.0 (SC-08). Noticias publicadas y dentro de su periodo
+        (fecha_publicacion <= ahora <= fecha_fin), de la más reciente a la más
+        antigua. Los borradores y las archivadas no se muestran. Contenido
+        informativo distinto de las promociones (comercios nuevos, campañas de
+        temporada, avisos de mantenimiento, cambios en políticas).
+      x-consumidores: [Frontend del portal]
+      x-dependencias: []
+      security: []
+      parameters:
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: por_pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Página de noticias publicadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListadoNoticias'
+        '422':
+          $ref: '#/components/responses/PaginacionInvalida'
+
+  /noticias/{slug}:
+    parameters:
+      - $ref: '#/components/parameters/SlugNoticia'
+    get:
+      tags: [Noticias]
+      operationId: obtenerNoticia
+      summary: Detalle de una noticia publicada
+      description: |
+        Nuevo en 1.4.0 (SC-08). La noticia con su contenido y las promociones
+        que enlaza que estén vigentes y visibles (mismo esquema que
+        listarPromocionesVigentes). Una noticia puede enlazar promociones,
+        pero es una entidad aparte. Si M3 no responde, la noticia se muestra
+        igual con promociones vacío.
+      x-consumidores: [Frontend del portal]
+      x-dependencias: [M3.buscarProductos (filtro ids), M2.ObtenerResumenComerciosLote, M4.consultarDisponibilidadProductoLote]
+      security: []
+      responses:
+        '200':
+          description: Noticia publicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticiaDetalle'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+
   /comercio/promociones:
     post:
       tags: [Promociones]
@@ -1251,6 +1319,175 @@ paths:
         '404':
           $ref: '#/components/responses/RecursoNoEncontrado'
 
+  /administracion/noticias:
+    post:
+      tags: [Noticias]
+      operationId: crearNoticia
+      summary: La administración crea una noticia en borrador
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma; los comercios no
+        publican noticias. Queda en borrador hasta publicarNoticia. El slug se
+        genera a partir del título (único; si ya existe se agrega -2, -3...).
+        Sin fecha_fin, se muestra un año desde que se publica.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosNoticia'
+      responses:
+        '201':
+          description: Noticia creada en borrador.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+    get:
+      tags: [Noticias]
+      operationId: listarNoticiasAdministracion
+      summary: Todas las noticias, para la administración
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Todas las noticias
+        (borradores, publicadas y archivadas), de la modificada más
+        recientemente a la más antigua, con filtro opcional por estado.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoNoticia'
+      responses:
+        '200':
+          description: Noticias.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/noticias/{id_noticia}:
+    parameters:
+      - $ref: '#/components/parameters/IdNoticia'
+    put:
+      tags: [Noticias]
+      operationId: actualizarNoticia
+      summary: Editar una noticia
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Reemplaza los datos
+        de un borrador o de una publicada (los enlaces a promociones también).
+        El slug cambia con el título solo mientras es borrador. 409 ERR-M1-006
+        si está archivada.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosNoticia'
+      responses:
+        '200':
+          description: Noticia actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNoticia'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/noticias/{id_noticia}/publicar:
+    parameters:
+      - $ref: '#/components/parameters/IdNoticia'
+    post:
+      tags: [Noticias]
+      operationId: publicarNoticia
+      summary: Publicar un borrador
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. La fecha de
+        publicación es ahora, o fecha_publicacion para programarla; desde ese
+        momento se muestra en el portal hasta fecha_fin. 409 ERR-M1-006 si ya
+        está publicada o archivada.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicacionNoticia'
+      responses:
+        '200':
+          description: Noticia publicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNoticia'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/noticias/{id_noticia}/archivar:
+    parameters:
+      - $ref: '#/components/parameters/IdNoticia'
+    post:
+      tags: [Noticias]
+      operationId: archivarNoticia
+      summary: Archivar una noticia
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Un borrador o una
+        publicada deja de mostrarse y ya no se modifica. 409 ERR-M1-006 si ya
+        estaba archivada.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Noticia archivada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNoticia'
+
 components:
   securitySchemes:
     sesionNucleo:
@@ -1320,6 +1557,28 @@ components:
       schema:
         type: string
         enum: [programada, vigente, finalizada, desactivada, oculta]
+    IdNoticia:
+      name: id_noticia
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    SlugNoticia:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 170
+        pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+    EstadoNoticia:
+      name: estado
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [borrador, publicada, archivada]
     EstadoSolicitudDestacado:
       name: estado
       in: query
@@ -1910,6 +2169,136 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+    DatosNoticia:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de crearNoticia y actualizarNoticia.
+      required: [titulo, resumen, contenido]
+      properties:
+        titulo:
+          type: string
+          minLength: 1
+          maxLength: 150
+        resumen:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: Texto corto para la portada y el listado.
+        contenido:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        imagen_url:
+          type: string
+          format: uri
+          maxLength: 255
+          nullable: true
+          description: URL http o https de la imagen.
+        fecha_fin:
+          type: string
+          format: date-time
+          nullable: true
+          description: Hasta cuándo se muestra; debe ser futura. Sin valor, un año desde hoy.
+        ids_promocion:
+          type: array
+          maxItems: 10
+          items:
+            type: integer
+            minimum: 1
+          description: Promociones de M1 que enlaza la noticia (deben existir). Sin valor, ninguna.
+    PublicacionNoticia:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo opcional de publicarNoticia.
+      properties:
+        fecha_publicacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: Para programar la publicación; debe ser anterior a fecha_fin. Sin valor, ahora.
+    Noticia:
+      type: object
+      description: Nuevo en 1.4.0. Noticia completa, para la administración.
+      required: [id_noticia, titulo, slug, resumen, contenido, imagen_url, estado, fecha_publicacion, fecha_fin, visible_en_portal, ids_promocion, id_usuario_autor]
+      properties:
+        id_noticia:
+          type: integer
+        titulo:
+          type: string
+        slug:
+          type: string
+        resumen:
+          type: string
+        contenido:
+          type: string
+        imagen_url:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          enum: [borrador, publicada, archivada]
+        fecha_publicacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: null mientras es borrador.
+        fecha_fin:
+          type: string
+          format: date-time
+        visible_en_portal:
+          type: boolean
+          description: true si está publicada y dentro de su periodo.
+        ids_promocion:
+          type: array
+          items:
+            type: integer
+        id_usuario_autor:
+          type: integer
+    NoticiaResumen:
+      type: object
+      description: Nuevo en 1.4.0. Noticia en la portada y en el listado.
+      required: [id_noticia, titulo, slug, resumen, imagen_url, fecha_publicacion]
+      properties:
+        id_noticia:
+          type: integer
+        titulo:
+          type: string
+        slug:
+          type: string
+        resumen:
+          type: string
+        imagen_url:
+          type: string
+          nullable: true
+        fecha_publicacion:
+          type: string
+          format: date-time
+    NoticiaDetalle:
+      description: Nuevo en 1.4.0. Noticia publicada con su contenido y las promociones enlazadas vigentes.
+      allOf:
+        - $ref: '#/components/schemas/NoticiaResumen'
+        - type: object
+          required: [contenido, promociones]
+          properties:
+            contenido:
+              type: string
+            promociones:
+              type: array
+              items:
+                $ref: '#/components/schemas/PromocionVigente'
+    ListadoNoticias:
+      type: object
+      description: Nuevo en 1.4.0. Página de noticias publicadas.
+      required: [pagina, por_pagina, total, noticias]
+      properties:
+        pagina:
+          type: integer
+        por_pagina:
+          type: integer
+        total:
+          type: integer
+        noticias:
+          type: array
+          items:
+            $ref: '#/components/schemas/NoticiaResumen'
     PrecioVigente:
       type: object
       description: |
@@ -2248,6 +2637,20 @@ components:
               codigo: ERR-M1-004
               mensaje: El producto o una de sus variaciones ya tiene otra promoción activa en esas fechas.
               detalles: null
+    ConflictoNoticia:
+      description: |
+        Nuevo en 1.4.0. ERR-M1-006 si la noticia está archivada (no se edita,
+        no se publica ni se vuelve a archivar) o si ya está publicada y se
+        intenta publicarla de nuevo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-M1-006
+              mensaje: La noticia está archivada y no se puede editar.
+              detalles: null
     DatosInvalidos:
       description: Faltan datos obligatorios o tienen un formato incorrecto.
       content:
@@ -2283,6 +2686,7 @@ x-interfaz-php:
       - ConflictoDestacadoException (ERR-M1-003, desde 1.4.0; solo en las rutas web de destacados)
       - TraslapePromocionException (ERR-M1-004, desde 1.4.0; solo en las rutas web de promociones)
       - PromocionNoModificableException (ERR-M1-005, desde 1.4.0; solo en las rutas web de promociones)
+      - NoticiaNoModificableException (ERR-M1-006, desde 1.4.0; solo en las rutas web de noticias)
   doble_de_prueba: tests/Doubles/M1/PortalPublicoFake.php
   metodos:
     - firma: "obtenerCliente(int $idCliente): array"
@@ -2491,6 +2895,7 @@ x-historial-versiones:
       - Promociones de los comercios (M1 es el dueño de los datos) - porcentaje o precio fijo, con fecha y hora de inicio y fin, al producto completo o a variaciones específicas, sin traslapes (ERR-M1-004). Rutas web nuevas - listarPromocionesVigentes, crearPromocion, listarPromocionesComercio, actualizarPromocion, desactivarPromocion (ERR-M1-005), listarPromocionesAdministracion, ordenarPromocion, ocultarPromocion y mostrarPromocion.
       - ProductoResumen agrega el campo opcional promocion (PromocionResumen) y VariacionFicha los campos opcionales precio_promocional, id_promocion y fin_promocion; solo vienen cuando hay una promoción vigente.
       - Nuevo método de la interfaz PHP para M5 - obtenerPreciosVigentes (esquema PrecioVigente).
+      - Noticias de la plataforma, que publica únicamente la administración (encargado_plataforma), con título, resumen, contenido, imagen (URL) y fecha de publicación; pueden enlazar promociones (tabla noticia_promociones de M1) pero son una entidad aparte. Rutas web nuevas - listarNoticias, obtenerNoticia (públicas), crearNoticia, listarNoticiasAdministracion, actualizarNoticia, publicarNoticia y archivarNoticia. Nuevo código propio ERR-M1-006 (409, noticia archivada o ya publicada).
     solicitud_de_cambio: SC-08
     nota_de_compatibilidad: |
       Sin cambios en el esquema Destacados ni en la firma de listarDestacados,

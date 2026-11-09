@@ -268,14 +268,21 @@ class PromocionesService
     /**
      * Promociones vigentes y visibles para la sección del portal, en el orden
      * de la plataforma, con el producto (solo publicados y de comercios
-     * activos) y el precio desde con la promoción.
+     * activos) y el precio desde con la promoción. Con $soloIds, solo esas
+     * (las promociones que enlaza una noticia).
      *
+     * @param  list<int>|null  $soloIds
      * @return list<array<string, mixed>>
      */
-    public function listarVigentes(): array
+    public function listarVigentes(?array $soloIds = null): array
     {
+        if ($soloIds === []) {
+            return [];
+        }
+
         $ahora = Carbon::now();
         $promociones = $this->vigentes($ahora)
+            ->when($soloIds !== null, fn (Builder $consulta) => $consulta->whereIn('id_promocion', $soloIds))
             ->orderByRaw('orden IS NULL')
             ->orderBy('orden')
             ->orderBy('fecha_inicio')
