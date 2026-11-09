@@ -15,13 +15,13 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
-        $middleware->trimStrings(except: ['contrasena']);
+        $middleware->trimStrings(except: ['contrasena', 'contrasena_confirmation']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['contrasena']);
 
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*', 'login', 'logout', 'sanctum/*')
+            fn (Request $request) => $request->is('api/*', 'login', 'logout', 'crear-contrasena', 'sanctum/*')
                 || $request->expectsJson(),
         );
 
@@ -32,7 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(function (Throwable $e, Request $request) {
             if (
-                $request->is('api/*', 'login', 'logout', 'sanctum/*')
+                $request->is('api/*', 'login', 'logout', 'crear-contrasena', 'sanctum/*')
                 || $request->expectsJson()
             ) {
                 return ManejadorErrores::renderizar($e, $request);
