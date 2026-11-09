@@ -2,6 +2,7 @@
 
 namespace App\Services\M5_Pedidos;
 
+use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
@@ -29,6 +30,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         protected ?InventarioServiceInterface $inventarioService = null,
         protected ?PagosServiceInterface $pagosService = null,
         protected ?PortalServiceInterface $portalService = null,
+        protected ?PortalPublicoContract $portalContract = null,
     ) {}
 
     // =========================================================================
@@ -40,6 +42,9 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
      * subtotal por línea, IVA por línea (13% o tasa de M3, nunca sobre envío),
      * costo de envío por comercio, total y estado de suspensión del comercio.
      *
+     * Desde contrato M1 v1.4.0 (SC-08): consulta precios vigentes con promoción
+     * en M1 mediante obtenerPreciosVigentes(array $idsVariacion).
+     *
      * @return array{
      *     items: list<array<string, mixed>>,
      *     grupos_comercio: array<int, array<string, mixed>>,
@@ -50,10 +55,12 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
     public function calcularDesgloseCarrito(
         ?Carrito $carrito = null,
         ?CatalogoServiceInterface $catalogoOverride = null,
-        ?ComerciosServiceInterface $comerciosOverride = null
+        ?ComerciosServiceInterface $comerciosOverride = null,
+        ?object $portalOverride = null
     ): array {
         $catalogo = $catalogoOverride ?? $this->catalogoService ?? (app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null);
         $comercios = $comerciosOverride ?? $this->comerciosService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
+        $portal = $portalOverride ?? $this->resolverPortalM1();
 
         if (! $carrito) {
             return [
@@ -75,22 +82,44 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         $cacheComercios = [];
         $hayComercioSuspendido = false;
 
+        $idsVariacion = $carrito->items
+            ->pluck('id_variacion')
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $preciosVigentesM1 = $this->consultarPreciosVigentesM1($portal, $idsVariacion);
+
         foreach ($carrito->items as $item) {
+            $idVariacionItem = (int) $item->id_variacion;
             $variacion = null;
             if ($catalogo) {
                 try {
-                    $variacion = $catalogo->obtenerVariacion((int) $item->id_variacion);
+                    $variacion = $catalogo->obtenerVariacion($idVariacionItem);
                 } catch (\Throwable) {
                     $variacion = null;
                 }
             }
 
             $comercioId = (int) ($variacion['id_comercio'] ?? $variacion['producto']['id_comercio'] ?? 1);
-            $precio = (float) ($variacion['precio'] ?? 10000.00);
+            $precioCatalogo = (float) ($variacion['precio'] ?? 10000.00);
             $tarifaIva = (float) ($variacion['tarifa_impuesto'] ?? 13.00);
-            $nombreProducto = (string) ($variacion['nombre'] ?? $variacion['producto']['nombre'] ?? 'Producto #'.$item->id_variacion);
-            $sku = (string) ($variacion['sku'] ?? 'SKU-VAR-'.$item->id_variacion);
+            $nombreProducto = (string) ($variacion['nombre'] ?? $variacion['producto']['nombre'] ?? 'Producto #'.$idVariacionItem);
+            $sku = (string) ($variacion['sku'] ?? 'SKU-VAR-'.$idVariacionItem);
             $imagen = (string) ($variacion['imagen'] ?? $variacion['imagen_url'] ?? '');
+
+            // Precio vigente desde M1 (Contrato M1 v1.4.0 / SC-08)
+            $infoPromocion = $preciosVigentesM1[$idVariacionItem] ?? null;
+            $precioBase = isset($infoPromocion['precio_base']) ? (float) $infoPromocion['precio_base'] : $precioCatalogo;
+            $precio = isset($infoPromocion['precio_final']) ? (float) $infoPromocion['precio_final'] : $precioCatalogo;
+            $idPromocion = isset($infoPromocion['id_promocion']) && $infoPromocion['id_promocion'] !== null
+                ? (int) $infoPromocion['id_promocion']
+                : null;
+            $finPromocion = $infoPromocion['fin_promocion'] ?? $infoPromocion['fecha_fin'] ?? $infoPromocion['promocion_fin'] ?? null;
+            $descuentoUnitario = round(max(0.0, $precioBase - $precio), 2);
+            $descuentoLinea = round($descuentoUnitario * (int) $item->cantidad, 2);
 
             if (! isset($cacheComercios[$comercioId])) {
                 $nombreComercio = 'Comercio #'.$comercioId;
@@ -184,14 +213,20 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             $itemData = [
                 'id_item_carrito' => (int) $item->id_item_carrito,
                 'id_carrito' => (int) $item->id_carrito,
-                'id_variacion' => (int) $item->id_variacion,
+                'id_variacion' => $idVariacionItem,
                 'cantidad' => (int) $item->cantidad,
                 'id_reserva' => $item->id_reserva ? (string) $item->id_reserva : null,
                 'nombre' => $nombreProducto,
                 'sku' => $sku,
                 'imagen' => $imagen,
+                'precio_base' => $precioBase,
+                'precio_final' => $precio,
                 'precio' => $precio,
                 'precio_unitario' => $precio,
+                'descuento_unitario' => $descuentoUnitario,
+                'descuento' => $descuentoLinea,
+                'id_promocion' => $idPromocion,
+                'fin_promocion' => $finPromocion,
                 'tarifa_impuesto' => $tarifaIva,
                 'id_comercio' => $comercioId,
                 'nombre_comercio' => $metaComercio['nombre_comercio'],
@@ -236,6 +271,85 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             ],
             'hay_comercio_suspendido' => $hayComercioSuspendido,
         ];
+    }
+
+    /**
+     * Resuelve el servicio o doble de M1 para consultas de precios vigentes.
+     */
+    private function resolverPortalM1(): ?object
+    {
+        if ($this->portalContract !== null) {
+            return $this->portalContract;
+        }
+
+        if ($this->portalService !== null) {
+            return $this->portalService;
+        }
+
+        if (app()->resolved(PortalPublicoContract::class) && app()->bound(PortalPublicoContract::class)) {
+            return app(PortalPublicoContract::class);
+        }
+
+        if (app()->resolved(PortalServiceInterface::class) && app()->bound(PortalServiceInterface::class)) {
+            return app(PortalServiceInterface::class);
+        }
+
+        $modo = config('integraciones.m5.m1.modo');
+        $doble = config('integraciones.m5.m1.doble');
+        if ($modo === 'doble' && is_string($doble) && class_exists($doble)) {
+            return app($doble);
+        }
+
+        if (app()->bound(PortalPublicoContract::class)) {
+            return app(PortalPublicoContract::class);
+        }
+
+        return null;
+    }
+
+    /**
+     * Consulta a M1 los precios vigentes por lote (contrato M1 v1.4.0 / SC-08).
+     * Normaliza tanto respuestas indexadas por id_variacion como listas secuenciales.
+     *
+     * @param  list<int>  $idsVariacion
+     * @return array<int, array<string, mixed>>
+     */
+    private function consultarPreciosVigentesM1(?object $portal, array $idsVariacion): array
+    {
+        if (! $portal || $idsVariacion === [] || ! method_exists($portal, 'obtenerPreciosVigentes')) {
+            return [];
+        }
+
+        try {
+            $respuesta = $portal->obtenerPreciosVigentes($idsVariacion);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (! is_array($respuesta)) {
+            return [];
+        }
+
+        $lista = $respuesta['precios'] ?? $respuesta['variaciones'] ?? $respuesta;
+        if (! is_array($lista)) {
+            return [];
+        }
+
+        $mapa = [];
+        foreach ($lista as $clave => $datos) {
+            if (! is_array($datos)) {
+                continue;
+            }
+            $idVar = isset($datos['id_variacion'])
+                ? (int) $datos['id_variacion']
+                : (is_numeric($clave) ? (int) $clave : 0);
+
+            if ($idVar > 0) {
+                $mapa[$idVar] = $datos;
+            }
+        }
+
+        return $mapa;
     }
 
     // =========================================================================
@@ -410,6 +524,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                         'cantidad' => $l->cantidad,
                         'precio_unitario' => (float) $l->precio_unitario,
                         'tarifa_impuesto' => (float) $l->tarifa_impuesto,
+                        'descuento' => (float) ($l->descuento ?? 0.0),
+                        'id_promocion' => $l->id_promocion !== null ? (int) $l->id_promocion : null,
                     ])->all(),
                     'historial_estados' => $subpedido->estados?->toArray() ?? [],
                     'cancelaciones' => $subpedido->cancelaciones?->toArray() ?? [],
@@ -651,13 +767,20 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
 
                         foreach ($grupo['items'] ?? [] as $itemData) {
                             $lineaReserva = (string) ($itemData['id_reserva'] ?? $idReservaDefault ?? '');
+                            $descuentoLinea = (float) ($itemData['descuento'] ?? 0.0);
+                            $idPromocionLinea = isset($itemData['id_promocion']) && $itemData['id_promocion'] !== null
+                                ? (int) $itemData['id_promocion']
+                                : null;
+
                             (new PedidoLinea)->crearLinea(
                                 $subpedido->id_subpedido,
                                 (int) $itemData['id_variacion'],
                                 (int) $itemData['cantidad'],
                                 (float) $itemData['precio_unitario'],
                                 (float) $itemData['tarifa_impuesto'],
-                                $lineaReserva !== '' ? $lineaReserva : null
+                                $lineaReserva !== '' ? $lineaReserva : null,
+                                $descuentoLinea,
+                                $idPromocionLinea
                             );
                         }
                     }
@@ -735,6 +858,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                             'cantidad' => $l->cantidad,
                             'precio_unitario' => (float) $l->precio_unitario,
                             'tarifa_impuesto' => (float) $l->tarifa_impuesto,
+                            'descuento' => (float) ($l->descuento ?? 0.0),
+                            'id_promocion' => $l->id_promocion !== null ? (int) $l->id_promocion : null,
                         ])->all(),
                     ])->all(),
                     'historial_estados' => $pedido->estados?->toArray() ?? [],

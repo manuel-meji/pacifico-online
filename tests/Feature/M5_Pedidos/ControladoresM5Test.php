@@ -2,19 +2,24 @@
 
 namespace Tests\Feature\M5_Pedidos;
 
+use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
+use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Models\Nucleo\Usuario;
 use App\Services\M5_Pedidos\Dobles\CatalogoStub;
 use App\Services\M5_Pedidos\Dobles\ComerciosStub;
 use App\Services\M5_Pedidos\Dobles\InventarioStub;
 use App\Services\M5_Pedidos\Dobles\PagosStub;
+use App\Services\M5_Pedidos\Dobles\PortalStub;
 use Database\Seeders\M5PedidosSeeder;
+use Tests\Doubles\M1\PortalPublicoFake;
 use Tests\TestCase;
 
 class ControladoresM5Test extends TestCase
@@ -279,5 +284,137 @@ class ControladoresM5Test extends TestCase
             'motivo' => 'Cliente solicitó cancelación antes de entrar en preparación',
             'requiere_reembolso' => 1,
         ]);
+    }
+
+    public function test_carrito_y_checkout_con_sesion_resuelven_id_cliente_por_usuario_en_m1(): void
+    {
+        $this->configurarMocks();
+
+        // El usuario autenticado tiene id_usuario = 501, que corresponde a id_cliente = 1 en M1 (PortalStub / PortalPublicoFake)
+        $usuario = new Usuario;
+        $usuario->forceFill(['id_usuario' => PortalPublicoFake::USUARIO_CON_CLIENTE]);
+
+        // 1. Agregar al carrito con sesión activa
+        $resAgregar = $this->actingAs($usuario)
+            ->postJson('/m5/carrito/items', [
+                'id_variacion' => 101,
+                'cantidad' => 2,
+            ])
+            ->assertStatus(201);
+
+        $this->assertSame(PortalPublicoFake::CLIENTE_CON_DIRECCIONES, $resAgregar->json('id_cliente'));
+        $this->assertDatabaseHas('pedidos_carritos', [
+            'id_cliente' => PortalPublicoFake::CLIENTE_CON_DIRECCIONES,
+        ]);
+        $this->assertDatabaseMissing('pedidos_carritos', [
+            'id_cliente' => PortalPublicoFake::USUARIO_CON_CLIENTE,
+        ]);
+
+        $itemId = $resAgregar->json('items.0.id_item_carrito');
+
+        // 2. Obtener carrito con sesión activa
+        $this->actingAs($usuario)
+            ->getJson('/m5/carrito')
+            ->assertStatus(200)
+            ->assertJsonPath('id_cliente', PortalPublicoFake::CLIENTE_CON_DIRECCIONES)
+            ->assertJsonCount(1, 'items');
+
+        // 3. Actualizar cantidad con sesión activa
+        $this->actingAs($usuario)
+            ->putJson('/m5/carrito/items/'.$itemId, ['cantidad' => 3])
+            ->assertStatus(200)
+            ->assertJsonPath('id_cliente', PortalPublicoFake::CLIENTE_CON_DIRECCIONES);
+
+        // 4. Listar direcciones con sesión activa
+        $this->actingAs($usuario)
+            ->getJson('/m5/carrito/direcciones')
+            ->assertStatus(200)
+            ->assertJsonPath('id_cliente', PortalPublicoFake::CLIENTE_CON_DIRECCIONES);
+
+        // 5. Procesar checkout con sesión activa
+        $resCheckout = $this->actingAs($usuario)
+            ->postJson('/m5/pedidos', ['metodoPago' => 'tarjeta'])
+            ->assertStatus(201);
+
+        $this->assertSame(PortalPublicoFake::CLIENTE_CON_DIRECCIONES, $resCheckout->json('id_cliente'));
+
+        // 6. Vaciar carrito con sesión activa
+        $this->actingAs($usuario)
+            ->postJson('/m5/carrito/items', ['id_variacion' => 102, 'cantidad' => 1])
+            ->assertStatus(201);
+
+        $this->actingAs($usuario)
+            ->deleteJson('/m5/carrito')
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('items_carrito', ['id_variacion' => 102]);
+    }
+
+    public function test_promociones_m1_precio_vigente_en_carrito_vencimiento_y_confirmacion_pedido(): void
+    {
+        $this->configurarMocks();
+
+        $portalStub = new PortalStub;
+        $this->app->instance(PortalPublicoContract::class, $portalStub);
+
+        // Parte A: Se agrega al carrito con promoción vigente (15.000 -> 12.000, promo #15), pero vence antes del checkout
+        $portalStub->definirPromocionVariacion(101, 15000.00, 12000.00, 15, '2026-11-15T23:59:59-06:00');
+
+        $resCarrito = $this->postJson('/m5/carrito/items', [
+            'id_cliente' => 1,
+            'id_variacion' => 101,
+            'cantidad' => 2,
+        ])->assertStatus(201);
+
+        $this->assertEqualsWithDelta(12000.00, (float) $resCarrito->json('items.0.precio_unitario'), 0.001);
+        $this->assertEqualsWithDelta(15000.00, (float) $resCarrito->json('items.0.precio_base'), 0.001);
+        $this->assertEqualsWithDelta(12000.00, (float) $resCarrito->json('items.0.precio_final'), 0.001);
+        $this->assertEqualsWithDelta(6000.00, (float) $resCarrito->json('items.0.descuento'), 0.001);
+        $this->assertSame(15, $resCarrito->json('items.0.id_promocion'));
+        $this->assertEqualsWithDelta(24000.00, (float) $resCarrito->json('resumen.subtotal'), 0.001);
+
+        // La promoción termina mientras el producto está en el carrito: al confirmar se cobra el precio normal (15.000 x 2 = 30.000)
+        $portalStub->limpiarPromociones();
+
+        $resCheckoutNormal = $this->postJson('/m5/pedidos', [
+            'id_cliente' => 1,
+            'metodoPago' => 'tarjeta',
+        ])->assertStatus(201);
+
+        $idPedidoNormal = (int) $resCheckoutNormal->json('id_pedido');
+        $this->assertEqualsWithDelta(30000.00, (float) $resCheckoutNormal->json('subtotal'), 0.001);
+
+        $lineaNormal = PedidoLinea::whereHas('subpedido', fn ($q) => $q->where('id_pedido', $idPedidoNormal))->first();
+        $this->assertNotNull($lineaNormal);
+        $this->assertEqualsWithDelta(15000.00, (float) $lineaNormal->precio_unitario, 0.001);
+        $this->assertEqualsWithDelta(0.00, (float) $lineaNormal->descuento, 0.001);
+        $this->assertNull($lineaNormal->id_promocion);
+
+        // Parte B: Se agrega a precio normal y la promoción empieza antes de confirmar el pedido (15.000 -> 10.000, promo #22)
+        $this->postJson('/m5/carrito/items', [
+            'id_cliente' => 1,
+            'id_variacion' => 101,
+            'cantidad' => 2,
+        ])->assertStatus(201);
+
+        $portalStub->definirPromocionVariacion(101, 15000.00, 10000.00, 22, '2026-11-20T23:59:59-06:00');
+
+        $resCheckoutPromo = $this->postJson('/m5/pedidos', [
+            'id_cliente' => 1,
+            'metodoPago' => 'tarjeta',
+            'cupon_descuento' => 'CUPON-CONVIVE',
+        ])->assertStatus(201);
+
+        $idPedidoPromo = (int) $resCheckoutPromo->json('id_pedido');
+        // Subtotal ya rebajado: 2 x 10.000 = 20.000 (tanto en maestro como en el subpedido enviado a M2)
+        $this->assertEqualsWithDelta(20000.00, (float) $resCheckoutPromo->json('subtotal'), 0.001);
+        $this->assertEqualsWithDelta(20000.00, (float) $resCheckoutPromo->json('subpedidos.0.subtotal'), 0.001);
+        $this->assertSame('CUPON-CONVIVE', $resCheckoutPromo->json('cupon_descuento'));
+
+        $lineaPromo = PedidoLinea::whereHas('subpedido', fn ($q) => $q->where('id_pedido', $idPedidoPromo))->first();
+        $this->assertNotNull($lineaPromo);
+        $this->assertEqualsWithDelta(10000.00, (float) $lineaPromo->precio_unitario, 0.001);
+        $this->assertEqualsWithDelta(10000.00, (float) $lineaPromo->descuento, 0.001);
+        $this->assertSame(22, (int) $lineaPromo->id_promocion);
     }
 }

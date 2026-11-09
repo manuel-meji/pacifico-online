@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\M5_Pedidos;
 
+use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
@@ -18,6 +19,7 @@ use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
 use App\Services\M5_Pedidos\PedidosService;
+use App\Services\Nucleo\ContextoCliente;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,6 +27,8 @@ use Illuminate\Support\Str;
 
 class ControladorPedido extends Controller
 {
+    private $m1Portal;
+
     private $m2Comercios;
 
     private $m4Inventario;
@@ -33,18 +37,24 @@ class ControladorPedido extends Controller
 
     private PedidosService $pedidosService;
 
-    public function __construct(?ComerciosServiceInterface $comercioService = null, ?InventarioServiceInterface $inventarioService = null, ?PagosServiceInterface $pagosService = null, ?PedidosService $pedidosService = null)
-    {
+    public function __construct(
+        ?ComerciosServiceInterface $comercioService = null,
+        ?InventarioServiceInterface $inventarioService = null,
+        ?PagosServiceInterface $pagosService = null,
+        ?PedidosService $pedidosService = null,
+        ?PortalPublicoContract $portalService = null
+    ) {
         $this->m2Comercios = $comercioService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
         $this->m4Inventario = $inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
         $this->m6Pagos = $pagosService ?? (app()->bound(PagosServiceInterface::class) ? app(PagosServiceInterface::class) : null);
         $this->pedidosService = $pedidosService ?? app(PedidosService::class);
+        $this->m1Portal = $portalService ?? (app()->bound(PortalPublicoContract::class) ? app(PortalPublicoContract::class) : (app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null));
     }
 
     public function procesarCheckout(Request $request): JsonResponse
     {
         $datos = $request->all();
-        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = $this->resolverIdCliente($request);
         $direccionClienteId = (int) ($request->input('id_direccion_cliente', 1));
 
         // 1. Validar que el carrito no esté vacío
@@ -56,9 +66,9 @@ class ControladorPedido extends Controller
         }
 
         // Validar cliente y dirección con M1_Portal (Contrato M1 v1.1.0)
-        $portalService = app()->bound(PortalServiceInterface::class)
+        $portalService = (app()->resolved(PortalServiceInterface::class) && app()->bound(PortalServiceInterface::class))
             ? app(PortalServiceInterface::class)
-            : null;
+            : ($this->m1Portal ?? (app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null));
 
         if ($portalService) {
             try {
@@ -73,8 +83,8 @@ class ControladorPedido extends Controller
             }
         }
 
-        // B1: Calcular desglose unificado del carrito con M3 y M2
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, null, $this->m2Comercios);
+        // B1: Calcular desglose unificado del carrito con M3, M2 y precios vigentes de M1
+        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, null, $this->m2Comercios, $portalService);
         $itemsAgrupados = $desglose['grupos_comercio'];
         $comerciosInvolucrados = array_keys($itemsAgrupados);
 
@@ -439,7 +449,7 @@ class ControladorPedido extends Controller
 
     public function listarPedidos(Request $request): JsonResponse
     {
-        $clienteId = (int) ($request->user()?->id_usuario ?? $request->user()?->id ?? $request->input('id_cliente', 1));
+        $clienteId = $this->resolverIdCliente($request);
         $query = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->where('id_cliente', $clienteId);
 
         if ($request->filled('estado_pedido')) {
@@ -489,6 +499,26 @@ class ControladorPedido extends Controller
     public function calcularCostos(float $subtotal, float $impuestos, float $envio): float
     {
         return round($subtotal + $impuestos + $envio, 2);
+    }
+
+    private function resolverIdCliente(Request $request): int
+    {
+        $usuario = $request->user();
+
+        if ($usuario !== null) {
+            $idUsuario = (int) ($usuario->id_usuario ?? $usuario->id ?? 0);
+
+            if ($idUsuario > 0 && $this->m1Portal && method_exists($this->m1Portal, 'obtenerIdClientePorUsuario')) {
+                $idCliente = (int) $this->m1Portal->obtenerIdClientePorUsuario($idUsuario);
+                if (app()->bound(ContextoCliente::class)) {
+                    app(ContextoCliente::class)->establecer($idCliente);
+                }
+
+                return $idCliente;
+            }
+        }
+
+        return (int) $request->input('id_cliente', 1);
     }
 
     private function errorRespuesta(string $codigo, string $mensaje, ?array $detalles = null, int $status = 400): JsonResponse

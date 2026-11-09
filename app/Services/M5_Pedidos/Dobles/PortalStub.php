@@ -28,6 +28,13 @@ class PortalStub implements PortalPublicoContract, PortalServiceInterface
      */
     private array $direcciones;
 
+    /**
+     * Promociones vigentes por variación para pruebas de integración (contrato M1 v1.4.0).
+     *
+     * @var array<int, array{id_variacion: int, precio_base: float, precio_final: float, id_promocion: int|null, fin_promocion: string|null}>
+     */
+    private array $promocionesVariacion = [];
+
     private int $siguienteIdDireccion = 10;
 
     public function __construct()
@@ -192,6 +199,10 @@ class PortalStub implements PortalPublicoContract, PortalServiceInterface
 
     public function obtenerIdClientePorUsuario(int $idUsuario): int
     {
+        if ($idUsuario === 501) {
+            return 1;
+        }
+
         foreach ($this->clientes as $c) {
             if (($c['id_usuario'] ?? null) === $idUsuario) {
                 return (int) $c['id_cliente'];
@@ -199,6 +210,60 @@ class PortalStub implements PortalPublicoContract, PortalServiceInterface
         }
 
         return $idUsuario;
+    }
+
+    /**
+     * Configura una promoción vigente sobre una variación en el doble de M1.
+     */
+    public function definirPromocionVariacion(
+        int $idVariacion,
+        float $precioBase,
+        float $precioFinal,
+        ?int $idPromocion = 1,
+        ?string $finPromocion = null
+    ): self {
+        $this->promocionesVariacion[$idVariacion] = [
+            'id_variacion' => $idVariacion,
+            'precio_base' => round($precioBase, 2),
+            'precio_final' => round($precioFinal, 2),
+            'id_promocion' => $idPromocion,
+            'fin_promocion' => $finPromocion ?? now()->addDay()->toIso8601String(),
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Elimina todas las promociones configuradas en el doble (p. ej. para simular vencimiento).
+     */
+    public function limpiarPromociones(): self
+    {
+        $this->promocionesVariacion = [];
+
+        return $this;
+    }
+
+    /**
+     * Precios vigentes por variación considerando promociones activas de M1 (contrato v1.4.0 / SC-08).
+     *
+     * @param  list<int>  $idsVariacion
+     * @return array<int, array{id_variacion: int, precio_base: float, precio_final: float, id_promocion: int|null, fin_promocion: string|null}>
+     */
+    public function obtenerPreciosVigentes(array $idsVariacion): array
+    {
+        if ($this->simularFallo) {
+            throw ErrorProveedorException::datosInvalidos('Error al consultar precios vigentes en M1');
+        }
+
+        $resultado = [];
+        foreach ($idsVariacion as $idVariacion) {
+            $id = (int) $idVariacion;
+            if (isset($this->promocionesVariacion[$id])) {
+                $resultado[$id] = $this->promocionesVariacion[$id];
+            }
+        }
+
+        return $resultado;
     }
 
     public function registrarCliente(array $datos): int
@@ -323,7 +388,7 @@ class PortalStub implements PortalPublicoContract, PortalServiceInterface
         ];
     }
 
-    public function listarDestacados(int $limite = 8): array
+    public function listarDestacados(int $limite = 12): array
     {
         $base = $this->getDestacados();
 
