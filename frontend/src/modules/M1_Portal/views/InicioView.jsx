@@ -7,7 +7,8 @@ import Imagen from '../components/Imagen';
 import { listarComercios, listarDestacados } from '../services/m1Api';
 import useConsulta from '../services/useConsulta';
 
-const LIMITE_DESTACADOS = 8;
+// La portada muestra hasta 12 destacados (contrato M1 1.4.0); en la cuadrícula de 4 columnas son 3 filas.
+const LIMITE_DESTACADOS = 12;
 
 // Página principal: GET /api/m1/v1/destacados.
 // Si secciones_no_disponibles incluye "comercios" o "productos", esa sección se oculta y el resto sigue.

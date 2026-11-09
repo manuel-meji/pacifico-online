@@ -29,8 +29,21 @@ class CompletadorProductos
      */
     public function completar(array $productos): array
     {
+        return $this->completarConInventario($productos)[0];
+    }
+
+    /**
+     * Igual que completar(), y además dice si M4 respondió. Si no respondió,
+     * la disponibilidad es la que dejó el adaptador y no se debe tomar como
+     * cierta (la portada no oculta productos por eso).
+     *
+     * @param  list<ProductoResumenDTO>  $productos
+     * @return array{0: list<ProductoResumenDTO>, 1: bool}
+     */
+    public function completarConInventario(array $productos): array
+    {
         if ($productos === []) {
-            return [];
+            return [[], true];
         }
 
         return $this->combinarDisponibilidad($this->descartarComerciosNoHabilitados($productos));
@@ -72,15 +85,16 @@ class CompletadorProductos
     }
 
     /**
-     * Si M4 no responde, quedan como Agotado (valor del adaptador).
+     * Si M4 no responde, quedan como Agotado (valor del adaptador) y el
+     * segundo valor es false.
      *
      * @param  list<ProductoResumenDTO>  $productos
-     * @return list<ProductoResumenDTO>
+     * @return array{0: list<ProductoResumenDTO>, 1: bool}
      */
     private function combinarDisponibilidad(array $productos): array
     {
         if ($productos === []) {
-            return [];
+            return [[], true];
         }
 
         $idsProducto = [];
@@ -92,7 +106,7 @@ class CompletadorProductos
         try {
             $disponibilidades = $this->inventario->consultarDisponibilidadProductos($idsProducto);
         } catch (DependenciaNoDisponibleException) {
-            return $productos;
+            return [$productos, false];
         }
 
         $estados = [];
@@ -101,13 +115,13 @@ class CompletadorProductos
             $estados[$disponibilidad->idProducto] = $disponibilidad->estado;
         }
 
-        return array_map(
+        return [array_map(
             fn (ProductoResumenDTO $producto): ProductoResumenDTO => $this->copiar(
                 $producto,
                 disponibilidad: $estados[$producto->idProducto] ?? $producto->disponibilidad,
             ),
             $productos,
-        );
+        ), true];
     }
 
     private function copiar(ProductoResumenDTO $producto, ?string $nombreComercio = null, ?Disponibilidad $disponibilidad = null): ProductoResumenDTO
