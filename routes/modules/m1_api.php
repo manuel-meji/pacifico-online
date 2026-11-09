@@ -3,10 +3,13 @@
 use App\Http\Controllers\M1_Portal\BusquedaController;
 use App\Http\Controllers\M1_Portal\ClienteController;
 use App\Http\Controllers\M1_Portal\ComercioController;
+use App\Http\Controllers\M1_Portal\DestacadosController;
 use App\Http\Controllers\M1_Portal\DireccionClienteController;
 use App\Http\Controllers\M1_Portal\FichaProductoController;
 use App\Http\Controllers\M1_Portal\PortadaController;
 use App\Http\Middleware\EstablecerCliente;
+use App\Http\Middleware\EstablecerComercio;
+use App\Http\Middleware\RequiereRol;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -43,6 +46,45 @@ Route::middleware(EstablecerCliente::class)->group(function (): void {
 });
 
 Route::get('/categorias', [BusquedaController::class, 'listarCategorias'])->name('categorias');
+
+/*
+| Productos destacados: solicitud, aprobación y cobro (contrato 1.4.0, SC-08).
+| - Tarifas: consulta pública.
+| - Comercio: rol encargado_comercio; EstablecerComercio fija el comercio de la
+|   sesión (RN-12), que nunca se toma del cuerpo de la petición.
+| - Administración: rol encargado_plataforma; EstablecerComercio le concede el
+|   acceso auditado del núcleo.
+*/
+Route::get('/destacados/tarifas', [DestacadosController::class, 'tarifas'])->name('destacados.tarifas');
+
+Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class.':encargado_comercio'])
+    ->prefix('comercio')
+    ->name('comercio.')
+    ->group(function (): void {
+        Route::post('/destacados/solicitudes', [DestacadosController::class, 'solicitar'])->name('destacados.solicitar');
+        Route::get('/destacados/solicitudes', [DestacadosController::class, 'solicitudesDelComercio'])->name('destacados.solicitudes');
+    });
+
+Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class.':encargado_plataforma'])
+    ->prefix('administracion')
+    ->name('administracion.')
+    ->group(function (): void {
+        Route::get('/destacados/solicitudes', [DestacadosController::class, 'solicitudes'])->name('destacados.solicitudes');
+
+        Route::post('/destacados/solicitudes/{id_solicitud_destacado}/aprobar', [DestacadosController::class, 'aprobar'])
+            ->where('id_solicitud_destacado', '[1-9][0-9]*')
+            ->name('destacados.aprobar');
+
+        Route::post('/destacados/solicitudes/{id_solicitud_destacado}/rechazar', [DestacadosController::class, 'rechazar'])
+            ->where('id_solicitud_destacado', '[1-9][0-9]*')
+            ->name('destacados.rechazar');
+
+        Route::post('/destacados', [DestacadosController::class, 'destacarPorPlataforma'])->name('destacados.crear');
+
+        Route::put('/destacados/tarifas/{periodo_dias}', [DestacadosController::class, 'definirTarifa'])
+            ->where('periodo_dias', '[0-9]+')
+            ->name('destacados.tarifas.definir');
+    });
 
 // CU-010 Registrar cliente. Pública (autorregistro); máximo 10 intentos por
 // minuto por IP para frenar registros masivos y pruebas de correos.

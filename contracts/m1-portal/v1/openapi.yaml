@@ -661,6 +661,296 @@ paths:
         '422':
           $ref: '#/components/responses/DatosInvalidos'
 
+  /destacados/tarifas:
+    get:
+      tags: [Destacados]
+      operationId: listarTarifasDestacado
+      summary: Tarifas de los periodos de producto destacado
+      description: |
+        Nuevo en 1.4.0 (SC-08). Tarifa fija de cada periodo (7, 15 o 30 días)
+        que define la administración. Es pública para que el panel del comercio
+        la muestre antes de solicitar. Un periodo sin tarifa no aparece y no se
+        puede solicitar.
+      x-consumidores: [Panel del comercio (M2), Panel de la administración (M2)]
+      security: []
+      responses:
+        '200':
+          description: Tarifas definidas, por periodo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TarifaDestacado'
+
+  /comercio/destacados/solicitudes:
+    post:
+      tags: [Destacados]
+      operationId: solicitarDestacado
+      summary: El comercio solicita destacar uno de sus productos
+      description: |
+        Nuevo en 1.4.0 (SC-08). El comercio de la sesión (rol
+        encargado_comercio; el comercio sale de la sesión, nunca del cuerpo)
+        pide destacar uno de sus productos por 7, 15 o 30 días. Se guarda la
+        tarifa vigente del periodo, que es la que se cobra si se aprueba. Queda
+        pendiente hasta que la administración la apruebe o la rechace.
+
+        - 404 ERR-004 si el producto no existe, no está publicado o es de otro
+          comercio (no se distingue, para no revelar productos ajenos).
+        - 409 ERR-M1-003 si el producto ya está destacado o ya tiene una
+          solicitud pendiente.
+        - 422 ERR-005 si el periodo no es 7, 15 o 30, o no tiene tarifa.
+        - El máximo de 3 destacados activos por comercio se valida al aprobar.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      x-dependencias: [M3.obtenerProducto (comercio del producto)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevaSolicitudDestacado'
+      responses:
+        '201':
+          description: Solicitud creada, pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoDestacado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+    get:
+      tags: [Destacados]
+      operationId: listarSolicitudesDestacado
+      summary: Solicitudes de destacado del comercio de la sesión
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo las del comercio de la sesión (RN-12), de
+        la más reciente a la más antigua. Una aprobada trae fecha_inicio y
+        fecha_fin del periodo.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoSolicitudDestacado'
+      responses:
+        '200':
+          description: Solicitudes del comercio.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/destacados/solicitudes:
+    get:
+      tags: [Destacados]
+      operationId: listarSolicitudesDestacadoAdministracion
+      summary: Solicitudes de destacado de todos los comercios
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo el rol encargado_plataforma, con el acceso
+        auditado del núcleo. Filtros opcionales por estado y comercio.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoSolicitudDestacado'
+        - name: id_comercio
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Solicitudes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/destacados/solicitudes/{id_solicitud_destacado}/aprobar:
+    parameters:
+      - $ref: '#/components/parameters/IdSolicitudDestacado'
+    post:
+      tags: [Destacados]
+      operationId: aprobarSolicitudDestacado
+      summary: Aprobar una solicitud de destacado
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. El periodo empieza
+        en el momento de aprobar y dura los días solicitados. Se genera un
+        cargo con la tarifa guardada en la solicitud, que se descuenta de la
+        liquidación del comercio (ver x-interfaz-php-comercial). El periodo
+        corre aunque el producto se oculte (agotado, desactivado o comercio
+        suspendido) y no se reembolsa.
+
+        - 409 ERR-M1-002 si el comercio ya tiene 3 destacados activos en ese
+          periodo (cuentan los pagados y los de la administración).
+        - 409 ERR-M1-003 si la solicitud ya fue resuelta o el producto ya está
+          destacado en ese periodo.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Solicitud aprobada, con fecha_inicio y fecha_fin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoDestacado'
+
+  /administracion/destacados/solicitudes/{id_solicitud_destacado}/rechazar:
+    parameters:
+      - $ref: '#/components/parameters/IdSolicitudDestacado'
+    post:
+      tags: [Destacados]
+      operationId: rechazarSolicitudDestacado
+      summary: Rechazar una solicitud de destacado
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. El motivo es
+        obligatorio y lo ve el comercio. No genera cargo.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RechazoSolicitudDestacado'
+      responses:
+        '200':
+          description: Solicitud rechazada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoDestacado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/destacados:
+    post:
+      tags: [Destacados]
+      operationId: destacarProductoPlataforma
+      summary: La administración destaca un producto por su cuenta, sin costo
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma, por ejemplo para una
+        campaña. Fechas libres con fecha y hora; no genera cargo. Aplica el
+        máximo de 3 destacados activos del comercio del producto en esas fechas
+        (409 ERR-M1-002) y no permite destacar dos veces el mismo producto en
+        fechas que se cruzan (409 ERR-M1-003).
+      x-consumidores: [Panel de la administración (M2)]
+      x-dependencias: [M3.obtenerProducto (comercio del producto)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevoDestacadoPlataforma'
+      responses:
+        '201':
+          description: Destacado creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DestacadoPlataforma'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoDestacado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /administracion/destacados/tarifas/{periodo_dias}:
+    parameters:
+      - name: periodo_dias
+        in: path
+        required: true
+        schema:
+          type: integer
+          enum: [7, 15, 30]
+    put:
+      tags: [Destacados]
+      operationId: definirTarifaDestacado
+      summary: Definir la tarifa de un periodo de destacado
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Crea o reemplaza la
+        tarifa fija del periodo. Las solicitudes ya hechas conservan la tarifa
+        con la que se solicitaron.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosTarifaDestacado'
+      responses:
+        '200':
+          description: Tarifa guardada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TarifaDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
 components:
   securitySchemes:
     sesionNucleo:
@@ -709,6 +999,20 @@ components:
         type: integer
         minimum: 1
 
+    IdSolicitudDestacado:
+      name: id_solicitud_destacado
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    EstadoSolicitudDestacado:
+      name: estado
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [pendiente, aprobada, rechazada]
   schemas:
     Disponibilidad:
       type: string
@@ -1134,6 +1438,163 @@ components:
               type: integer
         - $ref: '#/components/schemas/DatosDireccionCliente'
 
+    TarifaDestacado:
+      type: object
+      description: Nuevo en 1.4.0. Tarifa fija de un periodo de producto destacado.
+      required: [periodo_dias, monto, moneda]
+      properties:
+        periodo_dias:
+          type: integer
+          enum: [7, 15, 30]
+        monto:
+          type: number
+          minimum: 0
+        moneda:
+          type: string
+          example: CRC
+        actualizada:
+          type: string
+          format: date-time
+          nullable: true
+    DatosTarifaDestacado:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de definirTarifaDestacado.
+      required: [monto]
+      properties:
+        monto:
+          type: number
+          minimum: 0
+          description: Monto fijo del periodo, con hasta 2 decimales.
+    NuevaSolicitudDestacado:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de solicitarDestacado. El comercio sale de la sesión.
+      required: [id_producto, periodo_dias]
+      properties:
+        id_producto:
+          type: integer
+          minimum: 1
+        periodo_dias:
+          type: integer
+          enum: [7, 15, 30]
+    SolicitudDestacado:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Solicitud de un comercio para destacar uno de sus
+        productos. monto es la tarifa vigente al solicitar, la que se cobra al
+        aprobar. fecha_inicio y fecha_fin vienen solo si está aprobada.
+      required: [id_solicitud_destacado, id_comercio, id_producto, periodo_dias, monto, moneda, estado]
+      properties:
+        id_solicitud_destacado:
+          type: integer
+        id_comercio:
+          type: integer
+        id_producto:
+          type: integer
+        periodo_dias:
+          type: integer
+          enum: [7, 15, 30]
+        monto:
+          type: number
+        moneda:
+          type: string
+        estado:
+          type: string
+          enum: [pendiente, aprobada, rechazada]
+        motivo_rechazo:
+          type: string
+          nullable: true
+        fecha_solicitud:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_resolucion:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_inicio:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date-time
+          nullable: true
+    RechazoSolicitudDestacado:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de rechazarSolicitudDestacado.
+      required: [motivo]
+      properties:
+        motivo:
+          type: string
+          minLength: 1
+          maxLength: 500
+    NuevoDestacadoPlataforma:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de destacarProductoPlataforma.
+      required: [id_producto, fecha_inicio, fecha_fin]
+      properties:
+        id_producto:
+          type: integer
+          minimum: 1
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+          description: Posterior a fecha_inicio y al momento actual.
+    DestacadoPlataforma:
+      type: object
+      description: Nuevo en 1.4.0. Producto destacado por la administración, sin costo.
+      required: [id_producto_destacado, id_producto, id_comercio, origen, fecha_inicio, fecha_fin]
+      properties:
+        id_producto_destacado:
+          type: integer
+        id_producto:
+          type: integer
+        id_comercio:
+          type: integer
+        origen:
+          type: string
+          enum: [solicitud, plataforma]
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+    CargoDestacado:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Cargo de un destacado pagado que se aprobó; se descuenta
+        de la liquidación del comercio. Lo entrega
+        ComercialPortalContract::listarCargosDestacado (x-interfaz-php-comercial).
+      required: [id_cargo_destacado, id_comercio, id_solicitud_destacado, id_producto, periodo_dias, monto, moneda, fecha_cargo, fecha_inicio, fecha_fin]
+      properties:
+        id_cargo_destacado:
+          type: integer
+        id_comercio:
+          type: integer
+        id_solicitud_destacado:
+          type: integer
+        id_producto:
+          type: integer
+        periodo_dias:
+          type: integer
+          enum: [7, 15, 30]
+        monto:
+          type: number
+        moneda:
+          type: string
+        fecha_cargo:
+          type: string
+          format: date-time
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
     Error:
       type: object
       description: |
@@ -1254,6 +1715,32 @@ components:
               codigo: ERR-M1-001
               mensaje: Ya existe una cuenta con ese correo.
               detalles: null
+    RolSinPermiso:
+      description: Nuevo en 1.4.0. La cuenta con sesión no tiene el rol que pide la ruta (núcleo).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-002
+              mensaje: No se encuentra autorizado para realizar esta acción.
+              detalles: null
+    ConflictoDestacado:
+      description: |
+        Nuevo en 1.4.0. Errores propios del negocio de M1 para destacados:
+        ERR-M1-002 si el comercio ya tiene 3 destacados activos en ese periodo;
+        ERR-M1-003 si el producto ya está destacado o tiene una solicitud
+        pendiente, o la solicitud ya fue resuelta.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-M1-002
+              mensaje: El comercio ya tiene el máximo de 3 productos destacados activos en ese periodo.
+              detalles: null
     DatosInvalidos:
       description: Faltan datos obligatorios o tienen un formato incorrecto.
       content:
@@ -1285,6 +1772,8 @@ x-interfaz-php:
       - DatosInvalidosException (ERR-005, con detalles campo → mensaje)
       - DependenciaNoDisponibleException (ERR-006)
       - CorreoYaRegistradoException (ERR-M1-001)
+      - LimiteDestacadosException (ERR-M1-002, desde 1.4.0; solo en las rutas web de destacados)
+      - ConflictoDestacadoException (ERR-M1-003, desde 1.4.0; solo en las rutas web de destacados)
   doble_de_prueba: tests/Doubles/M1/PortalPublicoFake.php
   metodos:
     - firma: "obtenerCliente(int $idCliente): array"
@@ -1345,6 +1834,26 @@ x-interfaz-php:
         excepciones: [ClienteNoEncontradoException, DatosInvalidosException]
       - firma: "actualizarDireccionCliente(int $idCliente, int $idDireccionCliente, array $datos): array"
         excepciones: [DireccionNoEncontradaException, DatosInvalidosException]
+
+# ---------------------------------------------------------------
+# Interfaz PHP App\Contracts\M1_Portal\ComercialPortalContract (desde 1.4.0)
+# Va aparte de PortalPublicoContract para que quienes ya la implementan (por
+# ejemplo, el doble de M5) no tengan que agregar métodos.
+# ---------------------------------------------------------------
+x-interfaz-php-comercial:
+  interfaz: App\Contracts\M1_Portal\ComercialPortalContract
+  ubicacion: app/Contracts/M1_Portal/ComercialPortalContract.php
+  doble_de_prueba: tests/Doubles/M1/ComercialPortalFake.php
+  solicitud_de_cambio: SC-08
+  metodos:
+    - firma: "listarCargosDestacado(int $idComercio, string $desde, string $hasta): array"
+      desde: 1.4.0
+      consumidores: [M2 o M7 (liquidación al comercio; por confirmar en el Comité)]
+      retorna: Lista con la estructura del esquema CargoDestacado, ordenada por fecha_cargo.
+      parametros: $desde y $hasta en formato AAAA-MM-DD; se incluyen los dos días completos.
+      excepciones:
+        - DatosInvalidosException (equivale a ERR-005) si una fecha no tiene el formato o $desde es posterior a $hasta.
+      notas: Sin sesión de usuario. Los destacados que pone la administración no generan cargo.
 
 # ---------------------------------------------------------------
 # Dependencias que M1 consume (validadas contra las versiones corregidas)
@@ -1457,9 +1966,15 @@ x-historial-versiones:
       - GET /destacados muestra hasta 12 productos y comercios (limite por defecto y máximo 12, antes 8 y 24); un valor mayor se ajusta a 12 sin error.
       - Productos destacados con máximo 3 por comercio, sin los agotados (reaparecen solos al recuperar existencias) y rotados por turnos de 15 minutos cuando hay más de 12.
       - listarDestacados de la interfaz PHP cambia su valor por defecto de 8 a 12.
+      - Solicitud, aprobación y cobro de productos destacados. Rutas web nuevas - listarTarifasDestacado, solicitarDestacado, listarSolicitudesDestacado (comercio), listarSolicitudesDestacadoAdministracion, aprobarSolicitudDestacado, rechazarSolicitudDestacado, destacarProductoPlataforma y definirTarifaDestacado.
+      - Máximo 3 destacados activos por comercio al aprobar o al destacar desde la administración (ERR-M1-002) y sin destacar dos veces el mismo producto en fechas que se cruzan (ERR-M1-003).
+      - Nueva interfaz PHP ComercialPortalContract (x-interfaz-php-comercial) con listarCargosDestacado, para quien liquida al comercio. PortalPublicoContract no agrega métodos.
+      - Nuevos códigos propios ERR-M1-002 y ERR-M1-003 (409) y respuesta RolSinPermiso (403, ERR-002 del núcleo).
     solicitud_de_cambio: SC-08
     nota_de_compatibilidad: |
       Sin cambios en el esquema Destacados ni en la firma de listarDestacados,
       salvo el valor por defecto del límite. Un consumidor que pida más de 12
       recibe hasta 12, sin error, porque el límite ya se ajustaba al rango.
-      Por eso se publica como versión menor.
+      Las operaciones de destacados pagados son rutas nuevas y la interfaz
+      nueva va aparte, así que ningún consumidor actual de PortalPublicoContract
+      tiene que cambiar. Por eso se publica como versión menor.
