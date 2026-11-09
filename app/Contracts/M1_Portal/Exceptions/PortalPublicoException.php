@@ -31,6 +31,8 @@ abstract class PortalPublicoException extends RuntimeException implements ErrorE
         'ERR-005' => 422,
         'ERR-006' => 503,
         'ERR-M1-001' => 409,
+        'ERR-M1-002' => 409,
+        'ERR-M1-003' => 409,
     ];
 
     /**

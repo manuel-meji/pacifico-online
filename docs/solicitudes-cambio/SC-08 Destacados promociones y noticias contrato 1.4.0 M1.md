@@ -46,9 +46,10 @@
     - Rol `encargado_comercio`, con aislamiento por comercio (RN-12): solicitar destacado, listar sus solicitudes, crear, actualizar, desactivar y listar sus promociones.
     - Rol `encargado_plataforma`: resolver solicitudes, destacar productos sin costo, definir tarifas, ordenar y ocultar promociones, y publicar, editar y archivar noticias.
     - Públicas: promociones vigentes y noticias publicadas. El precio con promoción se agrega a los listados de productos y a la ficha.
-  - Interfaz PHP `PortalPublicoContract`, para los backends de otros módulos:
-    - `obtenerPreciosVigentes(array $idsVariacion)`: la usa M5.
-    - `listarCargosDestacado(int $idComercio, desde, hasta)`: la usa quien liquida al comercio.
+  - Interfaz PHP nueva `ComercialPortalContract` (`x-interfaz-php-comercial`), para los backends de otros módulos. Va aparte de `PortalPublicoContract` para que quienes ya la implementan, como el doble de M5, no tengan que agregar métodos:
+    - `listarCargosDestacado(int $idComercio, string $desde, string $hasta)`: la usa quien liquida al comercio.
+    - `obtenerPreciosVigentes(array $idsVariacion)`: la usará M5 (fase de promociones).
+  - Códigos propios nuevos: `ERR-M1-002` (409, el comercio ya tiene 3 destacados activos en ese periodo) y `ERR-M1-003` (409, el producto ya está destacado o tiene una solicitud pendiente, o la solicitud ya fue resuelta).
 
   **Base de datos de M1:**
   - Tablas nuevas para las solicitudes de destacado, las tarifas, los cargos, las promociones y las variaciones de cada promoción.

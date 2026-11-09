@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\M1_Portal\ComercialPortalContract;
 use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
@@ -13,6 +14,7 @@ use App\Events\M4_Inventario\ExistenciaAgotada;
 use App\Events\M4_Inventario\ExistenciaRepuesta;
 use App\Listeners\M1_Portal\EventosComercioListener;
 use App\Listeners\M1_Portal\EventosExistenciaListener;
+use App\Services\M1_Portal\ComercialPortalService;
 use App\Services\M1_Portal\Integraciones\CarritoClient;
 use App\Services\M1_Portal\Integraciones\CatalogoClient;
 use App\Services\M1_Portal\Integraciones\ComercioClient;
@@ -80,6 +82,11 @@ class M1IntegracionesServiceProvider extends ServiceProvider
         // Fachada de M1: lo que reciben M5, M6, el núcleo y los controladores
         // de M1 cuando piden PortalPublicoContract.
         $this->app->bind(PortalPublicoContract::class, PortalPublicoService::class);
+
+        // Parte comercial del portal (contrato 1.4.0, SC-08): cargos de
+        // destacados para quien liquida al comercio. Va en una interfaz aparte
+        // para no obligar a los dobles de PortalPublicoContract a cambiar.
+        $this->app->bind(ComercialPortalContract::class, ComercialPortalService::class);
 
         // Lo que pide el middleware EstablecerCliente del núcleo para fijar el
         // ámbito de cliente de la petición (tareas 18 y 23 del PC4). Solo tiene
