@@ -13,6 +13,9 @@ export const textoDescuento = (promocion) =>
   promocion?.tipo === 'porcentaje' ? `-${Number(promocion.valor).toLocaleString('es-CR')} %` : 'Precio especial';
 
 // Fecha corta para "Hasta el 30 nov.".
+// Fecha de publicación de una noticia: "10 de noviembre de 2026".
+export const fechaLarga = (iso) => new Date(iso).toLocaleDateString('es-CR', { day: 'numeric', month: 'long', year: 'numeric' });
+
 export const fechaCorta = (iso) => new Date(iso).toLocaleDateString('es-CR', { day: 'numeric', month: 'short' });
 
 // dia_semana del contrato: 1 = lunes … 7 = domingo.

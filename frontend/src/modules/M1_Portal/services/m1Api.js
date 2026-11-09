@@ -151,6 +151,19 @@ export function listarPromociones() {
   return llamar('/promociones');
 }
 
+// GET /noticias (listarNoticias, contrato 1.4.0). Noticias publicadas y vigentes de la plataforma,
+// de la más reciente a la más antigua. pagina >= 1, por_pagina de 1 a 50.
+// 200 → ListadoNoticias ({ pagina, por_pagina, total, noticias: NoticiaResumen[] }) · 422 ERR-005.
+export function listarNoticias(pagina = 1, porPagina = 10) {
+  return llamar(`/noticias${consulta({ pagina, por_pagina: porPagina })}`);
+}
+
+// GET /noticias/{slug} (obtenerNoticia, contrato 1.4.0). Noticia con su contenido y las promociones
+// enlazadas que estén vigentes (PromocionVigente). 200 → NoticiaDetalle · 404 ERR-004.
+export function obtenerNoticia(slug) {
+  return llamar(`/noticias/${encodeURIComponent(slug)}`);
+}
+
 // GET /comercios (listarComercios). pagina >= 1, por_pagina de 1 a 50.
 // 200 → ListadoComercios · 422 ERR-005 · 503 ERR-006.
 export function listarComercios(pagina = 1, porPagina = 20) {

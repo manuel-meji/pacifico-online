@@ -1,15 +1,19 @@
 import PaginaPortal, { usePortal } from '../components/PaginaPortal';
 import CarruselComercios from '../components/CarruselComercios';
+import TarjetaNoticia from '../components/TarjetaNoticia';
 import TarjetaProducto from '../components/TarjetaProducto';
 import { CargandoTarjetas, ErrorVista, Vacio } from '../components/EstadosVista';
 import Icono from '../components/IconoComercio';
 import Imagen from '../components/Imagen';
 import { fechaCorta } from '../services/formato';
-import { listarComercios, listarDestacados, listarPromociones } from '../services/m1Api';
+import { listarComercios, listarDestacados, listarNoticias, listarPromociones } from '../services/m1Api';
 import useConsulta from '../services/useConsulta';
 
 // La portada muestra hasta 12 destacados (contrato M1 1.4.0); en la cuadrícula de 4 columnas son 3 filas.
 const LIMITE_DESTACADOS = 12;
+
+// Últimas noticias de la plataforma que se muestran en la portada.
+const NOTICIAS_EN_PORTADA = 3;
 
 // Página principal: GET /api/m1/v1/destacados.
 // Si secciones_no_disponibles incluye "comercios" o "productos", esa sección se oculta y el resto sigue.
@@ -25,6 +29,8 @@ export default function InicioView() {
   const comercios = useConsulta(() => listarComercios(1, LIMITE_DESTACADOS), [], sinComerciosDestacados);
   // Sección de promociones vigentes (contrato 1.4.0). Si falla o no hay, la sección no se muestra.
   const promociones = useConsulta(() => listarPromociones(), []);
+  // Últimas noticias publicadas (contrato 1.4.0). Si falla o no hay, la sección no se muestra.
+  const noticias = useConsulta(() => listarNoticias(1, NOTICIAS_EN_PORTADA), []);
 
   return (
     <PaginaPortal>
@@ -74,6 +80,22 @@ export default function InicioView() {
                   {promo.titulo} · hasta el {fechaCorta(promo.fecha_fin)}
                 </p>
                 <TarjetaProducto producto={promo.producto} onAbrir={() => ir('producto', { id: promo.producto.id_producto })} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {noticias.estado === 'listo' && noticias.datos.noticias.length > 0 && (
+        <section className="mt-10" aria-labelledby="titulo-noticias">
+          <h2 id="titulo-noticias" className="mb-1 flex items-center gap-2 text-2xl font-bold text-brandDarkBlue">
+            <Icono nombre="noticia" className="h-6 w-6" /> Noticias
+          </h2>
+          <p className="mb-4 text-sm text-gray-600">Novedades de Pacíficos Online: comercios nuevos, campañas y avisos.</p>
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {noticias.datos.noticias.map((noticia) => (
+              <li key={noticia.id_noticia} className="min-w-0">
+                <TarjetaNoticia noticia={noticia} onAbrir={() => ir('noticia', { slug: noticia.slug })} />
               </li>
             ))}
           </ul>

@@ -6,6 +6,7 @@ use App\Http\Controllers\M1_Portal\ComercioController;
 use App\Http\Controllers\M1_Portal\DestacadosController;
 use App\Http\Controllers\M1_Portal\DireccionClienteController;
 use App\Http\Controllers\M1_Portal\FichaProductoController;
+use App\Http\Controllers\M1_Portal\NoticiasController;
 use App\Http\Controllers\M1_Portal\PortadaController;
 use App\Http\Controllers\M1_Portal\PromocionesController;
 use App\Http\Middleware\EstablecerCliente;
@@ -61,6 +62,13 @@ Route::get('/destacados/tarifas', [DestacadosController::class, 'tarifas'])->nam
 // Promociones vigentes de la sección del portal (contrato 1.4.0, SC-08). Pública.
 Route::get('/promociones', [PromocionesController::class, 'vigentes'])->name('promociones');
 
+// Noticias publicadas de la plataforma (contrato 1.4.0, SC-08). Públicas.
+Route::get('/noticias', [NoticiasController::class, 'listar'])->name('noticias');
+
+Route::get('/noticias/{slug}', [NoticiasController::class, 'mostrar'])
+    ->where('slug', '[a-z0-9]+(-[a-z0-9]+)*')
+    ->name('noticias.mostrar');
+
 Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class.':encargado_comercio'])
     ->prefix('comercio')
     ->name('comercio.')
@@ -115,6 +123,22 @@ Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class
         Route::post('/promociones/{id_promocion}/mostrar', [PromocionesController::class, 'mostrar'])
             ->where('id_promocion', '[1-9][0-9]*')
             ->name('promociones.mostrar');
+
+        // Noticias: solo la administración las publica (contrato 1.4.0, SC-08).
+        Route::post('/noticias', [NoticiasController::class, 'crear'])->name('noticias.crear');
+        Route::get('/noticias', [NoticiasController::class, 'administracion'])->name('noticias.listar');
+
+        Route::put('/noticias/{id_noticia}', [NoticiasController::class, 'actualizar'])
+            ->where('id_noticia', '[1-9][0-9]*')
+            ->name('noticias.actualizar');
+
+        Route::post('/noticias/{id_noticia}/publicar', [NoticiasController::class, 'publicar'])
+            ->where('id_noticia', '[1-9][0-9]*')
+            ->name('noticias.publicar');
+
+        Route::post('/noticias/{id_noticia}/archivar', [NoticiasController::class, 'archivar'])
+            ->where('id_noticia', '[1-9][0-9]*')
+            ->name('noticias.archivar');
     });
 
 // CU-010 Registrar cliente. Pública (autorregistro); máximo 10 intentos por
