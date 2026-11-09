@@ -148,4 +148,17 @@ class ReservaServiceTest extends TestCase
         $this->esperarError('ERR-M4-005', fn () => $this->inventario()->confirmarReserva($activa, 9001, 9101));
         Carbon::setTestNow();
     }
+
+    /** CP-M4-25 · RN-M4-014, RN-M4-013: confirmar una reserva cuyo plazo venció antes de que corra el proceso la marca VENCIDA, devuelve las unidades y responde ERR-M4-005. */
+    public function test_confirmar_una_reserva_vencida_sin_procesar_la_vence_y_responde_err_m4_005(): void
+    {
+        $id = $this->reservar(2, minutos: 1)['id_reserva'];
+        Carbon::setTestNow(Carbon::now()->addMinutes(2));
+
+        $this->esperarError('ERR-M4-005', fn () => $this->inventario()->confirmarReserva($id, 9001, 9101));
+
+        $this->assertSame('vencida', $this->inventario()->obtenerReserva($id)['estado_reserva'], 'Se conserva en el historial (RN-M4-013).');
+        $this->assertSame(0, (int) $this->fila()->cantidad_reservada);
+        Carbon::setTestNow();
+    }
 }
