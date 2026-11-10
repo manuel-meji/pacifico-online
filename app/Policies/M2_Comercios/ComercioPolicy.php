@@ -56,6 +56,12 @@ class ComercioPolicy
         return $this->esEncargadoPlataforma($usuario);
     }
 
+    /** Destacar comercios: ven la publicidad el encargado del propio comercio y la plataforma. */
+    public function verPublicidad(Usuario $usuario, Comercio $comercio): bool
+    {
+        return $this->esEncargadoPlataforma($usuario) || $this->actualizar($usuario, $comercio);
+    }
+
     public function consultarComercio(Authenticatable $usuario, int $idComercio): void
     {
         $rol = $this->rolActivo($usuario);

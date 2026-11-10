@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { FileText, Store } from 'lucide-react';
+import { FileText, Sparkles, Store } from 'lucide-react';
 import SolicitudesPlataforma from '../components/SolicitudesPlataforma';
 import ComerciosPlataforma from '../components/ComerciosPlataforma';
+import DestacadosPlataforma from '../components/DestacadosPlataforma';
 
 const PESTANAS = [
   { clave: 'solicitudes', nombre: 'Solicitudes', icono: FileText, Vista: SolicitudesPlataforma },
   { clave: 'comercios', nombre: 'Comercios', icono: Store, Vista: ComerciosPlataforma },
+  { clave: 'destacados', nombre: 'Destacados', icono: Sparkles, Vista: DestacadosPlataforma },
 ];
 
 export default function PanelPlataforma() {
