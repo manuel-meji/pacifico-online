@@ -21,6 +21,8 @@ Rama: `feature/integracion-general` · Responsable: Coordinación SG5 (M5 Carrit
 | 10/11/2026 | `frontend/src/modules/M5_Pedidos/views/CarritoView.jsx`, `componentes.jsx` | M5 | Ocultamiento del bloque de "Productos de prueba" y del botón "Panel de comercio (demo)" en navegación de cliente. Agregado botón "Explorar productos" en carrito vacío hacia `/app.html`. | Limpieza de interfaz para fase de integración real. | No aplica (M5) |
 | 10/11/2026 | `frontend/src/modules/M5_Pedidos/components/componentes.jsx`, `M5App.jsx`, `MisPedidosView.jsx` | M5 | Encabezado idéntico al portal M1, modal amigable de autenticación requerida para pagar y aviso en Mis Pedidos para usuarios no autenticados. | Estándar de diseño y experiencia de usuario amigable. | No aplica (M5) |
 | 10/11/2026 | `frontend/src/modules/M1_Portal/M1App.jsx` | M1 | Aviso contextual al llegar a login desde checkout (`?motivo=checkout`) y redirección automática de vuelta a `/carrito.html` tras login/registro exitoso. | Flujo amigable de compra sin perder el carrito. | Notificado al usuario |
+| 10/11/2026 | `bootstrap/providers.php`, `config/auth.php`, `frontend/src/modules/Nucleo/services/sesionApi.js` | Núcleo | Registro del provider `SanctumServiceProvider` y guard `sanctum` en `config/auth.php`, y sobrecarga flexible de argumentos en `iniciarSesion`. Corrige error HTTP 500 (`Auth guard [sanctum] is not defined`) en `/api/user`. | Permitir persistencia real de sesión autenticada en toda la aplicación. | Notificado al usuario |
+
 
 
 
