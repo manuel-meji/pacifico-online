@@ -9,6 +9,7 @@ use App\Models\M2_Comercios\SolicitudComercio;
 use App\Services\M2_Comercios\ComerciosService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
@@ -62,6 +63,20 @@ class SolicitudesController extends Controller
             'telefono_encargado', 'estado', 'requiere_documentos', 'motivo_rechazo',
             'fecha_reenvio', 'created_at', 'updated_at',
         ]));
+    }
+
+    /** CU-0022: abre el archivo original de un documento (solo el Encargado de la plataforma). */
+    public function verArchivoDocumento(int $idSolicitud, int $idDocumento): Response
+    {
+        Gate::authorize('revisar', new SolicitudComercio);
+
+        $archivo = $this->comercios->obtenerArchivoDocumento($idSolicitud, $idDocumento);
+
+        return response($archivo['contenido'], 200, [
+            'Content-Type' => $archivo['tipo'],
+            'Content-Disposition' => 'inline; filename="documento-'.$idDocumento.'"',
+            'Cache-Control' => 'no-store',
+        ]);
     }
 
     public function evaluarDocumento(int $idSolicitud, int $idDocumento, Request $request): JsonResponse
