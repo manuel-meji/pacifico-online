@@ -13,7 +13,12 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
   const nav = useContext(NavegacionM5);
   const mostrarMisPedidos = nav?.abrirMisPedidos && !nav.enMisPedidos;
   const mostrarDeseos = nav?.abrirDeseos && !nav.enDeseos;
-  const mostrarPanel = nav?.abrirPanelComercio && !nav.enPanelComercio;
+  const mostrarPanel = Boolean(
+    nav?.abrirPanelComercio &&
+    !nav.enPanelComercio &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('demo')
+  );
   return (
     <header className="sticky top-0 z-20 bg-white shadow-xs border-b border-gray-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
