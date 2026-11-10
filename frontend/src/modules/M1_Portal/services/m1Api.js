@@ -128,8 +128,31 @@ export function buscarProductos(criterio = {}) {
 
 // GET /categorias (listarCategoriasPortal). Menú del portal: principales con sus subcategorías.
 // 200 → CategoriaPortal[] · 503 ERR-006.
-export function listarCategorias() {
-  return llamar('/categorias');
+// El menú casi no cambia, así que la respuesta correcta se guarda en sessionStorage por 5 minutos:
+// al recargar o volver al portal desde el carrito no se pide de nuevo. Si el navegador no permite
+// guardar (modo privado, almacenamiento lleno), se pide siempre, como antes.
+const CLAVE_CATEGORIAS = 'm1.categorias';
+const VIGENCIA_CATEGORIAS_MS = 5 * 60 * 1000;
+
+export async function listarCategorias() {
+  try {
+    const guardado = JSON.parse(sessionStorage.getItem(CLAVE_CATEGORIAS) || 'null');
+    if (guardado && Date.now() - guardado.guardado < VIGENCIA_CATEGORIAS_MS && Array.isArray(guardado.datos)) {
+      return { ok: true, datos: guardado.datos };
+    }
+  } catch {
+    // Sin almacenamiento disponible: se consulta la API.
+  }
+
+  const respuesta = await llamar('/categorias');
+  if (respuesta.ok && Array.isArray(respuesta.datos)) {
+    try {
+      sessionStorage.setItem(CLAVE_CATEGORIAS, JSON.stringify({ guardado: Date.now(), datos: respuesta.datos }));
+    } catch {
+      // No se pudo guardar: la próxima vez se vuelve a pedir.
+    }
+  }
+  return respuesta;
 }
 
 // GET /productos/{id_producto} (obtenerFichaProducto).
