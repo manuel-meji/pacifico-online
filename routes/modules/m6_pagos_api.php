@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\M6_Pagos\ConfirmacionPagoController;
+use App\Http\Controllers\M6_Pagos\FacturasController;
+use App\Http\Controllers\M6_Pagos\NotasAjusteController;
 use App\Http\Controllers\M6_Pagos\PagosController;
 use App\Http\Middleware\M6_Pagos\VerificarFirmaPasarela;
 use Illuminate\Support\Facades\Route;
@@ -36,4 +38,23 @@ Route::prefix('api/m6/v1')
             ->whereNumber('id_pago')
             ->middleware(VerificarFirmaPasarela::class)
             ->name('pagos.confirmaciones');
+
+        // CU-004 Facturas electrónicas (una por subpedido). Se generan solas al confirmar el pago.
+        Route::get('facturas', [FacturasController::class, 'index'])
+            ->name('facturas.listar');
+
+        Route::get('facturas/{id_factura}', [FacturasController::class, 'show'])
+            ->whereNumber('id_factura')
+            ->name('facturas.consultar');
+
+        // CU-005 y CU-006 Notas de crédito y de débito sobre una factura.
+        Route::post('facturas/{id_factura}/notas-credito', [NotasAjusteController::class, 'credito'])
+            ->whereNumber('id_factura')
+            ->middleware('throttle:60,1')
+            ->name('facturas.notas-credito');
+
+        Route::post('facturas/{id_factura}/notas-debito', [NotasAjusteController::class, 'debito'])
+            ->whereNumber('id_factura')
+            ->middleware('throttle:60,1')
+            ->name('facturas.notas-debito');
     });

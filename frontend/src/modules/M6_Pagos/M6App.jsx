@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import FormularioPago from './components/FormularioPago';
 import ResultadoPago from './components/ResultadoPago';
+import FacturasPedidoView from './views/FacturasPedidoView';
 import HistorialComercioView from './views/HistorialComercioView';
 
 const PEDIDO_PRUEBA = {
@@ -10,6 +11,11 @@ const PEDIDO_PRUEBA = {
   subpedidos: [],
 };
 
+const PESTANAS = [
+  ['pago', 'Pagar pedido'],
+  ['factura', 'Facturas'],
+  ['historial', 'Historial'],
+];
 
 export default function M6App() {
   const [pantalla, setPantalla] = useState('pago');
@@ -22,15 +28,16 @@ export default function M6App() {
 
   return (
     <div className="min-h-screen bg-brandLightBg px-4 py-6 text-gray-800">
-      <nav className="mx-auto mb-5 flex max-w-xl gap-2">
-        <button type="button" onClick={() => setPantalla('pago')}
-          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${pantalla !== 'historial' ? 'border-brandDarkBlue bg-brandDarkBlue text-white' : 'border-gray-300 bg-white'}`}>
-          Pagar pedido
-        </button>
-        <button type="button" onClick={() => setPantalla('historial')}
-          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${pantalla === 'historial' ? 'border-brandDarkBlue bg-brandDarkBlue text-white' : 'border-gray-300 bg-white'}`}>
-          Historial
-        </button>
+      <nav className="mx-auto mb-5 flex max-w-xl gap-2" aria-label="Secciones de M6">
+        {PESTANAS.map(([clave, texto]) => {
+          const activa = clave === 'pago' ? pantalla === 'pago' || pantalla === 'resultado' : pantalla === clave;
+          return (
+            <button key={clave} type="button" onClick={() => setPantalla(clave)} aria-current={activa ? 'page' : undefined}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition ${activa ? 'border-brandDarkBlue bg-brandDarkBlue text-white' : 'border-gray-300 bg-white hover:border-brandBlue hover:text-brandBlue'}`}>
+              {texto}
+            </button>
+          );
+        })}
       </nav>
 
       {pantalla === 'pago' && (
@@ -48,10 +55,7 @@ export default function M6App() {
       )}
 
       {pantalla === 'factura' && (
-       
-        <p role="status" className="mx-auto max-w-xl rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          La consulta de facturas todavía no está disponible en el backend de M6.
-        </p>
+        <FacturasPedidoView idPedido={pago?.id_pedido ?? PEDIDO_PRUEBA.id_pedido} />
       )}
 
       {pantalla === 'historial' && (

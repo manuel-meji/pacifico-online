@@ -17,7 +17,8 @@ use Throwable;
 
 /**
  * Efectos posteriores a resolver un pago (se ejecuta SOLO una vez por pago,
- * después del commit): eventos, aviso a M5, aviso a M7 y bitácora del Núcleo.
+ * después del commit): eventos, aviso a M5, aviso a M7, facturación
+ * electrónica (CU-004) y bitácora del Núcleo.
  *
  * Un fallo al avisar a otro módulo no deshace el cobro ya registrado: se
  * deja en el log diario para reintentarlo (consistencia eventual, ADR-005).
@@ -28,6 +29,7 @@ class PublicadorResultadoPago
         private readonly PedidoClient $pedidos,
         private readonly ContabilidadClient $contabilidad,
         private readonly NucleoServiceInterface $nucleo,
+        private readonly FacturacionService $facturacion,
     ) {}
 
     public function publicar(Pago $pago, ?string $motivo = null): void
@@ -43,6 +45,11 @@ class PublicadorResultadoPago
         }
 
         $this->intentar('M5', fn () => $this->pedidos->notificarResultadoPago($pago->id_pedido, $pago->id_pago, $estado, $motivo));
+
+        // CU-004: una factura por subpedido. Nunca lanza ni deshace el cobro.
+        if ($estado === EstadoPago::CONFIRMADO) {
+            $this->facturacion->facturarPagoConfirmado($pago);
+        }
 
         $this->intentar('Nucleo', fn () => $this->nucleo->registrarAuditoria(
             $estado === EstadoPago::CONFIRMADO ? 'confirmar_pago' : 'rechazar_pago',

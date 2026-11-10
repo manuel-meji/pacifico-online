@@ -14,6 +14,7 @@ async function llamar(ruta, opciones = {}) {
       codigo: error.codigo,
       mensaje: error.mensaje,
       motivo: error.detalles?.motivo,
+      detalles: error.detalles ?? {},
       estadoHttp: resp.status,
     });
   }
@@ -30,6 +31,16 @@ export const procesarPago = ({ id_pedido, medio_pago, monto_total, token_medio_p
   });
 
 export const obtenerFactura = (idFactura) => llamar(`/facturas/${idFactura}`);
+
+// CU-004: un pedido multicomercio tiene una factura por subpedido.
+export const listarFacturasPedido = (idPedido) => llamar(`/facturas?id_pedido=${encodeURIComponent(idPedido)}`);
+
+// CU-005 (tipo "credito") y CU-006 (tipo "debito").
+export const emitirNota = (idFactura, tipo, { monto, motivo }) =>
+  llamar(`/facturas/${idFactura}/${tipo === 'debito' ? 'notas-debito' : 'notas-credito'}`, {
+    method: 'POST',
+    body: JSON.stringify({ monto, motivo }),
+  });
 
 export const consultarHistorial = ({ idComercio, idCliente }) => {
   const q = new URLSearchParams();

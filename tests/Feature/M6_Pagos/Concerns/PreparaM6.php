@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\M6_Pagos\Concerns;
 
+use App\Models\M6_Pagos\EstadoFacturaHacienda;
 use App\Models\M6_Pagos\EstadoNotificacionPago;
 use App\Models\M6_Pagos\EstadoPago;
 use App\Models\M6_Pagos\MedioPago;
@@ -44,6 +45,7 @@ trait PreparaM6
         EstadoPago::olvidarCache();
         EstadoNotificacionPago::olvidarCache();
         MedioPago::olvidarCache();
+        EstadoFacturaHacienda::olvidarCache();
 
         // Las migraciones de M6 se ejecutan sin modificarlas; en SQLite se omiten
         // solo sus sentencias exclusivas de PostgreSQL (ver BaseSinSentenciasPostgres).

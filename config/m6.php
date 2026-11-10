@@ -10,6 +10,8 @@
 |   M6_USAR_DOBLES=true                  Dobles de M1/M2/M5/M7 (tests/Doubles) o adaptadores reales.
 |   M6_CONFIRMACION_INMEDIATA=true       El simulador "envía" el webhook en cuanto aprueba el cobro.
 |   M6_WEBHOOK_SECRETO=...               Secreto HMAC compartido con la pasarela simulada.
+|   M6_HACIENDA_RESPUESTA=aceptada       Respuesta del simulador de Hacienda (aceptada, rechazada,
+|                                        enviada, no_disponible).
 */
 
 return [
@@ -26,4 +28,9 @@ return [
 
     // Segundos que se espera el candado por pedido antes de responder "pago activo".
     'espera_candado_segundos' => 5,
+
+    // Simulador de Hacienda (CU-004). Ver App\Services\M6_Pagos\Simuladores\HaciendaSimulador.
+    'hacienda' => [
+        'respuesta' => env('M6_HACIENDA_RESPUESTA', 'aceptada'),
+    ],
 ];
