@@ -16,4 +16,9 @@ class MockPagosService implements PasarelaPagoInterface
             'fecha_transaccion' => now()->toIso8601String(),
         ];
     }
+
+    public function reportarMovimientos(string $fechaInicio, string $fechaFin): array
+    {
+        return [];
+    }
 }

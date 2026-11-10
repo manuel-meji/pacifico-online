@@ -60,9 +60,8 @@ export default function M6App() {
 
       {pantalla === 'historial' && (
        
-        <div className="mx-auto max-w-3xl">
-          <HistorialComercioView idComercio={null} />
-        </div>
+          // CU-008: el filtro se elige en la pantalla; con sesión, el backend lo fija al propio (RN-12).
+         <HistorialComercioView />
       )}
     </div>
   );
