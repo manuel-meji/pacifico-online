@@ -53,6 +53,7 @@ export default function FichaInventarioKardex({ api, existencias, sedes, version
 
   return (
     <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-start">
       <Tarjeta>
         <label htmlFor="ficha-variacion" className="text-xs font-semibold uppercase tracking-wide text-gray-500">Variación</label>
         <select id="ficha-variacion" value={idVariacion ?? ''} onChange={(e) => { setIdVariacion(Number(e.target.value)); setIdUbicacion(''); }}
@@ -64,6 +65,7 @@ export default function FichaInventarioKardex({ api, existencias, sedes, version
 
       <section aria-labelledby="titulo-ubicaciones" className="space-y-2">
         <h2 id="titulo-ubicaciones" className="text-base font-bold text-gray-900">Existencia por ubicación</h2>
+        <div className="grid gap-2 sm:grid-cols-2">
         {filas.map((e) => (
           <button key={e.id_existencia} type="button" onClick={() => setIdUbicacion(idUbicacion === e.id_ubicacion ? '' : e.id_ubicacion)} aria-pressed={idUbicacion === e.id_ubicacion}
             className={`w-full rounded-xl border bg-white p-3 text-left shadow-sm transition ${idUbicacion === e.id_ubicacion ? 'border-brandBlue ring-2 ring-brandBlue/30' : 'border-gray-100 hover:shadow-md'}`}>
@@ -71,14 +73,16 @@ export default function FichaInventarioKardex({ api, existencias, sedes, version
             <p className="mt-1 text-sm text-gray-600">Física {e.cantidad_fisica} − reservada {e.cantidad_reservada} = <span className="font-bold text-gray-900">{disponible(e)} disponibles</span>{e.bajo_minimo && <span className="text-amber-800"> · bajo el mínimo ({e.stock_minimo})</span>}</p>
           </button>
         ))}
+        </div>
       </section>
+      </div>
 
       <section aria-labelledby="titulo-kardex" className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="titulo-kardex" className="text-base font-bold text-gray-900">Kardex · {idUbicacion ? nombreSede(sedes, idUbicacion) : 'todas las ubicaciones'}</h2>
           <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500"><IconoCandado className="h-3.5 w-3.5" />Solo lectura</span>
         </div>
-        <Tarjeta className="grid grid-cols-2 gap-2">
+        <Tarjeta className="grid grid-cols-2 gap-2 md:max-w-xl">
           {[['fecha_inicio', 'Desde'], ['fecha_fin', 'Hasta']].map(([campo, etiqueta]) => (
             <label key={campo} className="min-w-0 text-xs font-semibold text-gray-700" htmlFor={campo}>
               {etiqueta}
@@ -89,7 +93,7 @@ export default function FichaInventarioKardex({ api, existencias, sedes, version
         {error && <Aviso tipo="error" titulo="No se pudo consultar el Kardex" codigo={error.codigo}>{error.mensaje}</Aviso>}
         {kardex === null && !error && <p className="text-sm text-gray-500">Cargando movimientos…</p>}
         {kardex?.length === 0 && <Tarjeta><p className="text-sm text-gray-600">No hay movimientos con estos filtros.</p></Tarjeta>}
-        <ol className="space-y-2">
+        <ol className="grid gap-2 lg:grid-cols-2">
           {kardex?.map((k) => (
             <li key={k.id_kardex} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">

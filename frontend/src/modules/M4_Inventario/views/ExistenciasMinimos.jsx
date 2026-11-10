@@ -42,7 +42,7 @@ function FilaExistencia({ api, existencia, sedes, alCambiar }) {
   }
 
   return (
-    <li className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+    <li className="flex flex-col rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="min-w-0 break-words font-semibold text-gray-900">{nombreVariacion(existencia)}</span>
         <Insignia existencia={existencia} />
@@ -52,7 +52,7 @@ function FilaExistencia({ api, existencia, sedes, alCambiar }) {
         Física {existencia.cantidad_fisica} − reservada {existencia.cantidad_reservada} = <span className="font-bold text-gray-900">{disponible(existencia)} disponibles</span>
       </p>
       <p className="mt-1 text-xs text-gray-500">Valor del inventario {formatoColones(existencia.valor_inventario)}</p>
-      <form onSubmit={guardar} className="mt-2 flex items-end gap-2">
+      <form onSubmit={guardar} className="mt-auto flex items-end gap-2 pt-2">
         <label className="min-w-0 flex-1 text-xs font-semibold text-gray-700" htmlFor={`minimo-${existencia.id_existencia}`}>
           Stock mínimo
           <input id={`minimo-${existencia.id_existencia}`} inputMode="numeric" className={claseEntrada(estado?.tipo === 'error')} value={minimo} onChange={(e) => { setMinimo(e.target.value); setEstado(null); }} />
@@ -86,7 +86,7 @@ export default function ExistenciasMinimos({ api, existencias, sedes, alCambiar 
         </label>
       </Tarjeta>
       {filas.length === 0 && <Tarjeta><p className="text-sm text-gray-600">{soloBajoMinimo ? 'Ninguna existencia está bajo el mínimo.' : 'Todavía no hay existencias. Registre una entrada en Operaciones.'}</p></Tarjeta>}
-      <ul className="space-y-2">
+      <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         {filas.map((e) => <FilaExistencia key={e.id_existencia} api={api} existencia={e} sedes={sedes} alCambiar={alCambiar} />)}
       </ul>
     </div>

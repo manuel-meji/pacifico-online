@@ -105,8 +105,30 @@ export function crearApi(idComercio) {
       method: 'POST', body: JSON.stringify({ id_comercio: idComercio, ...solicitud }),
     }),
 
+    // POST /transferencias (TransferenciaSolicitud) → 201 TransferenciaRespuesta { id_transferencia, movimientos[2] }
+    registrarTransferencia: (solicitud) => llamar(`${BASE}/transferencias`, {
+      method: 'POST', body: JSON.stringify({ id_comercio: idComercio, ...solicitud }),
+    }),
+
+    // POST /ajustes (AjusteSolicitud) → 201 Ajuste. Conteo físico y, si hay diferencia, ajuste autorizado.
+    registrarAjuste: (solicitud) => llamar(`${BASE}/ajustes`, {
+      method: 'POST', body: JSON.stringify({ id_comercio: idComercio, ...solicitud }),
+    }),
+
     // GET /kardex → KardexRespuesta { datos, paginacion }, del más reciente al más antiguo
     consultarKardex: (filtros) => llamar(`${BASE}/kardex${consulta({ id_comercio: idComercio, ...filtros })}`),
+
+    // GET /kardex/valorizado → { datos, paginacion }, del más antiguo al más reciente. Se recorren las páginas
+    // (máximo 200 líneas cada una) para que los totales del reporte cubran todo el periodo.
+    async obtenerKardexValorizado({ fecha_inicio, fecha_fin, tipo_movimiento }) {
+      const datos = [];
+      for (let pagina = 1; pagina <= 25; pagina += 1) {
+        const r = await llamar(`${BASE}/kardex/valorizado${consulta({ id_comercio: idComercio, fecha_inicio, fecha_fin, tipo_movimiento, pagina, por_pagina: 200 })}`);
+        datos.push(...r.datos);
+        if (pagina >= r.paginacion.total_paginas) return { datos, paginacion: r.paginacion };
+      }
+      return { datos, paginacion: { total: datos.length, truncado: true } };
+    },
   };
 }
 
