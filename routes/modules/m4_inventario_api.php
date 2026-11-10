@@ -7,6 +7,7 @@ use App\Http\Controllers\M4_Inventario\ExistenciaController;
 use App\Http\Controllers\M4_Inventario\KardexController;
 use App\Http\Controllers\M4_Inventario\MovimientoController;
 use App\Http\Controllers\M4_Inventario\ReservaController;
+use App\Http\Controllers\M4_Inventario\TransferenciaController;
 use App\Http\Middleware\EstablecerComercio;
 use App\Http\Middleware\RequiereRol;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +43,7 @@ Route::prefix('api/m4/v1')
                 Route::put('existencias/{id_existencia}/stock-minimo', [ExistenciaController::class, 'fijarStockMinimo'])
                     ->whereNumber('id_existencia')->name('existencias.stock_minimo');
                 Route::post('movimientos', [MovimientoController::class, 'registrar'])->name('movimientos');
+                Route::post('transferencias', [TransferenciaController::class, 'registrar'])->name('transferencias');
                 Route::post('ajustes', [AjusteController::class, 'registrar'])->name('ajustes');
                 Route::get('kardex', [KardexController::class, 'consultar'])->name('kardex');
                 Route::get('kardex/valorizado', [KardexController::class, 'valorizado'])->name('kardex.valorizado');

@@ -117,6 +117,61 @@ return [
                     'operacion' => 'ajuste', 'id_comercio' => 104, 'id_variacion' => 501, 'ubicaciones' => [12], 'cantidad' => 2,
                     'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-09T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
                 ],
+                // Comercio 1 del escenario (seeder de M4, sedes 1 y 2 de M2). Cada una sirve para un
+                // conteo cuya diferencia con el sistema sea exactamente esa cantidad, una sola vez.
+                'autorizacion-ajuste-c1-0001' => [
+                    'operacion' => 'ajuste', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [1], 'cantidad' => 1,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-ajuste-c1-0002' => [
+                    'operacion' => 'ajuste', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [1], 'cantidad' => 2,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-ajuste-c1-0003' => [
+                    'operacion' => 'ajuste', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [2], 'cantidad' => 1,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-ajuste-c1-0004' => [
+                    'operacion' => 'ajuste', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [2], 'cantidad' => 2,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-ajuste-c1-0005' => [
+                    'operacion' => 'ajuste', 'id_comercio' => 1, 'id_variacion' => 502, 'ubicaciones' => [1], 'cantidad' => 1,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-ajuste-c1-0006' => [
+                    'operacion' => 'ajuste', 'id_comercio' => 1, 'id_variacion' => 502, 'ubicaciones' => [1], 'cantidad' => 2,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                // Transferencias del comercio 1 (RN-M4-012): ubicaciones [origen, destino] y cantidad exacta, una sola vez.
+                'autorizacion-transferencia-c1-0001' => [
+                    'operacion' => 'transferencia', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [1, 2], 'cantidad' => 1,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-transferencia-c1-0002' => [
+                    'operacion' => 'transferencia', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [1, 2], 'cantidad' => 2,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-transferencia-c1-0003' => [
+                    'operacion' => 'transferencia', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [1, 2], 'cantidad' => 5,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-transferencia-c1-0004' => [
+                    'operacion' => 'transferencia', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [2, 1], 'cantidad' => 1,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-transferencia-c1-0005' => [
+                    'operacion' => 'transferencia', 'id_comercio' => 1, 'id_variacion' => 501, 'ubicaciones' => [2, 1], 'cantidad' => 2,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-transferencia-c1-0006' => [
+                    'operacion' => 'transferencia', 'id_comercio' => 1, 'id_variacion' => 502, 'ubicaciones' => [1, 2], 'cantidad' => 1,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
+                'autorizacion-transferencia-c1-0007' => [
+                    'operacion' => 'transferencia', 'id_comercio' => 1, 'id_variacion' => 502, 'ubicaciones' => [1, 2], 'cantidad' => 2,
+                    'id_autorizador' => 2, 'fecha_autorizacion' => '2026-11-10T09:00:00-06:00', 'vence' => '2026-12-31T23:59:59-06:00',
+                ],
             ],
         ],
     ],
