@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { NavegacionM5 } from './components/componentes';
+import { ModalLoginRequerido, NavegacionM5 } from './components/componentes';
 import { actualizarCantidad, agregarItem, eliminarItem, obtenerCarrito, vaciarCarrito } from './services/m5Api';
 import { obtenerUsuario } from '../Nucleo/services/sesionApi';
 import CarritoPage from './views/CarritoView';
@@ -242,19 +242,21 @@ export default function M5App() {
     setPantalla('pedido');
   }
 
+  const [modalLogin, setModalLogin] = useState(false);
+
   // Si el usuario es invitado (sin sesión iniciada), no se le permite ir a checkout:
-  // se le redirige al login del portal sin vaciar su carrito.
+  // se muestra un modal amigable explicando el motivo y ofreciendo ingresar o registrarse
+  // sin vaciar su carrito.
   async function procederACheckout() {
     setAviso(null);
     try {
       const resp = await obtenerUsuario();
       if (!resp.ok || !resp.datos?.user) {
-        // Redirigir a login preservando el contexto
-        window.location.href = '/app.html?pantalla=ingresar';
+        setModalLogin(true);
         return;
       }
     } catch {
-      window.location.href = '/app.html?pantalla=ingresar';
+      setModalLogin(true);
       return;
     }
     setPantalla('checkout');
@@ -288,6 +290,8 @@ export default function M5App() {
         )}
         {pantalla === 'panel-comercio' && <PanelComercioView onVolver={() => volverAlCarrito()} />}
       </div>
+
+      <ModalLoginRequerido abierto={modalLogin} onCerrar={() => setModalLogin(false)} />
     </div>
     </NavegacionM5.Provider>
   );

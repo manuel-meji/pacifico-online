@@ -19,6 +19,9 @@ Rama: `feature/integracion-general` · Responsable: Coordinación SG5 (M5 Carrit
 | 10/11/2026 | `frontend/src/modules/M5_Pedidos/views/ListaDeseosView.jsx`, `componentes.jsx`, `DetallePedidoView.jsx` | M5 | Pantalla amigable de Lista de Deseos, botón en encabezado, logo hacia `/app.html` y modal de Devolución. | Integración y experiencia de usuario. | SC-09 creada |
 | 10/11/2026 | `frontend/src/modules/M5_Pedidos/views/CheckoutView.jsx`, `calculos.js`, `M5App.jsx` | M5 | Retiro del selector de medio de pago de M5 (se delega a M6) y redirección obligatoria a login si el usuario es invitado sin vaciar su carrito. | Acuerdo entre módulos y seguridad en checkout. | No aplica (M5) |
 | 10/11/2026 | `frontend/src/modules/M5_Pedidos/views/CarritoView.jsx`, `componentes.jsx` | M5 | Ocultamiento del bloque de "Productos de prueba" y del botón "Panel de comercio (demo)" en navegación de cliente. Agregado botón "Explorar productos" en carrito vacío hacia `/app.html`. | Limpieza de interfaz para fase de integración real. | No aplica (M5) |
+| 10/11/2026 | `frontend/src/modules/M5_Pedidos/components/componentes.jsx`, `M5App.jsx`, `MisPedidosView.jsx` | M5 | Encabezado idéntico al portal M1, modal amigable de autenticación requerida para pagar y aviso en Mis Pedidos para usuarios no autenticados. | Estándar de diseño y experiencia de usuario amigable. | No aplica (M5) |
+| 10/11/2026 | `frontend/src/modules/M1_Portal/M1App.jsx` | M1 | Aviso contextual al llegar a login desde checkout (`?motivo=checkout`) y redirección automática de vuelta a `/carrito.html` tras login/registro exitoso. | Flujo amigable de compra sin perder el carrito. | Notificado al usuario |
+
 
 
 

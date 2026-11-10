@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Check, CircleAlert, ClipboardList, CircleCheck, CircleX, Heart, Info, LoaderCircle, Lock, Minus, Package, Plus, Store, Trash2, TriangleAlert,
+  ArrowLeft, Check, CircleAlert, ClipboardList, CircleCheck, CircleX, Heart, Info, LoaderCircle, Lock, MapPin, Minus, Package, Phone, Plus, Search, ShoppingCart, Store, Trash2, TriangleAlert, User,
 } from 'lucide-react';
 import { colones } from '../services/calculos';
-import logoImg from '../../../assets/Logo.jpeg';
+import logoPacificos from '../../../assets/logo-pacificos.png';
+import { obtenerUsuario } from '../../Nucleo/services/sesionApi';
 
 // Navegación compartida de M5 (la provee M5App): { abrirMisPedidos, enMisPedidos, abrirPanelComercio, enPanelComercio, abrirDeseos, enDeseos }.
 // Permite que cualquier vista muestre los accesos del encabezado sin pasar props.
@@ -11,6 +12,29 @@ export const NavegacionM5 = createContext(null);
 
 export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al carrito' }) {
   const nav = useContext(NavegacionM5);
+  const [termino, setTermino] = useState('');
+  const [conSesion, setConSesion] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+    obtenerUsuario()
+      .then((r) => {
+        if (activo && r?.ok && r?.datos?.user) {
+          setConSesion(true);
+        }
+      })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
+
+  const handleBuscar = (e) => {
+    e.preventDefault();
+    const t = termino.trim();
+    if (t) {
+      window.location.href = `/app.html?buscar=${encodeURIComponent(t)}`;
+    }
+  };
+
   const mostrarMisPedidos = nav?.abrirMisPedidos && !nav.enMisPedidos;
   const mostrarDeseos = nav?.abrirDeseos && !nav.enDeseos;
   const mostrarPanel = Boolean(
@@ -19,55 +43,153 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).has('demo')
   );
+
   return (
-    <header className="sticky top-0 z-20 bg-white shadow-xs border-b border-gray-100">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          {onVolver && (
-            <button onClick={onVolver} aria-label={etiquetaVolver}
-              className="h-10 w-10 -ml-2 shrink-0 rounded-full flex items-center justify-center text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
-              <ArrowLeft className="w-5 h-5" aria-hidden="true" />
-            </button>
-          )}
-          <a href="/app.html" aria-label="Ir al portal de Pacíficos Online" className="flex items-center gap-2.5 shrink-0 hover:opacity-90 transition">
-            <img src={logoImg} alt="Pacíficos Online" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shadow-xs border border-blue-100" />
-            <span className="hidden sm:inline-block font-extrabold text-brandDarkBlue tracking-tight text-lg">
-              Pacíficos <span className="text-brandBlue font-semibold">Online</span>
+    <>
+      {/* Franja superior azul idéntica a M1 */}
+      <div className="hidden border-b border-blue-900 bg-brandDarkBlue px-4 py-2 text-xs text-white sm:block">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5 font-medium">
+              <MapPin className="h-4 w-4 text-brandGreen" aria-hidden="true" />
+              Envíos rápidos a todo Costa Rica
             </span>
-          </a>
-          <div className="h-5 w-px bg-gray-200 hidden sm:block mx-1" aria-hidden="true"></div>
-          <h1 className="min-w-0 truncate text-base sm:text-lg font-bold text-gray-800 tracking-tight">{titulo}</h1>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {paso && (
-            <span className="shrink-0 text-xs sm:text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
-              {paso}
+            <span className="flex items-center gap-1.5 font-medium">
+              <Phone className="h-4 w-4 text-brandGreen" aria-hidden="true" />
+              Soporte y Ventas: +506 2000-0000
             </span>
-          )}
-          {mostrarDeseos && (
-            <button type="button" onClick={nav.abrirDeseos} aria-label="Lista de deseos"
-              className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 sm:px-3 text-sm font-semibold text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
-              <Heart className="w-5 h-5 text-rose-500" aria-hidden="true" />
-              <span className="hidden sm:inline">Deseos</span>
-            </button>
-          )}
-          {mostrarMisPedidos && (
-            <button type="button" onClick={nav.abrirMisPedidos} aria-label="Mis pedidos"
-              className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 sm:px-3 text-sm font-semibold text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
-              <ClipboardList className="w-5 h-5" aria-hidden="true" />
-              <span className="hidden sm:inline">Mis pedidos</span>
-            </button>
-          )}
-          {mostrarPanel && (
-            <button type="button" onClick={nav.abrirPanelComercio} aria-label="Panel del comercio (demo)"
-              className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 sm:px-3 text-sm font-semibold text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
-              <Store className="w-5 h-5" aria-hidden="true" />
-              <span className="hidden md:inline">Panel del comercio (demo)</span>
-            </button>
-          )}
+          </div>
         </div>
       </div>
-    </header>
+
+      {/* Encabezado principal unificado */}
+      <header className="sticky top-0 z-20 bg-white shadow-xs">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:gap-4">
+          {/* Logotipo oficial idéntico a M1 */}
+          <a
+            href="/app.html"
+            aria-label="Pacíficos Online, ir al inicio"
+            className="flex shrink-0 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue"
+          >
+            <img src={logoPacificos} alt="Pacíficos Online" className="h-11 w-11 rounded-full object-cover" />
+            <span className="text-left leading-tight">
+              <span className="block text-xl font-extrabold tracking-tight text-brandDarkBlue">Pacíficos</span>
+              <span className="-mt-1 block text-xs font-bold tracking-widest text-brandGreen">ONLINE</span>
+            </span>
+          </a>
+
+          {/* Buscador: redirige a la búsqueda del portal */}
+          <form
+            role="search"
+            onSubmit={handleBuscar}
+            className="relative order-3 flex basis-full items-center sm:order-none sm:mx-4 sm:max-w-2xl sm:flex-1 sm:basis-0"
+          >
+            <label className="sr-only" htmlFor="buscar-m5">Buscar productos</label>
+            <input
+              id="buscar-m5"
+              type="search"
+              value={termino}
+              maxLength={100}
+              onChange={(e) => setTermino(e.target.value)}
+              placeholder="Buscar productos..."
+              className="w-full min-w-0 rounded-full border-2 border-gray-200 py-2.5 pl-5 pr-12 text-base transition sm:text-sm focus:border-brandBlue focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="absolute right-1 grid h-9 w-9 place-items-center rounded-full bg-brandDarkBlue text-white transition hover:bg-brandBlue sm:h-8 sm:w-8 cursor-pointer"
+              aria-label="Buscar"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </form>
+
+          {/* Navegación de cuenta, deseos, pedidos y carrito */}
+          <nav className="ml-auto flex shrink-0 items-center gap-4 sm:gap-5 text-sm font-medium text-gray-700 sm:ml-0" aria-label="Cuenta, pedidos y carrito">
+            <a
+              href={`/app.html?pantalla=${conSesion ? 'cuenta' : 'ingresar'}`}
+              aria-label={conSesion ? 'Mi cuenta' : 'Ingresar'}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition hover:text-brandBlue"
+            >
+              <User className="h-5 w-5" aria-hidden="true" />
+              <span className="hidden sm:inline">{conSesion ? 'Mi cuenta' : 'Ingresar'}</span>
+            </a>
+
+            {mostrarDeseos && (
+              <button
+                type="button"
+                onClick={nav.abrirDeseos}
+                aria-label="Lista de deseos"
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition hover:text-brandBlue cursor-pointer"
+              >
+                <Heart className="h-5 w-5 text-rose-500" aria-hidden="true" />
+                <span className="hidden sm:inline">Deseos</span>
+              </button>
+            )}
+
+            {mostrarMisPedidos && (
+              <button
+                type="button"
+                onClick={nav.abrirMisPedidos}
+                aria-label="Mis pedidos"
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition hover:text-brandBlue cursor-pointer"
+              >
+                <ClipboardList className="h-5 w-5" aria-hidden="true" />
+                <span className="hidden sm:inline">Mis pedidos</span>
+              </button>
+            )}
+
+            <a
+              href="/carrito.html"
+              aria-label="Carrito de compras"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 font-bold text-brandBlue transition hover:text-brandDarkBlue"
+            >
+              <span className="relative">
+                <ShoppingCart className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <span className="hidden sm:inline">Carrito</span>
+            </a>
+
+            {mostrarPanel && (
+              <button
+                type="button"
+                onClick={nav.abrirPanelComercio}
+                aria-label="Panel del comercio (demo)"
+                className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 transition cursor-pointer"
+              >
+                <Store className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden lg:inline">Panel demo</span>
+              </button>
+            )}
+          </nav>
+        </div>
+
+        {/* Barra de contexto de la pantalla de M5 (Paso actual / Breadcrumb) */}
+        <div className="border-t border-gray-100 bg-gray-50/80 px-4 py-2">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="flex items-center gap-2 min-w-0">
+              {onVolver && (
+                <button
+                  type="button"
+                  onClick={onVolver}
+                  aria-label={etiquetaVolver}
+                  className="inline-flex items-center gap-1 font-semibold text-brandDarkBlue hover:text-brandBlue transition cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                  <span>{etiquetaVolver}</span>
+                </button>
+              )}
+              {onVolver && <span className="text-gray-300">/</span>}
+              <h1 className="font-bold text-gray-800 truncate">{titulo}</h1>
+            </div>
+            {paso && (
+              <span className="shrink-0 font-semibold text-gray-600 bg-white px-2.5 py-0.5 rounded-full border border-gray-200 shadow-2xs">
+                {paso}
+              </span>
+            )}
+          </div>
+        </div>
+      </header>
+    </>
   );
 }
 
@@ -277,6 +399,76 @@ export function ModalConfirmacion({ abierto, titulo, children, textoConfirmar = 
             className="min-h-11 px-5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition inline-flex items-center justify-center gap-2 disabled:opacity-70">
             {ocupado ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Trash2 className="w-4 h-4" aria-hidden="true" />}
             {ocupado ? 'Procesando…' : textoConfirmar}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Modal amigable de inicio de sesion requerido para pagar ----------
+export function ModalLoginRequerido({ abierto, onCerrar }) {
+  const cerrarRef = useRef(null);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    cerrarRef.current?.focus();
+    const alTeclear = (e) => { if (e.key === 'Escape') onCerrar(); };
+    document.addEventListener('keydown', alTeclear);
+    return () => document.removeEventListener('keydown', alTeclear);
+  }, [abierto, onCerrar]);
+
+  if (!abierto) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-xs" aria-hidden="true" onClick={onCerrar} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-login-titulo"
+        aria-describedby="modal-login-desc"
+        className="relative bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md p-6 sm:p-7 space-y-5 animate-in fade-in zoom-in-95 duration-150"
+      >
+        <div className="flex items-start gap-4">
+          <div className="h-12 w-12 shrink-0 rounded-2xl bg-blue-50 text-brandDarkBlue flex items-center justify-center">
+            <Lock className="w-6 h-6" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h2 id="modal-login-titulo" className="text-lg font-bold text-gray-900 leading-snug">
+              Inicie sesión para completar su compra
+            </h2>
+            <p id="modal-login-desc" className="mt-1.5 text-xs sm:text-sm text-gray-600 leading-relaxed">
+              Para calcular los costos de envío a su dirección y asociar su pedido, debe identificarse con su cuenta.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-3 text-xs text-blue-900 flex items-center gap-2.5">
+          <CircleCheck className="w-4 h-4 text-brandGreen shrink-0" aria-hidden="true" />
+          <span className="font-medium">No se preocupe: los productos de su carrito se mantendrán guardados.</span>
+        </div>
+
+        <div className="space-y-2 pt-1">
+          <a
+            href="/app.html?pantalla=ingresar&motivo=checkout"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brandDarkBlue hover:bg-brandBlue text-white font-bold py-3 px-5 transition text-sm shadow-xs cursor-pointer"
+          >
+            Iniciar sesión
+          </a>
+          <a
+            href="/app.html?pantalla=crear&motivo=checkout"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 hover:border-brandBlue hover:text-brandBlue text-gray-700 font-semibold py-2.5 px-5 transition text-sm cursor-pointer"
+          >
+            Crear una cuenta nueva
+          </a>
+          <button
+            ref={cerrarRef}
+            type="button"
+            onClick={onCerrar}
+            className="w-full py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 transition cursor-pointer"
+          >
+            Volver al carrito
           </button>
         </div>
       </div>

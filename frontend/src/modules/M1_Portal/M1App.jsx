@@ -31,7 +31,7 @@ const titulos = {
 // Parámetros de las pantallas del portal que viajan en la URL (?pantalla=producto&id=1520, etc.).
 // Los nombres de la búsqueda son los del contrato de buscarProductos.
 const PARAMETROS_NUMERICOS = ['id', 'id_categoria', 'precio_minimo', 'precio_maximo', 'pagina', 'por_pagina'];
-const PARAMETROS_TEXTO = ['q', 'orden', 'slug'];
+const PARAMETROS_TEXTO = ['q', 'orden', 'slug', 'motivo'];
 
 export function leerParametros(busqueda = window.location.search) {
   const url = new URLSearchParams(busqueda);
@@ -153,11 +153,19 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
       await esperar();
       return { ok: false, ...correoDuplicado };
     }
-    return registrarCliente(datos);
+    const respuesta = await registrarCliente(datos);
+    if (respuesta.ok) {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('motivo') === 'checkout' || parametros.motivo === 'checkout') {
+        window.location.href = '/carrito.html';
+        return respuesta;
+      }
+    }
+    return respuesta;
   }
 
   // POST /login del núcleo compartido. Con ?simular=credenciales se muestra, sin backend, el error 422 del ingreso.
-  // Si entra un cliente va al inicio del portal. Los encargados todavía no tienen panel: la vista les avisa.
+  // Si entra un cliente va al inicio del portal (o de vuelta al carrito si venía de checkout). Los encargados todavía no tienen panel: la vista les avisa.
   async function ingresar({ correo, contrasena }) {
     if (simular === 'credenciales') {
       await esperar();
@@ -166,7 +174,14 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     const respuesta = await iniciarSesion(correo, contrasena);
     if (respuesta.ok) {
       setUsuario(respuesta.datos.user);
-      if (respuesta.datos.user.rol === 'cliente') navegar('inicio');
+      if (respuesta.datos.user.rol === 'cliente') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('motivo') === 'checkout' || parametros.motivo === 'checkout') {
+          window.location.href = '/carrito.html';
+          return respuesta;
+        }
+        navegar('inicio');
+      }
     }
     return respuesta;
   }
@@ -207,6 +222,14 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
       {errorCierre && (
         <div className="mx-auto w-full max-w-5xl px-4 pt-4">
           <Aviso>No se pudo cerrar la sesión. Intente de nuevo.</Aviso>
+        </div>
+      )}
+
+      {(parametros.motivo === 'checkout' || new URLSearchParams(window.location.search).get('motivo') === 'checkout') && (
+        <div className="mx-auto w-full max-w-md px-4 pt-4">
+          <Aviso tipo="info">
+            Inicie sesión o regístrese para continuar con su compra. Los productos de su carrito se encuentran guardados.
+          </Aviso>
         </div>
       )}
 
