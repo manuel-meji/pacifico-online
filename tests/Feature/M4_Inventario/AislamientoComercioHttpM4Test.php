@@ -57,6 +57,19 @@ class AislamientoComercioHttpM4Test extends TestCase
         $this->assertSame(1, (int) DB::table('reservas')->where('id_reserva', $this->reservaAjena)->value('id_estado_reserva'));
     }
 
+    public function test_un_comercio_no_transfiere_existencias_de_otro(): void
+    {
+        $this->actingAs($this->encargado(1), 'sanctum');
+
+        $this->postJson('/api/m4/v1/transferencias', [
+            'id_comercio' => 3, 'id_variacion' => 30, 'id_ubicacion_origen' => 1, 'id_ubicacion_destino' => 2,
+            'cantidad' => 1, 'justificacion' => 'Intento ajeno', 'id_autorizacion' => 'autorizacion-ajena',
+        ])->assertNotFound()->assertJsonPath('error.codigo', 'ERR-003');
+
+        $this->assertSame(7, (int) DB::table('existencias')->where('id_existencia', $this->existenciaAjena)->value('cantidad_fisica'));
+        $this->assertSame(0, DB::table('movimientos_inventario')->where('tipo', 'like', 'transferencia%')->count());
+    }
+
     public function test_el_comercio_dueno_si_ve_sus_datos(): void
     {
         $this->actingAs($this->encargado(3), 'sanctum')

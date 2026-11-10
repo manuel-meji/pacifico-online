@@ -161,13 +161,13 @@ interface InventarioModuleInterface extends InventarioServiceInterface
     public function registrarMovimientoManual(array $solicitud): array;
 
     /**
-     * registrarTransferencia (POST /transferencias). Alcance deseable: no
-     * implementado en v0.9.0 (responde ERR-006).
+     * registrarTransferencia (POST /transferencias): traslado autorizado entre dos
+     * ubicaciones del mismo comercio (RN-M4-012). Dos movimientos con la misma referencia.
      *
      * @param  array<string, mixed>  $solicitud  TransferenciaSolicitud.
      * @return array<string, mixed> TransferenciaRespuesta.
      *
-     * @throws ErrorInventarioException ERR-006
+     * @throws ErrorInventarioException ERR-M4-001, ERR-M4-013, ERR-M4-014, ERR-M4-015, ERR-002, ERR-003, ERR-005, ERR-006
      */
     public function registrarTransferencia(array $solicitud): array;
 

@@ -16,6 +16,7 @@ use App\Services\M4_Inventario\DTO\FiltroAuditoria;
 use App\Services\M4_Inventario\DTO\FiltroKardex;
 use App\Services\M4_Inventario\DTO\RegistroMovimientoDTO;
 use App\Services\M4_Inventario\DTO\ReservaSolicitudDTO;
+use App\Services\M4_Inventario\DTO\TransferenciaDTO;
 use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 use App\Services\M4_Inventario\Repositorios\ExistenciaRepositoryInterface;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,7 @@ use LogicException;
  * núcleo y delega en los servicios de aplicación del diseño del PC3 (figura 4.2a/b):
  *  - ReservaService: ciclo de vida de la reserva y vencimiento (ADR-002).
  *  - RegistroMovimientoService y AjusteService: movimientos manuales y conteos.
+ *  - TransferenciaService: transferencias entre ubicaciones (RN-M4-012).
  *  - KardexService: kardex, kardex valorizado, costo de productos vendidos y auditoría.
  * Responde siempre con los cuerpos de los schemas del contrato.
  *
@@ -57,6 +59,7 @@ class InventarioService implements InventarioModuleInterface
         private readonly AjusteService $ajustes,
         private readonly PublicadorDisponibilidad $publicador,
         private readonly ReservaService $reservas,
+        private readonly TransferenciaService $transferencias,
     ) {}
 
     // ------------------------------------------------------------------ estado
@@ -305,12 +308,15 @@ class InventarioService implements InventarioModuleInterface
         });
     }
 
-    /**
-     * Alcance deseable (transferencias entre ubicaciones): no implementado en v0.9.0.
-     */
     public function registrarTransferencia(array $solicitud): array
     {
-        throw ErrorInventarioException::operacionNoImplementada('registrarTransferencia');
+        $dto = TransferenciaDTO::desdeSolicitud($solicitud);
+
+        return $this->nucleo->ejecutarEnAmbito(function () use ($dto): array {
+            $this->exigirComercioDeSesion($dto->idComercio);
+
+            return $this->transferencias->registrarTransferencia($dto, $this->nucleo->usuarioActual());
+        });
     }
 
     public function registrarAjusteInventario(array $solicitud): array

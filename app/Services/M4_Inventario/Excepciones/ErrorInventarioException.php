@@ -162,20 +162,6 @@ class ErrorInventarioException extends RuntimeException
     }
 
     /**
-     * Operación publicada en el contrato que v0.9.0 no implementa (alcance deseable).
-     * Se responde ERR-006 para que el consumidor la trate como no disponible.
-     */
-    public static function operacionNoImplementada(string $operacion): self
-    {
-        return new self(
-            'ERR-006',
-            503,
-            'Operación no disponible en esta versión de la plataforma.',
-            ['modulo' => 'M4', 'operacion' => $operacion, 'motivo' => 'alcance_deseable_no_implementado'],
-        );
-    }
-
-    /**
      * @return array{error: array{codigo: string, mensaje: string, detalles: array<string, mixed>|null}}
      */
     public function toArray(): array

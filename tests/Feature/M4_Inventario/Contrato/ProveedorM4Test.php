@@ -4,7 +4,6 @@ namespace Tests\Feature\M4_Inventario\Contrato;
 
 use App\Contracts\M4_Inventario\Dependencias\PedidosDependencia;
 use App\Contracts\M4_Inventario\Dependencias\VerificadorAutorizacionesInterface;
-use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Events\M4_Inventario\AlertaStockMinimo;
 use App\Events\M4_Inventario\EventoInventario;
 use App\Events\M4_Inventario\ExistenciaAgotada;
@@ -15,7 +14,6 @@ use App\Events\M4_Inventario\SalidaInventarioConfirmada;
 use App\Jobs\M4_Inventario\VencerReservasJob;
 use App\Models\Nucleo\Usuario;
 use App\Services\M4_Inventario\Dobles\PedidosStub;
-use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Tests\Feature\M4_Inventario\EsquemaInventarioPrueba;
@@ -295,18 +293,29 @@ class ProveedorM4Test extends TestCase
         $this->assertErrorContrato($this->getJson("/api/m4/v1{$ruta}"), 'GET', $ruta, 422, ['ERR-005']);
     }
 
-    public function test_op20_registrar_transferencia_es_alcance_deseable_no_implementado(): void
+    public function test_op20_registrar_transferencia(): void
     {
-        // Publicada en v1.3.0 pero fuera del alcance mínimo de v0.9.0: responde ERR-006 (503),
-        // un estado publicado para la operación, en lugar de fallar en silencio (sección 3.4 del PC4).
-        $this->assertArrayHasKey('503', $this->contratoM4()['paths']['/transferencias']['post']['responses']);
-
-        try {
-            app(InventarioModuleInterface::class)->registrarTransferencia([]);
-            $this->fail('registrarTransferencia debía responder ERR-006.');
-        } catch (ErrorInventarioException $e) {
-            $this->assertSame(['ERR-006', 503], [$e->codigo, $e->http]);
+        foreach (['autorizacion-traslado-contrato' => 3, 'autorizacion-traslado-excedido' => 30] as $id => $cantidad) {
+            config(["integraciones.m4.autorizaciones.registradas.{$id}" => [
+                'operacion' => VerificadorAutorizacionesInterface::OPERACION_TRANSFERENCIA, 'id_comercio' => 1, 'id_variacion' => 10,
+                'ubicaciones' => [1, 2], 'cantidad' => $cantidad, 'id_autorizador' => 2,
+                'fecha_autorizacion' => '2026-11-09T09:00:00-06:00', 'vence' => '2099-12-31T23:59:59-06:00',
+            ]]);
         }
+        $ruta = '/transferencias';
+        $solicitud = [
+            'id_comercio' => 1, 'id_variacion' => 10, 'id_ubicacion_origen' => 1, 'id_ubicacion_destino' => 2,
+            'cantidad' => 3, 'justificacion' => 'Reposición de la bodega', 'id_autorizacion' => 'autorizacion-traslado-contrato',
+        ];
+
+        $cuerpo = $this->assertCumpleContrato($this->comoEncargado()->postJson("/api/m4/v1{$ruta}", $solicitud), 'POST', $ruta, 201);
+        $this->assertSame(['transferencia_salida', 'transferencia_entrada'], array_column($cuerpo['movimientos'], 'tipo_movimiento'));
+        $this->assertSame([$cuerpo['id_transferencia'], $cuerpo['id_transferencia']], array_column($cuerpo['movimientos'], 'referencia_id'));
+
+        $this->assertErrorContrato($this->postJson("/api/m4/v1{$ruta}", ['cantidad' => 30, 'id_autorizacion' => 'autorizacion-traslado-excedido'] + $solicitud), 'POST', $ruta, 409, ['ERR-M4-001']);
+        $this->assertErrorContrato($this->postJson("/api/m4/v1{$ruta}", ['id_ubicacion_destino' => 77] + $solicitud), 'POST', $ruta, 404, ['ERR-M4-014']);
+        $this->assertErrorContrato($this->postJson("/api/m4/v1{$ruta}", ['id_ubicacion_destino' => 1] + $solicitud), 'POST', $ruta, 422, ['ERR-005']);
+        $this->assertErrorContrato($this->postJson("/api/m4/v1{$ruta}", $solicitud), 'POST', $ruta, 403, ['ERR-002']);
     }
 
     // ------------------------------------------------------------ comunes
