@@ -1,7 +1,7 @@
 // Operaciones de bodega (M4): CU-M4-01 «Registrar movimiento de inventario», entrada con costo unitario y salida
 // manual, con POST /api/m4/v1/movimientos. La vista solo valida la forma de los campos; las reglas (comercio activo,
 // variación del comercio, sede habilitada, salida sin tocar lo reservado, costo promedio) las aplica el servidor.
-// Las transferencias entre ubicaciones son alcance deseable y no están en esta versión (v0.9.0).
+// Las transferencias entre ubicaciones están en su propia pantalla (views/Transferencias.jsx).
 // Mantiene los hallazgos H1, H7, H8, H9 y H10 de la validación del PC3 (sección 8.2).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconoCargando, IconoEntrada, IconoSalida } from '../components/iconos';
@@ -124,7 +124,7 @@ export default function GestionOperacionesInventario({ api, existencias, sedes, 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-3xl space-y-4">
       <div role="tablist" aria-label="Tipo de operación" className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1">
         {OPERACIONES.map(({ id, nombre, Icono }) => (
           <button key={id} role="tab" id={`tab-${id}`} aria-selected={operacion === id} aria-controls="panel-operacion" type="button"
@@ -159,6 +159,7 @@ export default function GestionOperacionesInventario({ api, existencias, sedes, 
       <div role="tabpanel" id="panel-operacion" aria-labelledby={`tab-${operacion}`}>
         <Tarjeta>
           <form onSubmit={enviar} noValidate className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
             <Campo id="variacion" etiqueta="Variación" error={err.otra_variacion ?? err.id_variacion}>
               <select id="variacion" className={claseEntrada(false)} value={form.id_variacion} onChange={cambiar('id_variacion')}>
                 {variaciones.map((v) => <option key={v.id_variacion} value={v.id_variacion}>{nombreVariacion(v)}</option>)}
@@ -178,6 +179,7 @@ export default function GestionOperacionesInventario({ api, existencias, sedes, 
                 <input aria-label="Número de ubicación" inputMode="numeric" className={claseEntrada(err.otra_ubicacion)} value={form.otra_ubicacion} onChange={cambiar('otra_ubicacion')} placeholder="Número de la sede" />
               )}
             </Campo>
+            </div>
 
             {existencia && (
               <dl className="grid grid-cols-3 gap-1 rounded-lg bg-brandLightBg p-2 text-center text-xs" aria-label="Existencia actual">
@@ -194,7 +196,7 @@ export default function GestionOperacionesInventario({ api, existencias, sedes, 
               <p className="text-xs text-gray-500">Solo se pueden usar las unidades disponibles: las reservadas por pedidos no salen.</p>
             )}
 
-            <div className={`grid gap-4 ${operacion === 'entrada' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <div className={`grid gap-4 ${operacion === 'entrada' ? 'grid-cols-1 min-[400px]:grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
               <Campo id="cantidad" etiqueta="Cantidad" error={err.cantidad}>
                 <input id="cantidad" inputMode="numeric" className={claseEntrada(err.cantidad)} value={form.cantidad} onChange={cambiar('cantidad')} placeholder="Ej. 10" aria-invalid={!!err.cantidad} aria-describedby={err.cantidad ? 'cantidad-error' : undefined} />
               </Campo>

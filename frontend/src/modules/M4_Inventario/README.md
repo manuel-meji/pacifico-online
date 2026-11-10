@@ -8,10 +8,13 @@ Pantallas del encargado del comercio en React + Tailwind, conectadas a la API de
 - **Existencias**: física − reservada = disponible por variación y ubicación, aviso de stock mínimo y
   edición del mínimo (`GET /existencias`, `PUT /existencias/{id}/stock-minimo`).
 - **Kardex**: existencia por ubicación y kardex con filtros de ubicación y periodo (CU-M4-08, `GET /kardex`).
+- **Transferencias**: traslado autorizado entre dos sedes del comercio (CU-M4-05, RN-M4-012, `POST /transferencias`).
+- **Inventario físico**: conteo y ajuste con autorización del Administrador (CU-M4-02, RN-M4-011, `POST /ajustes`).
+- **Reportes**: kardex valorizado del periodo con totales de entradas, salidas y valor (CU-M4-11, `GET /kardex/valorizado`).
 
-Las transferencias entre ubicaciones son alcance deseable: no están en esta versión (v0.9.0).
-
-Opera desde 360 px sin desplazamiento horizontal. Las vistas no tienen reglas de negocio: solo validan la forma
+Diseño adaptable: en celular (menos de 768 px) una columna con navegación inferior (Operaciones, Existencias, Kardex
+y «Más» con las otras tres); desde 768 px, menú lateral fijo con las seis pantallas y contenido ancho (max-w-6xl).
+Opera desde 360 px y con zoom al 200 % sin desplazamiento horizontal de la página. Las vistas no tienen reglas de negocio: solo validan la forma
 de los campos (H7) y muestran lo que responde el servidor. El comercio sale de la sesión del núcleo (RN-12).
 
 ## Correrlo
