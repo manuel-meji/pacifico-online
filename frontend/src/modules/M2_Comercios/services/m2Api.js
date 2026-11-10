@@ -171,6 +171,23 @@ export function reactivarComercio(idComercio) {
   return llamar(`/comercios/${idComercio}/reactivar`, { method: 'POST' });
 }
 
+// Destacar comercios (publicidad): el encargado solicita; la plataforma aprueba, rechaza o destaca directamente.
+export function consultarPublicidad(idComercio) {
+  return llamar(`/comercios/${idComercio}/publicidad`);
+}
+
+export function solicitarPublicidad(idComercio, dias) {
+  return llamar(`/comercios/${idComercio}/publicidad`, { method: 'POST', json: { dias } });
+}
+
+export function listarPublicidadPendiente() {
+  return llamar('/publicidad');
+}
+
+export function gestionarPublicidad(idPublicidad, accion) {
+  return llamar(`/publicidad/${idPublicidad}`, { method: 'POST', json: { accion } });
+}
+
 
 export function consultarMicrositio(idComercio) {
   return llamar(`/comercios/${idComercio}/micrositio`);

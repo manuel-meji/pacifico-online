@@ -132,3 +132,26 @@ export const cancelarSubpedido = (idSubpedido, { motivo, requiere_reembolso = tr
     method: 'POST',
     body: json({ motivo, requiere_reembolso }),
   });
+
+export const solicitarDevolucionSubpedido = (idSubpedido, { motivo }, idCliente = ID_CLIENTE_POR_DEFECTO) =>
+  llamar(armarRuta(`/subpedidos/${idSubpedido}/devolucion`, idCliente), {
+    method: 'POST',
+    body: json({ motivo }),
+  });
+
+// ---------- Lista de Deseos (Wishlist) ----------
+
+export const obtenerDeseos = (idCliente = ID_CLIENTE_POR_DEFECTO) =>
+  llamar(armarRuta('/deseos', idCliente));
+
+export const agregarDeseo = (idVariacion, idCliente = ID_CLIENTE_POR_DEFECTO) =>
+  llamar(armarRuta('/deseos', idCliente), {
+    method: 'POST',
+    body: json({ id_variacion: idVariacion }),
+  });
+
+export const eliminarDeseo = (idDeseo, idCliente = ID_CLIENTE_POR_DEFECTO) =>
+  llamar(armarRuta(`/deseos/${idDeseo}`, idCliente), { method: 'DELETE' });
+
+export const moverDeseoAlCarrito = (idDeseo, idCliente = ID_CLIENTE_POR_DEFECTO) =>
+  llamar(armarRuta(`/deseos/${idDeseo}/mover-al-carrito`, idCliente), { method: 'POST' });

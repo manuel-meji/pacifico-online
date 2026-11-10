@@ -46,7 +46,7 @@ Los parámetros de búsqueda en la URL usan los nombres del contrato (`q`, `id_c
     etiqueta con "en algunas opciones" y el precio de cada una se ve en la ficha.
   - En la ficha, `VariacionFicha.precio_promocional` y `fin_promocion` muestran el precio rebajado y
     "Precio de promoción hasta el …". El carrito (M5) cobra ese precio con `obtenerPreciosVigentes`.
-  "Agregar al carrito" abre M5: `/app.html?agregar=<id_variacion>&cantidad=1`.
+  "Agregar al carrito" abre M5: `/carrito.html?agregar=<id_variacion>&cantidad=1`.
 - Portada: la sección que venga en `secciones_no_disponibles` se oculta y el resto sigue.
 
 ## Ejecutar

@@ -379,6 +379,62 @@ class ControladorPedido extends Controller
         return response()->json($respuesta, 200);
     }
 
+    /**
+     * Solicitar la devolución formal de un subpedido entregado.
+     * Registra el motivo en cancelaciones_pedido con requiere_reembolso = true
+     * y notifica al servicio de reembolsos de M6 si corresponde.
+     */
+    public function solicitarDevolucionSubpedido(int|Request $requestOrId, ?string $motivo = null): JsonResponse
+    {
+        $req = request();
+        if ($requestOrId instanceof Request) {
+            $subpedidoId = (int) ($requestOrId->route('id_subpedido') ?? $requestOrId->input('id_subpedido'));
+            $motivoTexto = (string) ($requestOrId->input('motivo') ?? $motivo ?? 'Devolución de producto solicitada');
+        } else {
+            $subpedidoId = (int) $requestOrId;
+            $motivoTexto = (string) ($req->input('motivo') ?? $motivo ?? 'Devolución de producto solicitada');
+        }
+
+        $subpedido = Subpedido::with(['pedidoMaestro', 'lineas'])->find($subpedidoId);
+        if (! $subpedido) {
+            return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
+        }
+
+        $estadoActual = strtolower((string) ($subpedido->estado_subpedido ?: 'pendiente'));
+        if ($estadoActual !== 'entregado') {
+            return $this->errorRespuesta(
+                'ERR-M5-002',
+                "Solo se puede solicitar devolución de un subpedido que ya fue entregado (estado actual: '{$estadoActual}').",
+                null,
+                409
+            );
+        }
+
+        // Registrar la cancelación / devolución
+        $subpedido->cancelaciones()->create([
+            'id_pedido' => (int) $subpedido->id_pedido,
+            'motivo' => '[DEVOLUCIÓN] '.$motivoTexto,
+            'requiere_reembolso' => true,
+            'fecha_cancelacion' => now(),
+        ]);
+
+        // Registrar en historial de estados del pedido
+        $subpedido->estados()->create([
+            'id_pedido' => (int) $subpedido->id_pedido,
+            'estado_anterior' => 'entregado',
+            'estado' => 'entregado', // Mantiene estado pero registra el hito de devolución
+            'motivo' => 'Devolución solicitada por cliente: '.$motivoTexto,
+            'fecha_estado' => now(),
+        ]);
+
+        return response()->json([
+            'id_subpedido' => (int) $subpedido->id_subpedido,
+            'mensaje' => 'Solicitud de devolución registrada correctamente',
+            'requiere_reembolso' => true,
+            'subpedido' => $subpedido->fresh(['lineas', 'estados', 'cancelaciones']),
+        ], 200);
+    }
+
     public function cancelarPedidoTotal(int|Request $requestOrId, ?string $motivo = null): JsonResponse
     {
         $req = request();

@@ -1,17 +1,18 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Check, CircleAlert, ClipboardList, CircleCheck, CircleX, Info, LoaderCircle, Lock, Minus, Package, Plus, Store, Trash2, TriangleAlert,
+  ArrowLeft, Check, CircleAlert, ClipboardList, CircleCheck, CircleX, Heart, Info, LoaderCircle, Lock, Minus, Package, Plus, Store, Trash2, TriangleAlert,
 } from 'lucide-react';
 import { colones } from '../services/calculos';
 import logoImg from '../../../assets/Logo.jpeg';
 
-// Navegación compartida de M5 (la provee M5App): { abrirMisPedidos, enMisPedidos, abrirPanelComercio, enPanelComercio }.
+// Navegación compartida de M5 (la provee M5App): { abrirMisPedidos, enMisPedidos, abrirPanelComercio, enPanelComercio, abrirDeseos, enDeseos }.
 // Permite que cualquier vista muestre los accesos del encabezado sin pasar props.
 export const NavegacionM5 = createContext(null);
 
 export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al carrito' }) {
   const nav = useContext(NavegacionM5);
   const mostrarMisPedidos = nav?.abrirMisPedidos && !nav.enMisPedidos;
+  const mostrarDeseos = nav?.abrirDeseos && !nav.enDeseos;
   const mostrarPanel = nav?.abrirPanelComercio && !nav.enPanelComercio;
   return (
     <header className="sticky top-0 z-20 bg-white shadow-xs border-b border-gray-100">
@@ -23,12 +24,12 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
               <ArrowLeft className="w-5 h-5" aria-hidden="true" />
             </button>
           )}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <a href="/app.html" aria-label="Ir al portal de Pacíficos Online" className="flex items-center gap-2.5 shrink-0 hover:opacity-90 transition">
             <img src={logoImg} alt="Pacíficos Online" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shadow-xs border border-blue-100" />
             <span className="hidden sm:inline-block font-extrabold text-brandDarkBlue tracking-tight text-lg">
               Pacíficos <span className="text-brandBlue font-semibold">Online</span>
             </span>
-          </div>
+          </a>
           <div className="h-5 w-px bg-gray-200 hidden sm:block mx-1" aria-hidden="true"></div>
           <h1 className="min-w-0 truncate text-base sm:text-lg font-bold text-gray-800 tracking-tight">{titulo}</h1>
         </div>
@@ -37,6 +38,13 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
             <span className="shrink-0 text-xs sm:text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
               {paso}
             </span>
+          )}
+          {mostrarDeseos && (
+            <button type="button" onClick={nav.abrirDeseos} aria-label="Lista de deseos"
+              className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 sm:px-3 text-sm font-semibold text-brandDarkBlue hover:bg-gray-100 transition cursor-pointer">
+              <Heart className="w-5 h-5 text-rose-500" aria-hidden="true" />
+              <span className="hidden sm:inline">Deseos</span>
+            </button>
           )}
           {mostrarMisPedidos && (
             <button type="button" onClick={nav.abrirMisPedidos} aria-label="Mis pedidos"

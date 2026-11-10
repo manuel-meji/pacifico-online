@@ -54,7 +54,8 @@ function CamposComercio({ datos, setDatos, errores, bloquearIdentidad = false })
       <h3 className="mt-5 text-sm font-extrabold uppercase tracking-wide text-slate-500">Datos del comercio</h3>
       <div className="grid gap-x-4 sm:grid-cols-2">
         <Campo etiqueta="Nombre comercial" autoComplete="organization" {...campo('nombre_comercial')} />
-        <Campo etiqueta="Cédula jurídica (formato 3-101-123456)" placeholder="3-101-123456" disabled={bloquearIdentidad} {...campo('cedula_juridica')} />
+        {/* En la corrección, la cédula y el correo solo identifican la solicitud (arriba): no se repiten aquí. */}
+        {!bloquearIdentidad && <Campo etiqueta="Cédula jurídica (formato 3-101-123456)" placeholder="3-101-123456" {...campo('cedula_juridica')} />}
         <Campo etiqueta="Razón social" {...campo('razon_social')} />
         <Campo etiqueta="Dirección fiscal" {...campo('direccion_fiscal')} />
       </div>
@@ -70,7 +71,7 @@ function CamposComercio({ datos, setDatos, errores, bloquearIdentidad = false })
       <h3 className="mt-6 text-sm font-extrabold uppercase tracking-wide text-slate-500">Persona encargada</h3>
       <div className="grid gap-x-4 sm:grid-cols-2">
         <Campo etiqueta="Nombre completo" autoComplete="name" {...campo('nombre_encargado')} />
-        <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" disabled={bloquearIdentidad} {...campo('correo_encargado')} />
+        {!bloquearIdentidad && <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" {...campo('correo_encargado')} />}
         <Campo etiqueta="Teléfono (opcional)" type="tel" autoComplete="tel" {...campo('telefono_encargado')} />
       </div>
     </>

@@ -54,8 +54,8 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
               <Icono nombre="usuario" className="h-5 w-5" />
               <span className="hidden sm:inline">{conSesion ? 'Mi cuenta' : 'Ingresar'}</span>
             </button>
-            {/* El carrito es de M5 (app.html). */}
-            <a href="/app.html" className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue" aria-label={etiquetaCarrito}>
+            {/* El carrito es de M5 (carrito.html). */}
+            <a href="/carrito.html" className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue" aria-label={etiquetaCarrito}>
               <span className={`relative ${conProductos ? 'mr-2.5' : ''}`}>
                 <Icono nombre="carrito" className="h-6 w-6" />
                 {conProductos && (
