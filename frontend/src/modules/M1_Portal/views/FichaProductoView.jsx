@@ -8,8 +8,8 @@ import { obtenerFichaProducto } from '../services/m1Api';
 import { colones, fechaCorta, textoAtributos } from '../services/formato';
 import useConsulta from '../services/useConsulta';
 
-// M5 agrega al carrito desde un enlace: /app.html?agregar=<id_variacion>&cantidad=<n>
-const urlAgregarAlCarrito = (idVariacion, cantidad = 1) => `/app.html?agregar=${idVariacion}&cantidad=${cantidad}`;
+// M5 agrega al carrito desde un enlace: /carrito.html?agregar=<id_variacion>&cantidad=<n>
+const urlAgregarAlCarrito = (idVariacion, cantidad = 1) => `/carrito.html?agregar=${idVariacion}&cantidad=${cantidad}`;
 
 // CU-003 Consultar ficha de producto: GET /api/m1/v1/productos/{id_producto} (esquema FichaProducto).
 // Una variación solo se puede comprar si comprable es true; si no, se muestra "Agotado" y el botón queda deshabilitado.

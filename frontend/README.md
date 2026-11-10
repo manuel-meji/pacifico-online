@@ -29,14 +29,15 @@ Requiere Node.js. Desde esta carpeta (`frontend`):
     npm install
     npm run dev
 
-Se abre `app.html` en el navegador. La entrada del proyecto es `app.html` (no `index.html`).
+Se abre `app.html` en el navegador, que es la **puerta de entrada de la aplicación integrada** (portal de M1:
+inicio, búsqueda e inicio de sesión). El carrito y los pedidos de M5 están en `carrito.html`.
 
 ## Volver a generar los archivos de doble clic
 Si cambia el código, desde esta carpeta:
 
     npm run build:single
 
-Genera `dist-single/app.html`. Copie ese archivo sobre los de `prototipos/M5_Pedidos/` (para las versiones 2 y 3 hay que agregar
+Genera `dist-single/carrito.html`. Copie ese archivo sobre los de `prototipos/M5_Pedidos/` (para las versiones 2 y 3 hay que agregar
 `<script>window.SIMULAR_M5='stock';</script>` o `'comercio'` justo después de `<head>`).
 Nota: `npm audit` reporta vulnerabilidades en una dependencia de desarrollo de este paso (`vite-plugin-singlefile`); solo se usa al compilar.
 

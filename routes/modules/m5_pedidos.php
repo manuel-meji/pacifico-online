@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\M5_Pedidos\ControladorCarrito;
+use App\Http\Controllers\M5_Pedidos\ControladorDeseos;
 use App\Http\Controllers\M5_Pedidos\ControladorPedido;
 use Illuminate\Support\Facades\Route;
 
@@ -37,3 +38,10 @@ Route::get('/subpedidos/{id_subpedido}', [ControladorPedido::class, 'obtenerSubp
 Route::post('/subpedidos/{id_subpedido}/despachar', [ControladorPedido::class, 'despacharSubpedido'])->name('subpedidos.despachar');
 Route::post('/subpedidos/{id_subpedido}/entregar', [ControladorPedido::class, 'confirmarEntregaSubpedido'])->name('subpedidos.entregar');
 Route::post('/subpedidos/{id_subpedido}/cancelar', [ControladorPedido::class, 'cancelarSubpedido'])->name('subpedidos.cancelar');
+Route::post('/subpedidos/{id_subpedido}/devolucion', [ControladorPedido::class, 'solicitarDevolucionSubpedido'])->name('subpedidos.devolucion');
+
+// Lista de Deseos (Wishlist)
+Route::get('/deseos', [ControladorDeseos::class, 'index'])->name('deseos.index');
+Route::post('/deseos', [ControladorDeseos::class, 'store'])->name('deseos.store');
+Route::delete('/deseos/{id_deseo}', [ControladorDeseos::class, 'destroy'])->name('deseos.destroy');
+Route::post('/deseos/{id_deseo}/mover-al-carrito', [ControladorDeseos::class, 'moverAlCarrito'])->name('deseos.mover');
