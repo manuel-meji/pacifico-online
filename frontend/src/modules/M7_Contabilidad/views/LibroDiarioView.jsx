@@ -1,63 +1,11 @@
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
-
-// Datos demostrativos. No están conectados todavía con el backend.
-const asientosIniciales = [
-  {
-    numero: 'ASI-0004',
-    fecha: '2026-10-18',
-    descripcion: 'Registro automático de venta',
-    tipo: 'Venta automática',
-    estado: 'Registrado',
-    referencia: 'Pedido DEMO-004',
-    lineas: [
-      { codigo: '1.2.0', cuenta: 'Cuentas por cobrar', debe: 125000, haber: 0 },
-      { codigo: '4.0.0', cuenta: 'Ingresos por ventas', debe: 0, haber: 125000 },
-    ],
-  },
-  {
-    numero: 'ASI-0003',
-    fecha: '2026-10-17',
-    descripcion: 'Registro automático del costo de ventas',
-    tipo: 'Costo de ventas',
-    estado: 'Registrado',
-    referencia: 'Pedido DEMO-003',
-    lineas: [
-      { codigo: '5.0.0', cuenta: 'Costo de ventas', debe: 72000, haber: 0 },
-      { codigo: '1.3.0', cuenta: 'Inventario', debe: 0, haber: 72000 },
-    ],
-  },
-  {
-    numero: 'ASI-0002',
-    fecha: '2026-10-16',
-    descripcion: 'Ajuste contable de demostración',
-    tipo: 'Ajuste manual',
-    estado: 'Registrado',
-    referencia: 'Ajuste DEMO-002',
-    lineas: [
-      { codigo: '6.0.0', cuenta: 'Gastos operativos', debe: 15000, haber: 0 },
-      { codigo: '1.1.0', cuenta: 'Caja y bancos', debe: 0, haber: 15000 },
-    ],
-  },
-  {
-    numero: 'ASI-0001',
-    fecha: '2026-10-15',
-    descripcion: 'Registro de venta de demostración',
-    tipo: 'Venta automática',
-    estado: 'Anulado',
-    referencia: 'Pedido DEMO-001',
-    lineas: [
-      { codigo: '1.2.0', cuenta: 'Cuentas por cobrar', debe: 90000, haber: 0 },
-      { codigo: '4.0.0', cuenta: 'Ingresos por ventas', debe: 0, haber: 90000 },
-    ],
-  },
-];
+import { consultarLibroDiario } from '../services/libroDiarioApi';
 
 const tiposAsiento = [
   'Venta automática',
   'Costo de ventas',
-  'Ajuste manual',
 ];
 
 function formatoMoneda(monto) {
@@ -69,7 +17,7 @@ function formatoMoneda(monto) {
 }
 
 function formatoFecha(fecha) {
-  const [anio, mes, dia] = fecha.split('-');
+  const [anio, mes, dia] = fecha.slice(0, 10).split('-');
   return `${dia}/${mes}/${anio}`;
 }
 
@@ -82,43 +30,67 @@ export default function LibroDiarioView({ onNavegar }) {
   const [tamanoPagina, setTamanoPagina] = useState(10);
   const [pagina, setPagina] = useState(1);
   const [asientoSeleccionado, setAsientoSeleccionado] = useState(null);
+  const [asientosBackend, setAsientosBackend] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
 
-  const texto = busqueda.trim().toLowerCase();
+  useEffect(() => {
+    let activo = true;
 
-  const asientosFiltrados = asientosIniciales.filter((asiento) => {
-    const coincideBusqueda = [
-      asiento.numero,
-      asiento.descripcion,
-      asiento.referencia,
-      asiento.tipo,
-    ].some((valor) => valor.toLowerCase().includes(texto));
+    async function cargarAsientos() {
+      setCargando(true);
+      setError('');
 
-    const coincideTipo =
-      tipoSeleccionado === 'Todos' || asiento.tipo === tipoSeleccionado;
+      try {
+        const resultado = await consultarLibroDiario({
+          buscar: busqueda.trim(),
+          tipo:
+            tipoSeleccionado === 'Todos'
+              ? ''
+              : tipoSeleccionado === 'Venta automática'
+                ? 'VENTA'
+                : tipoSeleccionado === 'Costo de ventas'
+                  ? 'COSTO_VENTA'
+                  : tipoSeleccionado,
+          estado:
+            estadoSeleccionado === 'Todos'
+              ? ''
+              : estadoSeleccionado === 'Registrado'
+                ? 'REGISTRADO'
+                : estadoSeleccionado === 'Anulado'
+                  ? 'ANULADO'
+                  : estadoSeleccionado,
+          fecha_desde: fechaDesde,
+          fecha_hasta: fechaHasta,
+        });
 
-    const coincideEstado =
-      estadoSeleccionado === 'Todos' ||
-      asiento.estado === estadoSeleccionado;
+        if (activo) {
+          setAsientosBackend(resultado.asientos ?? []);
+        }
+      } catch (e) {
+        if (activo) {
+          setError(e.message || 'No se pudieron cargar los asientos.');
+          setAsientosBackend([]);
+        }
+      } finally {
+        if (activo) setCargando(false);
+      }
+    }
 
-    const coincideFechaDesde =
-      !fechaDesde || asiento.fecha >= fechaDesde;
+    cargarAsientos();
 
-    const coincideFechaHasta =
-      !fechaHasta || asiento.fecha <= fechaHasta;
+    return () => {
+      activo = false;
+    };
+  }, [busqueda, tipoSeleccionado, estadoSeleccionado, fechaDesde, fechaHasta]);
 
-    return (
-      coincideBusqueda &&
-      coincideTipo &&
-      coincideEstado &&
-      coincideFechaDesde &&
-      coincideFechaHasta
-    );
-  });
+  const asientosFiltrados = asientosBackend;
 
   const totalAsientos = asientosFiltrados.length;
   const totalPaginas = Math.max(1, Math.ceil(totalAsientos / tamanoPagina));
   const paginaActual = Math.min(pagina, totalPaginas);
   const indiceInicial = (paginaActual - 1) * tamanoPagina;
+
   const asientosVisibles = asientosFiltrados.slice(
     indiceInicial,
     indiceInicial + tamanoPagina
@@ -180,24 +152,18 @@ export default function LibroDiarioView({ onNavegar }) {
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Asientos registrados</p>
             <p className="mt-2 text-3xl font-bold text-[#1e3a8a]">
-              {asientosIniciales.filter(
+              {asientosBackend.filter(
                 (asiento) => asiento.estado === 'Registrado'
               ).length}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              Datos de demostración
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Asientos anulados</p>
             <p className="mt-2 text-3xl font-bold text-[#1e3a8a]">
-              {asientosIniciales.filter(
+              {asientosBackend.filter(
                 (asiento) => asiento.estado === 'Anulado'
               ).length}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              Datos de demostración
             </p>
           </article>
         </section>
@@ -319,9 +285,9 @@ export default function LibroDiarioView({ onNavegar }) {
               {totalAsientos === 0
                 ? 'No se encontraron asientos.'
                 : `Mostrando ${indiceInicial + 1}–${Math.min(
-                    indiceInicial + tamanoPagina,
-                    totalAsientos
-                  )} de ${totalAsientos} asientos`}
+                  indiceInicial + tamanoPagina,
+                  totalAsientos
+                )} de ${totalAsientos} asientos`}
             </p>
 
             <div className="flex items-center gap-2">
@@ -348,14 +314,8 @@ export default function LibroDiarioView({ onNavegar }) {
           {/* Vista móvil: tarjetas de asientos contables */}
           <div className="space-y-3 p-3 md:hidden">
             {asientosVisibles.map((asiento) => {
-              const totalDebe = asiento.lineas.reduce(
-                (total, linea) => total + linea.debe,
-                0
-              );
-              const totalHaber = asiento.lineas.reduce(
-                (total, linea) => total + linea.haber,
-                0
-              );
+              const totalDebe = asiento.totalDebe;
+              const totalHaber = asiento.totalHaber;
 
               return (
                 <article
@@ -373,11 +333,10 @@ export default function LibroDiarioView({ onNavegar }) {
                     </div>
 
                     <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                        asiento.estado === 'Registrado'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${asiento.estado === 'Registrado'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-700'
+                        }`}
                     >
                       {asiento.estado}
                     </span>
@@ -460,14 +419,8 @@ export default function LibroDiarioView({ onNavegar }) {
 
               <tbody className="divide-y divide-gray-100">
                 {asientosVisibles.map((asiento) => {
-                  const totalDebe = asiento.lineas.reduce(
-                    (total, linea) => total + linea.debe,
-                    0
-                  );
-                  const totalHaber = asiento.lineas.reduce(
-                    (total, linea) => total + linea.haber,
-                    0
-                  );
+                  const totalDebe = asiento.totalDebe;
+                  const totalHaber = asiento.totalHaber;
 
                   return (
                     <tr key={asiento.numero} className="transition hover:bg-blue-50">
@@ -488,11 +441,10 @@ export default function LibroDiarioView({ onNavegar }) {
                       </td>
                       <td className="px-4 py-4">
                         <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                            asiento.estado === 'Registrado'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${asiento.estado === 'Registrado'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-700'
+                            }`}
                         >
                           {asiento.estado}
                         </span>

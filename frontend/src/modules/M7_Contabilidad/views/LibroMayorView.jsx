@@ -499,17 +499,12 @@ export default function LibroMayorView({ onNavegar }) {
             </table>
           </div>
 
-
           <div className="border-t border-gray-200 px-5 py-4 text-sm text-gray-500">
-            Saldo calculado a partir de los movimientos visibles del período.
-            No representa el saldo histórico de una cuenta real.
+            Los saldos se calculan a partir de los asientos contables registrados
+            para la cuenta y el período seleccionado.
           </div>
-        </section>
 
-        <p className="mt-5 text-xs text-gray-500">
-          Datos demostrativos. La consulta definitiva deberá utilizar los
-          asientos contables registrados y las reglas de contabilización de M7.
-        </p>
+        </section>
       </main>
     </div>
   );
