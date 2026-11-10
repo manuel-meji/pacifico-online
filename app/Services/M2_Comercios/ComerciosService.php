@@ -21,24 +21,24 @@ use App\Models\M2_Comercios\ContactoComercio;
 use App\Models\M2_Comercios\DocumentoComercio;
 use App\Models\M2_Comercios\HorarioComercio;
 use App\Models\M2_Comercios\ImagenGaleriaComercio;
+use App\Models\M2_Comercios\MembresiaComercio;
 use App\Models\M2_Comercios\Micrositio;
 use App\Models\M2_Comercios\PoliticaComercio;
 use App\Models\M2_Comercios\PublicidadComercio;
 use App\Models\M2_Comercios\SedeComercio;
 use App\Models\M2_Comercios\SolicitudComercio;
 use App\Models\M2_Comercios\SuspensionComercio;
+use App\Services\M2_Comercios\Comision\CalculoMontoFijo;
+use App\Services\M2_Comercios\Comision\CalculoPorcentaje;
 use App\Services\Nucleo\ContextoComercio;
 use Closure;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use App\Models\M2_Comercios\MembresiaComercio;
-use App\Services\M2_Comercios\Comision\CalculoMontoFijo;
-use App\Services\M2_Comercios\Comision\CalculoPorcentaje;
-use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
  * Fachada de M2 (patrón Facade, sección 7 del PC3): implementa las 8 operaciones
@@ -1271,19 +1271,18 @@ class ComerciosService implements ComerciosServiceInterface
             ->where('id_comercio', $subpedido['id_comercio'])
             ->get()
             ->first(
-                fn (MembresiaComercio $membresia): bool =>
-                    $membresia->estaVigente(now())
+                fn (MembresiaComercio $membresia): bool => $membresia->estaVigente(now())
                     && $membresia->comision_preferencial !== null
             );
 
         if ($membresia !== null) {
-            $estrategia = new CalculoPorcentaje();
+            $estrategia = new CalculoPorcentaje;
             $valor = (string) $membresia->comision_preferencial;
         } else {
             // 6. Seleccionar la estrategia según la configuración normal
             $estrategia = match ($config->tipo) {
-                ComisionComercio::PORCENTAJE => new CalculoPorcentaje(),
-                ComisionComercio::MONTO_FIJO => new CalculoMontoFijo(),
+                ComisionComercio::PORCENTAJE => new CalculoPorcentaje,
+                ComisionComercio::MONTO_FIJO => new CalculoMontoFijo,
             };
 
             $valor = (string) $config->valor;
