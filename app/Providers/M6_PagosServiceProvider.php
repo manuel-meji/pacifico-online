@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Contracts\M6_Pagos\HaciendaInterface;
 use App\Contracts\M6_Pagos\PasarelaPagoInterface;
+use App\Services\M6_Pagos\Simuladores\HaciendaSimulador;
 use App\Services\M6_Pagos\Simuladores\PasarelaPagoSimulador;
 use Illuminate\Support\ServiceProvider;
 
@@ -12,6 +14,7 @@ class M6_PagosServiceProvider extends ServiceProvider
     {
         // Una sola instancia por proceso.
         $this->app->singleton(PasarelaPagoInterface::class, PasarelaPagoSimulador::class);
+        $this->app->singleton(HaciendaInterface::class, HaciendaSimulador::class);
     }
 
     public function boot(): void
