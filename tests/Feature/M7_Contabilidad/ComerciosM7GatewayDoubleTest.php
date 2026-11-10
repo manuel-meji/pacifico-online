@@ -15,8 +15,16 @@ class ComerciosM7GatewayDoubleTest extends TestCase
 
         $stub->configurarDatosFiscales(2, [
             'id_comercio' => 2,
-            'identificacion' => '3101234567',
-            'nombre_legal' => 'Comercio de prueba S.A.',
+            'cedula_juridica' => '3101234567',
+            'razon_social' => 'Comercio de prueba S.A.',
+            'inscrito_como_contribuyente' => true,
+            'direccion_fiscal' => 'Liberia, Guanacaste',
+            'comision' => [
+                'tipo' => 'PORCENTAJE',
+                'valor' => 10.0,
+                'base_calculo' => 'subtotal del subpedido',
+                'moneda' => 'CRC',
+            ],
         ]);
 
         $this->app->instance(ComerciosM7GatewayInterface::class, $stub);
@@ -25,12 +33,11 @@ class ComerciosM7GatewayDoubleTest extends TestCase
             ->obtenerDatosFiscalesComercio(2);
 
         $this->assertSame(2, $respuesta['id_comercio']);
-        $this->assertSame(
-            'Comercio de prueba S.A.',
-            $respuesta['nombre_legal']
-        );
+        $this->assertSame('3101234567', $respuesta['cedula_juridica']);
+        $this->assertSame('Comercio de prueba S.A.', $respuesta['razon_social']);
+        $this->assertTrue($respuesta['inscrito_como_contribuyente']);
+        $this->assertSame('CRC', $respuesta['comision']['moneda']);
     }
-
     public function test_m7_puede_simular_comision_calculada_de_m2(): void
     {
         $stub = new ComerciosM7Stub();

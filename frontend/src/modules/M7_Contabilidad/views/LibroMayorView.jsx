@@ -1,98 +1,9 @@
-
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
-
-// Datos demostrativos. Se sustituirán por movimientos contables reales.
-// Los movimientos se muestran cronológicamente para calcular el saldo.
-const movimientosIniciales = [
-  {
-    id: 1,
-    fecha: '2026-10-15',
-    asiento: 'ASI-0001',
-    codigo: '1.2.0',
-    cuenta: 'Cuentas por cobrar',
-    descripcion: 'Venta de demostración',
-    debe: 90000,
-    haber: 0,
-    estado: 'Anulado',
-  },
-  {
-    id: 2,
-    fecha: '2026-10-16',
-    asiento: 'ASI-0002',
-    codigo: '6.0.0',
-    cuenta: 'Gastos operativos',
-    descripcion: 'Ajuste contable de demostración',
-    debe: 15000,
-    haber: 0,
-    estado: 'Registrado',
-  },
-  {
-    id: 3,
-    fecha: '2026-10-16',
-    asiento: 'ASI-0002',
-    codigo: '1.1.0',
-    cuenta: 'Caja y bancos',
-    descripcion: 'Ajuste contable de demostración',
-    debe: 0,
-    haber: 15000,
-    estado: 'Registrado',
-  },
-  {
-    id: 4,
-    fecha: '2026-10-17',
-    asiento: 'ASI-0003',
-    codigo: '5.0.0',
-    cuenta: 'Costo de ventas',
-    descripcion: 'Costo de productos vendidos',
-    debe: 72000,
-    haber: 0,
-    estado: 'Registrado',
-  },
-  {
-    id: 5,
-    fecha: '2026-10-17',
-    asiento: 'ASI-0003',
-    codigo: '1.3.0',
-    cuenta: 'Inventario',
-    descripcion: 'Salida de inventario por venta',
-    debe: 0,
-    haber: 72000,
-    estado: 'Registrado',
-  },
-  {
-    id: 6,
-    fecha: '2026-10-18',
-    asiento: 'ASI-0004',
-    codigo: '1.2.0',
-    cuenta: 'Cuentas por cobrar',
-    descripcion: 'Venta automática de demostración',
-    debe: 125000,
-    haber: 0,
-    estado: 'Registrado',
-  },
-  {
-    id: 7,
-    fecha: '2026-10-18',
-    asiento: 'ASI-0004',
-    codigo: '4.0.0',
-    cuenta: 'Ingresos por ventas',
-    descripcion: 'Venta automática de demostración',
-    debe: 0,
-    haber: 125000,
-    estado: 'Registrado',
-  },
-];
-
-const cuentasDisponibles = [
-  { codigo: '1.1.0', nombre: 'Caja y bancos', naturaleza: 'Deudora' },
-  { codigo: '1.2.0', nombre: 'Cuentas por cobrar', naturaleza: 'Deudora' },
-  { codigo: '1.3.0', nombre: 'Inventario', naturaleza: 'Deudora' },
-  { codigo: '2.1.0', nombre: 'Cuentas por pagar', naturaleza: 'Acreedora' },
-  { codigo: '4.0.0', nombre: 'Ingresos por ventas', naturaleza: 'Acreedora' },
-  { codigo: '5.0.0', nombre: 'Costo de ventas', naturaleza: 'Deudora' },
-  { codigo: '6.0.0', nombre: 'Gastos operativos', naturaleza: 'Deudora' },
-];
+import {
+  listarCuentasMayor,
+  consultarLibroMayor,
+} from '../services/libroMayorApi';
 
 function formatoMoneda(monto) {
   return new Intl.NumberFormat('es-CR', {
@@ -108,74 +19,134 @@ function formatoFecha(fecha) {
 }
 
 export default function LibroMayorView({ onNavegar }) {
-  const [cuentaSeleccionada, setCuentaSeleccionada] = useState('1.2.0');
+  const [cuentas, setCuentas] = useState([]);
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
   const [incluirAnulados, setIncluirAnulados] = useState(false);
   const [busqueda, setBusqueda] = useState('');
 
+  const [cargandoCuentas, setCargandoCuentas] = useState(true);
+  const [errorCuentas, setErrorCuentas] = useState('');
+
+  const [movimientos, setMovimientos] = useState([]);
+  const [resumen, setResumen] = useState(null);
+  const [cargandoMovimientos, setCargandoMovimientos] = useState(false);
+  const [errorMovimientos, setErrorMovimientos] = useState('');
+
+
+  useEffect(() => {
+    let componenteActivo = true;
+
+    async function cargarCuentas() {
+      try {
+        setCargandoCuentas(true);
+        setErrorCuentas('');
+
+        const resultado = await listarCuentasMayor();
+
+        if (!componenteActivo) return;
+
+        const listaCuentas = resultado?.cuentas || [];
+
+        setCuentas(listaCuentas);
+
+        if (listaCuentas.length > 0) {
+          setCuentaSeleccionada(
+            String(listaCuentas[0].id_cuenta_contable)
+          );
+        }
+      } catch (error) {
+        if (componenteActivo) {
+          setErrorCuentas(error.message);
+        }
+      } finally {
+        if (componenteActivo) {
+          setCargandoCuentas(false);
+        }
+      }
+    }
+
+    cargarCuentas();
+
+    return () => {
+      componenteActivo = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let componenteActivo = true;
+
+    async function cargarMovimientos() {
+      if (!cuentaSeleccionada) {
+        setMovimientos([]);
+        setResumen(null);
+        setCargandoMovimientos(false);
+        return;
+      }
+
+      try {
+        setCargandoMovimientos(true);
+        setErrorMovimientos('');
+
+        const resultado = await consultarLibroMayor({
+          id_cuenta_contable: cuentaSeleccionada,
+          fecha_desde: fechaDesde,
+          fecha_hasta: fechaHasta,
+          incluirAnulados: incluirAnulados,
+        });
+
+        if (!componenteActivo) return;
+
+        setMovimientos(resultado?.movimientos || []);
+        setResumen(resultado || null);
+      } catch (error) {
+        if (componenteActivo) {
+          setErrorMovimientos(error.message);
+        }
+      } finally {
+        if (componenteActivo) {
+          setCargandoMovimientos(false);
+        }
+      }
+    }
+
+    cargarMovimientos();
+
+    return () => {
+      componenteActivo = false;
+    };
+  }, [cuentaSeleccionada, fechaDesde, fechaHasta, incluirAnulados]);
+
   const movimientosCuenta = useMemo(() => {
-    return movimientosIniciales
-      .filter((movimiento) => {
-        const coincideCuenta = movimiento.codigo === cuentaSeleccionada;
-        const coincideFechaDesde =
-          !fechaDesde || movimiento.fecha >= fechaDesde;
-        const coincideFechaHasta =
-          !fechaHasta || movimiento.fecha <= fechaHasta;
-        const coincideEstado =
-          incluirAnulados || movimiento.estado !== 'Anulado';
-        const coincideBusqueda = [
-          movimiento.asiento,
-          movimiento.descripcion,
-          movimiento.cuenta,
-        ].some((valor) =>
-          valor.toLowerCase().includes(busqueda.trim().toLowerCase())
-        );
+    const textoBusqueda = busqueda.trim().toLowerCase();
 
-        return (
-          coincideCuenta &&
-          coincideFechaDesde &&
-          coincideFechaHasta &&
-          coincideEstado &&
-          coincideBusqueda
-        );
-      })
-      .sort((a, b) => {
-        const porFecha = a.fecha.localeCompare(b.fecha);
-        return porFecha || a.id - b.id;
-      });
-  }, [
-    cuentaSeleccionada,
-    fechaDesde,
-    fechaHasta,
-    incluirAnulados,
-    busqueda,
-  ]);
+    return movimientos.filter((movimiento) => {
+      if (!textoBusqueda) return true;
 
-  const resumen = useMemo(() => {
-    const cuenta = cuentasDisponibles.find(
-      (item) => item.codigo === cuentaSeleccionada
-    );
+      return [
+        movimiento.asiento,
+        movimiento.descripcion,
+        movimiento.tipo,
+        movimiento.estado,
+      ].some((valor) =>
+        String(valor ?? '').toLowerCase().includes(textoBusqueda)
+      );
+    });
+  }, [movimientos, busqueda]);
 
-    const totalDebe = movimientosCuenta.reduce(
-      (total, movimiento) => total + movimiento.debe,
-      0
-    );
+  const cuentaActual = cuentas.find(
+    (cuenta) =>
+      String(cuenta.id_cuenta_contable) === cuentaSeleccionada
+  );
 
-    const totalHaber = movimientosCuenta.reduce(
-      (total, movimiento) => total + movimiento.haber,
-      0
-    );
-
-    // Saldo neto del período. Para una cuenta deudora, debe - haber;
-    // para una acreedora, haber - debe.
-    const saldoNeto =
-      cuenta?.naturaleza === 'Acreedora'
-        ? totalHaber - totalDebe
-        : totalDebe - totalHaber;
-
-    return { cuenta, totalDebe, totalHaber, saldoNeto };
-  }, [cuentaSeleccionada, movimientosCuenta]);
+  const resumenVista = {
+    cuenta: cuentaActual,
+    saldoInicial: resumen?.saldo_inicial ?? 0,
+    totalDebe: resumen?.total_debe ?? 0,
+    totalHaber: resumen?.total_haber ?? 0,
+    saldoNeto: resumen?.saldo_final ?? 0,
+  };
 
   function limpiarFiltros() {
     setFechaDesde('');
@@ -236,12 +207,33 @@ export default function LibroMayorView({ onNavegar }) {
                 onChange={(e) => setCuentaSeleccionada(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               >
-                {cuentasDisponibles.map((cuenta) => (
-                  <option key={cuenta.codigo} value={cuenta.codigo}>
-                    {cuenta.codigo} — {cuenta.nombre}
+                {cuentas.map((cuenta) => (
+                  <option
+                    key={cuenta.id_cuenta_contable}
+                    value={String(cuenta.id_cuenta_contable)}
+                  >
+                    {cuenta.codigo} - {cuenta.nombre}
                   </option>
                 ))}
               </select>
+
+              {cargandoCuentas && (
+                <p className="mt-2 text-sm text-gray-500">
+                  Cargando cuentas contables...
+                </p>
+              )}
+
+              {errorCuentas && (
+                <p className="mt-2 text-sm text-red-600">
+                  {errorCuentas}
+                </p>
+              )}
+
+              {!cargandoCuentas && !errorCuentas && cuentas.length === 0 && (
+                <p className="mt-2 text-sm text-gray-500">
+                  No hay cuentas contables disponibles.
+                </p>
+              )}
             </div>
 
             <div>
@@ -320,34 +312,43 @@ export default function LibroMayorView({ onNavegar }) {
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Cuenta seleccionada</p>
             <p className="mt-2 font-bold text-[#1e3a8a]">
-              {resumen.cuenta?.codigo}
+              {resumenVista.cuenta?.codigo}
             </p>
             <p className="mt-1 text-sm text-gray-600">
-              {resumen.cuenta?.nombre}
+              {resumenVista.cuenta?.nombre}
+            </p>
+          </article>
+
+          <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">Saldo inicial</p>
+            <p className="mt-2 text-xl font-bold text-[#1e3a8a]">
+              {formatoMoneda(resumenVista.saldoInicial)}
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Total debe</p>
             <p className="mt-2 text-xl font-bold text-[#1e3a8a]">
-              {formatoMoneda(resumen.totalDebe)}
+              {formatoMoneda(resumenVista.totalDebe)}
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Total haber</p>
             <p className="mt-2 text-xl font-bold text-[#1e3a8a]">
-              {formatoMoneda(resumen.totalHaber)}
+              {formatoMoneda(resumenVista.totalHaber)}
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Saldo neto del período</p>
+            <p className="text-sm text-gray-500">Saldo final</p>
             <p className="mt-2 text-xl font-bold text-[#1e3a8a]">
-              {formatoMoneda(resumen.saldoNeto)}
+              {formatoMoneda(resumenVista.saldoNeto)}
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              {resumen.cuenta?.naturaleza}
+              {resumenVista.cuenta?.naturaleza === 'ACREEDORA'
+                ? 'Acreedora'
+                : 'Deudora'}
             </p>
           </article>
         </section>
@@ -367,7 +368,7 @@ export default function LibroMayorView({ onNavegar }) {
           <div className="space-y-3 p-3 md:hidden">
             {movimientosCuenta.map((movimiento) => (
               <article
-                key={movimiento.id}
+                key={`${movimiento.id_asiento}-${movimiento.numero_linea}`}
                 className="rounded-lg border border-gray-200 bg-white p-4"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -381,13 +382,12 @@ export default function LibroMayorView({ onNavegar }) {
                   </div>
 
                   <span
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                      movimiento.estado === 'Registrado'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${movimiento.estado === 'REGISTRADO'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-700'
+                      }`}
                   >
-                    {movimiento.estado}
+                    {movimiento.estado === 'REGISTRADO' ? 'Registrado' : 'Anulado'}
                   </span>
                 </div>
 
@@ -430,6 +430,18 @@ export default function LibroMayorView({ onNavegar }) {
             )}
           </div>
 
+          {cargandoMovimientos && (
+            <div className="py-6 text-center text-sm text-gray-500">
+              Cargando movimientos del Libro Mayor...
+            </div>
+          )}
+
+          {errorMovimientos && (
+            <div className="py-6 text-center text-sm text-red-600">
+              {errorMovimientos}
+            </div>
+          )}
+
           {/* Vista de escritorio: tabla original */}
           <div className="hidden md:block">
             <table className="w-full text-left text-sm">
@@ -446,8 +458,9 @@ export default function LibroMayorView({ onNavegar }) {
 
               <tbody className="divide-y divide-gray-100">
                 {movimientosCuenta.map((movimiento) => (
-                  <tr key={movimiento.id} className="transition hover:bg-blue-50">
-                    <td className="whitespace-nowrap px-4 py-4 text-gray-600">
+                  <tr key={`${movimiento.id_asiento}-${movimiento.numero_linea}`}
+                    className="transition hover:bg-blue-50"
+                  >                    <td className="whitespace-nowrap px-4 py-4 text-gray-600">
                       {formatoFecha(movimiento.fecha)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-4 font-semibold text-[#1e3a8a]">
@@ -464,13 +477,12 @@ export default function LibroMayorView({ onNavegar }) {
                     </td>
                     <td className="px-4 py-4">
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          movimiento.estado === 'Registrado'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${movimiento.estado === 'REGISTRADO'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-700'
+                          }`}
                       >
-                        {movimiento.estado}
+                        {movimiento.estado === 'REGISTRADO' ? 'Registrado' : 'Anulado'}
                       </span>
                     </td>
                   </tr>
@@ -487,17 +499,12 @@ export default function LibroMayorView({ onNavegar }) {
             </table>
           </div>
 
-
           <div className="border-t border-gray-200 px-5 py-4 text-sm text-gray-500">
-            Saldo calculado a partir de los movimientos visibles del período.
-            No representa el saldo histórico de una cuenta real.
+            Los saldos se calculan a partir de los asientos contables registrados
+            para la cuenta y el período seleccionado.
           </div>
-        </section>
 
-        <p className="mt-5 text-xs text-gray-500">
-          Datos demostrativos. La consulta definitiva deberá utilizar los
-          asientos contables registrados y las reglas de contabilización de M7.
-        </p>
+        </section>
       </main>
     </div>
   );
