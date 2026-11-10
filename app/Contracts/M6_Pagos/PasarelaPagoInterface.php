@@ -13,4 +13,13 @@ interface PasarelaPagoInterface
      * @return array Resultado de la transacción con referencia_proveedor
      */
     public function procesarCobro(string $referencia, float $monto, array $datosPago): array;
+
+    /**
+     * Movimientos que la pasarela reporta en un período (CU-003, conciliación).
+     *
+     * @param  string  $fechaInicio  Fecha Y-m-d
+     * @param  string  $fechaFin  Fecha Y-m-d
+     * @return list<array{referencia_proveedor: string, monto: float}>
+     */
+    public function reportarMovimientos(string $fechaInicio, string $fechaFin): array;
 }

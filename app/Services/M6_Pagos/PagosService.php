@@ -9,7 +9,9 @@ use App\Enums\M6_Pagos\CodigoErrorM6;
 use App\Exceptions\M6_Pagos\ErrorContratoException;
 use App\Models\M6_Pagos\EstadoFacturaHacienda;
 use App\Models\M6_Pagos\EstadoPago;
+use App\Models\M6_Pagos\EstadoReembolso;
 use App\Models\M6_Pagos\FacturaElectronica;
+use App\Models\M6_Pagos\Reembolso;
 
 /**
  * Fachada pública de M6 (contrato PHP que consume M5).
@@ -23,6 +25,7 @@ class PagosService implements PagosServiceInterface
     public function __construct(
         private readonly ProcesamientoPagosService $procesamiento,
         private readonly FacturacionService $facturacion,
+        private readonly ReembolsoService $reembolsos,
     ) {}
 
     /**
@@ -80,6 +83,8 @@ class PagosService implements PagosServiceInterface
             ->values()
             ->all();
 
+        $this->reembolsos->reprocesarPendientes($pedidoId);
+
         $primera = $facturas[0] ?? [];
 
         return [
@@ -88,6 +93,41 @@ class PagosService implements PagosServiceInterface
             'estado' => $primera['estado'] ?? null,
             'id_pedido' => $pedidoId,
             'facturas' => $facturas,
+        ];
+    }
+
+    /**
+     * Reembolso pedido por M5 al cancelar un pedido o subpedido pagado (CU-007, RN-M5-10).
+     *
+     * M5 lo llama con method_exists, por eso NO se agrega a PagosServiceInterface
+     * (el doble PagosStub de M5 implementa esa interfaz y se rompería).
+     * Respuesta con las mismas claves que PagosStub, más el detalle en "reembolsos".
+     *
+     * @throws ErrorContratoException PAGO_NO_CONFIRMADO (409) | REEMBOLSO_EXCEDE_MONTO (422)
+     */
+    public function solicitarReembolso(int $pedidoId, float $monto, string $motivo = 'Cancelación de pedido', ?int $idSubpedido = null): array
+    {
+        $reembolsos = $this->reembolsos->gestionar($pedidoId, $idSubpedido, $monto, $motivo)
+            ->map(fn (Reembolso $r): array => [
+                'id_reembolso' => $r->id_reembolso,
+                'id_subpedido' => $r->id_subpedido,
+                'monto_reembolsado' => (float) $r->monto,
+                'estado' => EstadoReembolso::valorContrato($r->codigoEstado()),
+                'nota_credito_id' => $r->id_nota_credito,
+            ])
+            ->values()
+            ->all();
+
+        $primero = $reembolsos[0] ?? [];
+
+        return [
+            'id_reembolso' => $primero['id_reembolso'] ?? null,
+            'id_pedido' => $pedidoId,
+            'monto_reembolsado' => round(array_sum(array_column($reembolsos, 'monto_reembolsado')), 2),
+            'motivo' => trim($motivo),
+            'estado' => $primero['estado'] ?? null,
+            'fecha_reembolso' => now()->toIso8601String(),
+            'reembolsos' => $reembolsos,
         ];
     }
 }

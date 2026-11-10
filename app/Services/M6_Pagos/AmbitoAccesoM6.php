@@ -43,6 +43,30 @@ class AmbitoAccesoM6
         return $consulta;
     }
 
+    /**
+     * Historial (CU-008, RN-008): si hay sesión de cliente o de comercio, el filtro
+     * se fija al propio; pedir el de otro responde 404 (ERR-003).
+     *
+     * @return array{0: ?int, 1: ?int} [id_cliente, id_comercio]
+     */
+    public function resolverFiltros(?int $idCliente, ?int $idComercio): array
+    {
+        return [$this->propio($this->cliente, $idCliente), $this->propio($this->comercio, $idComercio)];
+    }
+
+    private function propio(ContextoAislamiento $contexto, ?int $id): ?int
+    {
+        if (! $this->activo($contexto)) {
+            return $id;
+        }
+
+        if ($id !== null && $id !== $contexto->idActual()) {
+            throw ErrorNucleoException::recursoNoAccesible();
+        }
+
+        return $contexto->idActual();
+    }
+
     private function fueraDeAmbito(ContextoAislamiento $contexto, int $id): bool
     {
         return $this->activo($contexto) && $contexto->idActual() !== $id;

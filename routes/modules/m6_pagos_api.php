@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\M6_Pagos\ConciliacionController;
 use App\Http\Controllers\M6_Pagos\ConfirmacionPagoController;
 use App\Http\Controllers\M6_Pagos\FacturasController;
+use App\Http\Controllers\M6_Pagos\HistorialController;
 use App\Http\Controllers\M6_Pagos\NotasAjusteController;
 use App\Http\Controllers\M6_Pagos\PagosController;
+use App\Http\Controllers\M6_Pagos\ReembolsosController;
 use App\Http\Middleware\M6_Pagos\VerificarFirmaPasarela;
 use Illuminate\Support\Facades\Route;
 
@@ -57,4 +60,19 @@ Route::prefix('api/m6/v1')
             ->whereNumber('id_factura')
             ->middleware('throttle:60,1')
             ->name('facturas.notas-debito');
+
+        // CU-007 Reembolsos (un reembolso por subpedido, cada uno con su nota de crédito).
+        Route::post('pedidos/{id_pedido}/reembolsos', [ReembolsosController::class, 'store'])
+            ->whereNumber('id_pedido')
+            ->middleware('throttle:60,1')
+            ->name('pedidos.reembolsos');
+
+        // CU-008 Historial de pagos y facturas (aislado por cliente y por comercio).
+        Route::get('historial', HistorialController::class)
+            ->name('historial');
+
+        // CU-003 Conciliación de pagos del período.
+        Route::post('conciliaciones', ConciliacionController::class)
+            ->middleware('throttle:60,1')
+            ->name('conciliaciones');
     });

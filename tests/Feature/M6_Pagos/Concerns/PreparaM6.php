@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\M6_Pagos\Concerns;
 
+use App\Models\M6_Pagos\EstadoConciliacion;
 use App\Models\M6_Pagos\EstadoFacturaHacienda;
 use App\Models\M6_Pagos\EstadoNotificacionPago;
 use App\Models\M6_Pagos\EstadoPago;
+use App\Models\M6_Pagos\EstadoReembolso;
+use App\Models\M6_Pagos\EstadoRevisionDiferencia;
 use App\Models\M6_Pagos\MedioPago;
+use App\Models\M6_Pagos\TipoDiferencia;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 
@@ -46,6 +50,10 @@ trait PreparaM6
         EstadoNotificacionPago::olvidarCache();
         MedioPago::olvidarCache();
         EstadoFacturaHacienda::olvidarCache();
+        EstadoReembolso::olvidarCache();
+        EstadoConciliacion::olvidarCache();
+        EstadoRevisionDiferencia::olvidarCache();
+        TipoDiferencia::olvidarCache();
 
         // Las migraciones de M6 se ejecutan sin modificarlas; en SQLite se omiten
         // solo sus sentencias exclusivas de PostgreSQL (ver BaseSinSentenciasPostgres).

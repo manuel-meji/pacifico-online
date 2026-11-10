@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Services\M6_Pagos\Simuladores;
 
 use App\Contracts\M6_Pagos\PasarelaPagoInterface;
+use App\Models\M6_Pagos\EstadoPago;
+use App\Models\M6_Pagos\Pago;
+use Illuminate\Support\Carbon;
 use RuntimeException;
 
 /**
@@ -67,5 +70,23 @@ class PasarelaPagoSimulador implements PasarelaPagoInterface
             'mensaje' => 'Transacción aprobada por el simulador de pasarela',
             'fecha_transaccion' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * Reporte de movimientos del período (CU-003). El simulador no guarda sus
+     * propias transacciones, así que reporta los cobros aprobados que M6 registró
+     * con su referencia. Decisión del subgrupo: por ahora sin opción de demostración,
+     * así que normalmente no habrá diferencias.
+     */
+    public function reportarMovimientos(string $fechaInicio, string $fechaFin): array
+    {
+        return Pago::query()
+            ->whereNotNull('referencia_proveedor')
+            ->where('id_estado_pago', EstadoPago::idDe(EstadoPago::CONFIRMADO))
+            ->whereBetween('fecha_confirmacion', [Carbon::parse($fechaInicio)->startOfDay(), Carbon::parse($fechaFin)->endOfDay()])
+            ->get(['referencia_proveedor', 'monto'])
+            ->map(fn (Pago $pago): array => ['referencia_proveedor' => $pago->referencia_proveedor, 'monto' => (float) $pago->monto])
+            ->values()
+            ->all();
     }
 }
