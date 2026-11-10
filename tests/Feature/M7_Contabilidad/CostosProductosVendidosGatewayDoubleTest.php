@@ -91,4 +91,57 @@ class CostosProductosVendidosGatewayDoubleTest extends TestCase
 
         $stub->obtenerCostosProductosVendidos(20);
     }
+    public function test_m7_valida_la_estructura_del_contrato_de_costos_de_m4(): void
+{
+    $stub = new CostosProductosVendidosStub();
+
+    $respuesta = [
+        'id_subpedido' => 10,
+        'id_comercio' => 2,
+        'variaciones' => [
+            [
+                'id_variacion' => 5,
+                'cantidad' => 3,
+                'costo_unitario' => 2000.00,
+                'costo_total' => 6000.00,
+            ],
+            [
+                'id_variacion' => 6,
+                'cantidad' => 2,
+                'costo_unitario' => 1500.00,
+                'costo_total' => 3000.00,
+            ],
+        ],
+        'costo_total' => 9000.00,
+    ];
+
+    $stub->configurarCostosDisponibles($respuesta);
+
+    $resultado = $stub->obtenerCostosProductosVendidos(10);
+
+    $this->assertSame(
+        ['id_subpedido', 'id_comercio', 'variaciones', 'costo_total'],
+        array_keys($resultado)
+    );
+
+    foreach ($resultado['variaciones'] as $variacion) {
+        $this->assertEqualsCanonicalizing(
+            ['id_variacion', 'cantidad', 'costo_unitario', 'costo_total'],
+            array_keys($variacion)
+        );
+
+        $this->assertGreaterThanOrEqual(1, $variacion['cantidad']);
+        $this->assertGreaterThanOrEqual(0, $variacion['costo_unitario']);
+        $this->assertGreaterThanOrEqual(0, $variacion['costo_total']);
+    }
+
+    $this->assertNotEmpty($resultado['variaciones']);
+
+    $this->assertEquals(
+        9000.00,
+        array_sum(array_column($resultado['variaciones'], 'costo_total'))
+    );
+
+    $this->assertEquals(9000.00, $resultado['costo_total']);
+}
 }
