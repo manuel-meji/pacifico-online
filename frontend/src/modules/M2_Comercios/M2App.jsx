@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileText, Store, ShieldCheck } from 'lucide-react';
+import { Boxes, FileText, Store, ShieldCheck } from 'lucide-react';
 import { cerrarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
 import { C, Cargando, Encabezado, SesionContexto, textoDeError } from './components/comunes';
 import Ingreso from './views/Ingreso';
@@ -78,6 +78,13 @@ export default function M2App() {
                 <Icono size={18} /> {corto}
               </button>
             ))}
+            {/* Enlace al inventario de M4 (/m4.html): el encargado del comercio entra con la misma sesión del núcleo. */}
+            {usuario?.rol === 'encargado_comercio' && (
+              <a href="/m4.html"
+                className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
+                <Boxes size={18} /> Inventario
+              </a>
+            )}
           </div>
         </nav>
         <main className="mx-auto max-w-6xl px-4 py-6">
