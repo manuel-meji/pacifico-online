@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Clock, ExternalLink, Image as ImageIcon, Images, Mail, Phone, Plus, ScrollText, Store, Trash2 } from 'lucide-react';
+import { Clock, ExternalLink, Image as ImageIcon, Images, Mail, Phone, Plus, ScrollText, Sparkles, Store, Trash2 } from 'lucide-react';
 import {
-  actualizarInformacion, consultarMicrositio, gestionarBanners, gestionarGaleria,
+  actualizarInformacion, consultarMicrositio, consultarPublicidad, solicitarPublicidad, gestionarBanners, gestionarGaleria,
   guardarContactos, guardarHorarios, guardarLogotipo, guardarPoliticas,
 } from '../services/m2Api';
 import {
@@ -138,6 +138,8 @@ export default function PanelComercio() {
   const [banners, setBanners] = useState([]);
   const [galeria, setGaleria] = useState([]);
   const [seccion, setSeccion] = useState('presentacion');
+  const [publicidad, setPublicidad] = useState(null);
+  const [diasDestacado, setDiasDestacado] = useState(7);
 
   const [estInfo, guardarInfo] = useGuardado(mensajeDeError);
   const [estLogo, guardarLogo] = useGuardado(mensajeDeError);
@@ -146,6 +148,7 @@ export default function PanelComercio() {
   const [estPoliticas, guardarPol] = useGuardado(mensajeDeError);
   const [estBanners, guardarBan] = useGuardado(mensajeDeError);
   const [estGaleria, guardarGal] = useGuardado(mensajeDeError);
+  const [estDestacar, guardarDestacar] = useGuardado(mensajeDeError);
 
   const aplicar = (d) => {
     setNombre(d.nombre_comercial || '');
@@ -175,6 +178,11 @@ export default function PanelComercio() {
   }, [idComercio, mensajeDeError]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  useEffect(() => {
+    if (!idComercio) return;
+    consultarPublicidad(idComercio).then((r) => { if (r.ok) setPublicidad(r.datos); });
+  }, [idComercio]);
 
   if (!idComercio) {
     return <Tarjeta><AvisoError mensaje="Tu usuario no tiene un comercio asociado." /></Tarjeta>;
@@ -212,6 +220,8 @@ export default function PanelComercio() {
   ];
 
   const abiertos = horarios.filter((h) => !h.cerrado).length;
+  const pendienteDestacado = publicidad?.publicidades?.find((p) => p.estado === 'Pendiente');
+  const vigenteDestacado = publicidad?.publicidades?.find((p) => p.vigente);
   const secciones = [
     { clave: 'presentacion', nombre: 'Presentación', icono: Store, resumen: logotipo ? 'Con logotipo' : 'Sin logotipo' },
     { clave: 'horario', nombre: 'Horario', icono: Clock, resumen: abiertos === 7 ? 'Todos los días' : `${abiertos} días abierto` },
@@ -219,6 +229,7 @@ export default function PanelComercio() {
     { clave: 'politicas', nombre: 'Políticas', icono: ScrollText, resumen: politicas.length === 1 ? '1 política' : `${politicas.length} políticas` },
     { clave: 'banners', nombre: 'Banners', icono: ImageIcon, resumen: banners.length === 1 ? '1 imagen' : `${banners.length} imágenes` },
     { clave: 'galeria', nombre: 'Galería', icono: Images, resumen: galeria.length === 1 ? '1 imagen' : `${galeria.length} imágenes` },
+    { clave: 'destacar', nombre: 'Destacar', icono: Sparkles, resumen: publicidad?.destacado ? 'Destacado' : (pendienteDestacado ? 'En revisión' : 'No destacado') },
   ];
 
   return (
@@ -379,6 +390,56 @@ export default function PanelComercio() {
                 <Plus size={16} /> Agregar política
               </Boton>
               <PieGuardado estado={estPoliticas} onGuardar={guardarListaPoliticas} />
+            </Seccion>
+          )}
+
+          {seccion === 'destacar' && (
+            /* Destacar mi comercio: solicitud de publicidad que revisa la plataforma */
+            <Seccion titulo="Destacar mi comercio"
+              descripcion="Los comercios destacados aparecen en la portada del portal. Elegí por cuántos días; la plataforma revisa tu solicitud y, al aprobarla, el periodo empieza ese día.">
+              {vigenteDestacado && (
+                <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800 ring-1 ring-green-200">
+                  Tu comercio está destacado hasta el {new Date(`${vigenteDestacado.fin}T00:00:00`).toLocaleDateString('es-CR')}.
+                </p>
+              )}
+              {pendienteDestacado ? (
+                <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">
+                  Tu solicitud de {pendienteDestacado.dias_solicitados} días está en revisión por la plataforma.
+                </p>
+              ) : (
+                <>
+                  <fieldset className="mt-4">
+                    <legend className="text-sm font-semibold text-slate-700">Periodo</legend>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      {[7, 15, 30].map((d) => (
+                        <label key={d} className={`flex cursor-pointer items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold ring-1 transition-colors ${
+                          diasDestacado === d ? `${C.marino} text-white ring-transparent` : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'}`}>
+                          <input type="radio" name="dias-destacado" value={d} checked={diasDestacado === d} className="sr-only"
+                            onChange={() => setDiasDestacado(d)} />
+                          {d} días
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <MensajeCampo mensaje={mensajeDe(estDestacar.errores, 'dias')} />
+                  <PieGuardado estado={estDestacar} texto="Solicitar destacado"
+                    onGuardar={() => guardarDestacar(() => solicitarPublicidad(idComercio, diasDestacado),
+                      'Solicitud enviada: la plataforma la va a revisar.', (datos) => setPublicidad(datos))} />
+                </>
+              )}
+              {publicidad?.publicidades?.length > 0 && (
+                <div className="mt-6">
+                  <p className="text-sm font-semibold text-slate-700">Historial</p>
+                  <ul className="mt-2 divide-y divide-slate-100 text-sm">
+                    {publicidad.publicidades.map((p) => (
+                      <li key={p.id_publicidad_comercio} className="flex flex-wrap justify-between gap-2 py-2">
+                        <span className="text-slate-700">{p.dias_solicitados ? `${p.dias_solicitados} días` : 'Publicidad'}{p.estado === 'Aprobada' ? ` · del ${new Date(`${p.inicio}T00:00:00`).toLocaleDateString('es-CR')} al ${new Date(`${p.fin}T00:00:00`).toLocaleDateString('es-CR')}` : ''}</span>
+                        <span className="font-semibold text-slate-500">{p.vigente ? 'Vigente' : p.estado}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </Seccion>
           )}
 

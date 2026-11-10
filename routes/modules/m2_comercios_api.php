@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\M2_Comercios\ComerciosController as Comercios;
+use App\Http\Controllers\M2_Comercios\ConfiguracionComercialController as Configuracion;
 use App\Http\Controllers\M2_Comercios\ConsultasComerciosController as Consultas;
 use App\Http\Controllers\M2_Comercios\MicrositiosController as Micrositios;
 use App\Http\Controllers\M2_Comercios\SolicitudesController as Solicitudes;
@@ -46,6 +47,15 @@ Route::prefix('api/m2/v1')
                 ->whereNumber('idComercio')->name('comercios.suspender');
             Route::post('comercios/{idComercio}/reactivar', [Comercios::class, 'reactivar'])
                 ->whereNumber('idComercio')->name('comercios.reactivar');
+
+            // --- Destacar comercios: publicidad (Diego) ---
+            Route::get('comercios/{idComercio}/publicidad', [Configuracion::class, 'publicidadDelComercio'])
+                ->whereNumber('idComercio')->name('comercios.publicidad');
+            Route::post('comercios/{idComercio}/publicidad', [Configuracion::class, 'solicitarPublicidad'])
+                ->whereNumber('idComercio')->name('comercios.publicidad.solicitar');
+            Route::get('publicidad', [Configuracion::class, 'publicidadPendiente'])->name('publicidad.pendiente');
+            Route::post('publicidad/{idPublicidad}', [Configuracion::class, 'gestionarPublicidad'])
+                ->whereNumber('idPublicidad')->name('publicidad.gestionar');
 
             // --- CU-0001 a CU-0007: edición del micrositio (Mia). EstablecerComercio fija el
             // ámbito del encargado para PerteneceAComercio: solo ve y edita lo de su comercio.
