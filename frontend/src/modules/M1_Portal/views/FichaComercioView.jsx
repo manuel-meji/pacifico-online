@@ -60,7 +60,7 @@ export default function FichaComercioView({ idComercio, criterio }) {
     <PaginaPortal>
       <nav aria-label="Ruta de navegación" className="py-3 text-sm text-gray-500">
         <ol className="flex flex-wrap items-center gap-1">
-          <li><button type="button" onClick={() => ir('inicio')} className="inline-flex items-center gap-1 hover:text-brandBlue"><Icono nombre="inicio" className="h-4 w-4" /> Inicio</button></li>
+          <li><button type="button" onClick={() => ir('inicio')} className="inline-flex min-h-[44px] items-center gap-1 hover:text-brandBlue sm:min-h-0"><Icono nombre="inicio" className="h-4 w-4" /> Inicio</button></li>
           <li aria-hidden><Icono nombre="derecha" className="h-3.5 w-3.5 text-gray-400" /></li>
           <li aria-current="page" className="min-w-0 truncate text-gray-800">{comercio.nombre_comercial}</li>
         </ol>

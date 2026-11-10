@@ -62,7 +62,7 @@ export default function ListadoProductos({
         {aviso}
 
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
-          <button type="button" onClick={() => setFiltrosMovil(true)} className="inline-flex items-center gap-2 rounded-lg border border-brandBlue px-3 py-1.5 text-sm font-semibold text-brandBlue transition hover:bg-blue-50 lg:hidden">
+          <button type="button" onClick={() => setFiltrosMovil(true)} className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-brandBlue px-3 py-1.5 text-sm font-semibold text-brandBlue transition hover:bg-blue-50 lg:hidden">
             <Icono nombre="filtros" className="h-4 w-4" /> Filtros
           </button>
           <p className="text-sm text-gray-600" aria-live="polite">
@@ -73,14 +73,14 @@ export default function ListadoProductos({
               <span className="shrink-0 text-gray-600">Ordenar:</span>
               <select value={criterio.orden ?? ''} disabled={!ordenHabilitado} title={ordenHabilitado ? undefined : 'Elegí una categoría o buscá un producto para ordenar'}
                 onChange={(e) => onCambio({ ...criterio, orden: e.target.value || null, pagina: 1 })}
-                className="min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-1.5 focus:border-brandBlue focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100">
+                className="min-h-[40px] min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-base focus:border-brandBlue focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 sm:min-h-0 sm:text-sm">
                 {ORDENES.map((o) => <option key={o.valor} value={o.valor}>{o.etiqueta}</option>)}
               </select>
             </label>
             <label className="flex items-center gap-2">
               <span className="text-gray-600">Mostrar:</span>
               <select value={porPagina} onChange={(e) => onCambio({ ...criterio, por_pagina: Number(e.target.value), pagina: 1 })}
-                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 focus:border-brandBlue focus:outline-none">
+                className="min-h-[40px] rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-base focus:border-brandBlue focus:outline-none sm:min-h-0 sm:text-sm">
                 {POR_PAGINA.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>

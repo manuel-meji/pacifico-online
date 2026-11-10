@@ -42,19 +42,20 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
             <label className="sr-only" htmlFor="buscar-portal">Buscar productos</label>
             <input id="buscar-portal" type="search" value={termino} maxLength={100} onChange={(e) => setTermino(e.target.value)}
               placeholder="Buscar productos..."
-              className="w-full min-w-0 rounded-full border-2 border-gray-200 py-2.5 pl-5 pr-12 text-sm transition focus:border-brandBlue focus:outline-none" />
-            <button className="absolute right-1 rounded-full bg-brandDarkBlue p-2 text-white transition hover:bg-brandBlue" aria-label="Buscar">
+              className="w-full min-w-0 rounded-full border-2 border-gray-200 py-2.5 pl-5 pr-12 text-base transition sm:text-sm focus:border-brandBlue focus:outline-none" />
+            <button className="absolute right-1 grid h-9 w-9 place-items-center rounded-full bg-brandDarkBlue text-white transition hover:bg-brandBlue sm:h-8 sm:w-8" aria-label="Buscar">
               <Icono nombre="buscar" className="h-4 w-4" />
             </button>
           </form>
 
           <nav className="ml-auto flex shrink-0 items-center gap-5 text-sm font-medium text-gray-700 sm:ml-0" aria-label="Cuenta y carrito">
-            <button type="button" onClick={onMiCuenta} className="flex min-h-[44px] items-center gap-1 transition hover:text-brandBlue">
+            <button type="button" onClick={onMiCuenta} aria-label={conSesion ? 'Mi cuenta' : 'Ingresar'}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue">
               <Icono nombre="usuario" className="h-5 w-5" />
               <span className="hidden sm:inline">{conSesion ? 'Mi cuenta' : 'Ingresar'}</span>
             </button>
             {/* El carrito es de M5 (app.html). */}
-            <a href="/app.html" className="flex min-h-[44px] items-center gap-1 transition hover:text-brandBlue" aria-label={etiquetaCarrito}>
+            <a href="/app.html" className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue" aria-label={etiquetaCarrito}>
               <span className={`relative ${conProductos ? 'mr-2.5' : ''}`}>
                 <Icono nombre="carrito" className="h-6 w-6" />
                 {conProductos && (
