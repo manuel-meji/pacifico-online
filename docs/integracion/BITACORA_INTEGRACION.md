@@ -17,4 +17,6 @@ Rama: `feature/integracion-general` · Responsable: Coordinación SG5 (M5 Carrit
 | 10/11/2026 | `app/Http/Controllers/M5_Pedidos/ControladorDeseos.php`, `ItemDeseo.php`, `create_pedidos_deseos_table.php` | M5 | Implementación completa de Lista de Deseos (Wishlist): listar, agregar, eliminar y mover al carrito. | Cumplir alcance mínimo formal M5 (Tabla 5.1). | SC-09 creada |
 | 10/11/2026 | `app/Http/Controllers/M5_Pedidos/ControladorPedido.php` | M5 | Endpoint `solicitarDevolucionSubpedido` para subpedidos entregados con bandera de reembolso M6. | Cumplir alcance mínimo formal M5 (Tabla 5.1). | SC-09 creada |
 | 10/11/2026 | `frontend/src/modules/M5_Pedidos/views/ListaDeseosView.jsx`, `componentes.jsx`, `DetallePedidoView.jsx` | M5 | Pantalla amigable de Lista de Deseos, botón en encabezado, logo hacia `/app.html` y modal de Devolución. | Integración y experiencia de usuario. | SC-09 creada |
+| 10/11/2026 | `frontend/src/modules/M5_Pedidos/views/CheckoutView.jsx`, `calculos.js`, `M5App.jsx` | M5 | Retiro del selector de medio de pago de M5 (se delega a M6) y redirección obligatoria a login si el usuario es invitado sin vaciar su carrito. | Acuerdo entre módulos y seguridad en checkout. | No aplica (M5) |
+
 

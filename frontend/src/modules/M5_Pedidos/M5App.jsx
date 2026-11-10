@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavegacionM5 } from './components/componentes';
 import { actualizarCantidad, agregarItem, eliminarItem, obtenerCarrito, vaciarCarrito } from './services/m5Api';
+import { obtenerUsuario } from '../Nucleo/services/sesionApi';
 import CarritoPage from './views/CarritoView';
 import CheckoutPage from './views/CheckoutView';
 import PedidoPendientePage from './views/PedidoPendienteView';
@@ -241,6 +242,24 @@ export default function M5App() {
     setPantalla('pedido');
   }
 
+  // Si el usuario es invitado (sin sesión iniciada), no se le permite ir a checkout:
+  // se le redirige al login del portal sin vaciar su carrito.
+  async function procederACheckout() {
+    setAviso(null);
+    try {
+      const resp = await obtenerUsuario();
+      if (!resp.ok || !resp.datos?.user) {
+        // Redirigir a login preservando el contexto
+        window.location.href = '/app.html?pantalla=ingresar';
+        return;
+      }
+    } catch {
+      window.location.href = '/app.html?pantalla=ingresar';
+      return;
+    }
+    setPantalla('checkout');
+  }
+
   return (
     <NavegacionM5.Provider value={navegacion}>
     <div className="min-h-screen bg-brandLightBg text-gray-800 font-sans antialiased flex flex-col">
@@ -249,7 +268,7 @@ export default function M5App() {
           <CarritoPage carrito={carrito} cargando={cargando} error={error} onReintentar={cargarCarrito} aviso={aviso}
             avisosItem={avisosItem} avisoDemo={avisoDemo} pendientes={pendientes}
             onCantidad={cambiarCantidad} onQuitar={quitar} onVaciar={vaciar} onAgregar={agregar}
-            onContinuar={() => { setAviso(null); setPantalla('checkout'); }} />
+            onContinuar={procederACheckout} />
         )}
         {pantalla === 'checkout' && (
           <CheckoutPage onVolver={() => volverAlCarrito()} onVolverConAviso={volverAlCarrito} onPedidoCreado={mostrarPedido} />
