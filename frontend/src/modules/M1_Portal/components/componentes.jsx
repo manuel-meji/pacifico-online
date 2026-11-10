@@ -16,7 +16,7 @@ export function Encabezado({ pantalla, onIr, usuario = null, onCerrarSesion }) {
           className="flex min-h-[44px] items-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
           <Logo />
         </button>
-        <nav aria-label="Cuenta" className="flex min-w-0 flex-wrap items-center gap-x-4">
+        <nav aria-label="Cuenta" className="flex min-w-0 flex-wrap items-center gap-x-3 sm:gap-x-4">
           {usuario ? (
             <>
               <span className="max-w-[9rem] truncate text-sm text-white sm:max-w-[16rem]" title={usuario.nombre}>{usuario.nombre}</span>
@@ -49,7 +49,7 @@ export function MigasDePan({ actual }) {
       <ol className="flex flex-wrap items-center gap-1.5">
         <li>
           <button type="button" onClick={() => onIr?.('inicio')}
-            className="rounded-sm font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue">
+            className="inline-flex min-h-[44px] items-center rounded-sm font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue sm:min-h-0">
             Inicio
           </button>
         </li>
@@ -127,7 +127,7 @@ export function EnlaceCuenta({ pregunta, texto, onClick }) {
   return (
     <p className="mt-5 text-center text-sm text-gray-600">
       {pregunta}{' '}
-      <button type="button" onClick={onClick} className="rounded-sm font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue">{texto}</button>
+      <button type="button" onClick={onClick} className="inline-flex min-h-[44px] items-center rounded-sm px-1 font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue sm:min-h-0">{texto}</button>
     </p>
   );
 }

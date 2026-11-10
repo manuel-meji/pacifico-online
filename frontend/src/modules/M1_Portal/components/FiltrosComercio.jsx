@@ -16,14 +16,14 @@ export const tieneCriterio = (criterio) => !!criterio.id_categoria || (criterio.
 function Grupo({ titulo, onLimpiar, children }) {
   const [abierto, setAbierto] = useState(true);
   return (
-    <section className="border-b border-gray-200 py-3 last:border-0">
+    <section className="border-b border-gray-200 py-1 last:border-0 lg:py-3">
       <button type="button" onClick={() => setAbierto(!abierto)} aria-expanded={abierto}
-        className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-wide text-gray-800">
+        className="flex min-h-[44px] w-full items-center justify-between text-xs font-bold uppercase tracking-wide text-gray-800 lg:min-h-0">
         {titulo}<Icono nombre={abierto ? 'abajo' : 'derecha'} className="h-4 w-4 text-gray-500" />
       </button>
       {abierto && (
-        <div className="mt-2 space-y-1.5">
-          {onLimpiar && <button type="button" onClick={onLimpiar} className="inline-flex items-center gap-1 text-xs font-medium text-brandBlue hover:underline"><Icono nombre="izquierda" className="h-3.5 w-3.5" /> Limpiar</button>}
+        <div className="mb-2 mt-1 space-y-1 lg:mb-0 lg:mt-2 lg:space-y-1.5">
+          {onLimpiar && <button type="button" onClick={onLimpiar} className="inline-flex min-h-[36px] items-center gap-1 text-xs font-medium text-brandBlue hover:underline lg:min-h-0"><Icono nombre="izquierda" className="h-3.5 w-3.5" /> Limpiar</button>}
           {children}
         </div>
       )}
@@ -33,7 +33,7 @@ function Grupo({ titulo, onLimpiar, children }) {
 
 function OpcionCategoria({ categoria, marcada, onElegir, sangria = false }) {
   return (
-    <label className={`flex cursor-pointer items-center gap-2 text-sm text-gray-700 ${sangria ? 'pl-5' : ''}`}>
+    <label className={`flex min-h-[40px] cursor-pointer items-center gap-2 text-sm text-gray-700 lg:min-h-0 ${sangria ? 'pl-5' : ''}`}>
       <input type="radio" name="categoria-filtro" checked={marcada} onChange={onElegir} className="h-4 w-4 accent-brandDarkBlue" />
       <span className="min-w-0 flex-1 truncate">{categoria.nombre}</span>
     </label>
@@ -91,8 +91,8 @@ export default function FiltrosComercio({ categorias = [], criterio, onCambio, c
           <form onSubmit={buscar} className="flex items-center gap-1">
             <label className="sr-only" htmlFor="buscar-comercio">Buscar en este comercio</label>
             <input id="buscar-comercio" type="search" value={termino} maxLength={100} onChange={(e) => setTermino(e.target.value)} placeholder="Nombre del producto"
-              className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:border-brandBlue focus:outline-none" />
-            <button className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brandDarkBlue text-white transition hover:bg-brandBlue" aria-label="Buscar"><Icono nombre="buscar" className="h-4 w-4" /></button>
+              className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-2 text-base focus:border-brandBlue focus:outline-none sm:py-1.5 sm:text-sm" />
+            <button className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brandDarkBlue text-white transition hover:bg-brandBlue sm:h-8 sm:w-8" aria-label="Buscar"><Icono nombre="buscar" className="h-4 w-4" /></button>
           </form>
           {avisoTermino && <p role="alert" className="text-xs text-red-700">{avisoTermino}</p>}
         </Grupo>
@@ -117,12 +117,12 @@ export default function FiltrosComercio({ categorias = [], criterio, onCambio, c
         <form onSubmit={aplicarPrecio} className="flex items-center gap-1 pt-1">
           <label className="sr-only" htmlFor="precio-min">Precio mínimo</label>
           <input id="precio-min" inputMode="numeric" placeholder="Mín" value={min} disabled={!precioHabilitado} onChange={(e) => setMin(e.target.value.replace(/\D/g, ''))}
-            className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-brandBlue focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100" />
+            className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-2 text-base focus:border-brandBlue focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 sm:py-1 sm:text-sm" />
           <span className="text-gray-400">-</span>
           <label className="sr-only" htmlFor="precio-max">Precio máximo</label>
           <input id="precio-max" inputMode="numeric" placeholder="Máx" value={max} disabled={!precioHabilitado} onChange={(e) => setMax(e.target.value.replace(/\D/g, ''))}
-            className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-brandBlue focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100" />
-          <button disabled={!precioHabilitado} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brandDarkBlue text-white transition hover:bg-brandBlue disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500" aria-label="Aplicar rango de precio"><Icono nombre="derecha" className="h-4 w-4" /></button>
+            className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-2 text-base focus:border-brandBlue focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 sm:py-1 sm:text-sm" />
+          <button disabled={!precioHabilitado} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brandDarkBlue text-white transition hover:bg-brandBlue sm:h-8 sm:w-8 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500" aria-label="Aplicar rango de precio"><Icono nombre="derecha" className="h-4 w-4" /></button>
         </form>
         {avisoPrecio && <p role="alert" className="text-xs text-red-700">{avisoPrecio}</p>}
       </Grupo>
