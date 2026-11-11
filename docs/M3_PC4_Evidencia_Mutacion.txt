@@ -1,0 +1,30 @@
+Y1 — Evidencia de prueba de mutacion
+
+Mutacion aplicada temporalmente:
+
+- Se cambio deliberadamente el nombre `id_producto` del payload HTTP de prueba a `producto_id`.
+- No se modifico codigo de produccion.
+- La comprobacion manual duplicada de campos obligatorios fue eliminada de la prueba; la respuesta se valida mediante `assertEsquema` y el `required` del esquema `ProductoDetalle`.
+
+Resultado con la mutacion:
+
+- Prueba ejecutada: `test_obtener_producto_en_ruta_actual_cumple_el_esquema_de_producto_detalle`.
+- Resultado: FALLÓ, codigo de salida 1.
+- Mensaje del validador: `Falta ProductoDetalle.id_producto.` seguido de `Failed asserting that an array has the key 'id_producto'.`
+
+Restauracion:
+
+- Se restauro el nombre original `id_producto`.
+- La suite `vendor/bin/phpunit tests/Feature/M3_Catalogo --testdox` volvio a pasar en las pruebas disponibles.
+- Resultado final: 7 pruebas aprobadas y 6 omitidas explicitamente por dependencias externas.
+- No queda ninguna mutacion en los archivos entregables.
+
+Procedimiento para obtener capturas reales:
+
+1. Antes de la mutacion, ejecutar `vendor/bin/phpunit tests/Feature/M3_Catalogo/Contratos/M3_ProveedorContratoTest.php --filter=test_obtener_producto_en_ruta_actual_cumple_el_esquema_de_producto_detalle` y capturar la consola si se necesita evidencia de restauracion posterior.
+2. En una copia temporal controlada de la prueba, cambiar `id_producto` a `producto_id` en el payload antes de `assertEsquema`.
+3. Ejecutar el mismo comando y capturar la salida que contiene `Falta ProductoDetalle.id_producto`.
+4. Restaurar el archivo original y ejecutar nuevamente el mismo comando.
+5. Capturar la salida exitosa de la restauracion y eliminar la copia temporal.
+
+No se incluyen capturas de pantalla en este archivo porque no fueron tomadas; la evidencia disponible es la salida textual registrada arriba.

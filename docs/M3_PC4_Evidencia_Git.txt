@@ -1,0 +1,20 @@
+Y6 — Evidencia de contribución individual
+
+Comando ejecutado:
+
+git shortlog -sne origin/desarrollo -- app/Services/M3_Catalogo app/Models/M3_Catalogo tests/Feature/M3_Catalogo tests/Unit/M3_Catalogo database/migrations/M3_Catalogo
+
+Resultado:
+
+3	Jeaustin Morales <JEAUSTIN.MORALES@ucr.ac.cr>
+1	Joshua Soto Hernandez <joshdz1605@gmail.com>
+1	Justin Marenco <jusherramarenco@gmail.com>
+1	MANUEL.MEJICANO <manuel.mejicano@ucr.ac.cr>
+
+Observación:
+
+No aparece una identidad de Yan en el alcance solicitado. La revisión de todo el historial encontró la identidad `Yan Enils Ortiz Barrantes <yanenils24@gmail.com>`, pero únicamente en dos commits de `docs/declaracion-uso-ia-M3.md`, fuera del alcance del comando solicitado. No se encontró otra identidad confirmada de Yan.
+
+Los autores parecidos encontrados en todo el historial fueron `Josuedob <jortizbermudez14@gmail.com>` y `Manuel Mejicano Ortiz <122234471+manuel-meji@users.noreply.github.com>`; no se atribuyen a Yan.
+
+No se modificaron `.mailmap`, la identidad Git ni el historial. La contribución de Yan a las rutas M3 solicitadas no puede demostrarse con el historial disponible.
