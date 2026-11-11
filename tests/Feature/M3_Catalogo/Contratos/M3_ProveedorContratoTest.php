@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\M3_Catalogo\Contratos;
 
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
+use Tests\Unit\M3_Catalogo\Concerns\PreparaDatosConsultasM3;
 
 class M3_ProveedorContratoTest extends TestCase
 {
+    use PreparaDatosConsultasM3;
+
     private const CONTRATO = 'contracts/m3-catalogo/v1/openapi_M3_v1.3.0.yaml';
 
     private const PREFIJO_CONTRATO = '/api/m3/v1';
@@ -20,6 +24,34 @@ class M3_ProveedorContratoTest extends TestCase
     {
         parent::setUp();
         $this->app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('m', 32)));
+        $this->sembrarCatalogoDelContrato();
+    }
+
+    /**
+     * El servicio de M3 lee la base: las rutas se comprueban contra datos reales y no contra los
+     * datos fijos de la prueba de concepto. Siembra el producto 1 publicado con la variacion 101.
+     * Los ids 1001 (producto y variacion) no se siembran: deben responder 404.
+     */
+    private function sembrarCatalogoDelContrato(): void
+    {
+        $this->crearEsquemaConsultasM3();
+        $this->comercioActivo(1);
+
+        $categoria = $this->categoria('General');
+        $producto = $this->producto(1, $categoria, 'Camiseta de algodon', 'publicado');
+
+        // variacion() del trait asigna el id solo; el contrato se prueba con el id fijo 101.
+        DB::table('producto_variaciones')->insert([
+            'id_variacion' => 101,
+            'id_producto' => $producto,
+            'id_comercio' => 1,
+            'sku' => 'CAM-ALG-M',
+            'precio' => 12500,
+            'tarifa_impuesto' => 13,
+            'disponible' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     public function test_el_contrato_declara_las_seis_operaciones_del_proveedor(): void
