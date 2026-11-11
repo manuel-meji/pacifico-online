@@ -40,7 +40,7 @@ Resultado verificado de la última ejecución:
 ```text
 13 tests
 13 aprobadas
-194 assertions
+257 assertions
 ```
 
 Las seis operaciones del proveedor ya tienen comprobaciones HTTP. El seeder M3 y el listener `ExistenciaAgotada` fueron verificados en PostgreSQL portátil aislado; los dos escenarios PHPUnit de aceptación siguen omitidos porque su flujo completo depende de la integración M5 y la prueba continúa configurada para SQLite en memoria.
@@ -54,7 +54,7 @@ $env:APP_KEY='base64:<clave temporal de pruebas>'
 vendor/bin/phpunit tests/Feature/M3_Catalogo tests/Unit/M3_Catalogo --coverage-clover <carpeta-temporal>\coverage.xml
 ```
 
-La cobertura se ejecutó con Xdebug. Resultado del alcance exigido (21 archivos): 77 métodos, 54 cubiertos; 722 líneas instrumentadas, 579 cubiertas. Porcentaje: 70.13% de métodos y 80.19% de líneas. La suite produjo 70 aprobadas, 2 omitidas y 321 assertions.
+La cobertura se ejecutó con Xdebug en la base integrada anterior. Resultado registrado del alcance exigido (21 archivos): 77 métodos, 54 cubiertos; 722 líneas instrumentadas, 579 cubiertas. Porcentaje: 70.13% de métodos y 80.19% de líneas. La suite produjo 70 aprobadas, 2 omitidas y 321 assertions; la ejecución posterior sobre `origin/desarrollo` registra 70 aprobadas, 2 omitidas y 384 assertions.
 
 ## Riesgos sin cobertura
 

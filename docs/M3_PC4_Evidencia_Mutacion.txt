@@ -16,7 +16,7 @@ Restauracion:
 
 - Se restauro el nombre original `id_producto`.
 - La suite `vendor/bin/phpunit tests/Feature/M3_Catalogo --testdox` volvio a pasar en las pruebas disponibles.
-- Resultado final de la prueba contractual: 13 pruebas aprobadas y 194 assertions. La suite M3 completa registra 70 aprobadas, 2 omitidas y 321 assertions.
+- Resultado final de la prueba contractual en la rama integrada: 13 pruebas aprobadas y 257 assertions. La suite M3 completa registra 70 aprobadas, 2 omitidas y 384 assertions.
 - No queda ninguna mutacion en los archivos entregables.
 
 Procedimiento para obtener capturas reales:
