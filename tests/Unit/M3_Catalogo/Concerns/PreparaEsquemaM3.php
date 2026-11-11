@@ -49,22 +49,13 @@ trait PreparaEsquemaM3
             codigo_barras VARCHAR(14) NULL,
             codigo_fabricante VARCHAR(100) NULL,
             disponible BOOLEAN NOT NULL DEFAULT 1,
-            tipo_descuento VARCHAR(20) NOT NULL DEFAULT 'ninguno',
-            valor_descuento NUMERIC NOT NULL DEFAULT 0,
             created_at DATETIME NULL,
             updated_at DATETIME NULL,
             CONSTRAINT fk_variaciones_producto_comercio FOREIGN KEY (id_producto, id_comercio)
                 REFERENCES productos (id_producto, id_comercio),
             CONSTRAINT uq_variaciones_comercio_sku UNIQUE (id_comercio, sku),
             CONSTRAINT ck_variaciones_precio CHECK (precio >= 0),
-            CONSTRAINT ck_variaciones_tarifa CHECK (tarifa_impuesto >= 0 AND tarifa_impuesto <= 100),
-            CONSTRAINT chk_variacion_tipo_descuento CHECK (tipo_descuento IN ('ninguno', 'porcentaje', 'monto_fijo')),
-            CONSTRAINT chk_variacion_valor_descuento CHECK (
-                valor_descuento >= 0
-                AND (tipo_descuento <> 'ninguno' OR valor_descuento = 0)
-                AND (tipo_descuento <> 'porcentaje' OR valor_descuento <= 100)
-                AND (tipo_descuento <> 'monto_fijo' OR valor_descuento <= precio)
-            )
+            CONSTRAINT ck_variaciones_tarifa CHECK (tarifa_impuesto >= 0 AND tarifa_impuesto <= 100)
         )");
     }
 
