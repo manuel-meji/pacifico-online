@@ -63,7 +63,7 @@ class PortadaService
         $noDisponibles = [];
 
         try {
-            $comercios = $this->comercios($ahora, $limite);
+            $comercios = $this->comercios($limite);
         } catch (DependenciaNoDisponibleException) {
             $comercios = [];
             $noDisponibles[] = 'comercios';
@@ -130,22 +130,24 @@ class PortadaService
     }
 
     /**
-     * Comercios vigentes que M2 devuelve como Activo.
+     * Comercios destacados que decide M2 (contrato 1.4.0): los que tienen una
+     * publicidad vigente aprobada en el panel de M2 (el comercio la solicita y
+     * la plataforma la aprueba, o la plataforma destaca directamente), en el
+     * orden de M2 (la publicidad más reciente primero). Solo los Activo.
+     *
+     * Antes salían de la tabla comercios_destacados de M1, que nadie llenaba
+     * desde una pantalla; así lo que se aprueba en M2 se ve en la portada.
      *
      * @return list<ComercioDTO>
      *
      * @throws DependenciaNoDisponibleException si M2 no responde.
      */
-    private function comercios(Carbon $ahora, int $limite): array
+    private function comercios(int $limite): array
     {
-        $ids = $this->seleccion->comerciosVigentes($ahora);
-
-        if ($ids === []) {
-            return [];
-        }
+        $destacados = $this->comercios->listarComerciosHabilitados(1, $limite, destacado: true)->comercios;
 
         $activos = array_filter(
-            $this->comercios->obtenerResumenComercios($ids),
+            $destacados,
             fn (ComercioDTO $comercio): bool => $comercio->estado === EstadoComercio::Activo,
         );
 

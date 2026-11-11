@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\ComerciosNoDisponible;
+use Tests\Doubles\M1\ComerciosSinDestacados;
 use Tests\Doubles\M1\InventarioNoDisponible;
 use Tests\Feature\M1_Portal\Concerns\ValidaEsquemaContrato;
 
@@ -76,15 +77,24 @@ class PortadaServiceTest extends PruebaM1
         );
     }
 
-    public function test_los_comercios_salen_en_el_orden_de_posicion(): void
+    public function test_los_comercios_destacados_son_los_que_decide_m2_en_su_orden(): void
     {
-        $this->destacarComercio(DatosPrueba::COMERCIO_ARTESANIAS_GUAITIL, 2);
+        // En el doble de M2 están destacados Guaitil (publicidad desde el 10/10) y
+        // La Ceiba (desde el 05/10); M2 los ordena de la publicidad más reciente a la
+        // más antigua. La tabla comercios_destacados de M1 ya no se usa.
         $this->destacarComercio(DatosPrueba::COMERCIO_CAFE_NICOYANO, 1);
 
         $this->assertSame(
-            [DatosPrueba::COMERCIO_CAFE_NICOYANO, DatosPrueba::COMERCIO_ARTESANIAS_GUAITIL],
+            [DatosPrueba::COMERCIO_ARTESANIAS_GUAITIL, DatosPrueba::COMERCIO_LA_CEIBA],
             $this->idsComercios($this->destacados()),
         );
+    }
+
+    public function test_sin_comercios_destacados_en_m2_la_seccion_viene_vacia(): void
+    {
+        config(['integraciones.m1.m2.doble' => ComerciosSinDestacados::class]);
+
+        $this->assertSame([], $this->destacados()->comercios);
     }
 
     public function test_solo_salen_los_destacados_activos_y_dentro_de_su_periodo(): void
@@ -92,13 +102,10 @@ class PortadaServiceTest extends PruebaM1
         $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 1, activo: false);
         $this->destacarProducto(DatosPrueba::PRODUCTO_CAFE_MOLIDO, 2, inicio: '2026-10-01 00:00:00', fin: '2026-11-10 11:59:59');
         $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 3, inicio: '2026-11-10 12:00:01', fin: '2026-12-01 00:00:00');
-        $this->destacarComercio(DatosPrueba::COMERCIO_LA_CEIBA, 1, activo: false);
-        $this->destacarComercio(DatosPrueba::COMERCIO_CAFE_NICOYANO, 2, fin: '2026-11-09 00:00:00');
 
         $destacados = $this->destacados();
 
         $this->assertSame([], $destacados->productos);
-        $this->assertSame([], $destacados->comercios);
         $this->assertSame([], $destacados->seccionesNoDisponibles);
     }
 
@@ -112,6 +119,8 @@ class PortadaServiceTest extends PruebaM1
 
     public function test_sin_destacados_vigentes_las_secciones_vienen_vacias_sin_error(): void
     {
+        config(['integraciones.m1.m2.doble' => ComerciosSinDestacados::class]);
+
         $destacados = $this->destacados();
 
         $this->assertEquals(new DestacadosDTO([], [], []), $destacados);
@@ -139,14 +148,12 @@ class PortadaServiceTest extends PruebaM1
         $this->destacarProducto(DatosPrueba::PRODUCTO_DE_COMERCIO_SUSPENDIDO, 1);
         $this->destacarProducto(DatosPrueba::PRODUCTO_INEXISTENTE, 2);
         $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 3);
-        $this->destacarComercio(DatosPrueba::COMERCIO_SUSPENDIDO, 1);
-        $this->destacarComercio(DatosPrueba::COMERCIO_INEXISTENTE, 2);
-        $this->destacarComercio(DatosPrueba::COMERCIO_LA_CEIBA, 3);
 
         $destacados = $this->destacados();
 
         $this->assertSame([DatosPrueba::PRODUCTO_JARRON], $this->idsProductos($destacados));
-        $this->assertSame([DatosPrueba::COMERCIO_LA_CEIBA], $this->idsComercios($destacados));
+        // M2 solo devuelve comercios Activo: el suspendido nunca sale como destacado.
+        $this->assertNotContains(DatosPrueba::COMERCIO_SUSPENDIDO, $this->idsComercios($destacados));
     }
 
     // ---------------------------------------------------------------
@@ -168,14 +175,11 @@ class PortadaServiceTest extends PruebaM1
         $this->destacarProducto(DatosPrueba::PRODUCTO_DE_COMERCIO_SUSPENDIDO, 1);
         $this->destacarProducto(DatosPrueba::PRODUCTO_CAMISA_LINO, 2);
         $this->destacarProducto(DatosPrueba::PRODUCTO_JARRON, 3);
-        $this->destacarComercio(DatosPrueba::COMERCIO_SUSPENDIDO, 1);
-        $this->destacarComercio(DatosPrueba::COMERCIO_LA_CEIBA, 2);
-        $this->destacarComercio(DatosPrueba::COMERCIO_CAFE_NICOYANO, 3);
 
         $destacados = app(PortadaService::class)->listarDestacados(2);
 
         $this->assertSame([DatosPrueba::PRODUCTO_CAMISA_LINO, DatosPrueba::PRODUCTO_JARRON], $this->idsProductos($destacados));
-        $this->assertSame([DatosPrueba::COMERCIO_LA_CEIBA, DatosPrueba::COMERCIO_CAFE_NICOYANO], $this->idsComercios($destacados));
+        $this->assertSame([DatosPrueba::COMERCIO_ARTESANIAS_GUAITIL, DatosPrueba::COMERCIO_LA_CEIBA], $this->idsComercios($destacados));
     }
 
     public function test_un_limite_fuera_de_rango_se_ajusta_de_1_a_12(): void
@@ -257,7 +261,8 @@ class PortadaServiceTest extends PruebaM1
 
         $this->assertSame([], $destacados->productos);
         $this->assertSame(['productos'], $destacados->seccionesNoDisponibles);
-        $this->assertCount(3, $destacados->comercios);
+        // Los comercios destacados vienen de M2 y siguen saliendo.
+        $this->assertCount(2, $destacados->comercios);
     }
 
     public function test_si_m2_no_responde_los_comercios_vienen_vacios_y_se_informa(): void
@@ -331,7 +336,7 @@ class PortadaServiceTest extends PruebaM1
 
         $this->assertCumpleEsquema('Destacados', $respuesta->json());
         $respuesta->assertJsonPath('secciones_no_disponibles', []);
-        $respuesta->assertJsonPath('comercios.0', [
+        $respuesta->assertJsonPath('comercios.1', [
             'id_comercio' => DatosPrueba::COMERCIO_LA_CEIBA,
             'nombre_comercial' => 'Tienda La Ceiba',
             'logotipo' => 'https://cdn.pacificos.example/comercios/34/logo.png',

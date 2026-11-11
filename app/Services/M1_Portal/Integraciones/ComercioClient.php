@@ -100,9 +100,14 @@ class ComercioClient
         return $resultado;
     }
 
-    public function listarComerciosHabilitados(int $pagina, int $porPagina): ListadoComerciosDTO
+    /**
+     * Comercios habilitados de M2. Con $destacado, solo los que tienen una
+     * publicidad vigente aprobada en M2, de la más reciente a la más antigua
+     * (contrato M2 1.2.1, ListarComerciosHabilitados).
+     */
+    public function listarComerciosHabilitados(int $pagina, int $porPagina, bool $destacado = false): ListadoComerciosDTO
     {
-        $respuesta = $this->llamar('M2', fn (): array => $this->contrato->listarComerciosHabilitados($pagina, $porPagina));
+        $respuesta = $this->llamar('M2', fn (): array => $this->contrato->listarComerciosHabilitados($pagina, $porPagina, $destacado));
 
         return new ListadoComerciosDTO(
             comercios: array_map(fn (array $comercio): ComercioDTO => $this->resumen($comercio), $respuesta['comercios']),

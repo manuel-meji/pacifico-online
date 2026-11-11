@@ -136,7 +136,8 @@ class PortalDemoSeederTest extends PruebaM1
 
         $destacados = app(PortalPublicoService::class)->listarDestacados(PortadaService::LIMITE_POR_DEFECTO);
 
-        $this->assertCount(3, $destacados['comercios']);
+        // Los comercios destacados los decide M2 (en su doble, Guaitil y La Ceiba).
+        $this->assertCount(2, $destacados['comercios']);
         $this->assertNotEmpty($destacados['productos']);
         $this->assertSame([], $destacados['secciones_no_disponibles']);
     }
