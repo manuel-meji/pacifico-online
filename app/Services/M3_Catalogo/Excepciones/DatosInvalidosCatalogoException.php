@@ -19,4 +19,10 @@ class DatosInvalidosCatalogoException extends RuntimeException
     {
         return self::CODIGO;
     }
+
+    /** Mismo codigo con el nombre que leen los consumidores (M1 busca codigo() en el error del proveedor). */
+    public function codigo(): string
+    {
+        return self::CODIGO;
+    }
 }
