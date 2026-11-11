@@ -115,7 +115,7 @@ export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre =
 
   if (carga.estado === 'cargando') {
     return (
-      <PaginaCuenta migas="Mi cuenta" titulo="Mi cuenta">
+      <PaginaCuenta migas="Mi cuenta" titulo="Mi cuenta" amplia>
         <p role="status" className="text-center text-sm text-gray-600">Cargando sus datos…</p>
       </PaginaCuenta>
     );
@@ -125,7 +125,7 @@ export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre =
     const sinSesion = carga.http === 401;
     const noEsCliente = carga.http === 404;
     return (
-      <PaginaCuenta migas="Mi cuenta" titulo="Mi cuenta">
+      <PaginaCuenta migas="Mi cuenta" titulo="Mi cuenta" amplia>
         <div className="space-y-4">
           <Aviso>
             {sinSesion && 'Inicie sesión para ver sus datos.'}
@@ -143,7 +143,7 @@ export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre =
   }
 
   return (
-    <PaginaCuenta migas="Mi cuenta" titulo="Mi cuenta">
+    <PaginaCuenta migas="Mi cuenta" titulo="Mi cuenta" amplia>
       {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('motivo') === 'checkout_dir' && (
         <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-2">
           <p className="text-sm font-bold text-brandDarkBlue">Gestionar dirección de entrega</p>
@@ -163,6 +163,7 @@ export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre =
       <form onSubmit={enviar} noValidate className="space-y-4">
         {guardado && <Aviso tipo="exito">Sus datos se actualizaron.</Aviso>}
         {errores.general && <Aviso>{errores.general}</Aviso>}
+        <div className="grid gap-4 md:grid-cols-2">
         {campos.map(({ id, etiqueta, icono, type, autoComplete }) => (
           <CampoConIcono key={id} id={id} etiqueta={etiqueta} icono={icono} type={type}
             autoComplete={autoComplete} value={f[id]} onChange={set(id)} error={errores[id]} />
@@ -175,7 +176,10 @@ export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre =
             <p id="correo-ayuda" className="mt-1 text-xs text-gray-600">Por ahora no se puede cambiar el correo electrónico.</p>
           )}
         </div>
-        <BotonPrincipal type="submit" disabled={enviando}>{enviando ? 'Guardando…' : 'Guardar cambios'}</BotonPrincipal>
+        </div>
+        <div className="md:ml-auto md:max-w-xs">
+          <BotonPrincipal type="submit" disabled={enviando}>{enviando ? 'Guardando…' : 'Guardar cambios'}</BotonPrincipal>
+        </div>
       </form>
       {/* Fuera del formulario de datos: la sección tiene sus propios formularios. */}
       <div className="mt-6">
