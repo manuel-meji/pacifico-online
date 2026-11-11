@@ -1,19 +1,91 @@
+
+import { useEffect, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
 import TarjetaIndicador from '../components/TarjetaIndicador';
-import {
-  indicadores,
-  asientos,
-  datosMensuales,
-  opcionesContables,
-} from '../services/tableroService';
+import { asientos } from '../services/tableroService';
+import { consultarReporteGerencial } from '../services/reporteGerencialApi';
+
+function formatoMoneda(valor) {
+  return `₡${Number(valor ?? 0).toLocaleString('es-CR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
 export default function TableroEjecutivoView({ onNavegar }) {
+  const [reporte, setReporte] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarReporte() {
+      try {
+        const datos = await consultarReporteGerencial();
+
+        if (activo) {
+          setReporte(datos);
+          setError('');
+        }
+      } catch (err) {
+        if (activo) {
+          setError(err.message || 'No se pudo cargar el reporte.');
+        }
+      } finally {
+        if (activo) {
+          setCargando(false);
+        }
+      }
+    }
+
+    cargarReporte();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  const indicadores = [
+    {
+      titulo: 'Ingresos',
+      valor: reporte ? formatoMoneda(reporte.resumen.ingresos) : '—',
+      detalle: 'Ingresos registrados por ventas',
+      color: 'azul',
+    },
+    {
+      titulo: 'Costos de ventas',
+      valor: reporte ? formatoMoneda(reporte.resumen.costos) : '—',
+      detalle: 'Costos registrados de ventas',
+      color: 'verde',
+    },
+    {
+      titulo: 'Utilidad bruta',
+      valor: reporte ? formatoMoneda(reporte.resumen.utilidad_bruta) : '—',
+      detalle: 'Ingresos menos costos de ventas',
+      color: 'azul',
+    },
+  ];
+
+  const datosMensuales = reporte?.mensual ?? [];
+
+  const maximoMensual = Math.max(
+    0,
+    ...datosMensuales.flatMap((dato) => [
+      Number(dato.ingresos),
+      Number(dato.costos),
+    ])
+  ) || 1;
+
+  const alturaBarra = (valor) =>
+    (Number(valor) / maximoMensual) * 100;
+
   return (
   <div className="m7-layout">
     <EncabezadoM7
-  seccionActiva="Tablero ejecutivo"
-  onNavegar={onNavegar}
-/>
+      seccionActiva="Tablero ejecutivo"
+      onNavegar={onNavegar}
+    />
       <main id="contenido" className="m7-main">
         <div className="m7-page-heading">
           <div>
@@ -26,13 +98,21 @@ export default function TableroEjecutivoView({ onNavegar }) {
 
           <div className="m7-period">
             <span>Período</span>
-            <strong>Octubre 2026</strong>
+            <strong>
+              {reporte
+                ? `${reporte.fecha_desde} al ${reporte.fecha_hasta}`
+                : 'Cargando período...'}
+            </strong>
           </div>
         </div>
 
         <div className="m7-demo-note">
           <span className="m7-demo-dot" />
-          Prototipo de demostración: los datos mostrados son de ejemplo.
+          {cargando
+            ? 'Cargando información contable...'
+            : error
+              ? `Error al cargar el reporte: ${error}`
+              : 'Los indicadores y el resumen mensual provienen de registros contables. Las demás secciones son demostrativas.'}
         </div>
 
 <section className="m7-indicators" aria-label="Indicadores financieros">
@@ -53,30 +133,38 @@ export default function TableroEjecutivoView({ onNavegar }) {
               <div>
                 <h2>Resumen mensual</h2>
                 <p className="m7-muted">
-                  Comparación ilustrativa de ingresos y costo de ventas.
+                  Comparación de ingresos y costo de ventas registrados.
                 </p>
               </div>
-              <span className="m7-tag">2026</span>
+              <span className="m7-tag">Por período</span>
             </div>
 
             <div className="m7-chart">
-              {datosMensuales.map((dato) => (
-                <div className="m7-chart-month" key={dato.mes}>
-                  <div className="m7-bars">
-                    <div
-                      className="m7-bar ingresos"
-                      style={{ height: `${dato.ingresos}%` }}
-                      title={`Ingresos: ${dato.ingresos}`}
-                    />
-                    <div
-                      className="m7-bar costos"
-                      style={{ height: `${dato.costos}%` }}
-                      title={`Costos: ${dato.costos}`}
-                    />
+              {datosMensuales.length > 0 ? (
+                datosMensuales.map((dato) => (
+                  <div className="m7-chart-month" key={dato.periodo}>
+                    <div className="m7-bars">
+                      <div
+                        className="m7-bar ingresos"
+                        style={{ height: `${alturaBarra(dato.ingresos)}%` }}
+                        title={`Ingresos: ${formatoMoneda(dato.ingresos)}`}
+                      />
+                      <div
+                        className="m7-bar costos"
+                        style={{ height: `${alturaBarra(dato.costos)}%` }}
+                        title={`Costos: ${formatoMoneda(dato.costos)}`}
+                      />
+                    </div>
+                    <span>{dato.periodo}</span>
                   </div>
-                  <span>{dato.mes}</span>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="m7-muted">
+                  {cargando
+                    ? 'Cargando datos...'
+                    : 'No hay movimientos contables para el período consultado.'}
+                </p>
+              )}
             </div>
 
             <div className="m7-legend">

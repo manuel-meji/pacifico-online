@@ -4,7 +4,7 @@ import EncabezadoPortal from './EncabezadoPortal';
 // Lo que M1App comparte con las vistas del portal: navegación, menú de categorías y persona con sesión.
 //   ir(pantalla, parametros) → cambia de pantalla y deja los parámetros en la URL
 //   cantidadCarrito → unidades del carrito de M5, o null si no hay sesión de cliente o M5 no respondió
-export const PortalContext = createContext({ ir: () => {}, categorias: [], usuario: null, cantidadCarrito: null });
+export const PortalContext = createContext({ ir: () => {}, categorias: [], usuario: null, cargandoUsuario: false, cantidadCarrito: null });
 
 export const usePortal = () => useContext(PortalContext);
 
@@ -23,6 +23,7 @@ export default function PaginaPortal({ terminoBusqueda = '', children }) {
         onBuscar={(q) => ir('busqueda', { q })}
         onCategoria={(idCategoria) => ir('busqueda', { id_categoria: idCategoria })}
         onMiCuenta={() => ir(usuario ? 'perfil' : 'ingresar')}
+        onGestion={['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol) ? () => ir('gestion') : null}
       />
       <main className="mx-auto w-full max-w-7xl px-4 pb-12">{children}</main>
       <footer className="border-t border-gray-200 bg-white py-6 text-center text-xs text-gray-500">

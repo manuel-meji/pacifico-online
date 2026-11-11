@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Aviso, Encabezado, NavegacionCuentaContext } from './components/componentes';
-import { PortalContext } from './components/PaginaPortal';
+import { Aviso } from './components/componentes';
+import PaginaPortal, { PortalContext } from './components/PaginaPortal';
 import { obtenerCantidadCarrito } from './services/carritoApi';
 import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
 import { listarCategorias, registrarCliente } from './services/m1Api';
@@ -13,6 +13,7 @@ import InicioView from './views/InicioView';
 import PerfilView from './views/PerfilView';
 import FichaProductoView from './views/FichaProductoView';
 import NoticiaView from './views/NoticiaView';
+import GestionView from './views/gestion/GestionView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
 
@@ -26,12 +27,13 @@ const titulos = {
   ingresar: 'Pacíficos Online · M1 Iniciar sesión',
   crear: 'Pacíficos Online · M1 Crear cuenta',
   perfil: 'Pacíficos Online · M1 Mi cuenta',
+  gestion: 'Pacíficos Online · Panel de gestión',
 };
 
 // Parámetros de las pantallas del portal que viajan en la URL (?pantalla=producto&id=1520, etc.).
 // Los nombres de la búsqueda son los del contrato de buscarProductos.
 const PARAMETROS_NUMERICOS = ['id', 'id_categoria', 'precio_minimo', 'precio_maximo', 'pagina', 'por_pagina'];
-const PARAMETROS_TEXTO = ['q', 'orden', 'slug', 'motivo'];
+const PARAMETROS_TEXTO = ['q', 'orden', 'slug', 'motivo', 'seccion'];
 
 export function leerParametros(busqueda = window.location.search) {
   const url = new URLSearchParams(busqueda);
@@ -63,6 +65,8 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   const [parametros, setParametros] = useState(() => leerParametros());
   // Persona con sesión ({ id_usuario, nombre, correo, rol, id_comercio }) o null. Viene de GET /api/user.
   const [usuario, setUsuario] = useState(null);
+  // true hasta que responde GET /api/user (el panel de gestión espera para no mostrar "sin acceso" por un instante).
+  const [cargandoUsuario, setCargandoUsuario] = useState(true);
   const [errorCierre, setErrorCierre] = useState(false);
   // Menú de GET /categorias, compartido por el encabezado y los filtros. Si falla, el menú no se muestra.
   const [categorias, setCategorias] = useState([]);
@@ -80,7 +84,9 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   useEffect(() => {
     let activo = true;
     obtenerUsuario().then((respuesta) => {
-      if (activo && respuesta.ok) setUsuario(respuesta.datos.user);
+      if (!activo) return;
+      if (respuesta.ok) setUsuario(respuesta.datos.user);
+      setCargandoUsuario(false);
     });
     return () => { activo = false; };
   }, []);
@@ -165,7 +171,8 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   }
 
   // POST /login del núcleo compartido. Con ?simular=credenciales se muestra, sin backend, el error 422 del ingreso.
-  // Si entra un cliente va al inicio del portal (o de vuelta al carrito si venía de checkout). Los encargados todavía no tienen panel: la vista les avisa.
+  // Si entra un cliente va al inicio del portal (o de vuelta al carrito si venía de checkout).
+  // Los encargados van a /m2.html, que abre el panel según su rol.
   async function ingresar({ correo, contrasena }) {
     if (simular === 'credenciales') {
       await esperar();
@@ -173,8 +180,11 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     }
     const respuesta = await iniciarSesion(correo, contrasena);
     if (respuesta.ok) {
+      const { rol } = respuesta.datos.user;
       setUsuario(respuesta.datos.user);
-      if (respuesta.datos.user.rol === 'cliente') {
+      if (rol === 'encargado_comercio' || rol === 'encargado_plataforma') {
+        window.location.href = '/m2.html';
+      } else if (rol === 'cliente') {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('motivo') === 'checkout' || parametros.motivo === 'checkout') {
           window.location.href = '/carrito.html';
@@ -198,7 +208,7 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     navegar('ingresar');
   }
 
-  const portal = useMemo(() => ({ ir: navegar, categorias, usuario, cantidadCarrito }), [categorias, usuario, cantidadCarrito, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
+  const portal = useMemo(() => ({ ir: navegar, categorias, usuario, cargandoUsuario, cantidadCarrito }), [categorias, usuario, cargandoUsuario, cantidadCarrito, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pantallas del portal público (encabezado con buscador y categorías).
   if (!['ingresar', 'crear', 'perfil'].includes(pantalla)) {
@@ -208,23 +218,16 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     else if (pantalla === 'producto') vista = <FichaProductoView key={id} idProducto={id} />;
     else if (pantalla === 'comercio') vista = <FichaComercioView key={id} idComercio={id} criterio={criterio} />;
     else if (pantalla === 'noticia') vista = <NoticiaView key={criterio.slug} slug={criterio.slug} />;
+    else if (pantalla === 'gestion') vista = <GestionView seccion={criterio.seccion} />;
     else vista = <InicioView />;
 
     return <PortalContext.Provider value={portal}>{vista}</PortalContext.Provider>;
   }
 
-  
+  // Pantallas de cuenta: mismo marco del portal (encabezado, ancho y pie) que el resto.
   return (
-    <NavegacionCuentaContext.Provider value={navegar}>
-    <div className="min-h-screen overflow-x-hidden bg-brandLightBg font-sans font-normal text-gray-800">
-      <Encabezado pantalla={pantalla} onIr={navegar} usuario={usuario} onCerrarSesion={cerrar} />
-
-      {errorCierre && (
-        <div className="mx-auto w-full max-w-5xl px-4 pt-4">
-          <Aviso>No se pudo cerrar la sesión. Intente de nuevo.</Aviso>
-        </div>
-      )}
-
+    <PortalContext.Provider value={portal}>
+    <PaginaPortal>
       {(parametros.motivo === 'checkout' || new URLSearchParams(window.location.search).get('motivo') === 'checkout') && (
         <div className="mx-auto w-full max-w-md px-4 pt-4">
           <Aviso tipo="info">
@@ -248,9 +251,9 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
       )}
 
       {pantalla === 'perfil' && (
-        <PerfilView onIrIngresar={() => navegar('ingresar')} />
+        <PerfilView onIrIngresar={() => navegar('ingresar')} onCerrarSesion={cerrar} errorCierre={errorCierre} />
       )}
-    </div>
-    </NavegacionCuentaContext.Provider>
+    </PaginaPortal>
+    </PortalContext.Provider>
   );
 }

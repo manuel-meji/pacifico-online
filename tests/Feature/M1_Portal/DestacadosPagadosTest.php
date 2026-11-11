@@ -355,6 +355,18 @@ class DestacadosPagadosTest extends PruebaM1
         $this->assertSame(0, CargoDestacado::query()->withoutGlobalScopes()->count());
     }
 
+    public function test_las_fechas_con_hora_de_costa_rica_se_guardan_en_el_instante_correcto(): void
+    {
+        // AHORA es 12:00 UTC (6:00 en Costa Rica). Inicia a las 7:00 de Costa Rica, o sea 13:00 UTC.
+        $this->comoAdministracion()->postJson(route('api.m1.v1.administracion.destacados.crear'), [
+            'id_producto' => DatosPrueba::PRODUCTO_CAFE_MOLIDO,
+            'fecha_inicio' => '2026-11-10T07:00:00-06:00',
+            'fecha_fin' => '2026-11-10T20:00:00-06:00',
+        ])->assertCreated()
+            ->assertJsonPath('fecha_inicio', '2026-11-10T13:00:00+00:00')
+            ->assertJsonPath('fecha_fin', '2026-11-11T02:00:00+00:00');
+    }
+
     public function test_los_destacados_de_la_administracion_tambien_respetan_el_maximo_de_3(): void
     {
         $this->destacadoExistente(7001, DatosPrueba::COMERCIO_CAFE_NICOYANO);

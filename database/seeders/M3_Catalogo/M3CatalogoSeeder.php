@@ -9,147 +9,188 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Catalogo de los escenarios de demostracion (seccion 2.2 del colectivo del PC4):
- * 10 productos y 11 variaciones con id fijos, para que M4 (existencias) y M5 (pedidos)
- * los referencien en sus propios seeders. Los comercios 1 a 5 son los de ComerciosDemoSeeder (M2).
- *
- * Es idempotente (upsert por llave primaria). Ejecutar solo con --class, nunca db:seed global:
- *     php artisan db:seed --class="Database\Seeders\M3_Catalogo\M3CatalogoSeeder"
+ * Seembrado de categorias, marcas, productos, variaciones, atributos e imagenes
+ * para que M4 y M5 los referencien en sus propios seeders. Los comercios 1 a 5 son los de ComerciosDemoSeeder (M2).
  */
 class M3CatalogoSeeder extends Seeder
 {
     public function run(): void
     {
-        $t = now();
+        DB::transaction(function () {
+            // 1. Estado de comercios (Proyección local M3)
+            $comerciosEstado = [
+                ['id_comercio' => 1, 'activo' => true],
+                ['id_comercio' => 2, 'activo' => true],
+                ['id_comercio' => 3, 'activo' => true],
+                ['id_comercio' => 4, 'activo' => true],
+                ['id_comercio' => 5, 'activo' => true],
+            ];
 
-        DB::transaction(function () use ($t): void {
-            $this->upsert('categorias', 'id_categoria', [
-                [1, 'Tecnología', 'Dispositivos y accesorios'],
-                [2, 'Hogar y oficina', 'Mobiliario y equipo'],
-                [3, 'Ropa', 'Indumentaria general'],
-                [4, 'Deportes', 'Artículos deportivos'],
-                [5, 'Alimentos y bebidas', 'Consumibles'],
-                [6, 'Cocina y mesa', 'Utensilios de cocina'],
-            ], ['id_categoria', 'nombre', 'descripcion'], $t, ['id_categoria_padre' => null]);
-
-            $this->upsert('marcas', 'id_marca', [
-                [1, 'Logitech', 'https://example.com/logitech.png', true],
-            ], ['id_marca', 'nombre', 'logotipo_url', 'destacada'], $t);
-
-            // [id_producto, id_comercio, id_categoria, id_marca, nombre, destacado]
-            $this->upsert('productos', 'id_producto', [
-                [1, 1, 1, 1, 'Mouse inalámbrico Logitech MQ291', true],
-                [2, 1, 1, null, 'Audífonos Bluetooth', false],
-                [3, 2, 2, null, 'Lámpara LED de escritorio', false],
-                [4, 2, 2, null, 'Organizador de escritorio', false],
-                [5, 3, 3, null, 'Camisa de lino manga larga', false],
-                [6, 3, 3, null, 'Pantalón chino', false],
-                [7, 4, 4, null, 'Camiseta deportiva', false],
-                [8, 4, 4, null, 'Botella térmica 750 ml', false],
-                [9, 5, 5, null, 'Café molido 340 g', false],
-                [10, 5, 6, null, 'Taza de cerámica', false],
-            ], ['id_producto', 'id_comercio', 'id_categoria', 'id_marca', 'nombre', 'destacado'], $t, [
-                'descripcion' => null,
-                'video_url' => null,
-                'estado_producto' => 'publicado',
-            ]);
-
-            // [id_variacion, id_producto, id_comercio, sku, precio, tipo_descuento, valor_descuento]
-                        // [id_variacion, id_producto, id_comercio, sku, precio]  (el descuento lo aplica la promocion de M1)
-            $this->upsert('producto_variaciones', 'id_variacion', [
-                [1, 1, 1, 'SDM-LOG-MQ291-NEG', 10000],
-                [2, 2, 1, 'SDM-AUD-BT-NEG', 15000],
-                [3, 3, 2, 'TML-LAMP-LED-BLA', 4500],
-                [4, 4, 2, 'TML-ORG-ESC-GRI', 3500],
-                [5, 5, 3, 'ELG-CAM-LIN-M-AZU', 25000],
-                [6, 6, 3, 'ELG-PAN-CHI-32-BEI', 30000],
-                [7, 7, 4, 'DP-CAM-DEP-S', 8990],
-                [8, 7, 4, 'DP-CAM-DEP-XL', 9490],
-                [9, 8, 4, 'DP-BOT-TER-NEG', 6750],
-                [10, 9, 5, 'CV-CAF-340-MED', 5425],
-                [11, 10, 5, 'CV-TAZ-CER-BLA', 3333],
-            ], ['id_variacion', 'id_producto', 'id_comercio', 'sku', 'precio'], $t, [
-                'tarifa_impuesto' => 13,
-                'codigo_barras' => null,
-                'codigo_fabricante' => null,
-                'disponible' => true,
-            ]);
-
-            // [id_atributo, id_variacion, tipo_atributo, valor]
-            $this->upsert('atributos_variacion', 'id_atributo', [
-                [1, 1, 'Color', 'Negro'],
-                [2, 2, 'Color', 'Negro'],
-                [3, 3, 'Color', 'Blanco'],
-                [4, 4, 'Color', 'Gris'],
-                [5, 5, 'Talla', 'M'],
-                [6, 5, 'Color', 'Azul'],
-                [7, 6, 'Talla', '32'],
-                [8, 6, 'Color', 'Beige'],
-                [9, 7, 'Talla', 'S'],
-                [10, 8, 'Talla', 'XL'],
-                [11, 9, 'Color', 'Negra'],
-                [12, 10, 'Tueste', 'Medio'],
-                [13, 11, 'Color', 'Blanca'],
-            ], ['id_atributo', 'id_variacion', 'tipo_atributo', 'valor'], $t);
-
-            // Una imagen por producto (la regla de 1 a 8 imagenes aplica al publicar).
-            $imagenes = [];
-            foreach (range(1, 10) as $n) {
-                $imagenes[] = [$n, $n, "https://example.com/producto-{$n}.jpg", 'jpg', 120000, 1];
+            foreach ($comerciosEstado as $estado) {
+                DB::table('estado_comercios_catalogo')->insertOrIgnore([
+                    'id_comercio' => $estado['id_comercio'],
+                    'activo' => $estado['activo'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             }
-            $this->upsert('imagenes_producto', 'id_imagen', $imagenes,
-                ['id_imagen', 'id_producto', 'imagen_url', 'formato', 'tamano_bytes', 'orden'], $t, ['id_variacion' => null]);
 
-            // Proyeccion local del estado del comercio (D2): los cinco comercios de la demo, activos.
-            $estados = [];
-            foreach (range(1, 5) as $idComercio) {
-                $estados[] = [
-                    'id_comercio' => $idComercio,
-                    'activo' => true,
-                    'fecha_ultimo_evento' => null,
-                    'id_ultimo_evento' => null,
-                    'created_at' => $t,
-                    'updated_at' => $t,
-                ];
+            // 2. Categorías
+            $categorias = [
+                ['id_categoria' => 1, 'id_categoria_padre' => null, 'nombre' => 'Tecnología', 'descripcion' => 'Productos tecnológicos'],
+                ['id_categoria' => 2, 'id_categoria_padre' => 1, 'nombre' => 'Accesorios de Cómputo', 'descripcion' => 'Periféricos y accesorios'],
+                ['id_categoria' => 3, 'id_categoria_padre' => null, 'nombre' => 'Ropa y Calzado', 'descripcion' => 'Vestimenta y calzado'],
+                ['id_categoria' => 4, 'id_categoria_padre' => 3, 'nombre' => 'Calzado Deportivo', 'descripcion' => 'Tenis y calzado deportivo'],
+                ['id_categoria' => 5, 'id_categoria_padre' => null, 'nombre' => 'Alimentos y Bebidas', 'descripcion' => 'Productos alimenticios'],
+                ['id_categoria' => 6, 'id_categoria_padre' => 5, 'nombre' => 'Café Gourmet', 'descripcion' => 'Café en grano y molido'],
+            ];
+
+            foreach ($categorias as $cat) {
+                DB::table('categorias')->updateOrInsert(
+                    ['id_categoria' => $cat['id_categoria']],
+                    [
+                        'id_categoria_padre' => $cat['id_categoria_padre'],
+                        'nombre' => $cat['nombre'],
+                        'descripcion' => $cat['descripcion'],
+                        'updated_at' => now(),
+                    ]
+                );
             }
-            DB::table('estado_comercios_catalogo')->upsert($estados, ['id_comercio'], ['activo', 'updated_at']);
+
+            // 3. Marcas
+            $marcas = [
+                ['id_marca' => 1, 'nombre' => 'Logitech', 'logotipo_url' => 'https://example.com/logitech.png', 'destacada' => true],
+            ];
+
+            foreach ($marcas as $m) {
+                DB::table('marcas')->updateOrInsert(
+                    ['id_marca' => $m['id_marca']],
+                    [
+                        'nombre' => $m['nombre'],
+                        'logotipo_url' => $m['logotipo_url'],
+                        'destacada' => $m['destacada'],
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+
+            // 4. Productos
+            $productos = [
+                ['id_producto' => 1, 'id_comercio' => 1, 'id_categoria' => 2, 'id_marca' => 1, 'nombre' => 'Mouse inalámbrico Logitech MQ291', 'descripcion' => 'Mouse ergonómico inalámbrico', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
+                ['id_producto' => 2, 'id_comercio' => 1, 'id_categoria' => 2, 'id_marca' => 1, 'nombre' => 'Teclado mecánico Logitech K835', 'descripcion' => 'Teclado mecánico compacto', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
+                ['id_producto' => 3, 'id_comercio' => 2, 'id_categoria' => 2, 'id_marca' => null, 'nombre' => 'Audífonos Bluetooth Over-Ear', 'descripcion' => 'Audífonos con cancelación de ruido', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
+                ['id_producto' => 4, 'id_comercio' => 3, 'id_categoria' => 2, 'id_marca' => null, 'nombre' => 'Cámara Web Full HD 1080p', 'descripcion' => 'Cámara web con micrófono integrado', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
+                ['id_producto' => 5, 'id_comercio' => 3, 'id_categoria' => 2, 'id_marca' => null, 'nombre' => 'Lente de cámara para Streaming', 'descripcion' => 'Lente gran angular para videollamadas', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
+                ['id_producto' => 6, 'id_comercio' => 4, 'id_categoria' => 4, 'id_marca' => null, 'nombre' => 'Tenis Deportivas Running Pro', 'descripcion' => 'Tenis para correr de alto rendimiento', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
+                ['id_producto' => 7, 'id_comercio' => 4, 'id_categoria' => 3, 'id_marca' => null, 'nombre' => 'Camisa Deportiva Dry-Fit', 'descripcion' => 'Camisa transpirable para ejercicio', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
+                ['id_producto' => 8, 'id_comercio' => 5, 'id_categoria' => 6, 'id_marca' => null, 'nombre' => 'Café Gourmet en Grano 500g', 'descripcion' => 'Café artesanal de altura', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
+                ['id_producto' => 9, 'id_comercio' => 5, 'id_categoria' => 6, 'id_marca' => null, 'nombre' => 'Café Gourmet Molido 340g', 'descripcion' => 'Café molido tueste medio', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
+                ['id_producto' => 10, 'id_comercio' => 5, 'id_categoria' => 5, 'id_marca' => null, 'nombre' => 'Taza Cerámica Corporativa', 'descripcion' => 'Taza térmica de cerámica', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
+            ];
+
+            foreach ($productos as $prod) {
+                DB::table('productos')->insertOrIgnore([
+                    'id_producto' => $prod['id_producto'],
+                    'id_comercio' => $prod['id_comercio'],
+                    'id_categoria' => $prod['id_categoria'],
+                    'id_marca' => $prod['id_marca'],
+                    'nombre' => $prod['nombre'],
+                    'descripcion' => $prod['descripcion'],
+                    'video_url' => $prod['video_url'],
+                    'destacado' => $prod['destacado'],
+                    'estado_producto' => $prod['estado_producto'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            // 5. Variaciones de Producto
+            // Estrategia: [id_variacion, id_producto, id_comercio, sku, precio]
+            $variaciones = [
+                ['id_variacion' => 1, 'id_producto' => 1, 'id_comercio' => 1, 'sku' => 'SDM-LOG-MQ291-NEG', 'precio' => 10000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 2, 'id_producto' => 2, 'id_comercio' => 1, 'sku' => 'SDM-LOG-K835-GRIS', 'precio' => 28000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 3, 'id_producto' => 3, 'id_comercio' => 2, 'sku' => 'TE-AUD-BT-BLA', 'precio' => 15000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 4, 'id_producto' => 4, 'id_comercio' => 3, 'sku' => 'ELG-CAM-FHD-NEG', 'precio' => 32000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 5, 'id_producto' => 5, 'id_comercio' => 3, 'sku' => 'ELG-CAM-LIN-M-AZU', 'precio' => 25000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 6, 'id_producto' => 6, 'id_comercio' => 4, 'sku' => 'DP-TENIS-RUN-40', 'precio' => 38900.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 7, 'id_producto' => 6, 'id_comercio' => 4, 'sku' => 'DP-TENIS-RUN-42', 'precio' => 38900.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 8, 'id_producto' => 7, 'id_comercio' => 4, 'sku' => 'DP-CAM-DRY-S', 'precio' => 18500.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 9, 'id_producto' => 8, 'id_comercio' => 5, 'sku' => 'CV-GRA-500G-MED', 'precio' => 6500.00, 'tarifa_impuesto' => 1.00, 'disponible' => true],
+                ['id_variacion' => 10, 'id_producto' => 9, 'id_comercio' => 5, 'sku' => 'CV-MOL-340G-MED', 'precio' => 4200.00, 'tarifa_impuesto' => 1.00, 'disponible' => true],
+                ['id_variacion' => 11, 'id_producto' => 10, 'id_comercio' => 5, 'sku' => 'CV-TAZ-CER-BLA', 'precio' => 3333.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+            ];
+
+            foreach ($variaciones as $v) {
+                DB::table('producto_variaciones')->insertOrIgnore([
+                    'id_variacion' => $v['id_variacion'],
+                    'id_producto' => $v['id_producto'],
+                    'id_comercio' => $v['id_comercio'],
+                    'sku' => $v['sku'],
+                    'precio' => $v['precio'],
+                    'tarifa_impuesto' => $v['tarifa_impuesto'],
+                    'disponible' => $v['disponible'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            // 6. Atributos de Variación
+            $atributos = [
+                ['id_variacion' => 1, 'tipo_atributo' => 'Color', 'valor' => 'Negro'],
+                ['id_variacion' => 2, 'tipo_atributo' => 'Color', 'valor' => 'Gris Oscuro'],
+                ['id_variacion' => 3, 'tipo_atributo' => 'Color', 'valor' => 'Blanco'],
+                ['id_variacion' => 4, 'tipo_atributo' => 'Resolución', 'valor' => '1080p'],
+                ['id_variacion' => 5, 'tipo_atributo' => 'Color', 'valor' => 'Azul'],
+                ['id_variacion' => 6, 'tipo_atributo' => 'Talla', 'valor' => '40'],
+                ['id_variacion' => 7, 'tipo_atributo' => 'Talla', 'valor' => '42'],
+                ['id_variacion' => 8, 'tipo_atributo' => 'Talla', 'valor' => 'S'],
+                ['id_variacion' => 9, 'tipo_atributo' => 'Tueste', 'valor' => 'Medio'],
+                ['id_variacion' => 10, 'tipo_atributo' => 'Presentación', 'valor' => 'Molido'],
+                ['id_variacion' => 11, 'tipo_atributo' => 'Color', 'valor' => 'Blanco'],
+            ];
+
+            foreach ($atributos as $at) {
+                DB::table('atributos_variacion')->updateOrInsert(
+                    [
+                        'id_variacion' => $at['id_variacion'],
+                        'tipo_atributo' => $at['tipo_atributo'],
+                    ],
+                    [
+                        'valor' => $at['valor'],
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+
+            // 7. Imágenes de Producto
+            $imagenes = [
+                ['id_producto' => 1, 'id_variacion' => 1, 'imagen_url' => 'https://example.com/mouse-negro.jpg', 'formato' => 'jpg', 'tamano_bytes' => 150000, 'orden' => 1],
+                ['id_producto' => 2, 'id_variacion' => 2, 'imagen_url' => 'https://example.com/teclado-k835.jpg', 'formato' => 'jpg', 'tamano_bytes' => 220000, 'orden' => 1],
+                ['id_producto' => 3, 'id_variacion' => 3, 'imagen_url' => 'https://example.com/audifonos-blancos.jpg', 'formato' => 'jpg', 'tamano_bytes' => 180000, 'orden' => 1],
+                ['id_producto' => 4, 'id_variacion' => 4, 'imagen_url' => 'https://example.com/webcam-1080p.jpg', 'formato' => 'jpg', 'tamano_bytes' => 210000, 'orden' => 1],
+                ['id_producto' => 5, 'id_variacion' => 5, 'imagen_url' => 'https://example.com/lente-azul.jpg', 'formato' => 'jpg', 'tamano_bytes' => 195000, 'orden' => 1],
+                ['id_producto' => 6, 'id_variacion' => 6, 'imagen_url' => 'https://example.com/tenis-running-40.jpg', 'formato' => 'jpg', 'tamano_bytes' => 310000, 'orden' => 1],
+                ['id_producto' => 7, 'id_variacion' => 8, 'imagen_url' => 'https://example.com/camisa-dryfit-s.jpg', 'formato' => 'jpg', 'tamano_bytes' => 140000, 'orden' => 1],
+                ['id_producto' => 8, 'id_variacion' => 9, 'imagen_url' => 'https://example.com/cafe-grano-500g.jpg', 'formato' => 'jpg', 'tamano_bytes' => 250000, 'orden' => 1],
+                ['id_producto' => 9, 'id_variacion' => 10, 'imagen_url' => 'https://example.com/cafe-molido-340g.jpg', 'formato' => 'jpg', 'tamano_bytes' => 230000, 'orden' => 1],
+                ['id_producto' => 10, 'id_variacion' => 11, 'imagen_url' => 'https://example.com/taza-blanca.jpg', 'formato' => 'jpg', 'tamano_bytes' => 120000, 'orden' => 1],
+            ];
+
+            foreach ($imagenes as $img) {
+                DB::table('imagenes_producto')->updateOrInsert(
+                    [
+                        'id_producto' => $img['id_producto'],
+                        'orden' => $img['orden'],
+                    ],
+                    [
+                        'id_variacion' => $img['id_variacion'],
+                        'imagen_url' => $img['imagen_url'],
+                        'formato' => $img['formato'],
+                        'tamano_bytes' => $img['tamano_bytes'],
+                        'updated_at' => now(),
+                    ]
+                );
+            }
         });
-
-        $this->reajustarSecuencias();
-    }
-
-    /**
-     * @param  list<list<mixed>>  $filas  valores en el orden de $columnas
-     * @param  list<string>  $columnas
-     * @param  array<string, mixed>  $fijos  columnas con el mismo valor en todas las filas
-     */
-    private function upsert(string $tabla, string $llave, array $filas, array $columnas, $t, array $fijos = []): void
-    {
-        $registros = array_map(
-            fn (array $fila): array => array_combine($columnas, $fila) + $fijos + ['created_at' => $t, 'updated_at' => $t],
-            $filas
-        );
-
-        $actualizar = array_values(array_diff(array_keys($registros[0]), [$llave, 'created_at']));
-
-        DB::table($tabla)->upsert($registros, [$llave], $actualizar);
-    }
-
-    /** Al insertar con id explicito la secuencia no avanza: sin esto el siguiente INSERT choca con el id 1. */
-    private function reajustarSecuencias(): void
-    {
-        if (DB::getDriverName() !== 'pgsql') {
-            return;
-        }
-
-        foreach ([
-            'categorias' => 'id_categoria',
-            'marcas' => 'id_marca',
-            'productos' => 'id_producto',
-            'producto_variaciones' => 'id_variacion',
-            'atributos_variacion' => 'id_atributo',
-            'imagenes_producto' => 'id_imagen',
-        ] as $tabla => $llave) {
-            DB::statement("SELECT setval(pg_get_serial_sequence('{$tabla}','{$llave}'), (SELECT MAX({$llave}) FROM {$tabla}))");
-        }
     }
 }

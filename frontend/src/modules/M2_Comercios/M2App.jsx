@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Boxes, FileText, Store, ShieldCheck } from 'lucide-react';
 import { cerrarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
-import { C, Cargando, Encabezado, SesionContexto, textoDeError } from './components/comunes';
-import Ingreso from './views/Ingreso';
+import { AvisoError, C, Cargando, Encabezado, SesionContexto, textoDeError } from './components/comunes';
 import SolicitudIncorporacion from './views/SolicitudIncorporacion';
 import PanelComercio from './views/PanelComercio';
 import PanelPlataforma from './views/PanelPlataforma';
@@ -12,14 +11,16 @@ const VISTAS = [
   { clave: 'comercio', nombre: 'Mi comercio', corto: 'Mi comercio', icono: Store, Vista: PanelComercio, rol: 'encargado_comercio' },
   { clave: 'plataforma', nombre: 'Panel de la plataforma', corto: 'Plataforma', icono: ShieldCheck, Vista: PanelPlataforma, rol: 'encargado_plataforma' },
 ];
+// Inicio de sesión único: los tres roles ingresan por la pantalla de M1.
+const URL_INGRESO = '/app.html?pantalla=ingresar';
 
-
-const vistaInicial = (usuario) =>
+const vistaInicial =(usuario) =>
   usuario?.rol === 'encargado_plataforma' ? 'plataforma' : usuario?.rol === 'encargado_comercio' ? 'comercio' : 'solicitud';
 
 export default function M2App() {
   const [usuario, setUsuario] = useState(undefined); 
   const [vista, setVista] = useState('solicitud');
+  const [errorCierre, setErrorCierre] = useState('');
 
   useEffect(() => {
     obtenerUsuario().then((r) => {
@@ -29,22 +30,18 @@ export default function M2App() {
     });
   }, []);
 
-  const alIngresar = (user) => {
-    setUsuario(user);
-    setVista(vistaInicial(user));
-  };
-
   const salir = async () => {
-    await cerrarSesion();
-    setUsuario(null);
-    setVista('solicitud');
+    setErrorCierre('');
+    const respuesta = await cerrarSesion();
+    // Con ok o 401 (ya no había sesión) se va al inicio de sesión único. Si falló por conexión se conserva la sesión.
+    if (respuesta.ok || respuesta.estado === 401) window.location.href = URL_INGRESO;
+    else setErrorCierre('No se pudo cerrar la sesión. Intente de nuevo.');
   };
 
  
   const mensajeDeError = useCallback((resultado) => {
     if (resultado && !resultado.ok && resultado.estado === 401) {
-      setUsuario(null);
-      setVista('ingreso');
+      window.location.href = URL_INGRESO;
     }
     return textoDeError(resultado);
   }, []);
@@ -52,13 +49,12 @@ export default function M2App() {
   const contexto = useMemo(() => ({ usuario: usuario ?? null, mensajeDeError }), [usuario, mensajeDeError]);
 
   const visibles = VISTAS.filter((v) => v.rol === null || v.rol === usuario?.rol);
-  const actual = visibles.find((v) => v.clave === vista);
+  // Sin sesión (o sin vista propia del rol) se ve la solicitud de incorporación, la única pública.
+  const actual = visibles.find((v) => v.clave === vista) ?? visibles[0];
 
   let contenido;
   if (usuario === undefined) {
     contenido = <Cargando texto="Verificando la sesión…" />;
-  } else if (vista === 'ingreso' || !actual) {
-    contenido = <Ingreso onIngreso={alIngresar} />;
   } else {
     const { Vista } = actual;
     contenido = <Vista />;
@@ -67,7 +63,7 @@ export default function M2App() {
   return (
     <SesionContexto.Provider value={contexto}>
       <div className="min-h-screen bg-slate-50 text-slate-800">
-        <Encabezado usuario={usuario} onIngresar={() => setVista('ingreso')} onSalir={salir} />
+        <Encabezado usuario={usuario} onIngresar={() => { window.location.href = URL_INGRESO; }} onSalir={salir} />
         <nav className={C.marino} aria-label="Secciones de comercios">
           <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2">
             {visibles.map(({ clave, corto, icono: Icono }) => (
@@ -89,8 +85,9 @@ export default function M2App() {
         </nav>
         <main className="mx-auto max-w-6xl px-4 py-6">
           <p className="mb-4 text-xs text-slate-500">
-            Inicio / Comercios / <span className="font-semibold text-slate-700">{actual && vista !== 'ingreso' ? actual.nombre : 'Ingresar'}</span>
+            Inicio / Comercios / <span className="font-semibold text-slate-700">{actual.nombre}</span>
           </p>
+          <AvisoError mensaje={errorCierre} />
           {contenido}
         </main>
       </div>

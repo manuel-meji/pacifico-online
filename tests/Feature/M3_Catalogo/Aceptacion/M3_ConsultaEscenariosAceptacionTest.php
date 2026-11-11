@@ -15,14 +15,14 @@ class M3_ConsultaEscenariosAceptacionTest extends TestCase
     public function test_escenario_uno_queda_pendiente_de_datos_oficiales_y_servicios_m5(): void
     {
         $this->markTestSkipped(
-            'Pendiente externo: seeder oficial de Jeaustin, buscarProductos, M5 y datos oficiales para verificar los seis productos, ₡10.000, ₡9.500, IVA 13% y total ₡110.960.'
+            'Pendiente real: el seeder M3 actual contiene el mouse a ₡10.000, pero no contiene por sí solo el precio final ₡9.500 ni el flujo M5 requerido para verificar seis productos, IVA y total ₡110.960.'
         );
     }
 
     public function test_escenario_dos_queda_pendiente_del_listener_m3_de_existencia_agotada(): void
     {
         $this->markTestSkipped(
-            'Pendiente externo: listener M3 para ExistenciaAgotada, evento confirmado y datos oficiales para verificar disponible=false en la variación 9 de la botella.'
+            'Pendiente real: el seeder M3 actual identifica la variación 9 como café en grano, no como botella. El listener ExistenciaAgotada sí está cubierto por pruebas M3, pero este escenario oficial no se marca aprobado con datos que no coinciden.'
         );
     }
 }

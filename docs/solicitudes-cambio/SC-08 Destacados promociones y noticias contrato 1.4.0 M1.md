@@ -30,6 +30,7 @@
      - Cada comercio tiene como máximo 3 productos destacados activos al mismo tiempo, contando los que solicita el comercio y los que pone la administración. Los agotados cuentan dentro de esos 3, porque siguen activos aunque no se muestren.
      - Un destacado deja de mostrarse solo si el producto se agota (M4), si el comercio lo desactiva (M3 deja de publicarlo) o si el comercio es suspendido (M2). Vuelve a aparecer solo si recupera existencias dentro del periodo. El periodo sigue corriendo y no se reembolsa.
      - Si M4 no responde, no se oculta ningún destacado: salen marcados como Agotado, para no vaciar la portada por una falla de otro módulo.
+     - Los **comercios** destacados de la portada los decide M2: los que tienen una publicidad vigente aprobada en su panel (`ListarComerciosHabilitados` con `destacado=true`). M1 deja de usar su tabla `comercios_destacados`.
   2. **Solicitud, aprobación y cobro de destacados** (construido).
      - El comercio solicita destacar uno de sus productos por 7, 15 o 30 días. La administración de la plataforma aprueba o rechaza la solicitud; el rechazo lleva un motivo obligatorio que ve el comercio.
      - Se cobra la tarifa vigente al momento de solicitar (la que el comercio vio), aunque la administración la cambie antes de aprobar. El periodo empieza al aprobarse.

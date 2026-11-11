@@ -220,6 +220,13 @@ paths:
         los comercios no activos, que tampoco se muestran aquí. El orden de la
         respuesta es el de la columna posicion de M1.
 
+        Desde 1.4.0 (SC-08), los comercios destacados los decide M2: son los que
+        tienen una publicidad vigente aprobada en el panel de M2 (el comercio la
+        solicita y la plataforma la aprueba, o la plataforma destaca
+        directamente). M1 los obtiene con M2.ListarComerciosHabilitados
+        (destacado=true), en el orden de M2 (la publicidad más reciente primero),
+        y ya no usa la tabla comercios_destacados.
+
         Desde 1.4.0 (SC-08), en la sección de productos:
         - Cada comercio tiene como máximo 3 productos destacados activos; si la
           selección tiene más, se muestran los 3 de menor posicion.
@@ -233,7 +240,7 @@ paths:
           como circular, así todos aparecen el mismo tiempo.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-01, RN-M1-05, RN-M1-06]
-      x-dependencias: [M3.buscarProductos 1.2.0 (filtro ids), M2.ObtenerResumenComerciosLote 1.1.0, M4.consultarDisponibilidadProductoLote 1.1.0]
+      x-dependencias: [M3.buscarProductos 1.3.0 (filtro ids), M2.ListarComerciosHabilitados 1.2.1 (destacado=true), M2.ObtenerResumenComerciosLote 1.2.1, M4.consultarDisponibilidadProductoLote 1.1.0]
       security: []
       parameters:
         - name: limite
@@ -2887,6 +2894,7 @@ x-historial-versiones:
     cambios:
       - GET /destacados muestra hasta 12 productos y comercios (limite por defecto y máximo 12, antes 8 y 24); un valor mayor se ajusta a 12 sin error.
       - Productos destacados con máximo 3 por comercio, sin los agotados (reaparecen solos al recuperar existencias) y rotados por turnos de 15 minutos cuando hay más de 12.
+      - Los comercios destacados de GET /destacados los decide M2 (ListarComerciosHabilitados con destacado=true); M1 deja de usar su tabla comercios_destacados. La respuesta no cambia de forma.
       - listarDestacados de la interfaz PHP cambia su valor por defecto de 8 a 12.
       - Solicitud, aprobación y cobro de productos destacados. Rutas web nuevas - listarTarifasDestacado, solicitarDestacado, listarSolicitudesDestacado (comercio), listarSolicitudesDestacadoAdministracion, aprobarSolicitudDestacado, rechazarSolicitudDestacado, destacarProductoPlataforma y definirTarifaDestacado.
       - Máximo 3 destacados activos por comercio al aprobar o al destacar desde la administración (ERR-M1-002) y sin destacar dos veces el mismo producto en fechas que se cruzan (ERR-M1-003).

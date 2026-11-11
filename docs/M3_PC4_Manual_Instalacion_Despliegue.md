@@ -10,7 +10,7 @@
 
 ## Extensiones PHP
 
-El entorno auditado tiene `pdo_pgsql`, `pdo_sqlite`, `fileinfo`, `gd` y `exif`. `imagick`, PCOV y Xdebug no están instalados.
+El entorno auditado tiene `pdo_pgsql`, `pdo_sqlite`, `fileinfo`, `gd` y `exif`. Xdebug 3.5.3 está instalado con cobertura habilitada; PCOV e `imagick` no están instalados.
 
 El contrato M3 v1.3.0 recibe `imagen_url` como una URL y no publica una carga de archivos ni procesamiento de imágenes. Por ello, para la funcionalidad M3 actualmente publicada no se requiere una extensión de edición de imágenes. Si una implementación posterior procesa archivos, `fileinfo` permite detectar el tipo MIME y `gd` está disponible para formatos raster convencionales; el uso de `imagick` requeriría instalarlo y no está verificado.
 
@@ -31,6 +31,21 @@ php artisan storage:link
 `FILESYSTEM_DISK=local` selecciona el disco predeterminado `local`; no significa que las imágenes sean públicas. En la configuración actual, `local` usa `storage/app/private`. El disco público es otro disco nombrado `public`, configurado con raíz `storage/app/public`, visibilidad pública y URL `http://localhost/storage`. La configuración efectiva verificada con Laravel es `filesystems.default = local`; no se encontró una variable específica para una carpeta de imágenes M3 (`M3_*`, `IMAGE_*` o `IMAGEN_*`).
 
 ## Base de datos
+
+### Validación local aislada ejecutada
+
+Se utilizó PostgreSQL portátil oficial EDB 16.15, sin instalador ni servicio de Windows:
+
+```text
+Distribución: %LOCALAPPDATA%\PC4-M3\PostgreSQL\pgsql
+Datos:        %LOCALAPPDATA%\PC4-M3\data
+Host:         127.0.0.1
+Puerto:       5433
+Base:         pc4_m3_local
+Usuario:      pc4_m3_admin
+```
+
+La conexión PHP 8.3 mediante `pdo_pgsql` fue verificada contra esa base. La base inició vacía; después se ejecutaron exclusivamente las ocho migraciones M3 y `M3CatalogoSeeder` en esa misma conexión local.
 
 ### Conexión a Supabase y puertos
 
@@ -60,9 +75,9 @@ Orden confirmado de migraciones M3:
 6. imágenes de producto
 7. productos relacionados
 
-No existe actualmente un seeder M3 en el repositorio. Por tanto, el comando final queda pendiente de confirmación de Jeaustin y no se inventa un namespace.
+El seeder M3 oficial está publicado en `database/seeders/M3_Catalogo/M3CatalogoSeeder.php`. Define 10 productos y 11 variaciones con identificadores fijos y debe ejecutarse únicamente en una base propia aislada.
 
-Cuando esté publicado, el comando tendrá esta forma, sustituyendo por el nombre real:
+Comando ejecutado en la base local aislada:
 
 ```powershell
 php artisan db:seed --class=Database\Seeders\M3_Catalogo\M3CatalogoSeeder
@@ -76,11 +91,11 @@ En el entorno publicado la cola predeterminada es `database`. El proceso se inic
 php artisan queue:work
 ```
 
-Los listeners M3 que reciban eventos de M4 y M2 deben estar publicados antes de validar esta integración. Actualmente no existe listener M3 para `ExistenciaAgotada`.
+Los listeners M3 de M2 y M4 están publicados en `app/Listeners/M3_Catalogo` y registrados por `M3ListenersServiceProvider`. Incluyen `ExistenciaAgotada`, `ExistenciaRepuesta` y la sincronización del estado de comercio.
 
 ## Verificación HTTP actual
 
-Las rutas existentes son `/m3/v1/...`, mientras que el contrato declara `/api/m3/v1/...`. Esta diferencia debe ser confirmada por el responsable de rutas antes de documentar un resultado exitoso.
+Las rutas existentes son `/m3/v1/...`, mientras que el contrato declara `/api/m3/v1/...`. La diferencia permanece pendiente y no se modificó producción.
 
 Solicitudes requeridas por el contrato:
 
@@ -92,7 +107,7 @@ GET /api/m3/v1/productos?q=camisa&pagina=1&por_pagina=20
 
 `q`, `pagina` y `por_pagina` son parámetros publicados por el contrato; `por_pagina` no puede superar 100. La respuesta esperada debe cumplir `ProductoDetalle`, `VariacionDetalle` y `ResultadoProductos` del contrato M3 v1.3.0.
 
-La aplicación actual registra `/m3/v1/productos/{id_producto}` y `/m3/v1/variaciones/{id_variacion}`, no `/api/m3/v1`, y no registra la búsqueda. No se modifican esas rutas; la validación HTTP contractual queda pendiente del responsable de rutas y del proveedor M3.
+El proveedor real ya implementa categorías, marcas, búsqueda, detalle de producto, detalle de variación y relacionados. La prueba Y1 valida sus respuestas bajo `/m3/v1`; el prefijo contractual `/api/m3/v1` sigue pendiente.
 
 ## Problemas frecuentes
 
@@ -103,7 +118,7 @@ La aplicación actual registra `/m3/v1/productos/{id_producto}` y `/m3/v1/variac
 
 ## Reproducibilidad
 
-La prueba desde una carpeta limpia y una base propia vacía todavía no se ha ejecutado. Cuando estén disponibles el seeder y las dependencias externas:
+La prueba aislada de M3 se ejecutó con la distribución portátil anterior. El procedimiento reproducible es:
 
 1. Clonar o copiar el proyecto a una carpeta nueva.
 2. Ejecutar `composer install`.
@@ -116,14 +131,14 @@ La prueba desde una carpeta limpia y una base propia vacía todavía no se ha ej
 9. Ejecutar las tres solicitudes HTTP del contrato.
 10. Ejecutar las pruebas M3.
 
-No se declara una prueba limpia exitosa porque aún no se ha realizado.
+La instalación y validación aislada de M3 fue exitosa. La prueba completa de integración M5 todavía no se declara exitosa porque requiere confirmar el escenario de pedido y sus datos de promociones/envío.
 
 ## Resultado de la comprobación aislada
 
-Se intentó una comprobación segura usando una base SQLite temporal fuera del repositorio, sin `.env`, sin Supabase y sin seeders. Las migraciones M3 de categorías, marcas y productos se ejecutaron; la migración de variaciones se detuvo porque contiene la sentencia PostgreSQL:
+La comprobación inicial con SQLite temporal se detuvo porque la migración de variaciones contiene la sentencia PostgreSQL:
 
 ```sql
 codigo_barras IS NULL OR codigo_barras ~ '^[0-9]{8,14}$'
 ```
 
-El operador `~` no es compatible con SQLite. La base temporal y sus artefactos fueron eliminados. Este resultado no autoriza modificar la migración ni ejecutar la prueba contra la base compartida. La reproducibilidad completa sigue pendiente de una base PostgreSQL propia y del seeder M3 oficial.
+El operador `~` no es compatible con SQLite. La validación posterior con PostgreSQL portátil confirmó que las ocho migraciones M3 y el seeder funcionan sin modificar las migraciones ni tocar la base compartida.
