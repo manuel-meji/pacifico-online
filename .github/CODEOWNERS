@@ -4,8 +4,15 @@
 # =========================================================================
 
 # Regla global por defecto (Archivos raíz, configuración, base de datos, núcleo)
-# Cualquier coordinador puede aprobar cambios generales, o el coordinador general:
-* @Doffyexe @Diego-Alfaro-Alvarado @Jeaustin-cyber @Giorgio6016 @manuel-meji @jusMa13 @Dercross44t
+# Nota: En GitHub CODEOWNERS se utiliza '*' en lugar de '-' para la regla raíz por defecto
+* @iMiauto @Doffyexe @Diego-Alfaro-Alvarado @Jeaustin-cyber @Giorgio6016 @manuel-meji @jusMa13 @Dercross44t
+
+# Núcleo (Rutas específicas)
+/app/Contracts/Nucleo/ @iMiauto
+/app/Http/Controllers/Nucleo/ @iMiauto
+/app/Models/Nucleo/ @iMiauto
+/app/Services/Nucleo/ @iMiauto
+/contracts/nucleo/ @iMiauto
 
 # Módulo 1: Portal Público y Búsqueda (SG1)
 /app/Contracts/M1_Portal/ @Doffyexe
@@ -50,8 +57,8 @@
 /contracts/m6-pagos/ @jusMa13
 
 # Módulo 7: Contabilidad (SG7)
-/app/Contracts/M7_Contabilidad/ @Dercross44t
-/app/Http/Controllers/M7_Contabilidad/ @Dercross44t
-/app/Models/M7_Contabilidad/ @Dercross44t
-/app/Services/M7_Contabilidad/ @Dercross44t
-/contracts/m7-contabilidad/ @Dercross44t
+/app/Contracts/M7_Contabilidad/ @Dercross44t @KristelSamanta
+/app/Http/Controllers/M7_Contabilidad/ @Dercross44t @KristelSamanta
+/app/Models/M7_Contabilidad/ @Dercross44t @KristelSamanta
+/app/Services/M7_Contabilidad/ @Dercross44t @KristelSamanta
+/contracts/m7-contabilidad/ @Dercross44t @KristelSamanta
