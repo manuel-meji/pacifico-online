@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Unit\M2_Comercios;
 
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\M2_Comercios\Micrositio;
 use App\Services\M2_Comercios\ComerciosService;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\Feature\M2_Comercios\Concerns\PreparaM2;
@@ -49,6 +51,33 @@ class DiscoImagenesTest extends TestCase
         $servicio->gestionarBanners($comercio->id_comercio, []);
 
         $this->assertSame([], Storage::disk('s3')->allFiles('m2'));
+    }
+
+    public function test_si_el_disco_no_guarda_la_imagen_lanza_err_006_y_el_logotipo_no_cambia(): void
+    {
+        config(['m2.disco_imagenes' => 's3']);
+        Storage::fake('s3');
+        $comercio = $this->crearComercio();
+        $this->enAmbitoDe($comercio->id_comercio);
+        $servicio = app(ComerciosService::class);
+        $servicio->guardarLogotipo($comercio->id_comercio, UploadedFile::fake()->image('logo.png'));
+        $logotipoAnterior = Micrositio::query()->value('logotipo');
+
+        // Disco que falla en silencio, como el s3 con 'throw' => false.
+        $discoQueFalla = \Mockery::mock(FilesystemAdapter::class);
+        $discoQueFalla->shouldReceive('putFile')->andReturn(false);
+        $discoQueFalla->shouldNotReceive('url');
+        Storage::set('s3', $discoQueFalla);
+
+        try {
+            $servicio->guardarLogotipo($comercio->id_comercio, UploadedFile::fake()->image('otro.png'));
+            $this->fail('Se esperaba ErrorNucleoException ERR-006.');
+        } catch (ErrorNucleoException $e) {
+            $this->assertSame('ERR-006', $e->getCodigo());
+            $this->assertSame(503, $e->getCodigoHttp());
+        }
+
+        $this->assertSame($logotipoAnterior, Micrositio::query()->value('logotipo'));
     }
 
     public function test_el_borrado_entiende_las_urls_publicas_de_supabase(): void
