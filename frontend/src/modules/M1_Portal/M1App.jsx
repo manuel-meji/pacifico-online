@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Aviso, Encabezado, NavegacionCuentaContext } from './components/componentes';
-import { PortalContext } from './components/PaginaPortal';
+import { Aviso } from './components/componentes';
+import PaginaPortal, { PortalContext } from './components/PaginaPortal';
 import { obtenerCantidadCarrito } from './services/carritoApi';
 import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
 import { listarCategorias, registrarCliente } from './services/m1Api';
@@ -165,7 +165,8 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   }
 
   // POST /login del núcleo compartido. Con ?simular=credenciales se muestra, sin backend, el error 422 del ingreso.
-  // Si entra un cliente va al inicio del portal (o de vuelta al carrito si venía de checkout). Los encargados todavía no tienen panel: la vista les avisa.
+  // Si entra un cliente va al inicio del portal (o de vuelta al carrito si venía de checkout).
+  // Los encargados van a /m2.html, que abre el panel según su rol.
   async function ingresar({ correo, contrasena }) {
     if (simular === 'credenciales') {
       await esperar();
@@ -173,8 +174,11 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     }
     const respuesta = await iniciarSesion(correo, contrasena);
     if (respuesta.ok) {
+      const { rol } = respuesta.datos.user;
       setUsuario(respuesta.datos.user);
-      if (respuesta.datos.user.rol === 'cliente') {
+      if (rol === 'encargado_comercio' || rol === 'encargado_plataforma') {
+        window.location.href = '/m2.html';
+      } else if (rol === 'cliente') {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('motivo') === 'checkout' || parametros.motivo === 'checkout') {
           window.location.href = '/carrito.html';
@@ -213,18 +217,10 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     return <PortalContext.Provider value={portal}>{vista}</PortalContext.Provider>;
   }
 
-  
+  // Pantallas de cuenta: mismo marco del portal (encabezado, ancho y pie) que el resto.
   return (
-    <NavegacionCuentaContext.Provider value={navegar}>
-    <div className="min-h-screen overflow-x-hidden bg-brandLightBg font-sans font-normal text-gray-800">
-      <Encabezado pantalla={pantalla} onIr={navegar} usuario={usuario} onCerrarSesion={cerrar} />
-
-      {errorCierre && (
-        <div className="mx-auto w-full max-w-5xl px-4 pt-4">
-          <Aviso>No se pudo cerrar la sesión. Intente de nuevo.</Aviso>
-        </div>
-      )}
-
+    <PortalContext.Provider value={portal}>
+    <PaginaPortal>
       {(parametros.motivo === 'checkout' || new URLSearchParams(window.location.search).get('motivo') === 'checkout') && (
         <div className="mx-auto w-full max-w-md px-4 pt-4">
           <Aviso tipo="info">
@@ -248,9 +244,9 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
       )}
 
       {pantalla === 'perfil' && (
-        <PerfilView onIrIngresar={() => navegar('ingresar')} />
+        <PerfilView onIrIngresar={() => navegar('ingresar')} onCerrarSesion={cerrar} errorCierre={errorCierre} />
       )}
-    </div>
-    </NavegacionCuentaContext.Provider>
+    </PaginaPortal>
+    </PortalContext.Provider>
   );
 }

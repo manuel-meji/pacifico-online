@@ -1,54 +1,12 @@
-import { createContext, useContext } from 'react';
-import Logo from './Logo';
-
-// Con sesión (usuario) muestra el nombre y "Cerrar sesión" en lugar de "Crea tu cuenta" e "Inicia sesión".
-export function Encabezado({ pantalla, onIr, usuario = null, onCerrarSesion }) {
-  const enlace = (destino, texto) => (
-    <button type="button" onClick={() => onIr(destino)} aria-current={pantalla === destino ? 'page' : undefined}
-      className={`min-h-[44px] border-b-2 px-1 text-sm font-medium text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${pantalla === destino ? 'border-brandBlue' : 'border-transparent'}`}>
-      {texto}
-    </button>
-  );
-  return (
-    <header className="bg-brandDarkBlue">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2">
-        <button type="button" onClick={() => onIr('inicio')} aria-label="Ir al inicio"
-          className="flex min-h-[44px] items-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-          <Logo />
-        </button>
-        <nav aria-label="Cuenta" className="flex min-w-0 flex-wrap items-center gap-x-3 sm:gap-x-4">
-          {usuario ? (
-            <>
-              <span className="max-w-[9rem] truncate text-sm text-white sm:max-w-[16rem]" title={usuario.nombre}>{usuario.nombre}</span>
-              {enlace('perfil', 'Mi cuenta')}
-              <button type="button" onClick={onCerrarSesion}
-                className="min-h-[44px] border-b-2 border-transparent px-1 text-sm font-medium text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-                Cerrar sesión
-              </button>
-            </>
-          ) : (
-            <>
-              {enlace('crear', 'Crea tu cuenta')}
-              {enlace('ingresar', 'Inicia sesión')}
-              {enlace('perfil', 'Mi cuenta')}
-            </>
-          )}
-        </nav>
-      </div>
-    </header>
-  );
-}
-
-// M1App provee onIr con este contexto para que "Inicio" de las migas navegue sin pasar la función por cada vista.
-export const NavegacionCuentaContext = createContext(null);
+import { usePortal } from './PaginaPortal';
 
 export function MigasDePan({ actual }) {
-  const onIr = useContext(NavegacionCuentaContext);
+  const { ir } = usePortal();
   return (
     <nav aria-label="Migas de pan" className="text-sm text-gray-600">
       <ol className="flex flex-wrap items-center gap-1.5">
         <li>
-          <button type="button" onClick={() => onIr?.('inicio')}
+          <button type="button" onClick={() => ir('inicio')}
             className="inline-flex min-h-[44px] items-center rounded-sm font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue sm:min-h-0">
             Inicio
           </button>
@@ -64,15 +22,16 @@ export function MigasDePan({ actual }) {
 
 // Migas, título centrado y tarjeta blanca con el formulario. `amplia` es para los formularios largos (crear cuenta,
 // Mi cuenta), que en pantallas anchas usan dos columnas; los cortos (iniciar sesión) quedan angostos.
+// El <main>, el ancho (max-w-7xl) y el margen lateral los pone PaginaPortal; PaginaCuenta no crea su propio <main>.
 export function PaginaCuenta({ migas, titulo, amplia = false, children }) {
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-5">
+    <div className="pt-5">
       <MigasDePan actual={migas} />
       <h1 className="mt-5 text-center text-2xl font-bold text-brandDarkBlue">{titulo}</h1>
       <section className={`mx-auto mt-5 w-full rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-8 ${amplia ? 'max-w-3xl' : 'max-w-md'}`}>
         {children}
       </section>
-    </main>
+    </div>
   );
 }
 

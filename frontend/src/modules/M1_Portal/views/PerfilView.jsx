@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Aviso, BotonPrincipal, CampoConIcono, PaginaCuenta } from '../components/componentes';
 import DireccionesSeccion from '../components/DireccionesSeccion';
+import { usePortal } from '../components/PaginaPortal';
 import { actualizarCliente, obtenerClienteSesion } from '../services/m1Api';
 
 // Campos del esquema DatosCliente (contracts/m1-portal/v1/openapi.yaml, versión 1.2.0) y sus límites,
@@ -23,18 +24,45 @@ function validar(f) {
 
 // ERR-005 trae `detalles` por campo; ERR-M1-001 es el correo de otro cliente (RN-M1-14).
 function erroresDelServidor(error) {
-  if (error.codigo === 'ERR-M1-001') return { correo_electronico: `${error.mensaje} (${error.codigo})` };
+  if (error.codigo === 'ERR-M1-001') return { correo_electronico: error.mensaje };
   const errores = {};
   for (const [campo, mensaje] of Object.entries(error.detalles || {})) {
     errores[campo] = Array.isArray(mensaje) ? mensaje[0] : mensaje;
   }
-  return Object.keys(errores).length ? errores : { general: `${error.mensaje} (${error.codigo})` };
+  return Object.keys(errores).length ? errores : { general: error.mensaje };
+}
+
+// "Cerrar sesión" (botón secundario, design.md 5.1). Solo se muestra con sesión.
+// onCerrarSesion es cerrar() de M1App: con éxito lleva a Iniciar sesión; si falla, M1App marca errorCierre.
+function CerrarSesion({ onCerrarSesion, errorCierre }) {
+  const { usuario } = usePortal();
+  const [cerrando, setCerrando] = useState(false);
+  if (!usuario) return null;
+
+  async function cerrar() {
+    setCerrando(true);
+    await onCerrarSesion();
+    setCerrando(false);
+  }
+
+  return (
+    <div className="mt-6 space-y-3 border-t border-gray-200 pt-6">
+      {errorCierre && <Aviso>No se pudo cerrar la sesión. Intente de nuevo.</Aviso>}
+      <button type="button" onClick={cerrar} disabled={cerrando}
+        className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-lg border border-brandBlue px-4 py-2 text-base font-semibold text-brandBlue transition enabled:hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-brandBlue focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-500">
+        {cerrando ? 'Cerrando sesión…' : 'Cerrar sesión'}
+      </button>
+    </div>
+  );
 }
 
 // Mi cuenta: ver y actualizar los datos de la persona con sesión (GET /clientes/sesion y PUT /clientes/{id_cliente})
 // y sus direcciones de envío (DireccionesSeccion). Cada persona solo ve sus propios datos (RN-M1-16). El correo no
 // se puede cambiar hasta que el núcleo lo permita.
-export default function PerfilView({ onIrIngresar }) {
+export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre = false }) {
+  const cierre = <CerrarSesion onCerrarSesion={onCerrarSesion} errorCierre={errorCierre} />;
+  const { usuario } = usePortal();
+  const esEncargado = ['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol);
   const [cliente, setCliente] = useState(null);
   const [f, setF] = useState(null);
   const [carga, setCarga] = useState({ estado: 'cargando' });
@@ -102,10 +130,14 @@ export default function PerfilView({ onIrIngresar }) {
           <Aviso>
             {sinSesion && 'Inicie sesión para ver sus datos.'}
             {noEsCliente && 'Esta cuenta no pertenece a un cliente del portal.'}
-            {!sinSesion && !noEsCliente && `${carga.error.mensaje} (${carga.error.codigo})`}
+            {!sinSesion && !noEsCliente && carga.error.mensaje}
           </Aviso>
           {sinSesion && <BotonPrincipal type="button" onClick={onIrIngresar}>Ingresar</BotonPrincipal>}
+          {noEsCliente && esEncargado && (
+            <BotonPrincipal type="button" onClick={() => { window.location.href = '/m2.html'; }}>Ir a mi panel</BotonPrincipal>
+          )}
         </div>
+        {cierre}
       </PaginaCuenta>
     );
   }
@@ -153,6 +185,7 @@ export default function PerfilView({ onIrIngresar }) {
       <div className="mt-6">
         <DireccionesSeccion idCliente={cliente.id_cliente} />
       </div>
+      {cierre}
     </PaginaCuenta>
   );
 }

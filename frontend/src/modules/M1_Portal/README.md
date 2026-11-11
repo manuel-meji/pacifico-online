@@ -62,8 +62,7 @@ Pantallas de ingreso y autorregistro del cliente. El registro respeta el esquema
 |---|---|
 | `views/IniciarSesionView.jsx` | Correo y contraseña, con validación en pantalla |
 | `views/CrearCuentaView.jsx` | Nombre, apellidos, correo, teléfono, dirección de envío, contraseña y confirmación (no se envía), con los límites de `RegistroCliente` |
-| `components/componentes.jsx` | Encabezado, migas de pan, campo con ícono, avisos y botón principal de estas pantallas |
-| `components/Logo.jsx` | Logotipo (`assets/logo-pacificos.png`) con el nombre al lado |
+| `components/componentes.jsx` | migas de pan, campo con ícono, avisos y botón principal de estas pantallas |
 | `services/datosMock.js` | Respuestas simuladas: ERR-M1-001 y credenciales incorrectas (solo con `?simular=`) |
 | `services/m1Api.js` | Cliente HTTP de `/api/m1/v1` con el token CSRF de Sanctum; hoy expone `registrarCliente` |
 
@@ -92,4 +91,6 @@ Debajo, la sección Direcciones de envío (`components/DireccionesSeccion.jsx`) 
 direcciones (la principal primero), permite agregar, editar y marcar otra como principal. La principal no se
 desmarca directamente. Los campos y su validación están en `services/camposDireccion.js`, compartidos con el registro.
 
-Pendiente: panel para `encargado_comercio` y `encargado_plataforma`; hoy, al ingresar, solo ven un aviso.
+Los tres roles usan este mismo inicio de sesión. Al ingresar, `encargado_comercio` y `encargado_plataforma` son
+redirigidos a `/m2.html`, que abre el panel correspondiente a su rol; en Mi cuenta, si la cuenta no es de cliente,
+estos roles ven el botón "Ir a mi panel" hacia la misma página.
