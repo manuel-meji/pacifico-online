@@ -25,4 +25,23 @@ describe('horaCostaRica', () => {
     expect(aCampoCostaRica(null)).toBe('');
     expect(aCampoCostaRica('no es fecha')).toBe('');
   });
+
+  it('rechaza un texto que no tiene forma de fecha y hora', () => {
+    expect(aIsoCostaRica('no es una fecha')).toBeNull();
+  });
+
+  it('una fecha que ya viene con el desfase de Costa Rica se muestra con la misma hora', () => {
+    expect(aCampoCostaRica('2027-03-15T12:30:00-06:00')).toBe('2027-03-15T12:30');
+  });
+
+  it('pasada la medianoche de UTC cae en el día anterior de Costa Rica, también entre años', () => {
+    expect(aCampoCostaRica('2027-01-01T03:00:00+00:00')).toBe('2026-12-31T21:00');
+  });
+
+  it.each(['2027-03-15T18:30:00Z', '2027-03-15T00:00:00+00:00', '2026-12-31T23:59:00Z', '2027-03-15T12:30:00-06:00'])(
+    'de ISO al campo y de vuelta conserva el mismo instante (%s)',
+    (iso) => {
+      expect(new Date(aIsoCostaRica(aCampoCostaRica(iso))).getTime()).toBe(new Date(iso).getTime());
+    },
+  );
 });

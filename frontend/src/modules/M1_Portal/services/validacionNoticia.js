@@ -1,7 +1,7 @@
 // Validación en el cliente del formulario de noticias (esquema DatosNoticia del contrato M1 1.4.0).
 // Usa los mismos límites que el contrato y el backend para no rechazar nada que el backend acepte;
 // __tests__/validacionNoticia.test.js los compara contra contracts/m1-portal/v1/openapi.yaml.
-import { horaLocalAIso } from './formato';
+import { aIsoCostaRica } from './horaCostaRica';
 
 // maxLength de DatosNoticia.
 export const LIMITES = { titulo: 150, resumen: 300, contenido: 20000, imagen_url: 255 };
@@ -30,7 +30,7 @@ export function validarNoticia(f) {
   const imagen = f.imagen_url.trim();
   if (largo(imagen) > LIMITES.imagen_url) errores.imagen_url = `Máximo ${LIMITES.imagen_url} caracteres.`;
   else if (imagen && !esUrlDeImagen(imagen)) errores.imagen_url = 'Escriba una dirección que empiece con http:// o https://.';
-  if (f.fecha_fin && !horaLocalAIso(f.fecha_fin)) errores.fecha_fin = 'Ingrese una fecha válida.';
+  if (f.fecha_fin && !aIsoCostaRica(f.fecha_fin)) errores.fecha_fin = 'Ingrese una fecha válida.';
   if (f.ids_promocion.length > MAX_PROMOCIONES) errores.ids_promocion = `Elija como máximo ${MAX_PROMOCIONES} promociones.`;
   return errores;
 }

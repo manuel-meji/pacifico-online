@@ -6,12 +6,12 @@ import { SECCIONES_GESTION, seccionesPara } from '../views/gestion/secciones';
 import { listarPromociones } from '../services/m1Api';
 import {
   actualizarNoticia, archivarNoticia, crearNoticia, listarNoticiasAdministracion,
-  listarPromocionesAdministracion, publicarNoticia,
+  publicarNoticia,
 } from '../services/noticiasApi';
+import { listarPromocionesAdministracion } from '../services/promocionesApi';
 
 vi.mock('../services/noticiasApi', () => ({
   listarNoticiasAdministracion: vi.fn(),
-  listarPromocionesAdministracion: vi.fn(),
   crearNoticia: vi.fn(),
   actualizarNoticia: vi.fn(),
   publicarNoticia: vi.fn(),
@@ -21,6 +21,9 @@ vi.mock('../services/noticiasApi', () => ({
 // Promociones vigentes del portal, para la vista previa. Las demás funciones de m1Api son las reales
 // (otras secciones del panel las importan al cargar secciones.js).
 vi.mock('../services/m1Api', async (original) => ({ ...(await original()), listarPromociones: vi.fn() }));
+
+// Promociones para enlazar: la función de la pestaña de Promociones (recibe { estado, idComercio }).
+vi.mock('../services/promocionesApi', async (original) => ({ ...(await original()), listarPromocionesAdministracion: vi.fn() }));
 
 afterEach(cleanup);
 
@@ -97,7 +100,7 @@ describe('NoticiasGestion: sección del panel', () => {
   it('pide solo las promociones vigentes para enlazar', async () => {
     render(<NoticiasGestion />);
 
-    await waitFor(() => expect(listarPromocionesAdministracion).toHaveBeenCalledWith('vigente'));
+    await waitFor(() => expect(listarPromocionesAdministracion).toHaveBeenCalledWith({ estado: 'vigente' }));
   });
 });
 
@@ -379,6 +382,21 @@ describe('NoticiasGestion: fecha_fin en hora de Costa Rica', () => {
     expect(datos.fecha_fin).toBe('2027-03-15T12:30:00-06:00');
     expect(new Date(datos.fecha_fin).getTime()).toBe(new Date('2027-03-15T18:30:00Z').getTime());
     expect(datos.imagen_url).toBe('https://x.test/a.png');
+  });
+
+  it('una fecha_fin que el backend guardó en UTC se muestra en hora de Costa Rica, aunque caiga en el día anterior', async () => {
+    // Formato real de la API (toIso8601String en UTC): las 18:00 del 30 de noviembre en Costa Rica.
+    listarNoticiasAdministracion.mockResolvedValue(ok([noticia({ fecha_fin: '2026-12-01T00:00:00+00:00' })]));
+    actualizarNoticia.mockResolvedValue(ok(noticia()));
+    render(<NoticiasGestion />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+
+    expect(screen.getByLabelText('Fecha de fin (opcional)').value).toBe('2026-11-30T18:00');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(actualizarNoticia).toHaveBeenCalled());
+    expect(actualizarNoticia.mock.calls[0][1].fecha_fin).toBe('2026-11-30T18:00:00-06:00');
   });
 
   it('una fecha_fin escrita en el formulario se manda con el desfase de Costa Rica', async () => {

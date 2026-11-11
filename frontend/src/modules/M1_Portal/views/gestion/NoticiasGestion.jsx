@@ -4,12 +4,11 @@ import { Aviso, BotonPrincipal } from '../../components/componentes';
 import { AvisoVista, CargandoBloque, ErrorVista, Vacio, mensajeDeDatosInvalidos } from '../../components/EstadosVista';
 import Icono from '../../components/IconoComercio';
 import TarjetaNoticia from '../../components/TarjetaNoticia';
-import { fechaLarga, horaLocalAIso, isoAHoraLocal } from '../../services/formato';
+import { fechaLarga } from '../../services/formato';
+import { aCampoCostaRica, aIsoCostaRica } from '../../services/horaCostaRica';
 import { listarPromociones } from '../../services/m1Api';
-import {
-  actualizarNoticia, archivarNoticia, crearNoticia, listarNoticiasAdministracion,
-  listarPromocionesAdministracion, publicarNoticia,
-} from '../../services/noticiasApi';
+import { actualizarNoticia, archivarNoticia, crearNoticia, listarNoticiasAdministracion, publicarNoticia } from '../../services/noticiasApi';
+import { listarPromocionesAdministracion } from '../../services/promocionesApi';
 import useConsulta from '../../services/useConsulta';
 import { LIMITES, MAX_PROMOCIONES, largo, validarNoticia } from '../../services/validacionNoticia';
 
@@ -81,7 +80,7 @@ function datosDelFormulario(f) {
     resumen: f.resumen.trim(),
     contenido: f.contenido.trim(),
     imagen_url: f.imagen_url.trim() || null,
-    ...(f.fecha_fin ? { fecha_fin: horaLocalAIso(f.fecha_fin) } : {}),
+    ...(f.fecha_fin ? { fecha_fin: aIsoCostaRica(f.fecha_fin) } : {}),
     ids_promocion: f.ids_promocion,
   };
 }
@@ -91,7 +90,7 @@ const formularioDe = (noticia) => ({
   resumen: noticia?.resumen ?? '',
   contenido: noticia?.contenido ?? '',
   imagen_url: noticia?.imagen_url ?? '',
-  fecha_fin: noticia?.fecha_fin ? isoAHoraLocal(noticia.fecha_fin) : '',
+  fecha_fin: noticia?.fecha_fin ? aCampoCostaRica(noticia.fecha_fin) : '',
   ids_promocion: noticia?.ids_promocion ?? [],
 });
 
@@ -370,7 +369,7 @@ export default function NoticiasGestion() {
 
   const lista = useConsulta(() => listarNoticiasAdministracion(filtro), [filtro]);
   // Solo se enlazan promociones vigentes.
-  const promociones = useConsulta(() => listarPromocionesAdministracion('vigente'), []);
+  const promociones = useConsulta(() => listarPromocionesAdministracion({ estado: 'vigente' }), []);
 
   const noticias = Array.isArray(lista.datos) ? lista.datos : [];
   const conLista = lista.estado === 'listo' || lista.estado === 'actualizando';

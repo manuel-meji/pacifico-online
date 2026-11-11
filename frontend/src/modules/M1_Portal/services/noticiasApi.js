@@ -34,8 +34,4 @@ export const publicarNoticia = (idNoticia, datos = {}) =>
 export const archivarNoticia = (idNoticia) =>
   llamarM1(`/administracion/noticias/${idNoticia}/archivar`, { method: 'POST' });
 
-// GET /administracion/promociones (listarPromocionesAdministracion). Promociones de todos los comercios,
-// con filtro opcional por estado; el panel pide las vigentes para enlazarlas a una noticia.
-// 200 → Promocion[] ({ id_promocion, titulo, estado, … }) · 401 ERR-001 · 403 ERR-002 · 422 ERR-005.
-export const listarPromocionesAdministracion = (estado) =>
-  llamarM1(`/administracion/promociones${consulta({ estado })}`);
+// Las promociones que enlaza una noticia se piden con listarPromocionesAdministracion de promocionesApi.js.
