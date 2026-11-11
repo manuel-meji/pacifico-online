@@ -122,9 +122,10 @@ class ReporteGerencialAceptacionTest extends TestCase
         $respuesta->assertOk()
             ->assertJsonPath('success', true);
 
-        $datos = $respuesta->json('data');
-
-        $this->assertNotEmpty($datos);
+        $respuesta->assertJsonPath('data.resumen.ingresos', '1000.00')
+            ->assertJsonPath('data.resumen.costos', '400.00')
+            ->assertJsonPath('data.resumen.utilidad_bruta', '600.00')
+            ->assertJsonPath('data.mensual.0.periodo', '2026-11');
     }
 
     public function test_el_reporte_no_incluye_datos_de_otros_comercios(): void
@@ -140,8 +141,8 @@ class ReporteGerencialAceptacionTest extends TestCase
         $respuesta->assertOk()
             ->assertJsonPath('success', true);
 
-        $datos = $respuesta->json('data');
-
-        $this->assertNotEmpty($datos);
+        $respuesta->assertJsonPath('data.resumen.ingresos', '1000.00')
+            ->assertJsonPath('data.resumen.costos', '0.00')
+            ->assertJsonPath('data.resumen.utilidad_bruta', '1000.00');
     }
 }
