@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace App\Services\M6_Pagos\Adaptadores;
 
+use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
 use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Services\M6_Pagos\Clients\ContabilidadClient;
 
 final class AdaptadorM7 implements ContabilidadClient
 {
+    public function __construct(
+        private readonly ContabilidadServiceInterface $contabilidad,
+    ) {
+    }
+
     public function enviarEventoFinanciero(int $idPago, string $tipo): void
     {
         throw $this->pendiente();
@@ -16,14 +22,17 @@ final class AdaptadorM7 implements ContabilidadClient
 
     public function consultarRegistroContablePago(int $idPago): bool
     {
-        throw $this->pendiente();
+        $resultado = $this->contabilidad
+            ->consultarRegistroContablePago($idPago);
+
+        return (bool) ($resultado['registrado'] ?? false);
     }
 
     private function pendiente(): ErrorNucleoException
     {
         return ErrorNucleoException::proveedorNoResponde(
             'M7',
-            'El contrato de M7 aún no publica las operaciones financieras de pagos.'
+            'M7 aún no implementa el procesamiento del evento financiero de pagos.'
         );
     }
 }

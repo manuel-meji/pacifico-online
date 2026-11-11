@@ -59,16 +59,40 @@ class PuertosM6BindingsTest extends TestCase
         $this->assertSame(8942, $this->app->make(PedidoClient::class)->obtenerDatosPedido(8942)->idPedido);
     }
 
-    public function test_en_modo_real_m7_resuelve_al_adaptador_provisional_que_responde_err_006(): void
-    {
-        config(['m6.usar_dobles' => false]);
+    public function test_en_modo_real_m7_resuelve_al_adaptador_y_consulta_el_registro_contable(): void
+{
+    config(['m6.usar_dobles' => false]);
 
-        $m7 = $this->app->make(ContabilidadClient::class);
+    $this->app->instance(
+        \App\Contracts\M7_Contabilidad\ContabilidadServiceInterface::class,
+        new class implements \App\Contracts\M7_Contabilidad\ContabilidadServiceInterface
+        {
+            public function registrarAsientoDespacho(
+                int $pedidoId,
+                float $totalVenta,
+                float $costoVentas
+            ): bool {
+                return true;
+            }
 
-        $this->assertInstanceOf(AdaptadorM7::class, $m7);
+            public function consultarRegistroContablePago(int $idPago): array
+            {
+                return [
+                    'id_pago' => $idPago,
+                    'registrado' => false,
+                    'asiento_id' => null,
+                    'fecha_registro' => null,
+                ];
+            }
+        }
+    );
 
-        $this->expectException(ErrorNucleoException::class);
+    $m7 = $this->app->make(ContabilidadClient::class);
 
-        $m7->consultarRegistroContablePago(1);
-    }
+    $this->assertInstanceOf(AdaptadorM7::class, $m7);
+
+    $resultado = $m7->consultarRegistroContablePago(1);
+
+    $this->assertFalse($resultado);
+}
 }
