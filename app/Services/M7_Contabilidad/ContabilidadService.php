@@ -3,7 +3,9 @@
 namespace App\Services\M7_Contabilidad;
 
 use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+
 
 class ContabilidadService implements ContabilidadServiceInterface
 {
@@ -21,4 +23,31 @@ class ContabilidadService implements ContabilidadServiceInterface
 
         return true;
     }
+
+    public function consultarRegistroContablePago(int $idPago): array {
+    if ($idPago <= 0) {
+        return [
+            'id_pago' => $idPago,
+            'registrado' => false,
+            'asiento_id' => null,
+            'fecha_registro' => null,
+        ];
+    }
+
+    $asiento = DB::table('asientos_contables')
+        ->where('id_pago', $idPago)
+        ->where('estado', 'REGISTRADO')
+        ->orderByDesc('fecha')
+        ->orderByDesc('id_asiento')
+        ->first();
+
+    return [
+        'id_pago' => $idPago,
+        'registrado' => $asiento !== null,
+        'asiento_id' => $asiento !== null
+            ? (int) $asiento->id_asiento
+            : null,
+        'fecha_registro' => $asiento?->fecha,
+    ];
+    }   
 }
