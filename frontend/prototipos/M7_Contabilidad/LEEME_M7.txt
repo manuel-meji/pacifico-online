@@ -1,0 +1,9 @@
+﻿PROTOTIPO M7 - CONTABILIDAD Y REPORTES GERENCIALES
+
+Para probar el prototipo:
+1. Descargue 1_Abrir_prototipo_M7.html.
+2. Abra el archivo descargado con doble clic en Chrome o Edge.
+3. Navegue por las secciones del módulo M7.
+
+El prototipo utiliza datos de ejemplo y funciona como una demostración de interfaz.
+No requiere instalar Node.js para abrir el archivo compilado.

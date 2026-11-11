@@ -6,14 +6,23 @@ use App\Contracts\Nucleo\NucleoServiceInterface;
 
 class NucleoService implements NucleoServiceInterface
 {
+    public function __construct(
+        private readonly BitacoraAuditoria $bitacoraAuditoria,
+        private readonly ContextoComercio $contextoComercio,
+    ) {}
+
+    /**
+     * Regla RN-12: comercio del ámbito de aislamiento de la petición actual
+     * (lo establece el middleware EstablecerComercio). Devuelve null cuando no hay
+     * comercio en el ámbito: nunca se asume un comercio por defecto.
+     */
     public function getComercioActualId(): ?int
     {
-        // Regla RN-12: Retornar ID del comercio de la sesión autenticada
-        return session('comercio_id', 1);
+        return $this->contextoComercio->idActual();
     }
 
     public function registrarAuditoria(string $accion, string $entidad, int $entidadId, array $detalles = []): void
     {
-        // Registro en tabla auditoria_logs
+        $this->bitacoraAuditoria->registrar($accion, $entidad, $entidadId, $detalles);
     }
 }

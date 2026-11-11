@@ -4,7 +4,8 @@ namespace Tests\Feature\M1_Portal;
 
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
-use App\Contracts\M4_Inventario\InventarioServiceInterface;
+use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Contracts\M5_Pedidos\CarritoServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 use App\Providers\M1IntegracionesServiceProvider;
 use App\Services\M1_Portal\Dobles\CarritoFake;
@@ -14,25 +15,27 @@ use App\Services\M1_Portal\Dobles\DatosPrueba;
 use App\Services\M1_Portal\Dobles\ErrorProveedorException;
 use App\Services\M1_Portal\Dobles\InventarioStub;
 use App\Services\M1_Portal\PortalService;
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Services\M2_Comercios\ComerciosService;
+use App\Services\M2_Comercios\Dobles\ComerciosDobleBase;
 use Tests\Doubles\M1\CarritoNoDisponible;
 use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\CatalogoRelacionadosNoDisponible;
 use Tests\Doubles\M1\ComerciosNoDisponible;
 use Tests\Doubles\M1\InventarioNoDisponible;
-use Tests\TestCase;
 
 /**
  * Verifica que los dobles de M1 sean coherentes entre sí, se comporten según
  * los contratos de sus proveedores y se seleccionen desde config/integraciones.php.
  */
-class DoblesCoherenciaTest extends TestCase
+class DoblesCoherenciaTest extends PruebaM1
 {
     public function test_los_servicios_de_m1_reciben_los_dobles_por_defecto(): void
     {
         $this->assertInstanceOf(ComerciosStub::class, $this->proveedorDeM1(ComerciosServiceInterface::class));
         $this->assertInstanceOf(CatalogoFake::class, $this->proveedorDeM1(CatalogoServiceInterface::class));
-        $this->assertInstanceOf(InventarioStub::class, $this->proveedorDeM1(InventarioServiceInterface::class));
+        $this->assertInstanceOf(InventarioStub::class, $this->proveedorDeM1(InventarioModuleInterface::class));
+        $this->assertInstanceOf(CarritoFake::class, $this->proveedorDeM1(CarritoServiceInterface::class));
         $this->assertInstanceOf(CarritoFake::class, $this->proveedorDeM1(PedidosServiceInterface::class));
     }
 
@@ -53,6 +56,32 @@ class DoblesCoherenciaTest extends TestCase
     public function test_los_dobles_no_afectan_a_los_demas_modulos(): void
     {
         $this->assertInstanceOf(ComerciosService::class, app(ComerciosServiceInterface::class));
+    }
+
+    public function test_el_stub_de_m2_extiende_la_base_y_no_simula_lo_que_m1_no_consume(): void
+    {
+        $m2 = new ComerciosStub;
+
+        $this->assertInstanceOf(ComerciosDobleBase::class, $m2);
+
+        $noConsumidas = [
+            'obtenerComercioActivo' => fn () => $m2->obtenerComercioActivo(1),
+            'obtenerSedesComercio' => fn () => $m2->obtenerSedesComercio(1),
+            'obtenerPoliticasEnvio' => fn () => $m2->obtenerPoliticasEnvio(1),
+            'obtenerDatosFiscalesComercio' => fn () => $m2->obtenerDatosFiscalesComercio(1),
+            'obtenerComisionSubpedido' => fn () => $m2->obtenerComisionSubpedido(1),
+            'obtenerMicrositio' => fn () => $m2->obtenerMicrositio(1),
+            'registrarComision' => fn () => $m2->registrarComision(1, 10.0),
+        ];
+
+        foreach ($noConsumidas as $nombre => $operacion) {
+            try {
+                $operacion();
+                $this->fail("{$nombre} debía responder ERR-006.");
+            } catch (ErrorNucleoException $error) {
+                $this->assertSame('ERR-006', $error->codigo, $nombre);
+            }
+        }
     }
 
     public function test_el_fake_de_m5_conserva_su_estado_durante_la_peticion(): void

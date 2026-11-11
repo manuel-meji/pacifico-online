@@ -1,0 +1,3069 @@
+openapi: 3.0.3
+info:
+  title: Contrato de Integración - m4-inventario
+  description: 'Contrato de integración v1 del módulo M4 (Inventario multiempresa) de Pacíficos Online. Incluye
+    en un único archivo: API REST ofrecida por M4, dependencias síncronas consumidas y contrato de eventos publicados/consumidos.
+    Proveedor de servicios para M1, M3, M5, M7 y el rol Soporte/Auditoría de la plataforma (núcleo). Consume dependencias
+    de M2, M3 y M5. Todo acceso a datos de inventario desde otros módulos se realiza por los contratos aquí documentados.
+    Los identificadores siguen el formato id_entidad del modelo canónico. La versión 1.2.0 alinea el contrato con las
+    reglas de publicación 4.1 y el formato de error 5.5 del PC3 colectivo: esquema ErrorEstandar, códigos propios
+    ERR-M4-nnn y ERR-003 en 404 para el aislamiento por comercio.'
+  version: 1.2.0
+  x-estado: 'Versión 1.2.0 lista para subir a contracts/m4-inventario/v1/ (reemplaza a la 1.1.0 publicada)'
+servers:
+- url: /api/m4/v1
+  description: Servidor local / integración
+security:
+- bearerAuth: []
+tags:
+- name: Estado
+- name: Disponibilidad
+  description: Consulta de stock (M1, M3, M5).
+- name: Reservas
+  description: Ciclo de vida de la reserva (M5).
+- name: Kardex
+  description: Historial y kardex valorizado (M7).
+- name: Auditoría
+  description: Consulta de solo lectura de varios comercios (rol Soporte/Auditoría, RN-M4-015).
+- name: Existencias
+- name: Movimientos
+- name: Ajustes
+paths:
+  /health:
+    get:
+      tags:
+      - Estado
+      summary: Verificación de estado del módulo
+      operationId: verificarEstado
+      security: []
+      responses:
+        '200':
+          description: Módulo operando correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  module:
+                    type: string
+                    example: m4-inventario
+  /existencias/disponibilidad:
+    get:
+      tags:
+      - Disponibilidad
+      summary: Consultar stock disponible de una variación
+      description: 'Disponible = cantidad_fisica − cantidad_reservada. cantidad_reservada suma reservas ACTIVA y
+        CONFIRMADA aún no consumidas ni liberadas. Valor calculado. Consumidores M1, M3 y M5. No se maneja stock
+        defectuoso. Una variación sin existencia registrada no genera error: responde 200 con cantidad_disponible 0 y
+        estado_disponibilidad agotado, igual que las otras tres consultas de disponibilidad (M1). Consulta pública de catálogo (CS-01, M1): no exige token ni aplica el filtro por comercio de
+        RN-12, igual que el precio o la foto de un producto.'
+      operationId: consultarStockDisponible
+      security: []
+      parameters:
+      - name: id_comercio
+        in: query
+        required: true
+        description: Comercio dueño de la existencia.
+        schema:
+          type: integer
+          format: int64
+      - name: id_variacion
+        in: query
+        required: true
+        description: Variación consultada (acta 3.5).
+        schema:
+          type: integer
+          format: int64
+      - name: id_ubicacion
+        in: query
+        required: false
+        description: Ubicación. Si se omite, se suman todas las del comercio.
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Disponibilidad calculada. Sin existencia registrada se devuelve agotado, no 404.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Disponibilidad'
+              examples:
+                disponible:
+                  value:
+                    id_comercio: 104
+                    id_variacion: 501
+                    id_ubicacion: 12
+                    cantidad_disponible: 4
+                    estado_disponibilidad: disponible
+                    bajo_stock: false
+                sin_existencia_registrada:
+                  value:
+                    id_comercio: 104
+                    id_variacion: 777
+                    id_ubicacion: null
+                    cantidad_disponible: 0
+                    estado_disponibilidad: agotado
+                    bajo_stock: false
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+  /existencias/disponibilidad/lote:
+    post:
+      tags:
+      - Disponibilidad
+      summary: Consultar disponibilidad en lote
+      description: 'Operación de lectura (POST solo para admitir un cuerpo extenso). Una variación sin existencia
+        no genera error: se devuelve agotada. Consulta pública de catálogo (CS-01, M1): no exige token ni aplica
+        el filtro por comercio de RN-12.'
+      operationId: consultarDisponibilidadLote
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisponibilidadLoteSolicitud'
+            example:
+              items:
+              - id_comercio: 104
+                id_variacion: 501
+              - id_comercio: 104
+                id_variacion: 502
+                id_ubicacion: 12
+      responses:
+        '200':
+          description: Disponibilidad de cada ítem, en el mismo orden.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Disponibilidad'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+  /existencias/disponibilidad/producto:
+    get:
+      tags:
+      - Disponibilidad
+      summary: Consultar disponibilidad agregada de un producto (CS-02, M1)
+      description: 'Responde disponible si al menos una variación del producto tiene unidades disponibles en el
+        comercio, y agotado si ninguna tiene. Un producto sin existencias registradas se devuelve como agotado,
+        sin error. Pensada para resultados de búsqueda, donde M1 aún no sabe qué variación elegirá la persona
+        compradora. Consulta pública: no exige token ni aplica el filtro por comercio de RN-12.'
+      operationId: consultarDisponibilidadProducto
+      security: []
+      parameters:
+      - name: id_comercio
+        in: query
+        required: true
+        description: Comercio dueño del producto.
+        schema:
+          type: integer
+          format: int64
+      - name: id_producto
+        in: query
+        required: true
+        description: Producto consultado (agrega todas sus variaciones).
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Disponibilidad agregada del producto.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisponibilidadProducto'
+              example:
+                id_comercio: 104
+                id_producto: 230
+                estado_disponibilidad: disponible
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+  /existencias/disponibilidad/producto/lote:
+    post:
+      tags:
+      - Disponibilidad
+      summary: Consultar disponibilidad agregada de varios productos (CS-02, M1)
+      description: 'Versión en lote de consultarDisponibilidadProducto, para una página de resultados de búsqueda
+        sin superar el límite de variaciones del lote por variación. Un producto sin existencias registradas se
+        devuelve como agotado, sin error. Consulta pública: no exige token ni aplica el filtro por comercio de
+        RN-12.'
+      operationId: consultarDisponibilidadProductoLote
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisponibilidadProductoLoteSolicitud'
+            example:
+              items:
+              - id_comercio: 104
+                id_producto: 230
+              - id_comercio: 104
+                id_producto: 231
+      responses:
+        '200':
+          description: Disponibilidad agregada de cada producto, en el mismo orden.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DisponibilidadProducto'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+  /reservas:
+    post:
+      tags:
+      - Reservas
+      summary: Reservar existencias
+      description: 'M4 valida comercio activo, variación y ubicación habilitada del mismo comercio. id_ubicacion
+        es opcional: si falta, M4 selecciona una ubicación habilitada con toda la cantidad suficiente. Selección,
+        comprobación de stock y reserva son atómicas bajo bloqueo pesimista. Si una candidata pierde disponibilidad
+        por concurrencia, reevalúa las candidatas dentro de la operación sin dejar reservas parciales. Solo se compromete
+        cantidad_reservada, no se descuenta cantidad_fisica hasta el despacho. Se liberan exactamente una vez las
+        reservas ACTIVA cuyo plazo venció, disminuyendo cantidad_reservada y aumentando disponibilidad; CONFIRMADA
+        no expira. Publica ExistenciaReservada después de confirmar la transacción. Si ninguna ubicación tiene toda
+        la cantidad, devuelve 409; no distribuye unidades entre ubicaciones en esta versión candidata. La política
+        de selección y reparto permanece pendiente de acuerdo. Idempotencia con Idempotency-Key: devuelve asignación
+        original; no selecciona otra bodega en reintentos.'
+      operationId: reservarExistencias
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservaSolicitud'
+            examples:
+              ubicacion_automatica:
+                summary: M5 reserva sin elegir bodega
+                value:
+                  id_comercio: 104
+                  id_variacion: 501
+                  cantidad: 2
+                  expiracion_minutos: 15
+              ubicacion_explicita:
+                summary: Reserva en ubicación indicada
+                value:
+                  id_comercio: 104
+                  id_variacion: 501
+                  id_ubicacion: 12
+                  cantidad: 2
+      responses:
+        '201':
+          description: Reserva creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+              example:
+                id_reserva: 3f2b8a52-6c1e-4d0b-9a3e-1f6f0d9b7a10
+                id_comercio: 104
+                id_existencia: 77
+                id_variacion: 501
+                id_ubicacion: 12
+                cantidad: 2
+                estado_reserva: activa
+                id_pedido: null
+                id_subpedido: null
+                fecha_creacion: '2026-11-10T15:04:05Z'
+                fecha_expiracion: '2026-11-10T15:19:05Z'
+                fecha_resolucion: null
+                motivo_cierre: null
+        '200':
+          description: 'Reintento idempotente: se devuelve la reserva original.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '404':
+          description: 'ERR-003 si la variación o la ubicación son de otro comercio; ERR-M4-002 si no existe existencia para la variación en esa ubicación.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: 'ERR-M4-001: ninguna ubicación válida tiene toda la cantidad solicitada (sin
+            compromiso parcial); ERR-M4-003: misma clave con datos distintos.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: Clave única por comercio para reintentos. Si no se envía, no se garantiza deduplicación de
+          la solicitud de reserva. Convención propuesta SC-M4-08, por ratificar con M5. Misma clave y datos efectivos
+          devuelve reserva y ubicación originales; datos distintos devuelve 409.
+        schema:
+          type: string
+          minLength: 1
+  /reservas/{id_reserva}:
+    get:
+      tags:
+      - Reservas
+      summary: Consultar una reserva
+      operationId: obtenerReserva
+      parameters:
+      - name: id_reserva
+        in: path
+        required: true
+        description: Identificador devuelto al reservar.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Reserva.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '404':
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /reservas/{id_reserva}/confirmar:
+    post:
+      tags:
+      - Reservas
+      summary: Confirmar reserva (pasar a definitiva)
+      description: 'Confirma una reserva ACTIVA cuyo plazo no venció y vincula pedido/subpedido del mismo comercio.
+        La transición ACTIVA a CONFIRMADA conserva las unidades reservadas y desactiva solo el vencimiento automático,
+        sin borrar la fecha original. PedidoConfirmado del catálogo utiliza la misma operación de dominio. La ruta
+        síncrona no sustituye el acuerdo asíncrono ADR-005; ambos caminos son idempotentes. Repetición con mismos
+        identificadores devuelve 200; identificadores distintos devuelve 409. Si venció, liberar las unidades exactamente
+        una vez, conservar la reserva y rechazar. Para eventos no hay respuesta HTTP al publicador: registrar rechazo
+        y aplicar el protocolo acordado con M5.'
+      operationId: confirmarReserva
+      parameters:
+      - name: id_reserva
+        in: path
+        required: true
+        description: Reserva a confirmar.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservaVinculoSolicitud'
+            example:
+              id_pedido: 9120
+              id_subpedido: 18455
+      responses:
+        '200':
+          description: Reserva CONFIRMADA (o confirmación repetida del mismo vínculo).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '404':
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: ERR-M4-005, ERR-M4-006 o ERR-M4-007.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /reservas/{id_reserva}/liberar:
+    post:
+      tags:
+      - Reservas
+      summary: Liberar reserva
+      description: 'Libera una reserva que todavía no produjo una salida física. Puede atender de forma síncrona
+        situaciones como PagoRechazado o PedidoCancelado (eventos del catálogo 4.3 del PC3).
+        Si el pedido ya fue despachado, esta operación NO aumenta existencias: debe verificarse el retorno físico
+        y utilizar registrarReingresoPorReserva. Solo ACTIVA o CONFIRMADA pueden pasar a LIBERADA. Libera unidades
+        una vez y conserva historial y registro de Kardex de disponibilidad. Repetir LIBERADA o VENCIDA devuelve
+        su estado sin efectos adicionales; CONSUMIDA devuelve 409. La cancelación parcial afecta solo las reservas
+        del subpedido indicado por M5.'
+      operationId: liberarReserva
+      parameters:
+      - name: id_reserva
+        in: path
+        required: true
+        description: Reserva a liberar.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiberarReservaSolicitud'
+            example:
+              motivo: pago_rechazado
+      responses:
+        '200':
+          description: Reserva liberada (o ya cerrada).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '404':
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: 'La reserva ya se convirtió en salida. Códigos: ERR-M4-008.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /reservas/{id_reserva}/salida:
+    post:
+      tags:
+      - Reservas
+      summary: Registrar la salida de una reserva (despacho)
+      description: Solo una reserva CONFIRMADA puede consumirse. Antes de modificar datos, validar mediante el contrato
+        de M5 que el pedido está pagado, que el subpedido pertenece a ese pedido y comercio y que ambos identificadores
+        coinciden con el vínculo de la reserva. Una transacción descuenta cantidad_fisica y cantidad_reservada en
+        igual medida, registra salida y Kardex valorizado y pasa a CONSUMIDA. Repetir una salida CONSUMIDA con el
+        mismo pedido/subpedido devuelve 200 sin duplicar movimiento ni publicación; vínculos distintos devuelven
+        409. Publicar SalidaInventarioConfirmada después del commit según SC-M4-09. La ruta y el evento de despacho
+        comparten la misma operación idempotente; el nombre del evento requiere conciliación con M5.
+      operationId: confirmarSalidaPorReserva
+      parameters:
+      - name: id_reserva
+        in: path
+        required: true
+        description: Reserva a consumir.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservaVinculoSolicitud'
+            example:
+              id_pedido: 9120
+              id_subpedido: 18455
+      responses:
+        '201':
+          description: Salida registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalidaReserva'
+        '200':
+          description: 'Reintento idempotente: la salida ya existía.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalidaReserva'
+        '404':
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: ERR-M4-006, ERR-M4-005, ERR-M4-009 o ERR-M4-007.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '503':
+          description: 'ERR-006: no se pudo validar el estado y vínculo con M5; no se registra salida.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+  /reservas/{id_reserva}/reingreso:
+    post:
+      tags:
+      - Reservas
+      summary: Registrar reingreso por cancelación
+      description: 'Alcance deseable. Solo una reserva CONSUMIDA con salida original registrada admite reingreso.
+        Pedido/subpedido deben corresponder a la salida. Cancelación por sí sola no aumenta inventario: exigir recepción
+        física verificada, registrada por personal autorizado y vinculada a las unidades de la salida; se valida
+        id_recepcion, no una afirmación del solicitante. Esta operación candidata contempla retorno completo, sin
+        duplicarlo; el retorno parcial requiere contrato adicional acordado. Transacción de entrada y Kardex; una
+        reserva CONFIRMADA se libera sin reingreso.'
+      operationId: registrarReingresoPorReserva
+      parameters:
+      - name: id_reserva
+        in: path
+        required: true
+        description: Reserva consumida.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReingresoSolicitud'
+            example:
+              id_pedido: 9120
+              id_subpedido: 18455
+              id_recepcion: recepcion-0001
+              justificacion: Recepción física completa verificada
+      responses:
+        '201':
+          description: Reingreso registrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Movimiento'
+        '404':
+          description: 'ERR-003 si la reserva pertenece a otro comercio; ERR-M4-004 si la reserva no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: ERR-M4-006, ERR-M4-010, ERR-M4-011 o ERR-M4-007.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /kardex/valorizado:
+    get:
+      tags:
+      - Kardex
+      summary: Obtener kardex valorizado
+      description: 'Solo lectura. Las líneas son inmutables (RN-M4-003): el mismo periodo siempre devuelve los mismos
+        valores salvo líneas nuevas. Cada registro incluye usuario, motivo y saldos. Las reservas y liberaciones
+        se distinguen de movimientos físicos; no imputar sus cantidades a ventas o costos. Saldo físico del último
+        registro coincide con existencia física.'
+      operationId: obtenerKardexValorizado
+      parameters:
+      - name: id_comercio
+        in: query
+        required: true
+        description: Comercio.
+        schema:
+          type: integer
+          format: int64
+      - name: fecha_inicio
+        in: query
+        required: true
+        description: Inicio del periodo (inclusive).
+        schema:
+          type: string
+          format: date
+      - name: fecha_fin
+        in: query
+        required: true
+        description: Fin del periodo (inclusive).
+        schema:
+          type: string
+          format: date
+      - name: tipo_movimiento
+        in: query
+        required: false
+        description: Filtra por tipo de movimiento.
+        schema:
+          type: string
+          enum:
+          - entrada
+          - salida
+          - ajuste
+          - transferencia_salida
+          - transferencia_entrada
+          - reingreso
+          - reserva
+          - confirmacion_reserva
+          - liberacion_reserva
+          - vencimiento_reserva
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página (desde 1).
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: por_pagina
+        in: query
+        required: false
+        description: Registros por página.
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Líneas del kardex.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KardexRespuesta'
+        '422':
+          description: ERR-M4-012 si el rango de fechas es inválido; ERR-005 si los demás datos de consulta son inválidos. Sin máximo de días impuesto sin acuerdo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/RecursoNoAccesible'
+  /auditoria/inventario:
+    get:
+      tags:
+      - Auditoría
+      summary: Consultar inventario y kardex de varios comercios (solo lectura)
+      description: 'Excepción controlada y de solo lectura a RN-12 (RF-M4-012, RN-M4-015, CU-M4-12). Solo el rol
+        Soporte/Auditoría de la plataforma puede invocarla; un usuario de comercio recibe 403. Cada consulta se
+        registra en la bitácora de auditoría del núcleo (usuario, fecha, hora, comercios consultados). No modifica
+        datos. Si se indican fecha_inicio y fecha_fin se incluye además el kardex del periodo. Consumidor: núcleo
+        compartido (rol Soporte/Auditoría).'
+      operationId: consultarInventarioAuditoria
+      parameters:
+      - name: ids_comercio
+        in: query
+        required: true
+        description: Comercios a consultar, separados por coma; permiso exclusivo de Soporte/Auditoría.
+        style: form
+        explode: false
+        schema:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+            format: int64
+      - name: fecha_inicio
+        in: query
+        required: false
+        description: Inicio del periodo del kardex (inclusive). Obligatorio si se envía fecha_fin.
+        schema:
+          type: string
+          format: date
+      - name: fecha_fin
+        in: query
+        required: false
+        description: Fin inclusive. Obligatorio si se envía fecha_inicio; ambas fechas forman un rango válido.
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Existencias de cada comercio y, si se pidió un periodo, su kardex.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditoriaInventarioRespuesta'
+        '422':
+          description: 'Comercios o fechas inválidos. Códigos: ERR-M4-012, ERR-005.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /existencias:
+    get:
+      tags:
+      - Existencias
+      summary: Listar existencias
+      operationId: listarExistencias
+      parameters:
+      - name: id_comercio
+        in: query
+        required: true
+        description: Comercio.
+        schema:
+          type: integer
+          format: int64
+      - name: id_ubicacion
+        in: query
+        required: false
+        description: Filtra por ubicación.
+        schema:
+          type: integer
+          format: int64
+      - name: id_variacion
+        in: query
+        required: false
+        description: Filtra por variación.
+        schema:
+          type: integer
+          format: int64
+      - name: bajo_minimo
+        in: query
+        required: false
+        description: Solo existencias con disponible <= stock_minimo.
+        schema:
+          type: boolean
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página (desde 1).
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: por_pagina
+        in: query
+        required: false
+        description: Registros por página.
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Existencias.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Existencia'
+                  paginacion:
+                    $ref: '#/components/schemas/Paginacion'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/RecursoNoAccesible'
+  /existencias/{id_existencia}/stock-minimo:
+    put:
+      tags:
+      - Existencias
+      summary: Fijar stock mínimo
+      description: Si tras el cambio el disponible queda en o bajo el mínimo, se publica AlertaStockMinimo. La operación
+        queda en la bitácora del núcleo.
+      operationId: fijarStockMinimo
+      parameters:
+      - name: id_existencia
+        in: path
+        required: true
+        description: Existencia.
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - stock_minimo
+              properties:
+                stock_minimo:
+                  type: integer
+                  minimum: 0
+            example:
+              stock_minimo: 5
+      responses:
+        '200':
+          description: Existencia actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Existencia'
+        '404':
+          description: 'ERR-003 si la existencia pertenece a otro comercio; ERR-M4-002 si la existencia no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /movimientos:
+    post:
+      tags:
+      - Movimientos
+      summary: Registrar entrada o salida manual
+      description: 'Valida el comercio activo, la variación y la ubicación habilitada del mismo comercio mediante
+        M2/M3. Transacción atómica: actualiza existencia física y registra movimiento y Kardex. Una salida manual
+        no puede consumir las unidades comprometidas por reservas ACTIVA o CONFIRMADA. El costo de entrada es obligatorio;
+        la valoración posterior depende de SC-M4-07.'
+      operationId: registrarMovimientoManual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovimientoSolicitud'
+            example:
+              id_comercio: 104
+              id_variacion: 501
+              id_ubicacion: 12
+              tipo_movimiento: entrada
+              cantidad: 20
+              costo_unitario: 8500.0
+              justificacion: Compra a proveedor, factura 1032
+      responses:
+        '201':
+          description: Movimiento registrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Movimiento'
+        '404':
+          description: 'ERR-003 si el recurso es de otro comercio; ERR-M4-013 si la variación no existe; ERR-M4-014 si la ubicación no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: 'Regla de negocio. Códigos: ERR-M4-015, ERR-M4-001.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /kardex:
+    get:
+      tags:
+      - Kardex
+      summary: Consultar kardex de una variación
+      operationId: consultarKardex
+      parameters:
+      - name: id_comercio
+        in: query
+        required: true
+        description: Comercio.
+        schema:
+          type: integer
+          format: int64
+      - name: id_variacion
+        in: query
+        required: true
+        description: Variación.
+        schema:
+          type: integer
+          format: int64
+      - name: id_ubicacion
+        in: query
+        required: false
+        description: Ubicación.
+        schema:
+          type: integer
+          format: int64
+      - name: fecha_inicio
+        in: query
+        required: false
+        description: Desde (inclusive).
+        schema:
+          type: string
+          format: date
+      - name: fecha_fin
+        in: query
+        required: false
+        description: Hasta (inclusive).
+        schema:
+          type: string
+          format: date
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página (desde 1).
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: por_pagina
+        in: query
+        required: false
+        description: Registros por página.
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Líneas del kardex.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KardexRespuesta'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          $ref: '#/components/responses/RecursoNoAccesible'
+      description: ' Cada registro incluye usuario, motivo y saldos. Las reservas y liberaciones se distinguen de
+        movimientos físicos; no imputar sus cantidades a ventas o costos. Saldo físico del último registro coincide
+        con existencia física.'
+  /transferencias:
+    post:
+      tags:
+      - Movimientos
+      summary: Transferir entre ubicaciones
+      description: Ambos movimientos comparten el mismo identificador de transferencia (referencia_id). Origen y
+        destino deben ser distintos. Las dos ubicaciones deben estar habilitadas y pertenecer al mismo comercio
+        de la variación y del autorizador. Requiere autorización previa verificada del Administrador (RN-M4-012).
+        Una única transacción bloquea existencias, descuenta en origen y suma en destino; falla completa con rollback
+        ante cualquier error. No se trasladan unidades reservadas. Registrar ejecutor, autorizador, fecha/hora y
+        motivo.
+      operationId: registrarTransferencia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferenciaSolicitud'
+            example:
+              id_comercio: 104
+              id_variacion: 501
+              id_ubicacion_origen: 12
+              id_ubicacion_destino: 13
+              cantidad: 5
+              justificacion: Reposición de la tienda
+              id_autorizacion: autorizacion-0001
+      responses:
+        '201':
+          description: Transferencia registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferenciaRespuesta'
+        '404':
+          description: 'ERR-003 si el recurso es de otro comercio; ERR-M4-013 si la variación no existe; ERR-M4-014 si la ubicación no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: 'Regla de negocio. Códigos: ERR-M4-015, ERR-M4-001.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /ajustes:
+    post:
+      tags:
+      - Ajustes
+      summary: Registrar conteo físico y ajuste
+      description: 'Conteo físico bajo bloqueo: cantidad_sistema_vista debe coincidir con la física actual o devolver
+        409 ERR-M4-016. Con diferencia exige motivo no vacío y autorización previa del Administrador
+        del comercio, validada en servidor por id_autorizacion, antes de aplicar; registra ejecutor, autorizador
+        y fecha/hora (RN-M4-011). Sin autorización válida no modifica stock. El flujo previo de solicitud/aprobación
+        debe registrar esa autorización; los endpoints de dicho flujo se acordarán con la interfaz de bodega y núcleo.
+        Si cantidad_contada es menor que unidades reservadas ACTIVA y CONFIRMADA, rechazar ERR-M4-017.
+        Sin diferencia registra conteo sin movimiento. Con diferencia actualiza física y crea Kardex en una transacción
+        atómica.'
+      operationId: registrarAjusteInventario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AjusteSolicitud'
+            example:
+              id_comercio: 104
+              id_variacion: 501
+              id_ubicacion: 12
+              cantidad_sistema_vista: 18
+              cantidad_contada: 16
+              motivo_ajuste: merma
+              justificacion: Dos unidades dañadas en bodega
+              id_autorizacion: autorizacion-0002
+      responses:
+        '201':
+          description: Ajuste registrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ajuste'
+        '404':
+          description: 'ERR-003 si la existencia pertenece a otro comercio; ERR-M4-002 si la existencia no existe.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: 'Regla de negocio. Códigos: ERR-M4-016, ERR-M4-015, ERR-M4-017.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+  /subpedidos/{id_subpedido}/costos-productos-vendidos:
+    get:
+      tags:
+      - Kardex
+      summary: Obtener costos de los productos vendidos de un subpedido
+      operationId: ObtenerCostoProductosVendidos
+      x-consumidores:
+      - M7
+      description: >
+        Consulta de solo lectura para la dependencia ObtenerCostoProductosVendidos(id_subpedido) de M7.
+        Devuelve los costos de las variaciones del subpedido a partir de las salidas físicas confirmadas
+        y valorizadas registradas por M4, sin exigir que M7 reconstruya el kardex. No incluye reservas,
+        liberaciones, transferencias ni salidas manuales ajenas al subpedido. Cada movimiento de salida
+        se cuenta una sola vez. Los costos son los registrados al confirmar la salida, no los precios
+        de venta ni una revalorización con el costo actual. Se mantiene el método de valoración
+        pendiente de acuerdo SC-M4-07. Si el evento de despacho llega antes de que M4 confirme y
+        valorice todas las salidas del subpedido, no se entrega un resultado parcial como definitivo:
+        se responde 409 y M7 debe reintentar. La consulta no genera movimientos ni asientos contables.
+        El núcleo debe autorizar a M7 y validar el acceso al comercio propietario del subpedido.
+      parameters:
+      - name: id_subpedido
+        in: path
+        required: true
+        description: Identificador del subpedido cuyo costo de ventas se consulta.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+      responses:
+        '200':
+          description: Costos completos de las salidas confirmadas del subpedido, agrupados por variación.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostosProductosVendidosSubpedido'
+              example:
+                id_subpedido: 501
+                id_comercio: 12
+                variaciones:
+                - id_variacion: 101
+                  cantidad: 2
+                  costo_unitario: 8500.0
+                  costo_total: 17000.0
+                costo_total: 17000.0
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/AccesoDenegado'
+        '404':
+          description: ERR-003 si el subpedido es de otro comercio; ERR-M4-018 si no hay registros asociados al subpedido en M4.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '409':
+          description: Las salidas del subpedido aún no están completamente confirmadas y valorizadas. Código ERR-M4-019. Reintentar sin registrar un costo de ventas parcial ni cero.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEstandar'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token emitido por el núcleo compartido (identidad y roles). El filtro por comercio (RN-12) lo
+        aplica el núcleo.
+  schemas:
+    CostosProductosVendidosSubpedido:
+      type: object
+      required:
+      - id_subpedido
+      - id_comercio
+      - variaciones
+      - costo_total
+      properties:
+        id_subpedido:
+          type: integer
+          format: int64
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio propietario del subpedido.
+        variaciones:
+          type: array
+          minItems: 1
+          description: Una línea por id_variacion, agregando únicamente sus salidas confirmadas del subpedido.
+          items:
+            $ref: '#/components/schemas/CostoVariacionVendida'
+        costo_total:
+          type: number
+          minimum: 0
+          description: Suma de costo_total de todas las variaciones; importe del costo de ventas que M7 consulta.
+    CostoVariacionVendida:
+      type: object
+      required:
+      - id_variacion
+      - cantidad
+      - costo_unitario
+      - costo_total
+      properties:
+        id_variacion:
+          type: integer
+          format: int64
+        cantidad:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Suma de unidades de las salidas confirmadas de esta variación en el subpedido.
+        costo_unitario:
+          type: number
+          minimum: 0
+          description: >
+            Costo unitario de la salida registrada; si existen varias salidas con costos distintos,
+            costo_total dividido entre cantidad. Es un valor agregado de consulta, no una elección
+            de costo promedio como método de valoración del inventario. M7 usa costo_total como
+            importe registrado para evitar diferencias de redondeo.
+        costo_total:
+          type: number
+          minimum: 0
+          description: Suma de los importes valorizados registrados para las salidas confirmadas de esta variación.
+    ErrorEstandar:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [codigo, mensaje]
+          properties:
+            codigo: { type: string, example: "ERR-004" }
+            mensaje: { type: string }
+            detalles: { type: object, nullable: true }
+    Paginacion:
+      type: object
+      properties:
+        pagina:
+          type: integer
+        por_pagina:
+          type: integer
+        total:
+          type: integer
+        total_paginas:
+          type: integer
+    Disponibilidad:
+      type: object
+      required:
+      - id_comercio
+      - id_variacion
+      - cantidad_disponible
+      - estado_disponibilidad
+      - bajo_stock
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación.
+        id_ubicacion:
+          type: integer
+          format: int64
+          nullable: true
+          description: Nulo cuando la cantidad suma todas las ubicaciones.
+        cantidad_disponible:
+          type: integer
+          minimum: 0
+        estado_disponibilidad:
+          type: string
+          enum:
+          - disponible
+          - agotado
+        bajo_stock:
+          type: boolean
+          description: true si cantidad_disponible <= stock_minimo, RN-M4-016.
+    DisponibilidadItem:
+      type: object
+      required:
+      - id_comercio
+      - id_variacion
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación.
+        id_ubicacion:
+          type: integer
+          format: int64
+          description: Ubicación (opcional).
+    DisponibilidadLoteSolicitud:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/DisponibilidadItem'
+    DisponibilidadProducto:
+      type: object
+      description: Disponibilidad agregada de un producto (CS-02); disponible si al menos una variación tiene
+        unidades, agotado si ninguna tiene o el producto no tiene existencias registradas.
+      required:
+      - id_comercio
+      - id_producto
+      - estado_disponibilidad
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_producto:
+          type: integer
+          format: int64
+          description: Producto (agrega todas sus variaciones).
+        estado_disponibilidad:
+          type: string
+          enum:
+          - disponible
+          - agotado
+    DisponibilidadProductoItem:
+      type: object
+      required:
+      - id_comercio
+      - id_producto
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_producto:
+          type: integer
+          format: int64
+          description: Producto.
+    DisponibilidadProductoLoteSolicitud:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/DisponibilidadProductoItem'
+    ReservaSolicitud:
+      type: object
+      required:
+      - id_comercio
+      - id_variacion
+      - cantidad
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio dueño del stock.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación a reservar.
+        id_ubicacion:
+          type: integer
+          format: int64
+          description: Opcional. Si se envía, debe ser una ubicación habilitada del comercio. Si se omite, M4 selecciona
+            una habilitada con toda la cantidad disponible requerida; devuelve la ubicación asignada. No requiere
+            que el cliente elija bodega.
+        cantidad:
+          type: integer
+          minimum: 1
+        expiracion_minutos:
+          type: integer
+          minimum: 1
+          default: 15
+    Reserva:
+      type: object
+      required:
+      - id_reserva
+      - id_comercio
+      - id_existencia
+      - cantidad
+      - estado_reserva
+      - id_variacion
+      - id_ubicacion
+      - fecha_creacion
+      - fecha_expiracion
+      properties:
+        id_reserva:
+          type: string
+          format: uuid
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_existencia:
+          type: integer
+          format: int64
+          description: Existencia apartada.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación (derivada de la existencia).
+        id_ubicacion:
+          type: integer
+          format: int64
+          description: Ubicación (derivada de la existencia).
+        cantidad:
+          type: integer
+          minimum: 1
+        estado_reserva:
+          type: string
+          enum:
+          - activa
+          - confirmada
+          - consumida
+          - liberada
+          - vencida
+          description: Representación JSON de los estados ACTIVA, CONFIRMADA, CONSUMIDA, LIBERADA y VENCIDA del
+            PC2.
+        id_pedido:
+          type: integer
+          format: int64
+          nullable: true
+        id_subpedido:
+          type: integer
+          format: int64
+          nullable: true
+        fecha_creacion:
+          type: string
+          format: date-time
+          description: Momento de la reserva.
+        fecha_expiracion:
+          type: string
+          format: date-time
+          description: Plazo original de la reserva temporal, conservado para trazabilidad. El temporizador solo
+            expira ACTIVA; CONFIRMADA conserva las unidades sin expiración automática.
+        fecha_resolucion:
+          type: string
+          format: date-time
+          description: Fecha de la última transición; el historial conserva todas las transiciones.
+          nullable: true
+        motivo_cierre:
+          type: string
+          nullable: true
+          description: pago_rechazado, pedido_cancelado, solicitud_m5 o vencimiento.
+    ReservaVinculoSolicitud:
+      type: object
+      required:
+      - id_pedido
+      - id_subpedido
+      properties:
+        id_pedido:
+          type: integer
+          format: int64
+          description: Pedido de M5.
+        id_subpedido:
+          type: integer
+          format: int64
+          description: Subpedido de M5 del comercio de la reserva. Debe pertenecer a id_pedido; validar por contrato
+            de M5.
+    LiberarReservaSolicitud:
+      type: object
+      required:
+      - motivo
+      properties:
+        motivo:
+          type: string
+          enum:
+          - pago_rechazado
+          - pedido_cancelado
+          - solicitud_m5
+    ReingresoSolicitud:
+      type: object
+      required:
+      - id_pedido
+      - id_subpedido
+      - justificacion
+      - id_recepcion
+      properties:
+        id_pedido:
+          type: integer
+          format: int64
+          description: Pedido cancelado.
+        justificacion:
+          type: string
+          maxLength: 255
+          minLength: 1
+        id_subpedido:
+          type: integer
+          format: int64
+          description: Subpedido asociado a la salida original.
+        id_recepcion:
+          type: string
+          description: Identificador del registro de recepción física verificada por personal autorizado; M4 valida
+            existencia, cantidades y vínculo. Su mecanismo técnico se ratifica en integración.
+          minLength: 1
+    Movimiento:
+      type: object
+      required:
+      - id_movimiento
+      - id_existencia
+      - id_comercio
+      - id_producto
+      - id_variacion
+      - id_ubicacion
+      - tipo_movimiento
+      - efecto_stock
+      - cantidad
+      - fecha_movimiento
+      - id_usuario
+      - justificacion
+      properties:
+        id_movimiento:
+          type: integer
+          format: int64
+          description: Atributo canónico.
+        id_existencia:
+          type: integer
+          format: int64
+          description: Existencia afectada.
+        id_comercio:
+          type: integer
+          format: int64
+          description: Atributo canónico.
+        id_producto:
+          type: integer
+          format: int64
+          description: Atributo canónico.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación afectada.
+        id_ubicacion:
+          type: integer
+          format: int64
+          description: Ubicación.
+        tipo_movimiento:
+          type: string
+          enum:
+          - entrada
+          - salida
+          - ajuste
+          - transferencia_salida
+          - transferencia_entrada
+          - reingreso
+          - reserva
+          - confirmacion_reserva
+          - liberacion_reserva
+          - vencimiento_reserva
+        efecto_stock:
+          type: string
+          enum:
+          - aumenta
+          - disminuye
+          - sin_cambio_fisico
+          description: 'Efecto sobre stock físico. Reserva, confirmación, liberación y vencimiento no cambian físico:
+            sí trazan compromiso/disponibilidad.'
+        cantidad:
+          type: integer
+          minimum: 1
+        costo_unitario:
+          type: number
+          nullable: true
+        id_usuario:
+          type: integer
+          format: int64
+          description: Usuario ejecutor identificado por el contexto autenticado, registrado por M4.
+        referencia_tipo:
+          type: string
+          nullable: true
+          enum:
+          - reserva
+          - pedido
+          - transferencia
+          - conteo
+          - manual
+          - null
+        referencia_id:
+          type: string
+          nullable: true
+        justificacion:
+          type: string
+          description: Motivo o justificación del registro.
+          minLength: 1
+        fecha_movimiento:
+          type: string
+          format: date-time
+          description: Atributo canónico.
+        id_autorizador:
+          type: integer
+          format: int64
+          description: Administrador que aprobó ajustes/transferencias; nulo si no aplica.
+          nullable: true
+        fecha_autorizacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de aprobación registrada; nula si no aplica.
+        saldo_reservado:
+          type: integer
+          format: int64
+          description: Unidades reservadas ACTIVA/CONFIRMADA después del movimiento.
+          minimum: 0
+        saldo_disponible:
+          type: integer
+          format: int64
+          description: Disponible posterior = saldo físico menos saldo reservado.
+          minimum: 0
+    SalidaReserva:
+      type: object
+      required:
+      - id_movimiento
+      - id_reserva
+      - id_variacion
+      - cantidad
+      - costo_unitario
+      - monto_total
+      properties:
+        id_movimiento:
+          type: integer
+          format: int64
+          description: Movimiento de salida.
+        id_kardex:
+          type: integer
+          format: int64
+          description: Línea de kardex.
+        id_reserva:
+          type: string
+          format: uuid
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación.
+        cantidad:
+          type: integer
+        costo_unitario:
+          type: number
+          description: Costo según el método de valoración pendiente de ratificación M4/M7 (SC-M4-07).
+        monto_total:
+          type: number
+        fecha_movimiento:
+          type: string
+          format: date-time
+          description: Fecha de la salida.
+    MovimientoSolicitud:
+      oneOf:
+      - type: object
+        required:
+        - id_comercio
+        - id_variacion
+        - id_ubicacion
+        - tipo_movimiento
+        - cantidad
+        - justificacion
+        - costo_unitario
+        properties:
+          id_comercio:
+            type: integer
+            format: int64
+            description: Comercio.
+          id_variacion:
+            type: integer
+            format: int64
+            description: Variación.
+          id_ubicacion:
+            type: integer
+            format: int64
+            description: Ubicación.
+          tipo_movimiento:
+            type: string
+            enum:
+            - entrada
+          cantidad:
+            type: integer
+            minimum: 1
+          costo_unitario:
+            type: number
+            minimum: 0
+            description: Obligatorio si el tipo es entrada.
+          justificacion:
+            type: string
+            maxLength: 255
+      - type: object
+        required:
+        - id_comercio
+        - id_variacion
+        - id_ubicacion
+        - tipo_movimiento
+        - cantidad
+        - justificacion
+        properties:
+          id_comercio:
+            type: integer
+            format: int64
+            description: Comercio.
+          id_variacion:
+            type: integer
+            format: int64
+            description: Variación.
+          id_ubicacion:
+            type: integer
+            format: int64
+            description: Ubicación.
+          tipo_movimiento:
+            type: string
+            enum:
+            - salida
+          cantidad:
+            type: integer
+            minimum: 1
+          costo_unitario:
+            type: number
+            minimum: 0
+            description: Obligatorio si el tipo es entrada.
+          justificacion:
+            type: string
+            maxLength: 255
+    TransferenciaSolicitud:
+      type: object
+      required:
+      - id_comercio
+      - id_variacion
+      - id_ubicacion_origen
+      - id_ubicacion_destino
+      - cantidad
+      - justificacion
+      - id_autorizacion
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación.
+        id_ubicacion_origen:
+          type: integer
+          format: int64
+          description: Origen.
+        id_ubicacion_destino:
+          type: integer
+          format: int64
+          description: Destino (distinto del origen).
+        cantidad:
+          type: integer
+          minimum: 1
+        justificacion:
+          type: string
+          maxLength: 255
+        id_autorizacion:
+          type: string
+          description: Referencia de una autorización previa registrada en servidor por el Administrador del mismo
+            comercio. M4 valida permiso, vigencia y correspondencia con variación, ubicaciones y cantidades; no
+            basta un ID de usuario enviado por el cliente.
+          minLength: 1
+    TransferenciaRespuesta:
+      type: object
+      properties:
+        id_transferencia:
+          type: string
+          format: uuid
+        movimientos:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/Movimiento'
+    AjusteSolicitud:
+      type: object
+      required:
+      - id_comercio
+      - id_variacion
+      - id_ubicacion
+      - cantidad_sistema_vista
+      - cantidad_contada
+      - motivo_ajuste
+      - justificacion
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación.
+        id_ubicacion:
+          type: integer
+          format: int64
+          description: Ubicación.
+        cantidad_sistema_vista:
+          type: integer
+          minimum: 0
+          description: Cantidad que el encargado vio en pantalla; se compara bajo bloqueo.
+        cantidad_contada:
+          type: integer
+          minimum: 0
+        motivo_ajuste:
+          type: string
+          enum:
+          - merma
+          - robo
+          - danio
+          - sobrante
+          - error_conteo
+          - otro
+        justificacion:
+          type: string
+          maxLength: 255
+          minLength: 1
+        id_autorizacion:
+          type: string
+          description: Referencia de una autorización previa registrada en servidor por el Administrador del mismo
+            comercio. M4 valida permiso, vigencia y correspondencia con variación, ubicaciones y cantidades; no
+            basta un ID de usuario enviado por el cliente.
+          minLength: 1
+      description: Si hay diferencia, id_autorizacion es obligatorio antes de aplicar el ajuste. Si no hay diferencia,
+        se registra el conteo sin movimiento y no se exige autorización.
+    Ajuste:
+      type: object
+      properties:
+        id_ajuste:
+          type: integer
+          format: int64
+          description: Conteo.
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_existencia:
+          type: integer
+          format: int64
+          description: Existencia contada.
+        id_movimiento:
+          type: integer
+          format: int64
+          nullable: true
+        motivo_ajuste:
+          type: string
+          nullable: true
+        cantidad_sistema:
+          type: integer
+        cantidad_contada:
+          type: integer
+        diferencia:
+          type: integer
+          description: 'Calculada: cantidad_contada − cantidad_sistema.'
+        id_usuario:
+          type: integer
+          format: int64
+          description: Usuario ejecutor identificado por el contexto autenticado, registrado por M4.
+        justificacion:
+          type: string
+          description: Motivo o justificación del registro.
+          minLength: 1
+        fecha_ajuste:
+          type: string
+          format: date-time
+          description: Fecha del conteo.
+        id_autorizador:
+          type: integer
+          format: int64
+          description: Administrador que aprobó ajustes/transferencias; nulo si no aplica.
+          nullable: true
+        fecha_autorizacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de aprobación registrada; nula si no aplica.
+      required:
+      - id_usuario
+      - justificacion
+    Existencia:
+      type: object
+      properties:
+        id_existencia:
+          type: integer
+          format: int64
+          description: Fila de stock.
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_producto:
+          type: integer
+          format: int64
+          description: Producto.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación.
+        id_ubicacion:
+          type: integer
+          format: int64
+          description: Ubicación.
+        sku:
+          type: string
+        cantidad_fisica:
+          type: integer
+        cantidad_reservada:
+          type: integer
+          description: Unidades comprometidas por reservas ACTIVA y CONFIRMADA.
+        cantidad_disponible:
+          type: integer
+          description: Calculada.
+        stock_minimo:
+          type: integer
+        bajo_minimo:
+          type: boolean
+          description: 'Calculada: cantidad_disponible <= stock_minimo.'
+        fecha_actualizacion:
+          type: string
+          format: date-time
+          description: Última modificación.
+        valor_inventario:
+          type: number
+          minimum: 0
+          description: Valorización según el método que ratifiquen M4 y M7 (SC-M4-07); no fija promedio ni PEPS.
+    LineaKardex:
+      type: object
+      properties:
+        id_kardex:
+          type: integer
+          format: int64
+          description: Línea.
+        id_movimiento:
+          type: integer
+          format: int64
+          description: Movimiento valorizado.
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio.
+        id_producto:
+          type: integer
+          format: int64
+          description: Producto.
+        id_variacion:
+          type: integer
+          format: int64
+          description: Variación.
+        id_ubicacion:
+          type: integer
+          format: int64
+          description: Ubicación.
+        tipo_movimiento:
+          type: string
+          enum:
+          - entrada
+          - salida
+          - ajuste
+          - transferencia_salida
+          - transferencia_entrada
+          - reingreso
+          - reserva
+          - confirmacion_reserva
+          - liberacion_reserva
+          - vencimiento_reserva
+        efecto_stock:
+          type: string
+          enum:
+          - aumenta
+          - disminuye
+          - sin_cambio_fisico
+          description: 'Efecto sobre stock físico. Reserva, confirmación, liberación y vencimiento no cambian físico:
+            sí trazan compromiso/disponibilidad.'
+        cantidad:
+          type: integer
+        metodo_valorizacion:
+          type: string
+          description: Método ratificado por M4/M7; pendiente SC-M4-07. No se presupone promedio ponderado.
+        costo_unitario:
+          type: number
+          nullable: true
+          description: Valor monetario físico; nulo para operaciones exclusivas de reserva/disponibilidad.
+        monto_total:
+          type: number
+          nullable: true
+          description: Valor monetario físico; nulo para operaciones exclusivas de reserva/disponibilidad.
+        saldo_cantidad:
+          type: integer
+        saldo_valorizado:
+          type: number
+        referencia_tipo:
+          type: string
+          nullable: true
+        referencia_id:
+          type: string
+          nullable: true
+        fecha_movimiento:
+          type: string
+          format: date-time
+          description: Fecha del movimiento.
+        fecha_registro:
+          type: string
+          format: date-time
+          description: Momento en que se asentó la línea.
+        id_usuario:
+          type: integer
+          format: int64
+          description: Usuario ejecutor identificado por el contexto autenticado, registrado por M4.
+        justificacion:
+          type: string
+          description: Motivo o justificación del registro.
+          minLength: 1
+        id_autorizador:
+          type: integer
+          format: int64
+          description: Administrador que aprobó ajustes/transferencias; nulo si no aplica.
+          nullable: true
+        fecha_autorizacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de aprobación registrada; nula si no aplica.
+        saldo_reservado:
+          type: integer
+          format: int64
+          description: Unidades reservadas ACTIVA/CONFIRMADA después del movimiento.
+          minimum: 0
+        saldo_disponible:
+          type: integer
+          format: int64
+          description: Disponible posterior = saldo físico menos saldo reservado.
+          minimum: 0
+      required:
+      - id_usuario
+      - justificacion
+      - id_kardex
+      - id_comercio
+      - id_variacion
+      - id_ubicacion
+      - tipo_movimiento
+      - saldo_cantidad
+      - saldo_reservado
+      - saldo_disponible
+      - fecha_movimiento
+      description: Historial inmutable físico y de disponibilidad. Las reservas trazan saldos sin generar costo
+        de venta ni afectar valorización física. El costo de ventas solo surge de salida confirmada. Correcciones
+        mediante nuevos movimientos.
+    KardexRespuesta:
+      type: object
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineaKardex'
+        paginacion:
+          $ref: '#/components/schemas/Paginacion'
+    AuditoriaInventarioRespuesta:
+      type: object
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditoriaComercio'
+    AuditoriaComercio:
+      type: object
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+          description: Comercio consultado.
+        existencias:
+          type: array
+          description: Existencias del comercio con su disponible calculado.
+          items:
+            $ref: '#/components/schemas/Existencia'
+        kardex:
+          type: array
+          description: Líneas del kardex del periodo. Vacío si no se pidió un periodo.
+          items:
+            $ref: '#/components/schemas/LineaKardex'
+    M2EstadoComercio:
+      type: object
+      description: Respuesta de ObtenerComercioActivo, según openapi_M2_v1.2.0.
+      required:
+      - id_comercio
+      - estado
+      - activo
+      properties:
+        id_comercio:
+          type: integer
+        estado:
+          type: string
+          enum:
+          - Pendiente
+          - Activo
+          - Rechazado
+          - Suspendido
+        activo:
+          type: boolean
+          description: true únicamente cuando estado es Activo. M4 solo permite movimientos manuales con activo = true.
+        motivo_estado:
+          type: string
+          nullable: true
+          description: Motivo de la suspensión o del rechazo; nulo si el comercio está Activo o Pendiente.
+    M2SedesComercio:
+      type: object
+      properties:
+        id_comercio:
+          type: integer
+        sedes:
+          type: array
+          items:
+            $ref: '#/components/schemas/M2SedeHabilitada'
+    M2SedeHabilitada:
+      type: object
+      required:
+      - id_sede
+      - habilitada
+      properties:
+        id_sede:
+          type: integer
+          description: Sede física (tienda o bodega) propiedad de M2. Es el mismo identificador que M4 guarda como id_ubicacion.
+        nombre:
+          type: string
+        direccion:
+          type: string
+        habilitada:
+          type: boolean
+          example: true
+    EventoExistenciaReservada:
+      type: object
+      required:
+      - id_reserva
+      - id_comercio
+      - id_variacion
+      - id_ubicacion
+      - cantidad
+      - fecha_expiracion
+      - id_evento
+      - version_evento
+      - fecha_evento
+      properties:
+        id_reserva:
+          type: string
+          format: uuid
+        id_comercio:
+          type: integer
+          format: int64
+        id_variacion:
+          type: integer
+          format: int64
+        id_ubicacion:
+          type: integer
+          format: int64
+        cantidad:
+          type: integer
+          minimum: 1
+        fecha_expiracion:
+          type: string
+          format: date-time
+        id_evento:
+          type: string
+          format: uuid
+        version_evento:
+          type: string
+          example: 1.0.0
+        fecha_evento:
+          type: string
+          format: date-time
+    EventoExistenciaAgotada:
+      type: object
+      description: 'Se publica cuando la disponibilidad total de la variación, sumando todas las ubicaciones del
+        comercio, llega a 0 (CS-03, M1). id_ubicacion siempre es nulo en este evento: no distingue bodega.'
+      required:
+      - id_comercio
+      - id_producto
+      - id_variacion
+      - id_ubicacion
+      - cantidad_disponible
+      - fecha_evento
+      - id_evento
+      - version_evento
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+        id_producto:
+          type: integer
+          format: int64
+          description: Producto al que pertenece la variación (CS-04, M1); evita que M1 tenga que consultarlo a M3.
+        id_variacion:
+          type: integer
+          format: int64
+        id_ubicacion:
+          type: integer
+          format: int64
+          nullable: true
+          description: Siempre nulo. El disparador es el total del comercio, no una ubicación (CS-03).
+        cantidad_disponible:
+          type: integer
+          minimum: 0
+          enum:
+          - 0
+        fecha_evento:
+          type: string
+          format: date-time
+        id_evento:
+          type: string
+          format: uuid
+        version_evento:
+          type: string
+          example: 1.0.0
+    EventoSalidaInventarioConfirmada:
+      type: object
+      required:
+      - id_movimiento
+      - id_comercio
+      - id_pedido
+      - id_subpedido
+      - id_variacion
+      - id_ubicacion
+      - cantidad
+      - costo_unitario
+      - fecha_movimiento
+      - monto_total
+      - id_evento
+      - version_evento
+      - fecha_evento
+      properties:
+        id_movimiento:
+          type: integer
+          format: int64
+        id_comercio:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+        id_variacion:
+          type: integer
+          format: int64
+        id_ubicacion:
+          type: integer
+          format: int64
+        cantidad:
+          type: integer
+          minimum: 1
+        costo_unitario:
+          type: number
+        fecha_movimiento:
+          type: string
+          format: date-time
+        monto_total:
+          type: number
+        id_evento:
+          type: string
+          format: uuid
+        version_evento:
+          type: string
+          example: 1.0.0
+        fecha_evento:
+          type: string
+          format: date-time
+    EventoExistenciaRepuesta:
+      type: object
+      description: 'Se publica cuando la disponibilidad total de la variación, sumando todas las ubicaciones del
+        comercio, vuelve a ser mayor que 0 (CS-03, M1). id_ubicacion siempre es nulo en este evento.'
+      required:
+      - id_comercio
+      - id_producto
+      - id_variacion
+      - id_ubicacion
+      - cantidad_disponible
+      - fecha_evento
+      - id_evento
+      - version_evento
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+        id_producto:
+          type: integer
+          format: int64
+          description: Producto al que pertenece la variación (CS-04, M1); evita que M1 tenga que consultarlo a M3.
+        id_variacion:
+          type: integer
+          format: int64
+        id_ubicacion:
+          type: integer
+          format: int64
+          nullable: true
+          description: Siempre nulo. El disparador es el total del comercio, no una ubicación (CS-03).
+        cantidad_disponible:
+          type: integer
+          minimum: 1
+        fecha_evento:
+          type: string
+          format: date-time
+        id_evento:
+          type: string
+          format: uuid
+        version_evento:
+          type: string
+          example: 1.0.0
+    EventoReservaVencida:
+      type: object
+      required:
+      - id_reserva
+      - id_comercio
+      - id_pedido
+      - id_subpedido
+      - fecha_expiracion
+      - id_evento
+      - version_evento
+      - fecha_evento
+      properties:
+        id_reserva:
+          type: string
+          format: uuid
+        id_comercio:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+          nullable: true
+        id_subpedido:
+          type: integer
+          format: int64
+          nullable: true
+        fecha_expiracion:
+          type: string
+          format: date-time
+        id_evento:
+          type: string
+          format: uuid
+        version_evento:
+          type: string
+          example: 1.0.0
+        fecha_evento:
+          type: string
+          format: date-time
+    EventoAlertaStockMinimo:
+      type: object
+      required:
+      - id_comercio
+      - id_variacion
+      - id_ubicacion
+      - cantidad_disponible
+      - stock_minimo
+      - fecha_evento
+      - id_evento
+      - version_evento
+      properties:
+        id_comercio:
+          type: integer
+          format: int64
+        id_variacion:
+          type: integer
+          format: int64
+        id_ubicacion:
+          type: integer
+          format: int64
+          nullable: true
+        cantidad_disponible:
+          type: integer
+          minimum: 0
+        stock_minimo:
+          type: integer
+        fecha_evento:
+          type: string
+          format: date-time
+        id_evento:
+          type: string
+          format: uuid
+        version_evento:
+          type: string
+          example: 1.0.0
+    EventoProductoPublicado:
+      type: object
+      required:
+      - id_evento
+      - fecha_evento
+      - id_comercio
+      - id_producto
+      - id_variacion
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_evento:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        id_producto:
+          type: integer
+          format: int64
+        id_variacion:
+          type: integer
+          format: int64
+    EventoPedidoConfirmado:
+      type: object
+      required:
+      - id_evento
+      - fecha_evento
+      - id_comercio
+      - id_pedido
+      - id_subpedido
+      - reservas
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_evento:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+        reservas:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+    EventoPagoRechazado:
+      type: object
+      required:
+      - id_evento
+      - fecha_evento
+      - id_comercio
+      - id_pedido
+      - id_subpedido
+      - reservas
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_evento:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+        reservas:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+    EventoPedidoCancelado:
+      type: object
+      required:
+      - id_evento
+      - fecha_evento
+      - id_comercio
+      - id_pedido
+      - id_subpedido
+      - reservas
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_evento:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+        reservas:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+    EventoComercioAprobado:
+      type: object
+      required:
+      - id_evento
+      - fecha_hora
+      - id_comercio
+      - estado
+      - nombre_comercial
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_hora:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        estado:
+          type: string
+          enum:
+          - Activo
+        nombre_comercial:
+          type: string
+    EventoComercioReactivado:
+      type: object
+      description: Carga útil publicada por M2 en su contrato v1.2.0 y registrada en la sección 4.3 del PC3.
+      required:
+      - id_evento
+      - fecha_hora
+      - id_comercio
+      - estado
+      - nombre_comercial
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_hora:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        estado:
+          type: string
+          enum:
+          - Activo
+        nombre_comercial:
+          type: string
+    EventoComercioSuspendido:
+      type: object
+      required:
+      - id_evento
+      - fecha_hora
+      - id_comercio
+      - estado
+      - motivo
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_hora:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        estado:
+          type: string
+          enum:
+          - Suspendido
+        motivo:
+          type: string
+          minLength: 1
+    EventoSubpedidoDespachado:
+      type: object
+      required:
+      - id_evento
+      - fecha_evento
+      - id_comercio
+      - id_pedido
+      - id_subpedido
+      - reservas
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_evento:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+        reservas:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+    EventoSubpedidoCancelado:
+      type: object
+      required:
+      - id_evento
+      - fecha_evento
+      - id_comercio
+      - id_pedido
+      - id_subpedido
+      - reservas
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+        fecha_evento:
+          type: string
+          format: date-time
+        id_comercio:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+        reservas:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+  responses:
+    NoAutenticado:
+      description: 'ERR-001: sesión inválida o expirada.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-001
+              mensaje: Tu sesión expiró, inicia sesión de nuevo.
+              detalles: null
+    AccesoDenegado:
+      description: 'ERR-002: el rol del usuario no tiene permiso para la operación.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-002
+              mensaje: No se encuentra autorizado para realizar esta acción.
+              detalles: null
+    RecursoNoAccesible:
+      description: 'ERR-003: el recurso es de otro comercio o de otro cliente (aislamiento, RN-12); se responde como si no existiera.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-003
+              mensaje: El recurso solicitado no existe o no es accesible.
+              detalles: null
+    ErrorValidacion:
+      description: 'ERR-005: validación de datos fallida. El detalle por campo viene en detalles.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-005
+              mensaje: Revisa los datos marcados (detalle por campo en detalles).
+              detalles:
+                cantidad: Debe ser mayor o igual a 1.
+    DependenciaNoDisponible:
+      description: 'ERR-006: M2, M3 o M5 no respondieron. La operación es parte de la compra en curso: no se reintenta en segundo plano ni se confirma a medias.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+          example:
+            error:
+              codigo: ERR-006
+              mensaje: Servicio temporalmente no disponible, intentar de nuevo.
+              detalles: null
+x-dependencias-consumidas:
+- modulo_proveedor: M2
+  operacion: ObtenerSedesComercio
+  ruta: GET /api/m2/v1/comercios/{id_comercio}/sedes
+  respuesta:
+    $ref: '#/components/schemas/M2SedesComercio'
+  estado: Registrada en la validación cruzada 4.4 del PC3 colectivo; verificado contra openapi_M2_v1.2.0.yaml; M2 declara a M4 como consumidor.
+  uso: Sedes habilitadas. id_sede de M2 es el mismo identificador que id_ubicacion de M4 (confirmado por M2 en su
+    contrato v1.2.0); sede cubre tienda y bodega.
+- modulo_proveedor: M2
+  operacion: ObtenerComercioActivo
+  ruta: GET /api/m2/v1/comercios/{id_comercio}/estado
+  respuesta:
+    $ref: '#/components/schemas/M2EstadoComercio'
+  estado: Verificado contra openapi_M2_v1.2.0.yaml; M2 declara a M4 como consumidor (bearerAuth) para bloquear movimientos
+    manuales de un comercio suspendido o inactivo.
+  uso: Verificar activo (activo = true); ObtenerSedesComercio no devuelve estado operativo del comercio.
+- modulo_proveedor: M3
+  operacion: obtenerVariacion
+  ruta: GET /api/m3/v1/variaciones/{id_variacion}
+  estado: Registrada en la validación cruzada 4.4 del PC3 colectivo (M4 → M3); reemplaza al nombre obtenerDetalleVariacion
+    del PC2 de M4.
+  uso: Validar la variación y su pertenencia al comercio. La respuesta (VariacionDetalle) trae el producto embebido,
+    de donde M4 toma id_comercio para compararlo con el de la solicitud.
+- modulo_proveedor: M5
+  operacion: obtenerPedido
+  ruta: GET /api/m5/v1/pedidos/{id_pedido}
+  estado: Registrada en la validación cruzada 4.4 del PC3 colectivo; M5 declara a M4 como consumidor.
+  uso: Verificar estado pagado y pertenencia pedido/subpedidos.
+- modulo_proveedor: M5
+  operacion: obtenerSubpedido
+  ruta: GET /api/m5/v1/subpedidos/{id_subpedido}
+  estado: Registrada en la validación cruzada 4.4 del PC3 colectivo; M5 declara a M4 como consumidor.
+  uso: Verificar vínculo del subpedido con pedido, comercio y líneas, sin consultas directas a tablas de M5.
+x-eventos:
+  nota: 'Contratos asíncronos en la extensión x-eventos. Los eventos de esta lista están registrados en la sección 4.3 del PC3 colectivo con versión 1.0.0 y cada uno se implementa como clase DTO en app/Events/M4_Inventario/{NombreEvento}.php con id_evento (UUID) para la idempotencia. Los esquemas de los eventos que M4 consume declaran solo los campos que M4 usa; la carga útil completa la define el módulo productor. Los eventos se publican tras el commit.'
+  publicados_por_m4:
+  - nombre: ExistenciaReservada
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M4
+    consumidores:
+    - M5
+    disparador: Se crea correctamente una reserva de existencia.
+    esquema:
+      $ref: '#/components/schemas/EventoExistenciaReservada'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: ExistenciaAgotada
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M4
+    consumidores:
+    - M1
+    - M3
+    disparador: 'La cantidad disponible de una variación llega a 0, sumando todas las ubicaciones del comercio
+      (CS-03); id_ubicacion viaja nulo.'
+    esquema:
+      $ref: '#/components/schemas/EventoExistenciaAgotada'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: SalidaInventarioConfirmada
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M4
+    consumidores:
+    - M7
+    disparador: Se confirma la salida física asociada a una reserva/pedido despachado y se registra el movimiento
+      valorizado.
+    nota: Nombre y monto_total del PC2 M4; Coordinar con M7 para no duplicar costo al recibir también el evento de despacho.
+    esquema:
+      $ref: '#/components/schemas/EventoSalidaInventarioConfirmada'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: ExistenciaRepuesta
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M4
+    consumidores:
+    - M1
+    - M3
+    - M5
+    disparador: 'El total de la variación en el comercio, sumando todas las ubicaciones, vuelve a ser mayor que
+      0 (CS-03); id_ubicacion viaja nulo.'
+    esquema:
+      $ref: '#/components/schemas/EventoExistenciaRepuesta'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: ReservaVencida
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M4
+    consumidores:
+    - M5
+    disparador: Una reserva activa alcanza su fecha de expiración sin confirmarse.
+    esquema:
+      $ref: '#/components/schemas/EventoReservaVencida'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: AlertaStockMinimo
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M4
+    consumidores:
+    - M2
+    disparador: La cantidad disponible queda igual o por debajo del stock mínimo configurado.
+    esquema:
+      $ref: '#/components/schemas/EventoAlertaStockMinimo'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  consumidos_por_m4:
+  - nombre: ProductoPublicado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M3
+    consumidores:
+    - M1
+    - M4
+    accion_en_m4: Crear de manera idempotente el registro de existencia inicial de la variación, sin inventar unidades
+      físicas. Asignación a ubicaciones por acordar con M3/M2.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
+    esquema:
+      $ref: '#/components/schemas/EventoProductoPublicado'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: PedidoConfirmado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M5
+    consumidores:
+    - M4
+    - M6
+    - M2
+    accion_en_m4: Transición idempotente ACTIVA a CONFIRMADA sin vencimiento automático; validar vínculo y plazo.
+      Si vencida, liberar una vez y notificar rechazo por mecanismo acordado con M5.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
+    esquema:
+      $ref: '#/components/schemas/EventoPedidoConfirmado'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: PagoRechazado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M6
+    consumidores:
+    - M4
+    accion_en_m4: Liberar la reserva únicamente si aún no existe salida física.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
+    esquema:
+      $ref: '#/components/schemas/EventoPagoRechazado'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: PedidoCancelado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M5
+    consumidores:
+    - M4
+    accion_en_m4: Liberar la reserva si el pedido aún no fue despachado. Si ya hubo salida, no incrementar existencias
+      hasta verificar el retorno físico y registrar el reingreso.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
+    esquema:
+      $ref: '#/components/schemas/EventoPedidoCancelado'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: ComercioAprobado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    version: 1.0.0
+    productor: M2
+    consumidores:
+    - M4
+    accion_en_m4: Habilitar sedes del comercio para registrar existencias, sin crear unidades físicas.
+    esquema:
+      $ref: '#/components/schemas/EventoComercioAprobado'
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: ComercioSuspendido
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0; M4 figura como consumidor.
+    version: 1.0.0
+    productor: M2
+    consumidores:
+    - M4
+    accion_en_m4: Bloquear nuevas entradas, ajustes y transferencias manuales (RN-M4-009). Pedidos pagados en curso
+      no se alteran unilateralmente; resolución SC-M4-11.
+    esquema:
+      $ref: '#/components/schemas/EventoComercioSuspendido'
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: ComercioReactivado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0; M4 figura como consumidor.
+    version: 1.0.0
+    productor: M2
+    consumidores:
+    - M4
+    accion_en_m4: Desbloquear las entradas, ajustes y transferencias manuales del comercio cuando vuelve a estado Activo
+      (revierte el bloqueo de RN-M4-009). La configuración de comisión y membresía del comercio no afecta a M4.
+    esquema:
+      $ref: '#/components/schemas/EventoComercioReactivado'
+    idempotencia: Deduplicar por id_evento y por identidad de negocio. Un evento repetido o fuera de orden respecto de ComercioSuspendido no debe dejar al comercio en un estado incorrecto; ante duda, confirmar con ObtenerComercioActivo.
+  - nombre: SubpedidoDespachado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0; el catálogo lo registra también como PedidoDespachado.
+    productor: M5
+    consumidores:
+    - M4
+    accion_en_m4: Salida solo de reservas vinculadas al subpedido pagado y su comercio.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
+    esquema:
+      $ref: '#/components/schemas/EventoSubpedidoDespachado'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+  - nombre: SubpedidoCancelado
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    productor: M5
+    consumidores:
+    - M4
+    accion_en_m4: Liberar solo reservas ACTIVA/CONFIRMADA del subpedido; si consumidas, requerir recepción física
+      para reingreso.
+    estado_payload: Carga útil según la sección 4.3 del PC3; M4 declara solo los campos que usa.
+    esquema:
+      $ref: '#/components/schemas/EventoSubpedidoCancelado'
+    version: 1.0.0
+    idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
+x-versionado:
+  version_candidata: 1.2.0
+  politica: MAJOR para cambios incompatibles, MINOR para adiciones compatibles, PATCH para correcciones compatibles (ADR-004 y sección 4.1 del PC3).
+  estado_publicacion: La versión 1.1.0 ya está publicada en contracts/m4-inventario/v1/openapi.yaml; la 1.2.0 la reemplaza en esa misma ruta.
+  cambio_1_1_0: 'CS-01 a CS-04 (M1): dos operaciones existentes pasan a públicas, dos operaciones nuevas de disponibilidad por producto y dos eventos aclarados (disparador por total del comercio + id_producto).'
+  cambio_1_2_0: 'Alineación con el PC3 colectivo: esquema ErrorEstandar (5.5); códigos de negocio ERR-M4-001 a ERR-M4-019; ERR-001, ERR-002, ERR-005 y ERR-006 para los errores transversales; aislamiento por comercio en 404 con ERR-003 (antes 403); respuesta 200 agotado en la consulta individual de disponibilidad; ruta base /api/m4/v1; operación de costo de productos vendidos para M7; consulta de auditoría; interfaz PHP; eventos del catálogo 4.3 con v1.0.0.'
+  compatibilidad: 'El cambio de códigos de error y del HTTP del aislamiento afecta a los consumidores que leen esos códigos. La sección 5.5 y la 5.7 del PC3 lo exigen a todos los módulos (M3 y M5 ajustan el suyo). Se publica como 1.2.0 por decisión del módulo; si el Comité lo trata como cambio incompatible, debe publicarse /v2/ con convivencia mínima de 14 días (sección 4.1).'
+x-interfaz-php:
+  nota: 'Con Inertia, M1 llama a M4 por esta interfaz y no por HTTP (validación de M1). Cada método equivale a la
+    operación REST indicada y devuelve el mismo cuerpo. Los arreglos de entrada y salida usan los nombres de campo
+    de los schemas OpenAPI. Consultas públicas: no requieren usuario autenticado.'
+  ubicacion: app/Contracts/M4_Inventario/InventarioModuleInterface.php
+  namespace: App\Contracts\M4_Inventario
+  interfaz: InventarioModuleInterface
+  alcance_documentado: Las cuatro consultas de disponibilidad (M1, M3, M5). Los demás métodos se documentan al cerrar el
+    contrato PHP completo.
+  metodos:
+  - firma: 'public function consultarStockDisponible(int $idComercio, int $idVariacion, ?int $idUbicacion = null): array'
+    equivale_a: GET /existencias/disponibilidad
+    parametros: idComercio y idVariacion obligatorios; idUbicacion opcional (si falta, suma todas las ubicaciones).
+    retorna: 'Disponibilidad: id_comercio, id_variacion, id_ubicacion|null, cantidad_disponible, estado_disponibilidad, bajo_stock.
+      Sin existencia registrada devuelve cantidad_disponible 0 y estado agotado; no lanza excepción.'
+    errores: ERR-005 (parámetros inválidos).
+  - firma: 'public function consultarDisponibilidadLote(array $items): array'
+    equivale_a: POST /existencias/disponibilidad/lote
+    parametros: '$items: lista de 1 a 100 elementos { id_comercio, id_variacion, id_ubicacion? }.'
+    retorna: 'Lista de Disponibilidad en el mismo orden que $items.'
+    errores: ERR-005 (lista vacía, más de 100 elementos o elemento inválido).
+  - firma: 'public function consultarDisponibilidadProducto(int $idComercio, int $idProducto): array'
+    equivale_a: GET /existencias/disponibilidad/producto
+    parametros: idComercio e idProducto obligatorios.
+    retorna: 'DisponibilidadProducto: id_comercio, id_producto, estado_disponibilidad (disponible si al menos una variación
+      tiene unidades; agotado en caso contrario o si el producto no tiene existencias).'
+    errores: ERR-005 (parámetros inválidos).
+  - firma: 'public function consultarDisponibilidadProductoLote(array $items): array'
+    equivale_a: POST /existencias/disponibilidad/producto/lote
+    parametros: '$items: lista de 1 a 100 elementos { id_comercio, id_producto }.'
+    retorna: 'Lista de DisponibilidadProducto en el mismo orden que $items.'
+    errores: ERR-005 (lista vacía, más de 100 elementos o elemento inválido).
+  doble_de_prueba: M1 puede sustituir la interfaz por un doble que devuelva estas mismas estructuras.
+  eventos_dto: app/Events/M4_Inventario/{NombreEvento}.php, con id_evento (UUID), según la sección 4.1 del PC3.
+  dobles_y_pruebas: tests/Doubles/M4_Inventario/ y pruebas contractuales en tests/Feature/Contracts/ (sección 4.1 del PC3).
+x-codigos-error:
+  nota: 'Códigos propios de M4 con el formato ERR-M{n}-{nnn} (sección 5.5 del PC3). Los códigos ERR-001 a ERR-006 son del núcleo: M4 usa ERR-001 (401), ERR-002 (403), ERR-003 (404, aislamiento), ERR-005 (422) y ERR-006 (503). nombre_anterior es el código con nombre de la versión 1.1.0.'
+  propios:
+  - codigo: ERR-M4-001
+    http: 409
+    nombre_anterior: EXISTENCIA_INSUFICIENTE
+    mensaje: 'No hay existencias suficientes para la cantidad solicitada.'
+    operaciones: 'reservarExistencias, registrarMovimientoManual, registrarTransferencia'
+  - codigo: ERR-M4-002
+    http: 404
+    nombre_anterior: EXISTENCIA_NO_ENCONTRADA
+    mensaje: 'No hay existencias registradas para la variación en esa ubicación.'
+    operaciones: 'reservarExistencias, fijarStockMinimo, registrarAjusteInventario'
+  - codigo: ERR-M4-003
+    http: 409
+    nombre_anterior: CLAVE_IDEMPOTENCIA_REUTILIZADA
+    mensaje: 'La clave de idempotencia ya se usó con otros datos.'
+    operaciones: 'reservarExistencias'
+  - codigo: ERR-M4-004
+    http: 404
+    nombre_anterior: RESERVA_NO_ENCONTRADA
+    mensaje: 'No se encontró la reserva.'
+    operaciones: 'obtenerReserva, confirmarReserva, liberarReserva, confirmarSalidaPorReserva, registrarReingresoPorReserva'
+  - codigo: ERR-M4-005
+    http: 409
+    nombre_anterior: RESERVA_VENCIDA
+    mensaje: 'La reserva venció y ya no puede confirmarse.'
+    operaciones: 'confirmarReserva, confirmarSalidaPorReserva'
+  - codigo: ERR-M4-006
+    http: 409
+    nombre_anterior: ESTADO_RESERVA_INVALIDO
+    mensaje: 'La reserva no está en un estado que permita esta operación.'
+    operaciones: 'confirmarReserva, confirmarSalidaPorReserva, registrarReingresoPorReserva'
+  - codigo: ERR-M4-007
+    http: 409
+    nombre_anterior: VINCULO_PEDIDO_INVALIDO
+    mensaje: 'El pedido o subpedido no corresponde a la reserva.'
+    operaciones: 'confirmarReserva, confirmarSalidaPorReserva, registrarReingresoPorReserva'
+  - codigo: ERR-M4-008
+    http: 409
+    nombre_anterior: RESERVA_YA_CONSUMIDA
+    mensaje: 'La reserva ya se convirtió en salida y no puede liberarse.'
+    operaciones: 'liberarReserva'
+  - codigo: ERR-M4-009
+    http: 409
+    nombre_anterior: PEDIDO_NO_PAGADO
+    mensaje: 'El pedido aún no está pagado.'
+    operaciones: 'confirmarSalidaPorReserva'
+  - codigo: ERR-M4-010
+    http: 409
+    nombre_anterior: REINGRESO_YA_REGISTRADO
+    mensaje: 'El reingreso de esta reserva ya fue registrado.'
+    operaciones: 'registrarReingresoPorReserva'
+  - codigo: ERR-M4-011
+    http: 409
+    nombre_anterior: RETORNO_NO_VERIFICADO
+    mensaje: 'La recepción física de la mercadería no está verificada.'
+    operaciones: 'registrarReingresoPorReserva'
+  - codigo: ERR-M4-012
+    http: 422
+    nombre_anterior: RANGO_FECHAS_INVALIDO
+    mensaje: 'El rango de fechas no es válido.'
+    operaciones: 'obtenerKardexValorizado, consultarInventarioAuditoria'
+  - codigo: ERR-M4-013
+    http: 404
+    nombre_anterior: VARIACION_NO_ENCONTRADA
+    mensaje: 'No se encontró la variación.'
+    operaciones: 'registrarMovimientoManual, registrarTransferencia'
+  - codigo: ERR-M4-014
+    http: 404
+    nombre_anterior: UBICACION_NO_ENCONTRADA
+    mensaje: 'No se encontró la ubicación.'
+    operaciones: 'registrarMovimientoManual, registrarTransferencia'
+  - codigo: ERR-M4-015
+    http: 409
+    nombre_anterior: COMERCIO_NO_HABILITADO
+    mensaje: 'El comercio no está habilitado para registrar movimientos.'
+    operaciones: 'registrarMovimientoManual, registrarTransferencia, registrarAjusteInventario'
+  - codigo: ERR-M4-016
+    http: 409
+    nombre_anterior: CONTEO_DESACTUALIZADO
+    mensaje: 'El conteo físico está desactualizado; vuelve a contar.'
+    operaciones: 'registrarAjusteInventario'
+  - codigo: ERR-M4-017
+    http: 409
+    nombre_anterior: AJUSTE_BAJO_COMPROMETIDO
+    mensaje: 'El ajuste dejaría el stock por debajo de lo comprometido.'
+    operaciones: 'registrarAjusteInventario'
+  - codigo: ERR-M4-018
+    http: 404
+    nombre_anterior: SUBPEDIDO_NO_ENCONTRADO
+    mensaje: 'No hay registros del subpedido en inventario.'
+    operaciones: 'ObtenerCostoProductosVendidos'
+  - codigo: ERR-M4-019
+    http: 409
+    nombre_anterior: COSTOS_SUBPEDIDO_NO_DISPONIBLES
+    mensaje: 'Las salidas del subpedido aún no están confirmadas; reintenta más tarde.'
+    operaciones: 'ObtenerCostoProductosVendidos'
+x-procesos-segundo-plano:
+- proceso: Liberación de reservas vencidas
+  modulo: M4
+  disparo: Cada 60 segundos, RNF-M4-007
+  control: Solo ACTIVA con fecha_expiracion cumplida; transición y decremento reservado atómicos e idempotentes.
+    Conservar detalle e historial. Confirmación comprueba plazo aun si temporizador no ejecutó.
+x-acuerdos-pendientes:
+- 'M1, M3, M5 y M7: avisar de la versión 1.2.0, porque cambian los códigos de error (ERR-M4-nnn) y el HTTP del aislamiento (403 pasa a 404 con ERR-003).'
+- 'M3: confirmar en su openapi la operación obtenerVariacion y la publicación de ProductoPublicado, registradas en las secciones 4.3 y 4.4 del PC3.'
+- 'M2: confirmar que id_sede es único globalmente (no solo dentro del comercio); su contrato v1.2.0 no lo declara.'
+- 'M5/Comité: selección de ubicación y eventual reparto multiubicación. Esta versión usa una ubicación con cantidad completa; falta ratificar el criterio de desempate.'
+- 'M5/Comité: cancelación parcial y payloads de SubpedidoDespachado, PedidoCancelado y SubpedidoCancelado; impedir doble efecto de REST y evento.'
+- 'M4/M7: SC-M4-07, método de valoración del costo.'
+- 'M4/M5: SC-M4-08, Idempotency-Key.'
+- 'Comité: orden estricto de llegada solicitado por el cliente; el bloqueo garantiza atomicidad pero no FIFO. Seleccionar el mecanismo de cola u orden antes de afirmar cumplimiento.'
+- 'Núcleo/bodega: contrato de autorización previa y verificación de recepción física; no asumir que un ID suministrado acredita autorización o devolución.'
+- 'Actualizar PC2: ubicación opcional en RF-M4-006, CU-M4-06, interfaz PHP y OpenAPI; estados y nombres API; el retorno de la reserva incluye ubicación y vencimiento.'
+x-cambios-aplicados:
+- 'v1.2.0, alineación con el PC3 colectivo: ErrorEstandar (5.5), ERR-M4-001 a ERR-M4-019, ERR-001/002/003/005/006 para errores transversales, ERR-003 en 404 para recursos de otro comercio, tabla x-codigos-error, eventos del catálogo 4.3 con v1.0.0 (PedidoDespachado queda como alias de SubpedidoDespachado) y rutas completas /api/mX/v1 en las dependencias.'
+- 'Validación de M1: interfaz PHP de las cuatro consultas de disponibilidad (x-interfaz-php); formato de error sin marca de supuesto,
+  sin id_solicitud y con códigos del núcleo (ERR-001, ERR-002, ERR-003, ERR-005); consultarStockDisponible responde 200
+  agotado en lugar de 404; ruta base /api/m4/v1.'
+- 'Validación de M3: dependencia de M3 renombrada de obtenerDetalleVariacion a obtenerVariacion (GET /variaciones/{id_variacion});
+  se retiró la nota de nombre no verificado; el estado de ProductoPublicado refleja que M3 aún no lo publica.'
+- 'M2 v1.2.0: id_sede = id_ubicacion confirmado; M4 consumidor autorizado de ObtenerComercioActivo y ComercioSuspendido;
+  nuevo consumo de ComercioReactivado (propuesto) para desbloquear movimientos manuales; schemas M2EstadoComercio y
+  M2SedeHabilitada alineados con M2.'
+- UUID preservado; ubicación opcional en solicitud y obligatoria en reserva efectiva; ejemplos con/sin ubicación.
+- Stock defectuoso eliminado; estados confirmada alineados al PC2; original expiración conservada.
+- Autorizaciones, motivo, atomicidad, pago/vínculos, retorno físico y errores documentados.
+- Disponibilidad incluye bajo_stock; Kardex incluye auditoría y movimientos de compromiso.
+- Eventos incluidos con schemas y estados de aprobación diferenciados; dependencia M2 contrastada; M3 pendiente.
+- Límites y método de valoración sin respaldo retirados; propuestas y brechas no declaradas aprobadas.
+- 'CS-01 (M1): GET /existencias/disponibilidad y POST /existencias/disponibilidad/lote ahora son públicas (security:
+  [], sin filtro RN-12); se retiran sus respuestas 401/403.'
+- 'CS-02 (M1): nuevas operaciones públicas consultarDisponibilidadProducto y consultarDisponibilidadProductoLote,
+  con schemas DisponibilidadProducto, DisponibilidadProductoItem y DisponibilidadProductoLoteSolicitud.'
+- 'CS-03 (M1): ExistenciaAgotada y ExistenciaRepuesta se disparan por el total del comercio; id_ubicacion documentado
+  como siempre nulo en ambos eventos.'
+- 'CS-04 (M1): id_producto agregado como campo requerido en EventoExistenciaAgotada y EventoExistenciaRepuesta.'

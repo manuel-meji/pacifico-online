@@ -1,26 +1,769 @@
 openapi: 3.0.3
 info:
-  title: Contrato de Integración - m2-comercios
-  description: Especificación OpenAPI v1 para el módulo m2-comercios en Pacíficos Online.
-  version: 1.0.0
+  title: Pacíficos Online — M2 Micrositios y administración de comercios
+  description: >
+    Contrato formal del Módulo 2. Expone las operaciones de consulta que
+    M1, M3, M4, M5, M6 y M7 utilizan para obtener información del comercio
+    sin acceder directamente a sus datos. Sigue las reglas de publicación del
+    Comité (sección 4.1) y el formato de error estándar del núcleo
+    (sección 5.5).
+
+    Autorización. Cada operación se ofrece por dos vías.
+    (1) Entre módulos, por la interfaz PHP ComerciosServiceInterface
+    (app/Contracts/M2_Comercios/), dentro del mismo proceso. El módulo
+    consumidor no presenta una credencial propia: la llamada se ejecuta en
+    el contexto de la petición en curso o en el contexto de sistema (colas),
+    y el aislamiento por comercio lo aplica el núcleo según ese contexto
+    (sección 5.3). Por esta vía no se responde 401 ni 403; el control de
+    rol lo hace el consumidor en su propia ruta.
+    (2) Por HTTP, con la sesión del núcleo (sección 5.1). Los roles
+    permitidos de cada operación se indican en x-autorizacion. Un rol no
+    permitido recibe 403 (ERR-002) y un recurso de otro comercio, 404
+    (ERR-003).
+  version: 1.2.1
+  contact:
+    name: Subgrupo SG2 — Módulo 2
 servers:
-  - url: /api/v1/m2-comercios
-    description: Servidor local / integración
+  - url: /api/m2/v1
+
 paths:
-  /health:
+  /comercios/publico:
     get:
-      summary: Verificación de estado del módulo
+      operationId: ListarComerciosHabilitados
+      summary: Listado paginado de comercios habilitados (estado Activo), para M1.
+      description: >
+        Solo devuelve comercios en estado Activo ("comercio habilitado" del
+        glosario). M1 la consume con destacado=true en su operación
+        listarDestacados para obtener los comercios destacados de la página
+        principal. Un comercio es destacado cuando está Activo y tiene una
+        publicidad vigente en M2 (RF-011, RF-021): la fecha actual está
+        dentro de su periodo de vigencia. Los comercios destacados se
+        ordenan por la fecha de inicio de la publicidad, la más reciente
+        primero.
+      tags: [Comercios]
+      parameters:
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: por_pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: destacado
+          in: query
+          required: false
+          description: >
+            Si es true, devuelve solo los comercios destacados. Si se omite o
+            es false, devuelve todos los comercios habilitados.
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
-          description: Módulo operando correctamente
+          description: Página de comercios habilitados.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  module:
-                    type: string
-                    example: m2-comercios
+                $ref: '#/components/schemas/ListadoComercios'
+        '422':
+          $ref: '#/components/responses/ValidacionFallida'
+
+  /comercios/publico/lote:
+    post:
+      operationId: ObtenerResumenComerciosLote
+      summary: Resumen de varios comercios en una sola llamada, para M1.
+      description: >
+        Recibe una lista de id_comercio y devuelve el resumen de cada uno.
+        Solo se incluyen los comercios habilitados (estado Activo); los
+        identificadores inexistentes o no habilitados se omiten de la
+        respuesta. Máximo 50 identificadores por solicitud (ERR-005 si se
+        excede).
+      tags: [Comercios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudLoteComercios'
+      responses:
+        '200':
+          description: Resúmenes de los comercios habilitados encontrados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumenComerciosLote'
+        '422':
+          $ref: '#/components/responses/ValidacionFallida'
+
+  /comercios/{id_comercio}/publico:
+    get:
+      operationId: ObtenerDatosComercioPublico
+      summary: Información pública del comercio para presentar su micrositio.
+      description: >
+        Solo responde 200 para comercios en estado Activo (comercio
+        habilitado). Si el comercio no existe o está Pendiente, Rechazado o
+        Suspendido, responde 404 (ERR-004): el portal no debe mostrar
+        comercios que no estén habilitados.
+      tags: [Comercios]
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Información pública del comercio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComercioPublico'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/ValidacionFallida'
+
+  /comercios/{id_comercio}/estado:
+    get:
+      operationId: ObtenerComercioActivo
+      x-autorizacion:
+        consumidores: [M3, M4]
+        entre_modulos: >
+          Interfaz PHP en el mismo proceso, sin credencial propia. M3 la invoca al crear o publicar productos; M4, al registrar entradas, ajustes y transferencias manuales. Ambas ocurren en el contexto del Encargado del comercio que opera sobre su propio comercio, o en el contexto de sistema.
+        http: >
+          encargado_comercio: solo su propio comercio (otro comercio, 404 ERR-003). encargado_plataforma: cualquier comercio. cliente: 403 ERR-002.
+      summary: Identificador y estado operativo del comercio, para M3 y M4.
+      description: >
+        Consumida por M3 (validar si puede publicar productos) y por M4
+        (bloquear entradas, ajustes y transferencias manuales cuando el
+        comercio está suspendido o inactivo). Ver x-autorizacion.
+        Devuelve 200 para cualquier comercio existente, con su estado
+        actual; 404 solo si el comercio no existe.
+      tags: [Comercios]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Estado operativo del comercio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoComercio'
+        '401':
+          $ref: '#/components/responses/TokenInvalido'
+        '403':
+          $ref: '#/components/responses/SinPermiso'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/ValidacionFallida'
+
+  /comercios/{id_comercio}/sedes:
+    get:
+      operationId: ObtenerSedesComercio
+      x-autorizacion:
+        consumidores: [M4]
+        entre_modulos: >
+          Interfaz PHP en el mismo proceso, sin credencial propia. M4 la invoca al validar la ubicación de un movimiento, en el contexto del Encargado del comercio o en el contexto de sistema.
+        http: >
+          encargado_comercio: solo su propio comercio (otro comercio, 404 ERR-003). encargado_plataforma: cualquier comercio. cliente: 403 ERR-002.
+      summary: Lista de sedes físicas habilitadas del comercio, para M4.
+      description: >
+        Cada sede (tienda o bodega) es propiedad de M2. Su id_sede es el
+        mismo identificador que M4 guarda como id_ubicacion en sus
+        existencias y movimientos: M4 valida con esta operación que la
+        ubicación pertenece al comercio y está habilitada, sin leer tablas
+        de M2.
+      tags: [Comercios]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Sedes habilitadas del comercio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedesComercio'
+        '401':
+          $ref: '#/components/responses/TokenInvalido'
+        '403':
+          $ref: '#/components/responses/SinPermiso'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/ValidacionFallida'
+
+  /comercios/{id_comercio}/politicas-envio:
+    get:
+      operationId: ObtenerPoliticasEnvio
+      x-autorizacion:
+        consumidores: [M5]
+        entre_modulos: >
+          Interfaz PHP en el mismo proceso, sin credencial propia. M5 la invoca al calcular el envío durante la compra, en el contexto del Cliente.
+        http: >
+          cliente: cualquier comercio habilitado. encargado_comercio: solo su propio comercio (otro comercio, 404 ERR-003). encargado_plataforma: cualquier comercio.
+      summary: Políticas y tarifas de envío configuradas por el comercio, para M5.
+      tags: [Comercios]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Políticas y tarifas de envío.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoliticasEnvio'
+        '401':
+          $ref: '#/components/responses/TokenInvalido'
+        '403':
+          $ref: '#/components/responses/SinPermiso'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/ValidacionFallida'
+
+  /comercios/{id_comercio}/datos-fiscales:
+    get:
+      operationId: ObtenerDatosFiscalesComercio
+      x-autorizacion:
+        consumidores: [M6, M7]
+        entre_modulos: >
+          Interfaz PHP en el mismo proceso, sin credencial propia. M6 la invoca al generar la factura y M7 al registrar asientos, normalmente en el contexto de sistema (procesamiento de eventos).
+        http: >
+          encargado_comercio: solo su propio comercio (otro comercio, 404 ERR-003). encargado_plataforma: cualquier comercio. cliente: 403 ERR-002.
+      summary: Datos fiscales y configuración de comisión del comercio, para M6 y M7.
+      tags: [Comercios]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Datos fiscales y comisión pactada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatosFiscalesComercio'
+        '401':
+          $ref: '#/components/responses/TokenInvalido'
+        '403':
+          $ref: '#/components/responses/SinPermiso'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/ValidacionFallida'
+
+  /subpedidos/{id_subpedido}/comision:
+    get:
+      operationId: ObtenerComisionSubpedido
+      x-autorizacion:
+        consumidores: [M7]
+        entre_modulos: >
+          Interfaz PHP en el mismo proceso, sin credencial propia. M7 la invoca al procesar el despacho del subpedido, en el contexto de sistema.
+        http: >
+          encargado_comercio: solo subpedidos de su propio comercio (otro comercio, 404 ERR-003). encargado_plataforma: cualquier subpedido. cliente: 403 ERR-002.
+      summary: Monto de comisión ya determinado para un subpedido, para M7.
+      description: >
+        M2 es el módulo responsable de calcular y registrar la comisión
+        (RN-010, sobre el subtotal del subpedido). La comisión se calcula
+        al consumir el evento SubpedidoDespachado de M5; el subtotal se
+        obtiene con obtenerSubpedido de M5 (GET /api/m5/v1/subpedidos/{id_subpedido}),
+        que M5 ya declara para M2. Si el subpedido todavía no tiene comisión
+        calculada, responde ERR-004. M7 solo registra el efecto contable y
+        no duplica la lógica de cálculo.
+      tags: [Comisiones]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - name: id_subpedido
+          in: path
+          required: true
+          description: Identificador del subpedido (propiedad de M5).
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Comisión determinada para el subpedido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComisionSubpedido'
+        '401':
+          $ref: '#/components/responses/TokenInvalido'
+        '403':
+          $ref: '#/components/responses/SinPermiso'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/ValidacionFallida'
+
+components:
+  securitySchemes:
+    sesionNucleo:
+      type: apiKey
+      in: cookie
+      name: laravel_session
+      description: >
+        Cookie de sesión de Laravel emitida por el inicio de sesión del
+        núcleo (Laravel Sanctum en modo SPA, sección 5.1). El nombre real
+        de la cookie lo fija SESSION_COOKIE.
+
+  parameters:
+    IdComercio:
+      name: id_comercio
+      in: path
+      required: true
+      description: Identificador del comercio.
+      schema:
+        type: integer
+
+  responses:
+    TokenInvalido:
+      description: ERR-001 — Token inválido o expirado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+    SinPermiso:
+      description: ERR-002 — Rol sin permiso para la operación.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+    NoEncontrado:
+      description: >
+        ERR-004 — El recurso no existe o no está habilitado. ERR-003 — El
+        recurso pertenece a otro comercio (aislamiento, sección 5.3 del
+        núcleo); se responde con 404 para no revelar que existe.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+    ValidacionFallida:
+      description: ERR-005 — Parámetro de entrada inválido.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEstandar'
+
+  schemas:
+    ErrorEstandar:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            codigo:
+              type: string
+              example: "ERR-004"
+            mensaje:
+              type: string
+            detalles:
+              type: object
+              nullable: true
+
+    ComercioPublico:
+      type: object
+      required: [id_comercio, nombre_comercial, estado]
+      properties:
+        id_comercio:
+          type: integer
+        nombre_comercial:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+          description: Descripción o información empresarial del comercio.
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+        banners:
+          type: array
+          items:
+            $ref: '#/components/schemas/BannerPublico'
+        galeria:
+          type: array
+          description: Imágenes de la galería, en su orden de presentación.
+          items:
+            $ref: '#/components/schemas/ImagenGaleria'
+        horarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/HorarioPublico'
+        contacto:
+          $ref: '#/components/schemas/ContactoPublico'
+        redes_sociales:
+          type: array
+          items:
+            $ref: '#/components/schemas/RedSocialPublica'
+        politicas:
+          type: array
+          items:
+            $ref: '#/components/schemas/PoliticaPublica'
+        estado:
+          type: string
+          enum: [Activo]
+          description: >
+            Siempre Activo: esta operación solo devuelve comercios
+            habilitados; para cualquier otro estado responde 404.
+
+    ImagenGaleria:
+      type: object
+      properties:
+        id_imagen:
+          type: integer
+        imagen_url:
+          type: string
+          format: uri
+        texto_alternativo:
+          type: string
+
+    ContactoPublico:
+      type: object
+      properties:
+        telefono:
+          type: string
+          nullable: true
+        correo:
+          type: string
+          format: email
+          nullable: true
+        direccion:
+          type: string
+          nullable: true
+
+    BannerPublico:
+      type: object
+      properties:
+        id_banner:
+          type: integer
+        imagen_url:
+          type: string
+          format: uri
+        texto_alternativo:
+          type: string
+
+    HorarioPublico:
+      type: object
+      properties:
+        id_horario:
+          type: integer
+        dia_semana:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: "1 = lunes ... 7 = domingo"
+        hora_apertura:
+          type: string
+          format: HH:mm
+          nullable: true
+        hora_cierre:
+          type: string
+          format: HH:mm
+          nullable: true
+        cerrado:
+          type: boolean
+
+    RedSocialPublica:
+      type: object
+      properties:
+        plataforma:
+          type: string
+        url:
+          type: string
+          format: uri
+
+    PoliticaPublica:
+      type: object
+      properties:
+        tipo:
+          type: string
+        descripcion:
+          type: string
+
+    ComercioResumen:
+      type: object
+      required: [id_comercio, nombre_comercial, estado, destacado]
+      properties:
+        id_comercio:
+          type: integer
+        nombre_comercial:
+          type: string
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+        estado:
+          type: string
+          enum: [Activo]
+        destacado:
+          type: boolean
+          description: True si el comercio tiene una publicidad vigente.
+
+    SolicitudLoteComercios:
+      type: object
+      required: [ids_comercio]
+      properties:
+        ids_comercio:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items:
+            type: integer
+
+    ResumenComerciosLote:
+      type: object
+      required: [comercios]
+      properties:
+        comercios:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComercioResumen'
+
+    ListadoComercios:
+      type: object
+      required: [pagina, por_pagina, total, comercios]
+      properties:
+        pagina:
+          type: integer
+        por_pagina:
+          type: integer
+        total:
+          type: integer
+          description: Total de comercios habilitados que cumplen el filtro.
+        comercios:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComercioResumen'
+
+    EstadoComercio:
+      type: object
+      required: [id_comercio, estado, activo]
+      properties:
+        id_comercio:
+          type: integer
+        estado:
+          type: string
+          enum: [Pendiente, Activo, Rechazado, Suspendido]
+          description: >
+            Pendiente corresponde a "Pendiente de revisión" de las
+            especificaciones de casos de uso. Activo equivale a "comercio
+            habilitado" del glosario.
+        activo:
+          type: boolean
+          description: true únicamente cuando estado es Activo.
+        motivo_estado:
+          type: string
+          nullable: true
+          description: >
+            Motivo de la suspensión (RN-005) o del rechazo (RN-016);
+            null si el comercio está Activo o Pendiente.
+
+    SedesComercio:
+      type: object
+      required: [id_comercio, sedes]
+      properties:
+        id_comercio:
+          type: integer
+        sedes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SedeHabilitada'
+
+    SedeHabilitada:
+      type: object
+      required: [id_sede, habilitada]
+      properties:
+        id_sede:
+          type: integer
+          description: >
+            Identificador de la sede física (tienda o bodega), propiedad
+            de M2. Es el mismo identificador que M4 guarda como
+            id_ubicacion.
+        nombre:
+          type: string
+        direccion:
+          type: string
+        habilitada:
+          type: boolean
+          example: true
+
+    PoliticasEnvio:
+      type: object
+      properties:
+        id_comercio:
+          type: integer
+        politicas:
+          type: array
+          items:
+            $ref: '#/components/schemas/PoliticaPublica'
+        tarifas:
+          type: array
+          items:
+            $ref: '#/components/schemas/TarifaEnvio'
+
+    TarifaEnvio:
+      type: object
+      properties:
+        zona:
+          type: string
+        costo:
+          type: number
+          format: double
+        moneda:
+          type: string
+
+    DatosFiscalesComercio:
+      type: object
+      required: [id_comercio, cedula_juridica, razon_social, inscrito_como_contribuyente]
+      properties:
+        id_comercio:
+          type: integer
+        cedula_juridica:
+          type: string
+          description: "Identificador fiscal del comercio (modelo canónico: cedula_juridica)."
+        razon_social:
+          type: string
+        direccion_fiscal:
+          type: string
+        inscrito_como_contribuyente:
+          type: boolean
+          description: >
+            Indica si el comercio está inscrito como contribuyente ante
+            Hacienda. Es requisito de aprobación (RN-001 y decisión del
+            Comité, Artefactos Colectivos PC2, sección 3.3), por lo que en
+            la práctica es true para un comercio Activo; se expone para
+            que M6 lo valide de forma explícita.
+        comision:
+          $ref: '#/components/schemas/ConfiguracionComision'
+
+    ConfiguracionComision:
+      type: object
+      properties:
+        tipo:
+          type: string
+          description: "porcentaje | monto_fijo"
+        valor:
+          type: number
+          format: double
+        base_calculo:
+          type: string
+          description: "Subtotal del pedido, según la decisión del PC2 (RN-010)."
+        moneda:
+          type: string
+          nullable: true
+          description: "Aplica solo si el tipo de comisión es monto_fijo."
+
+    ComisionSubpedido:
+      type: object
+      required: [id_subpedido, id_comercio, monto_comision, base_utilizada, moneda]
+      properties:
+        id_subpedido:
+          type: integer
+        id_comercio:
+          type: integer
+        monto_comision:
+          type: number
+          format: double
+          description: Monto de la comisión ya determinado por M2.
+        base_utilizada:
+          type: number
+          format: double
+          description: Subtotal del subpedido sobre el que se calculó (sin envío, RN-010).
+        moneda:
+          type: string
+
+# ---------------------------------------------------------------
+# Eventos publicados por M2.
+# OpenAPI 3.0.3 no modela eventos asíncronos de forma nativa; se
+# documentan aquí como extensión. Implementación comprometida: eventos
+# de Laravel en app/Events/M2_Comercios/, despachados a la cola de la
+# plataforma (no son una llamada síncrona), para que M1, M3, M4 y M5
+# los consuman.
+# ---------------------------------------------------------------
+x-eventos-publicados:
+  ComercioAprobado:
+    version: v1
+    cuando_se_publica: >
+      Después de confirmar la aprobación y guardar el comercio en estado
+      Activo. Lo consumen M1, M3 y M4.
+    carga_util:
+      id_evento: "string (UUID)"
+      fecha_hora: "string (date-time)"
+      id_comercio: "integer"
+      estado: "string, valor fijo: Activo"
+      nombre_comercial: "string"
+  ComercioSuspendido:
+    version: v1
+    cuando_se_publica: >
+      Después de confirmar la suspensión y guardar el motivo y el estado
+      Suspendido. Lo consumen M1, M3, M4 y M5.
+    carga_util:
+      id_evento: "string (UUID)"
+      fecha_hora: "string (date-time)"
+      id_comercio: "integer"
+      estado: "string, valor fijo: Suspendido"
+      motivo: "string, obligatorio y no vacío"
+  ComercioReactivado:
+    version: v1
+    cuando_se_publica: >
+      Después de confirmar la reactivación de un comercio Suspendido y
+      guardarlo nuevamente en estado Activo (la configuración de comisión
+      y membresía se mantiene, RN-017). Lo consumen M1, M3, M4 y M5.
+    carga_util:
+      id_evento: "string (UUID)"
+      fecha_hora: "string (date-time)"
+      id_comercio: "integer"
+      estado: "string, valor fijo: Activo"
+      nombre_comercial: "string"
+
+# ---------------------------------------------------------------
+# Dependencias que M2 consume de otros módulos. Se documentan para
+# la validación cruzada productor-consumidor (sección 4.4). El
+# contrato vigente de cada una es el que publica su productor.
+# ---------------------------------------------------------------
+x-dependencias-consumidas:
+  SubpedidoDespachado:
+    productor: M5
+    tipo: evento
+    uso: >
+      Disparar el cálculo y registro de la comisión de la plataforma
+      (RN-010, paso 9 del recorrido transversal). Alimenta
+      ObtenerComisionSubpedido.
+    campos_usados: [id_evento, id_subpedido, id_comercio]
+    estado: >
+      M5 publica el evento hacia M1, M4 y M7; pendiente de que agregue
+      a M2 como consumidor.
+  obtenerSubpedido:
+    productor: M5
+    tipo: operación
+    ruta: GET /api/m5/v1/subpedidos/{id_subpedido}
+    uso: >
+      Obtener el subtotal del subpedido (antes de impuestos y envío),
+      que es la base de la comisión. M5 ya declara a M2 como consumidor.
+    campos_usados: [id_subpedido, id_comercio, subtotal]
+  AlertaStockMinimo:
+    productor: M4
+    tipo: evento
+    version: 1.0.0 (candidata de M4)
+    uso: Mostrar la alerta de reposición en el panel del comercio.
+    campos_usados: [id_comercio, id_variacion, cantidad_disponible, stock_minimo]
+  obtenerResumenFinancieroComercio:
+    productor: M7
+    tipo: operación
+    ruta: GET /api/v1/m7/comercios/{id_comercio}/resumen-financiero
+    uso: >
+      Mostrar el resumen financiero en el panel del comercio. La consume
+      el frontend del panel de M2; el backend de M2 no la invoca.

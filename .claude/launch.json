@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "laravel",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["artisan", "serve", "--port=8000"],
+      "port": 8000
+    },
+    {
+      "name": "laravel-m1-doble",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd public && M1_M2_MODO=doble M1_M3_MODO=doble M1_M4_MODO=doble exec php -S 127.0.0.1:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"],
+      "port": 8000
+    },
+    {
+      "name": "frontend-prototipo",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--port=5173", "--strictPort", "--open=false"],
+      "port": 5173
+    }
+  ]
+}

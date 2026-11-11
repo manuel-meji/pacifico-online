@@ -1,158 +1,156 @@
+import { useEffect, useState } from 'react';
+import PaginaPortal, { usePortal } from '../components/PaginaPortal';
+import TarjetaProducto, { BadgeAgotado, BadgeDisponible } from '../components/TarjetaProducto';
+import { CargandoBloque, ErrorVista } from '../components/EstadosVista';
+import Icono from '../components/IconoComercio';
+import Imagen from '../components/Imagen';
+import { obtenerFichaProducto } from '../services/m1Api';
+import { colones, fechaCorta, textoAtributos } from '../services/formato';
+import useConsulta from '../services/useConsulta';
 
-export default function FichaProductoView() {
+// M5 agrega al carrito desde un enlace: /carrito.html?agregar=<id_variacion>&cantidad=<n>
+const urlAgregarAlCarrito = (idVariacion, cantidad = 1) => `/carrito.html?agregar=${idVariacion}&cantidad=${cantidad}`;
+
+// CU-003 Consultar ficha de producto: GET /api/m1/v1/productos/{id_producto} (esquema FichaProducto).
+// Una variación solo se puede comprar si comprable es true; si no, se muestra "Agotado" y el botón queda deshabilitado.
+export default function FichaProductoView({ idProducto }) {
+  const { ir } = usePortal();
+  const consulta = useConsulta(() => obtenerFichaProducto(idProducto), [idProducto], !!idProducto);
+  const ficha = consulta.datos;
+
   return (
-    <div className="min-h-screen bg-brandLightBg font-sans text-gray-800 antialiased">
-    <div className="bg-brandDarkBlue text-white text-xs py-2 px-4 border-b border-blue-900">
-      <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <span>
-            Envíos rápidos a todo Costa Rica
-          </span>
-          <span>
-            Soporte y Ventas: +506 2000-0000
-          </span>
-        </div>
-        <div className="flex space-x-4">
-          <a href="#" className="hover:underline">
-            Sucursales
-          </a>
-          <a href="#" className="hover:underline">
-            Garantías
-          </a>
-          <a href="#" className="hover:underline">
-            Ayuda
-          </a>
-        </div>
-      </div>
-    </div>
-    <header className="bg-white shadow-sm sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center space-x-3 shrink-0">
-          <div className="w-11 h-11 rounded-full bg-brandGreen flex items-center justify-center font-extrabold text-white text-2xl shadow">
-            P
+    <PaginaPortal>
+      <nav aria-label="Ruta de navegación" className="py-3 text-sm text-gray-500">
+        <ol className="flex flex-wrap items-center gap-1">
+          <li><button type="button" onClick={() => ir('inicio')} className="inline-flex min-h-[44px] items-center gap-1 hover:text-brandBlue sm:min-h-0"><Icono nombre="inicio" className="h-4 w-4" /> Inicio</button></li>
+          {ficha && consulta.estado !== 'error' && (
+            <>
+              <li aria-hidden><Icono nombre="derecha" className="h-3.5 w-3.5 text-gray-400" /></li>
+              <li><button type="button" onClick={() => ir('comercio', { id: ficha.comercio.id_comercio })} className="inline-flex min-h-[44px] items-center hover:text-brandBlue sm:min-h-0">{ficha.comercio.nombre_comercial}</button></li>
+              <li aria-hidden><Icono nombre="derecha" className="h-3.5 w-3.5 text-gray-400" /></li>
+              <li aria-current="page" className="min-w-0 truncate text-gray-800">{ficha.nombre}</li>
+            </>
+          )}
+        </ol>
+      </nav>
+
+      {!idProducto && <ErrorVista resultado={{ estado: 404 }} noEncontrado="Este producto no está disponible" onVolver={() => ir('inicio')} />}
+      {idProducto && consulta.estado === 'cargando' && <CargandoBloque etiqueta="Cargando producto" />}
+      {idProducto && consulta.estado === 'error' && (
+        <ErrorVista resultado={consulta.resultado} noEncontrado="Este producto no está disponible" onReintentar={consulta.reintentar} onVolver={() => ir('inicio')} />
+      )}
+      {idProducto && ficha && (consulta.estado === 'listo' || consulta.estado === 'actualizando') && (
+        <Ficha ficha={ficha} onVerComercio={() => ir('comercio', { id: ficha.comercio.id_comercio })} onVerProducto={(id) => ir('producto', { id })} />
+      )}
+    </PaginaPortal>
+  );
+}
+
+function Ficha({ ficha, onVerComercio, onVerProducto }) {
+  const variaciones = ficha.variaciones ?? [];
+  const inicial = variaciones.find((v) => v.comprable) ?? variaciones[0] ?? null;
+  const [idVariacion, setIdVariacion] = useState(inicial?.id_variacion ?? null);
+  const [imagen, setImagen] = useState(0);
+
+  useEffect(() => {
+    setIdVariacion(inicial?.id_variacion ?? null);
+    setImagen(0);
+    // Al cambiar de producto (relacionados) se vuelve a la primera variación comprable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ficha.id_producto]);
+
+  const variacion = variaciones.find((v) => v.id_variacion === idVariacion) ?? inicial;
+  const imagenes = ficha.imagenes ?? [];
+  const comprable = !!variacion?.comprable;
+
+  return (
+    <>
+      <section className="grid grid-cols-1 gap-6 rounded-xl bg-white p-4 shadow-md sm:p-6 md:grid-cols-2 md:gap-8 md:p-8">
+        <div className="min-w-0">
+          <div className="grid aspect-square place-items-center overflow-hidden rounded-lg border border-gray-100 bg-white p-4">
+            <Imagen key={imagenes[imagen]} src={imagenes[imagen]} alt={ficha.nombre} className="max-h-full max-w-full object-contain" claseIcono="h-24 w-24 text-brandBlue/40" />
           </div>
-          <div className="leading-tight">
-            <span className="text-xl font-extrabold text-brandDarkBlue tracking-tight block">
-              Pacíficos
-            </span>
-            <span className="text-xs text-brandGreen font-bold tracking-widest block -mt-1">
-              ONLINE
-            </span>
-          </div>
+          {imagenes.length > 1 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto">
+              {imagenes.map((url, i) => (
+                <button type="button" key={url} onClick={() => setImagen(i)} aria-label={`Ver imagen ${i + 1}`} aria-pressed={i === imagen}
+                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${i === imagen ? 'border-brandBlue' : 'border-gray-100'}`}>
+                  <span className="grid h-full w-full place-items-center"><Imagen src={url} className="h-full w-full object-cover" claseIcono="h-6 w-6 text-brandBlue/40" /></span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="flex-1 max-w-2xl mx-4">
-          <div className="relative flex items-center">
-            <input type="text" placeholder="Buscar productos, marcas o comercios..." className="w-full border-2 border-gray-200 rounded-full py-2.5 pl-5 pr-12 text-sm focus:outline-none focus:border-brandBlue transition" />
-            <button className="absolute right-1 bg-brandDarkBlue hover:bg-brandBlue text-white p-2 rounded-full transition">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-              </svg>
+
+        <div className="min-w-0">
+          <button type="button" onClick={onVerComercio} className="mb-2 inline-flex items-center gap-1 text-sm font-semibold text-brandDarkBlue hover:text-brandBlue">
+            <Icono nombre="tienda" className="h-4 w-4" /> {ficha.comercio.nombre_comercial}
+          </button>
+          <h1 className="break-words text-2xl font-bold text-gray-900">{ficha.nombre}</h1>
+          {ficha.marca && <p className="mt-1 text-sm text-gray-500">Marca: {ficha.marca}</p>}
+
+          {variacion && (
+            <div className="my-5 rounded-lg border-l-4 border-brandGreen bg-gray-50 p-4">
+              <span className="text-xs font-semibold uppercase text-gray-500">Precio</span>
+              {variacion.precio_promocional != null ? (
+                <>
+                  <p className="flex flex-wrap items-baseline gap-x-3">
+                    <span className="text-3xl font-extrabold text-red-700">{colones(variacion.precio_promocional)}</span>
+                    <span className="text-base text-gray-500 line-through">{colones(variacion.precio)}</span>
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-red-700">Precio de promoción hasta el {fechaCorta(variacion.fin_promocion)}</p>
+                </>
+              ) : (
+                <p className="text-3xl font-extrabold text-brandDarkBlue">{colones(variacion.precio)}</p>
+              )}
+              <div className="mt-2">{variacion.disponibilidad === 'Disponible' && comprable ? <BadgeDisponible /> : <BadgeAgotado />}</div>
+            </div>
+          )}
+
+          {variaciones.length > 1 && (
+            <fieldset className="mb-5">
+              <legend className="mb-2 text-sm font-semibold text-gray-800">Opciones</legend>
+              <div className="flex flex-wrap gap-2">
+                {variaciones.map((v) => (
+                  <button type="button" key={v.id_variacion} onClick={() => setIdVariacion(v.id_variacion)} aria-pressed={v.id_variacion === variacion?.id_variacion}
+                    className={`max-w-full rounded-lg border px-3 py-2 text-left text-sm transition ${v.id_variacion === variacion?.id_variacion ? 'border-brandDarkBlue bg-blue-50 font-semibold text-brandDarkBlue' : 'border-gray-200 bg-white hover:border-brandBlue'} ${v.comprable ? '' : 'text-gray-400 line-through'}`}>
+                    {textoAtributos(v.atributos) || v.sku}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          {variacion && comprable ? (
+            <a href={urlAgregarAlCarrito(variacion.id_variacion)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brandGreen px-6 py-3 font-bold text-white shadow-sm transition hover:brightness-105">
+              <Icono nombre="carrito" className="h-5 w-5" /> Agregar al carrito
+            </a>
+          ) : (
+            <button type="button" disabled className="w-full cursor-not-allowed rounded-lg bg-gray-300 px-4 py-3 font-bold text-gray-500">
+              Agotado
             </button>
-          </div>
+          )}
+
+          {ficha.descripcion && <p className="mt-6 whitespace-pre-line text-sm leading-relaxed text-gray-600">{ficha.descripcion}</p>}
+          {ficha.video_url && (
+            <a href={ficha.video_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brandBlue hover:underline">
+              Ver video del producto <Icono nombre="derecha" className="h-4 w-4" />
+            </a>
+          )}
         </div>
-        <div className="flex items-center space-x-6 text-sm font-medium text-gray-700 shrink-0">
-          <a href="#" className="flex items-center space-x-1 hover:text-brandBlue transition">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-            </svg>
-            <span>
-              Mi Cuenta
-            </span>
-          </a>
-          <a href="#" className="flex items-center space-x-1 hover:text-brandBlue transition relative">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"></path>
-            </svg>
-            <span className="bg-brandGreen text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center -top-2 -right-3 absolute">
-              0
-            </span>
-            <span className="ml-2">
-              Carrito
-            </span>
-          </a>
-        </div>
-      </div>
-      <nav className="bg-brandDarkBlue text-white border-t border-blue-900 text-sm font-medium">
-        <div className="max-w-7xl mx-auto px-4 flex space-x-8 overflow-x-auto py-2.5">
-          <a href="#" className="hover:text-brandGreen whitespace-nowrap">
-            Laptops
-          </a>
-          <a href="#" className="hover:text-brandGreen whitespace-nowrap">
-            PC Escritorio
-          </a>
-          <a href="#" className="hover:text-brandGreen whitespace-nowrap">
-            Tarjetas Gráficas
-          </a>
-          <a href="#" className="hover:text-brandGreen whitespace-nowrap">
-            Monitores
-          </a>
-          <a href="#" className="hover:text-brandGreen whitespace-nowrap">
-            Periféricos
-          </a>
-          <a href="#" className="text-brandGreen font-bold whitespace-nowrap">
-            Ofertas del Día
-          </a>
-        </div>
-        </nav>  
-     </header>
-     
-<main className="mx-auto max-w-7xl px-4 py-6">
-  <section className="mb-8 grid grid-cols-1 gap-8 rounded-xl bg-white p-6 shadow-md md:grid-cols-2 md:p-8">
+      </section>
 
-    {/* Imagen del producto */}
-    <div className="flex items-center justify-center rounded-lg border bg-white p-4">
-      <img
-        src="https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=80"
-        alt="Laptop Acer Nitro Lite"
-        className="max-h-96 object-contain"
-      />
-    </div>
-
-    {/* Información del producto */}
-    <div>
-      <p className="mb-3 text-sm font-semibold text-brandDarkBlue">
-        Comercio vendedor: TecnoPacífico
-      </p>
-
-      <h1 className="mb-4 text-2xl font-bold text-gray-900">
-        Acer Nitro Lite Core i5-13420H / 16GB RAM / RTX 4050 / 512GB SSD
-      </h1>
-
-      <div className="mb-6 rounded-lg border-l-4 border-brandGreen bg-gray-50 p-4">
-        <span className="text-xs font-semibold uppercase text-gray-500">
-          Precio de contado
-        </span>
-
-        <p className="text-3xl font-extrabold text-brandDarkBlue">
-          ₡549,900
-        </p>
-
-        <span className="text-xs text-gray-500">
-          IVA incluido
-        </span>
-      </div>
-
-      <p className="mb-6 text-sm leading-relaxed text-gray-600">
-        Laptop de alto rendimiento para gaming y diseño.
-        Procesador Intel Core i5 de 13.ª generación,
-        gráficos NVIDIA RTX 4050 y pantalla de 144 Hz.
-      </p>
-
-      <p className="mb-6 text-sm font-semibold text-green-700">
-        Disponible en inventario
-      </p>
-
-      <button
-        type="button"
-        className="w-full rounded-lg bg-brandGreen px-6 py-3 font-bold text-white"
-      >
-        Agregar al carrito
-      </button>
-    </div>
-
-  </section>
-</main>
-
-    </div>
+      {(ficha.relacionados ?? []).length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-4 text-xl font-bold text-brandDarkBlue">También te puede interesar</h2>
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {ficha.relacionados.map((p) => (
+              <li key={p.id_producto} className="min-w-0"><TarjetaProducto producto={p} onAbrir={() => onVerProducto(p.id_producto)} /></li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }

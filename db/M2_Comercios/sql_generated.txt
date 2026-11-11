@@ -1,0 +1,225 @@
+-- ==============================================================
+-- Pacíficos Online — M2 Micrositios y administración de comercios (SG2)
+-- SQL resultante de las migraciones de M2 (PostgreSQL).
+-- Equivale a la salida de: php artisan migrate --pretend
+-- Generado y verificado en PostgreSQL 16 local, porque la base de datos compartida del curso aún no está disponible.
+-- Referencias a otros módulos (id_usuario del Núcleo, id_subpedido de M5): solo lógicas, sin llave foránea física (decisión 1.9 del Comité).
+-- ==============================================================
+
+-- 2026_10_21_100000_create_comercios_table.php
+create table comercios (
+    id_comercio bigserial primary key,
+    cedula_juridica varchar(12) not null,
+    nombre_comercial varchar(150) not null,
+    razon_social varchar(150) not null,
+    direccion_fiscal varchar(255) not null,
+    inscrito_como_contribuyente boolean not null default false,
+    estado varchar(15) not null default 'Pendiente',
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table comercios add constraint uq_comercios_cedula_juridica unique (cedula_juridica);
+alter table comercios add constraint chk_comercios_estado check (estado IN ('Pendiente', 'Activo', 'Rechazado', 'Suspendido'));  -- Estados del comercio (glosario)
+alter table comercios add constraint chk_comercios_cedula_formato check (cedula_juridica ~ '^[0-9]-[0-9]{3}-[0-9]{6}$');  -- Formato de cédula jurídica
+
+-- 2026_10_21_100100_create_micrositios_table.php
+create table micrositios (
+    id_micrositio bigserial primary key,
+    id_comercio bigint not null,
+    descripcion text null,
+    logotipo varchar(255) null,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table micrositios add constraint fk_micrositios_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table micrositios add constraint uq_micrositios_comercio unique (id_comercio);
+
+-- 2026_10_21_100200_create_membresias_comercio_table.php
+create table membresias_comercio (
+    id_membresia_comercio bigserial primary key,
+    id_comercio bigint not null,
+    nombre varchar(100) not null,
+    beneficios text null,
+    comision_preferencial decimal(5, 2) null,
+    inicio date not null,
+    fin date null,
+    activa boolean not null default true,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table membresias_comercio add constraint fk_membresias_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+CREATE UNIQUE INDEX uq_membresia_activa_comercio ON membresias_comercio (id_comercio) WHERE activa;
+alter table membresias_comercio add constraint chk_membresia_comision_preferencial check (comision_preferencial IS NULL OR (comision_preferencial >= 0 AND comision_preferencial <= 100));  -- RN-008
+alter table membresias_comercio add constraint chk_membresias_fechas check (fin IS NULL OR fin >= inicio);  -- Vigencia coherente
+
+-- 2026_10_21_100300_create_comisiones_comercio_table.php
+create table comisiones_comercio (
+    id_comision_comercio bigserial primary key,
+    id_comercio bigint not null,
+    id_membresia_comercio bigint null,
+    tipo varchar(15) not null,
+    valor decimal(12, 2) not null,
+    moneda char(3) null,
+    vigente_desde timestamp(0) without time zone not null default CURRENT_TIMESTAMP,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table comisiones_comercio add constraint fk_comisiones_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table comisiones_comercio add constraint fk_comision_membresia foreign key (id_membresia_comercio) references membresias_comercio (id_membresia_comercio) on delete restrict;
+alter table comisiones_comercio add constraint uq_comision_comercio_vigencia unique (id_comercio, vigente_desde);
+alter table comisiones_comercio add constraint chk_comisiones_tipo check (tipo IN ('porcentaje', 'monto_fijo'));  -- RN-007
+alter table comisiones_comercio add constraint chk_comisiones_valor check (valor >= 0 AND (tipo <> 'porcentaje' OR valor <= 100));  -- RN-006
+alter table comisiones_comercio add constraint chk_comisiones_moneda check (tipo <> 'monto_fijo' OR moneda IS NOT NULL);  -- Monto fijo requiere moneda
+
+-- 2026_10_21_100400_create_comisiones_subpedido_table.php
+create table comisiones_subpedido (
+    id_comision_subpedido bigserial primary key,
+    id_subpedido bigint not null,
+    id_comercio bigint not null,
+    subtotal_base decimal(12, 2) not null,
+    monto decimal(12, 2) not null,
+    moneda char(3) not null default 'CRC',
+    id_evento uuid not null,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table comisiones_subpedido add constraint uq_comision_subpedido unique (id_subpedido);
+comment on column comisiones_subpedido.id_subpedido is 'Referencia lógica a pedidos_subpedidos (M5)';
+alter table comisiones_subpedido add constraint fk_comisiones_subpedido_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table comisiones_subpedido add constraint uq_comision_subpedido_evento unique (id_evento);
+alter table comisiones_subpedido add constraint chk_comision_subpedido_subtotal check (subtotal_base >= 0);  -- RN-010
+alter table comisiones_subpedido add constraint chk_comision_subpedido_monto check (monto >= 0);  -- RN-010
+
+-- 2026_10_21_100500_create_publicidad_comercio_table.php
+create table publicidad_comercio (
+    id_publicidad_comercio bigserial primary key,
+    id_comercio bigint not null,
+    ubicacion varchar(50) not null,
+    inicio date not null,
+    fin date not null,
+    activa boolean not null default true,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table publicidad_comercio add constraint fk_publicidad_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table publicidad_comercio add constraint chk_publicidad_fechas check (fin >= inicio);  -- Vigencia coherente
+
+-- 2026_10_21_100600_create_suspensiones_comercio_table.php
+create table suspensiones_comercio (
+    id_suspension bigserial primary key,
+    id_comercio bigint not null,
+    id_usuario bigint not null,
+    motivo text not null,
+    fecha_suspension timestamp(0) without time zone not null default CURRENT_TIMESTAMP,
+    fecha_reactivacion timestamp(0) without time zone null,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table suspensiones_comercio add constraint fk_suspensiones_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+comment on column suspensiones_comercio.id_usuario is 'Referencia lógica a usuarios (Núcleo)';
+CREATE UNIQUE INDEX uq_suspension_abierta_comercio ON suspensiones_comercio (id_comercio) WHERE fecha_reactivacion IS NULL;
+alter table suspensiones_comercio add constraint chk_suspensiones_motivo check (length(trim(motivo)) > 0);  -- RN-005
+alter table suspensiones_comercio add constraint chk_suspensiones_fechas check (fecha_reactivacion IS NULL OR fecha_reactivacion >= fecha_suspension);  -- Reactivación posterior a la suspensión
+
+-- 2026_10_21_100700_create_solicitudes_comercio_table.php
+create table solicitudes_comercio (
+    id_solicitud bigserial primary key,
+    id_comercio bigint not null,
+    nombre_encargado varchar(150) not null,
+    correo_encargado varchar(150) not null,
+    telefono_encargado varchar(20) null,
+    estado varchar(15) not null default 'Pendiente',
+    requiere_documentos boolean not null default false,
+    motivo_rechazo text null,
+    fecha_reenvio timestamp(0) without time zone null,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table solicitudes_comercio add constraint fk_solicitudes_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+CREATE UNIQUE INDEX uq_solicitud_pendiente_comercio ON solicitudes_comercio (id_comercio) WHERE estado = 'Pendiente';
+alter table solicitudes_comercio add constraint chk_solicitudes_estado check (estado IN ('Pendiente', 'Aprobada', 'Rechazada'));  -- Estados de la solicitud
+alter table solicitudes_comercio add constraint chk_solicitud_motivo_rechazo check (estado <> 'Rechazada' OR (motivo_rechazo IS NOT NULL AND length(trim(motivo_rechazo)) > 0));  -- RN-016
+
+-- 2026_10_21_100800_create_documentos_comercio_table.php
+create table documentos_comercio (
+    id_documento_comercio bigserial primary key,
+    id_comercio bigint not null,
+    tipo varchar(50) not null,
+    ruta_cifrada varchar(255) not null,
+    fecha_vencimiento date null,
+    resultado varchar(15) not null default 'pendiente',
+    observacion text null,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table documentos_comercio add constraint fk_documentos_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table documentos_comercio add constraint chk_documentos_resultado check (resultado IN ('pendiente', 'valido', 'invalido'));  -- RN-002
+
+-- 2026_10_21_100900_create_contacto_comercio_table.php
+create table contacto_comercio (
+    id_contacto bigserial primary key,
+    id_comercio bigint not null,
+    tipo varchar(20) not null,
+    valor varchar(255) not null,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table contacto_comercio add constraint fk_contacto_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table contacto_comercio add constraint chk_contacto_tipo check (tipo IN ('telefono', 'correo', 'direccion', 'facebook', 'instagram', 'whatsapp', 'tiktok', 'sitio_web'));  -- Tipos de contacto
+
+-- 2026_10_21_101000_create_politicas_comercio_table.php
+create table politicas_comercio (
+    id_politica bigserial primary key,
+    id_comercio bigint not null,
+    tipo varchar(30) not null,
+    contenido text not null,
+    configuracion_envio jsonb null,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table politicas_comercio add constraint fk_politicas_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table politicas_comercio add constraint chk_politicas_tipo check (tipo IN ('envio', 'devolucion', 'garantia', 'privacidad', 'otra'));  -- Tipos de política
+alter table politicas_comercio add constraint chk_politicas_configuracion_envio check (tipo = 'envio' OR configuracion_envio IS NULL);  -- Solo las políticas de envío tienen tarifas
+
+-- 2026_10_21_101100_create_banners_comercio_table.php
+create table banners_comercio (
+    id_banner bigserial primary key,
+    id_comercio bigint not null,
+    ruta varchar(255) not null,
+    texto_alternativo varchar(150) not null,
+    orden smallint not null default 1,
+    activo boolean not null default true,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table banners_comercio add constraint fk_banners_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table banners_comercio add constraint chk_banners_orden check (orden >= 1);  -- Orden válido
+
+-- 2026_10_21_101200_create_horarios_comercio_table.php
+create table horarios_comercio (
+    id_horario bigserial primary key,
+    id_comercio bigint not null,
+    dia_semana smallint not null,
+    hora_apertura time(0) without time zone null,
+    hora_cierre time(0) without time zone null,
+    cerrado boolean not null default false,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table horarios_comercio add constraint fk_horarios_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table horarios_comercio add constraint uq_horarios_comercio_dia unique (id_comercio, dia_semana);
+alter table horarios_comercio add constraint chk_horarios_dia check (dia_semana BETWEEN 1 AND 7);  -- 1 = lunes, 7 = domingo
+alter table horarios_comercio add constraint chk_horarios_horas check (cerrado OR (hora_apertura IS NOT NULL AND hora_cierre IS NOT NULL AND hora_apertura < hora_cierre));  -- Horas coherentes si abre
+
+-- 2026_10_21_101300_create_galeria_comercio_table.php
+create table galeria_comercio (
+    id_imagen bigserial primary key,
+    id_comercio bigint not null,
+    ruta varchar(255) not null,
+    texto_alternativo varchar(150) not null,
+    orden smallint not null default 1,
+    created_at timestamp(0) without time zone null,
+    updated_at timestamp(0) without time zone null
+);
+alter table galeria_comercio add constraint fk_galeria_comercio_id_comercio foreign key (id_comercio) references comercios (id_comercio) on delete restrict;
+alter table galeria_comercio add constraint chk_galeria_orden check (orden >= 1);  -- Orden válido

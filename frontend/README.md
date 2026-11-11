@@ -16,12 +16,12 @@ Código en `src/modules/M5_Pedidos/`:
 | `services/datosMock.js` | Datos de ejemplo (productos, comercios, precios y envíos); no vienen de M2, M3 ni M4 |
 
 ## Verlo con doble clic (sin instalar nada)
-En la carpeta `prototipos/` de esta misma carpeta, abra con Chrome o Edge:
+En la carpeta `prototipos/M5_Pedidos/` de esta misma carpeta, abra con Chrome o Edge:
 - `1_Abrir_prototipo.html`: flujo normal.
 - `2_Abrir_prototipo_producto_agotado.html`: alternativa del paso 4 del CU-004.
 - `3_Abrir_prototipo_comercio_suspendido.html`: alternativa del paso 5 del CU-004.
 
-Para verlo a 360 px de ancho: F12, modo dispositivo (Ctrl + Shift + M) y ancho 360.
+Cuenta con diseño responsivo completo (versión web a pantalla completa y versión móvil al ajustar el ancho a 360 px en F12 / modo dispositivo).
 
 ## Ejecutarlo para desarrollar
 Requiere Node.js. Desde esta carpeta (`frontend`):
@@ -29,14 +29,15 @@ Requiere Node.js. Desde esta carpeta (`frontend`):
     npm install
     npm run dev
 
-Se abre `app.html` en el navegador. La entrada del proyecto es `app.html` (no `index.html`).
+Se abre `app.html` en el navegador, que es la **puerta de entrada de la aplicación integrada** (portal de M1:
+inicio, búsqueda e inicio de sesión). El carrito y los pedidos de M5 están en `carrito.html`.
 
 ## Volver a generar los archivos de doble clic
 Si cambia el código, desde esta carpeta:
 
     npm run build:single
 
-Genera `dist-single/app.html`. Copie ese archivo sobre los de `prototipos/` (para las versiones 2 y 3 hay que agregar
+Genera `dist-single/carrito.html`. Copie ese archivo sobre los de `prototipos/M5_Pedidos/` (para las versiones 2 y 3 hay que agregar
 `<script>window.SIMULAR_M5='stock';</script>` o `'comercio'` justo después de `<head>`).
 Nota: `npm audit` reporta vulnerabilidades en una dependencia de desarrollo de este paso (`vite-plugin-singlefile`); solo se usa al compilar.
 

@@ -2,24 +2,20 @@
 
 namespace Tests\Feature;
 
-use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
+use App\Events\M5_Pedidos\SubpedidoDespachado;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class DespacharSubpedidoM2ConsumerTest extends TestCase
 {
     /**
-     * Verifica que M5 despacha el subpedido, notifica a M2 y registra la comision.
+     * Verifica que M5 despacha el subpedido y emite el evento canónico SubpedidoDespachado,
+     * el cual es consumido por M2 para registrar la comisión.
      */
     public function test_despachar_subpedido_notifica_a_m2_como_consumidor_y_registra_comision(): void
     {
-        $mockComercios = $this->createMock(ComerciosServiceInterface::class);
-        $mockComercios->expects($this->once())
-            ->method('registrarComision')
-            ->with($this->equalTo(101), $this->equalTo(15000.00))
-            ->willReturn(true);
-
-        $this->app->instance(ComerciosServiceInterface::class, $mockComercios);
+        Event::fake([SubpedidoDespachado::class]);
 
         /** @var PedidosServiceInterface $pedidosService */
         $pedidosService = $this->app->make(PedidosServiceInterface::class);
@@ -30,6 +26,10 @@ class DespacharSubpedidoM2ConsumerTest extends TestCase
         $this->assertEquals('despachado', $resultado['estado_subpedido']);
         $this->assertEquals('SubpedidoDespachado', $resultado['evento']);
         $this->assertContains('M2', $resultado['consumidores_notificados']);
-        $this->assertTrue($resultado['comision_registrada_m2']);
+
+        Event::assertDispatched(SubpedidoDespachado::class, function (SubpedidoDespachado $evento) {
+            return $evento->id_subpedido === 55
+                && $evento->guia_transporte === 'GUIA-EXPRESS-123';
+        });
     }
 }

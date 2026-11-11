@@ -1,6 +1,10 @@
 <?php
 
+use App\Http\Controllers\Nucleo\CrearContrasenaController;
+use App\Http\Controllers\Nucleo\SesionController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Middleware\EstablecerCliente;
+use App\Http\Middleware\EstablecerComercio;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,10 +21,28 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::post('/login', [SesionController::class, 'login'])
+    ->middleware('throttle:login')
+    ->name('login');
+
+// Invitación del Encargado del comercio: define su contraseña con el token del correo.
+Route::post('/crear-contrasena', CrearContrasenaController::class)
+    ->middleware('throttle:6,1')
+    ->name('crear-contrasena');
+
+Route::post('/logout', [SesionController::class, 'logout'])
+    ->middleware('auth:sanctum')
+    ->name('logout');
+
 // M1: Portal Público y Búsqueda
 Route::prefix('m1')
     ->name('m1.')
     ->group(base_path('routes/modules/m1_portal.php'));
+
+// M1: Rutas contractuales OpenAPI v1.1.0
+Route::prefix('api/m1/v1')
+    ->name('api.m1.v1.')
+    ->group(base_path('routes/modules/m1_api.php'));
 
 // M2: Micrositios y Administración de Comercios
 Route::prefix('m2')
@@ -37,7 +59,17 @@ Route::prefix('m4')
     ->name('m4.')
     ->group(base_path('routes/modules/m4_inventario.php'));
 
-// M5: Carrito y Gestión de Pedidos
+// M5: Carrito y Gestión de Pedidos - Rutas contractuales OpenAPI v1.1.0
+Route::prefix('api/m5/v1')
+    ->name('api.m5.v1.')
+    ->group(base_path('routes/modules/m5_pedidos.php'));
+
+// M5: Alias para compatibilidad con prefijo general /api/v1
+Route::prefix('api/v1')
+    ->name('api.v1.')
+    ->group(base_path('routes/modules/m5_pedidos.php'));
+
+// M5: Carrito y Gestión de Pedidos (Compatibilidad frontend y tests previos)
 Route::prefix('m5')
     ->name('m5.')
     ->group(base_path('routes/modules/m5_pedidos.php'));

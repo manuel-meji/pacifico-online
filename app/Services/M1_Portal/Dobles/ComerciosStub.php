@@ -2,19 +2,17 @@
 
 namespace App\Services\M1_Portal\Dobles;
 
-use App\Contracts\M2_Comercios\ComerciosServiceInterface;
-use LogicException;
+use App\Services\M2_Comercios\Dobles\ComerciosDobleBase;
 
 /**
  * Stub de M2 Micrositios y comercios (contrato 1.2.1) para las operaciones que
  * consume M1: ObtenerDatosComercioPublico, ObtenerResumenComerciosLote y
  * ListarComerciosHabilitados.
  *
- * El contrato de M2 no publica firmas PHP; las de esta clase son las
- * propuestas por M1 a partir de las operaciones REST, y se ajustan cuando M2
- * las agregue a ComerciosServiceInterface.
+ * Las firmas vienen de ComerciosDobleBase; las demás operaciones de M2
+ * responden ERR-006 por defecto.
  */
-class ComerciosStub implements ComerciosServiceInterface
+class ComerciosStub extends ComerciosDobleBase
 {
     private const MAXIMO_LOTE = 50;
 
@@ -108,14 +106,19 @@ class ComerciosStub implements ComerciosServiceInterface
         ];
     }
 
+    /**
+     * Métodos obsoletos que la interfaz preliminar todavía exige y que
+     * ComerciosDobleBase no cubre. Eliminar cuando el segundo PR de M2 los
+     * quite de ComerciosServiceInterface.
+     */
     public function obtenerMicrositio(int $comercioId): array
     {
-        throw new LogicException('Fuera del alcance del doble de M1.');
+        throw $this->noSimulada(__FUNCTION__);
     }
 
     public function registrarComision(int $pedidoId, float $subtotalPedido): bool
     {
-        throw new LogicException('Fuera del alcance del doble de M1.');
+        throw $this->noSimulada(__FUNCTION__);
     }
 
     /**

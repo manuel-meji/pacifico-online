@@ -67,7 +67,6 @@ CREATE TABLE existencias (
     id_ubicacion       bigint        NOT NULL,
     cantidad_fisica    numeric(14,3) NOT NULL DEFAULT 0,
     cantidad_reservada numeric(14,3) NOT NULL DEFAULT 0,
-    cantidad_defectuosa numeric(14,3) NOT NULL DEFAULT 0,
     stock_minimo       numeric(14,3) NOT NULL DEFAULT 0,
     costo_promedio     numeric(14,4) NOT NULL DEFAULT 0,
     created_at         timestamptz,
@@ -81,7 +80,7 @@ CREATE TABLE existencias (
     CONSTRAINT ck_existencias_fisica_no_negativa CHECK (cantidad_fisica >= 0),
     CONSTRAINT ck_existencias_reservada_no_negativa CHECK (cantidad_reservada >= 0),
     CONSTRAINT ck_existencias_disponible_no_negativo
-        CHECK (cantidad_fisica - cantidad_reservada - cantidad_defectuosa >= 0),
+        CHECK (cantidad_fisica - cantidad_reservada >= 0),
     CONSTRAINT ck_existencias_stock_minimo_no_negativo CHECK (stock_minimo >= 0)
 );
 
@@ -132,7 +131,6 @@ CREATE TABLE kardex_inventario (
     id_movimiento    bigint        NOT NULL,
     saldo_cantidad   numeric(14,3) NOT NULL,
     saldo_reservado  numeric(14,3) NOT NULL DEFAULT 0,
-    saldo_defectuoso numeric(14,3) NOT NULL DEFAULT 0,
     monto_total      numeric(16,2) NOT NULL,
     CONSTRAINT pk_kardex_inventario PRIMARY KEY (id_kardex),
     CONSTRAINT uq_kardex_movimiento UNIQUE (id_movimiento),

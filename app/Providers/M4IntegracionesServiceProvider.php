@@ -1,0 +1,79 @@
+<?php
+
+namespace App\Providers;
+
+use App\Contracts\M4_Inventario\Dependencias\CatalogoDependencia;
+use App\Contracts\M4_Inventario\Dependencias\ComerciosDependencia;
+use App\Contracts\M4_Inventario\Dependencias\NucleoDependencia;
+use App\Contracts\M4_Inventario\Dependencias\PedidosDependencia;
+use App\Contracts\M4_Inventario\Dependencias\VerificadorAutorizacionesInterface;
+use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Services\M4_Inventario\Dependencias\CatalogoReal;
+use App\Services\M4_Inventario\Dependencias\ComerciosReal;
+use App\Services\M4_Inventario\Dependencias\NucleoReal;
+use App\Services\M4_Inventario\Dependencias\PedidosReal;
+use App\Services\M4_Inventario\InventarioService;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
+
+/**
+ * Despliegue mínimo de M4.
+ *
+ * 1. Elige, para cada dependencia de M4 (M2, M3, M5 y el núcleo), entre el doble y
+ *    el servicio real según config/integraciones.php, clave m4. El servicio
+ *    real se llama dentro del mismo proceso por la interfaz PHP del proveedor
+ *    (sección 5.1 del PC3), nunca leyendo sus tablas.
+ * 2. Enlaza InventarioModuleInterface con el servicio real de M4.
+ * 3. Registra la API del contrato en /api/m4/v1 (routes/modules/m4_inventario_api.php),
+ *    que usa el frontend React de la plataforma (SC-07: React + API en lugar de Inertia).
+ */
+class M4IntegracionesServiceProvider extends ServiceProvider
+{
+    /**
+     * Interfaz de cada dependencia y adaptador real que la implementa.
+     *
+     * @var array<string, array{0: class-string, 1: class-string}>
+     */
+    public const DEPENDENCIAS = [
+        'm2' => [ComerciosDependencia::class, ComerciosReal::class],
+        'm3' => [CatalogoDependencia::class, CatalogoReal::class],
+        'nucleo' => [NucleoDependencia::class, NucleoReal::class],
+        'm5' => [PedidosDependencia::class, PedidosReal::class],
+    ];
+
+    public function register(): void
+    {
+        $this->app->bind(InventarioModuleInterface::class, InventarioService::class);
+
+        foreach (self::DEPENDENCIAS as $proveedor => [$interfaz, $real]) {
+            $this->app->bind($interfaz, fn (Application $app): object => $this->resolver($app, $proveedor, $real));
+        }
+
+        // El núcleo aún no ofrece el verificador de autorizaciones: solo hay doble.
+        $this->app->bind(VerificadorAutorizacionesInterface::class, fn (Application $app): object => $app->make(
+            $app['config']->get('integraciones.m4.autorizaciones.doble')
+        ));
+    }
+
+    public function boot(): void
+    {
+        $this->loadRoutesFrom(base_path('routes/modules/m4_inventario_api.php'));
+    }
+
+    /**
+     * @param  class-string  $real
+     */
+    private function resolver(Application $app, string $proveedor, string $real): object
+    {
+        $configuracion = $app['config']->get("integraciones.m4.{$proveedor}");
+
+        return match ($configuracion['modo'] ?? null) {
+            'real' => $app->make($real),
+            'doble' => $app->make($configuracion['doble']),
+            default => throw new InvalidArgumentException(
+                "integraciones.m4.{$proveedor}.modo debe ser 'doble' o 'real'."
+            ),
+        };
+    }
+}

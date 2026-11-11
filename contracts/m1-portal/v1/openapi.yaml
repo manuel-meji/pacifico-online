@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: M1 Portal público y búsqueda — Contrato del módulo
-  version: 1.1.0
+  version: 1.4.0
   description: |
     Contrato formal del módulo M1 Portal público y búsqueda de Pacíficos Online
     (IF6100, II Ciclo 2026, subgrupo SG1).
@@ -39,7 +39,7 @@ info:
 
     Integración con otros módulos. Por decisión del Comité de Arquitectura e
     Integración, los módulos se comunican de forma sincrónica por la interfaz PHP
-    App\Contracts\M1\PortalPublicoContract, dentro de la misma aplicación Laravel.
+    App\Contracts\M1_Portal\PortalPublicoContract, dentro de la misma aplicación Laravel.
     Las rutas HTTP de este documento son para el frontend (Inertia con React,
     decisión del PC2). Las llamadas por la interfaz PHP no llevan sesión de
     usuario, por lo que pueden hacerse desde procesos en segundo plano. La
@@ -57,6 +57,10 @@ servers:
   - url: /api/m1/v1
     description: Ruta base del módulo en el ambiente de integración (propuesta SG1)
 tags:
+  - name: Noticias
+    description: Nuevo en 1.4.0 (SC-08). Noticias de la plataforma; las publica solo la administración.
+  - name: Promociones
+    description: Nuevo en 1.4.0 (SC-08). Promociones de los comercios y sección del portal.
   - name: Búsqueda
     description: Búsqueda de productos de los comercios habilitados.
   - name: Destacados
@@ -215,6 +219,18 @@ paths:
         M2.ObtenerResumenComerciosLote. Ambos omiten los productos no publicados y
         los comercios no activos, que tampoco se muestran aquí. El orden de la
         respuesta es el de la columna posicion de M1.
+
+        Desde 1.4.0 (SC-08), en la sección de productos:
+        - Cada comercio tiene como máximo 3 productos destacados activos; si la
+          selección tiene más, se muestran los 3 de menor posicion.
+        - Un producto agotado (M4) no se muestra y vuelve a aparecer solo cuando
+          recupera existencias dentro de su periodo. Tampoco se muestran los
+          productos que el comercio desactivó (M3 los omite) ni los de comercios
+          suspendidos (M2). Si M4 no responde, no se oculta ninguno y salen con
+          disponibilidad Agotado.
+        - Se muestran hasta 12. Si hay más, se rotan por turnos de 15 minutos:
+          cada turno avanza tantas posiciones como el límite, tomando la lista
+          como circular, así todos aparecen el mismo tiempo.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-01, RN-M1-05, RN-M1-06]
       x-dependencias: [M3.buscarProductos 1.2.0 (filtro ids), M2.ObtenerResumenComerciosLote 1.1.0, M4.consultarDisponibilidadProductoLote 1.1.0]
@@ -223,12 +239,15 @@ paths:
         - name: limite
           in: query
           required: false
-          description: Cantidad máxima de comercios y de productos.
+          description: |
+            Cantidad máxima de comercios y de productos. Desde 1.4.0 el máximo
+            y el valor por defecto son 12; un valor fuera de rango se ajusta al
+            más cercano, sin error.
           schema:
             type: integer
             minimum: 1
-            maximum: 24
-            default: 8
+            maximum: 12
+            default: 12
       responses:
         '200':
           description: Destacados vigentes.
@@ -307,6 +326,9 @@ paths:
       description: |
         Nuevo en 1.1.0. Página de comercios del portal. Toma el listado de
         M2.ListarComerciosHabilitados, que solo devuelve comercios activos.
+
+        Desde 1.3.0: una pagina o por_pagina que no sea un entero dentro del
+        rango responde 422 con ERR-005 y el detalle por campo.
       x-consumidores: [Frontend del portal]
       x-dependencias: [M2.ListarComerciosHabilitados 1.1.0]
       security: []
@@ -333,6 +355,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListadoComercios'
+        '422':
+          $ref: '#/components/responses/PaginacionInvalida'
         '503':
           $ref: '#/components/responses/DependenciaNoDisponible'
 
@@ -349,6 +373,12 @@ paths:
         sus productos de M3.buscarProductos (filtro id_comercio), con la
         disponibilidad agregada de M4. Responde 404 si M2 responde 404 (el
         comercio no existe o no está activo).
+
+        Desde 1.3.0: si M3 no responde, el micrositio se muestra igual con la
+        información del comercio, la lista de productos vacía y
+        productos_disponibles en false, para que el portal muestre un aviso.
+        Si M2 no responde, 503. Una pagina o por_pagina que no sea un entero
+        dentro del rango responde 422 con ERR-005.
       x-consumidores: [Frontend del portal]
       x-dependencias: [M2.ObtenerDatosComercioPublico 1.1.0, M3.buscarProductos 1.2.0, M4.consultarDisponibilidadProductoLote 1.1.0]
       security: []
@@ -377,6 +407,8 @@ paths:
                 $ref: '#/components/schemas/Micrositio'
         '404':
           $ref: '#/components/responses/RecursoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/PaginacionInvalida'
         '503':
           $ref: '#/components/responses/DependenciaNoDisponible'
 
@@ -392,10 +424,14 @@ paths:
         Desde 1.1.0: M1 coordina el registro dentro de una misma transacción.
         Solicita al núcleo compartido la creación de la cuenta de acceso con rol
         Cliente (ServicioIdentidad::crearCuenta), recibe el id_usuario y crea el registro en clientes con ese
-        id_usuario. La dirección enviada en direccion_envio se guarda como la
-        dirección principal en direcciones_cliente. Ningún módulo escribe
+        id_usuario. Ningún módulo escribe
         directamente en la tabla de usuarios del núcleo. Si cualquier paso falla,
         no queda ni la cuenta ni el cliente.
+
+        Desde 1.2.0: el cuerpo trae la cédula (obligatoria y única) y la
+        dirección de envío desglosada en el objeto direccion, con los campos de
+        direcciones_cliente. Esa dirección se guarda como la dirección
+        principal del cliente, en la misma transacción.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-14, RN-M1-15]
       x-dependencias: [Nucleo.ServicioIdentidad::crearCuenta]
@@ -417,6 +453,32 @@ paths:
           $ref: '#/components/responses/CorreoDuplicado'
         '422':
           $ref: '#/components/responses/DatosInvalidos'
+
+  /clientes/sesion:
+    get:
+      tags: [Clientes]
+      operationId: obtenerClienteSesion
+      summary: Obtener el cliente de la persona con sesión
+      description: |
+        Nuevo en 1.2.0. Devuelve los datos de la persona compradora que tiene
+        la sesión abierta. El frontend la usa para conocer su id_cliente, que
+        el núcleo no entrega en /api/user. Si la cuenta no pertenece a un
+        cliente (por ejemplo, una cuenta de comercio), responde ERR-003.
+      x-consumidores: [Frontend del portal]
+      x-reglas: [RN-M1-16]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Datos del cliente con sesión.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/ClienteNoAccesible'
 
   /clientes/{id_cliente}:
     parameters:
@@ -450,18 +512,24 @@ paths:
                 $ref: '#/components/schemas/Cliente'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/ClienteNoEncontrado'
+          $ref: '#/components/responses/ClienteNoAccesible'
     put:
       tags: [Clientes]
       operationId: actualizarCliente
       summary: Actualizar cliente
       description: |
         Reemplaza los datos de la persona compradora. Solo la propia persona puede
-        modificarlos (RN-M1-16) y solo M1 los modifica (RN-M1-15). El campo
-        direccion_envio actualiza la dirección principal del cliente.
+        modificarlos (RN-M1-16) y solo M1 los modifica (RN-M1-15).
+
+        Desde 1.2.0 esta operación no modifica direcciones: la dirección
+        principal y las demás se cambian con las operaciones de Direcciones.
+        La cédula no se cambia desde aquí.
+
+        Temporal en 1.2.0: el correo no se puede cambiar (422 ERR-005 con
+        detalle en correo_electronico) hasta que el núcleo ofrezca
+        actualizarCorreo, porque el inicio de sesión usa el correo de la
+        cuenta del núcleo. Se acepta el mismo correo con otras mayúsculas.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-14, RN-M1-15, RN-M1-16]
       security:
@@ -481,10 +549,8 @@ paths:
                 $ref: '#/components/schemas/ClienteId'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/ClienteNoEncontrado'
+          $ref: '#/components/responses/ClienteNoAccesible'
         '409':
           $ref: '#/components/responses/CorreoDuplicado'
         '422':
@@ -518,10 +584,8 @@ paths:
                   $ref: '#/components/schemas/DireccionCliente'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/ClienteNoEncontrado'
+          $ref: '#/components/responses/ClienteNoAccesible'
     post:
       tags: [Direcciones]
       operationId: agregarDireccionCliente
@@ -549,10 +613,8 @@ paths:
                 $ref: '#/components/schemas/DireccionCliente'
         '401':
           $ref: '#/components/responses/NoAutenticado'
-        '403':
-          $ref: '#/components/responses/AccesoDenegado'
         '404':
-          $ref: '#/components/responses/ClienteNoEncontrado'
+          $ref: '#/components/responses/ClienteNoAccesible'
         '422':
           $ref: '#/components/responses/DatosInvalidos'
 
@@ -564,7 +626,15 @@ paths:
       tags: [Direcciones]
       operationId: actualizarDireccionCliente
       summary: Actualizar una dirección de envío
-      description: Nuevo en 1.1.0. Reemplaza los datos de una dirección del propio cliente.
+      description: |
+        Nuevo en 1.1.0. Reemplaza los datos de una dirección del propio cliente.
+        El alias no puede repetirse para el mismo cliente. Marcarla como
+        principal desmarca la anterior.
+
+        Desde 1.2.0 la dirección principal no se puede desmarcar directamente
+        (422 con detalle en es_principal): se cambia marcando otra como
+        principal. Así el cliente siempre tiene una dirección principal y el
+        direccion_envio que leen M5 y M6 nunca queda vacío.
       x-consumidores: [Frontend del portal]
       x-reglas: [RN-M1-15, RN-M1-16]
       security:
@@ -584,12 +654,839 @@ paths:
                 $ref: '#/components/schemas/DireccionCliente'
         '401':
           $ref: '#/components/responses/NoAutenticado'
+        '404':
+          description: |
+            ERR-003 si el cliente no es la persona con sesión (RN-M1-16), o
+            ERR-004 si la dirección no existe o no pertenece a ese cliente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /destacados/tarifas:
+    get:
+      tags: [Destacados]
+      operationId: listarTarifasDestacado
+      summary: Tarifas de los periodos de producto destacado
+      description: |
+        Nuevo en 1.4.0 (SC-08). Tarifa fija de cada periodo (7, 15 o 30 días)
+        que define la administración. Es pública para que el panel del comercio
+        la muestre antes de solicitar. Un periodo sin tarifa no aparece y no se
+        puede solicitar.
+      x-consumidores: [Panel del comercio (M2), Panel de la administración (M2)]
+      security: []
+      responses:
+        '200':
+          description: Tarifas definidas, por periodo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TarifaDestacado'
+
+  /comercio/destacados/solicitudes:
+    post:
+      tags: [Destacados]
+      operationId: solicitarDestacado
+      summary: El comercio solicita destacar uno de sus productos
+      description: |
+        Nuevo en 1.4.0 (SC-08). El comercio de la sesión (rol
+        encargado_comercio; el comercio sale de la sesión, nunca del cuerpo)
+        pide destacar uno de sus productos por 7, 15 o 30 días. Se guarda la
+        tarifa vigente del periodo, que es la que se cobra si se aprueba. Queda
+        pendiente hasta que la administración la apruebe o la rechace.
+
+        - 404 ERR-004 si el producto no existe, no está publicado o es de otro
+          comercio (no se distingue, para no revelar productos ajenos).
+        - 409 ERR-M1-003 si el producto ya está destacado o ya tiene una
+          solicitud pendiente.
+        - 422 ERR-005 si el periodo no es 7, 15 o 30, o no tiene tarifa.
+        - El máximo de 3 destacados activos por comercio se valida al aprobar.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      x-dependencias: [M3.obtenerProducto (comercio del producto)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevaSolicitudDestacado'
+      responses:
+        '201':
+          description: Solicitud creada, pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
         '403':
-          $ref: '#/components/responses/AccesoDenegado'
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoDestacado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+    get:
+      tags: [Destacados]
+      operationId: listarSolicitudesDestacado
+      summary: Solicitudes de destacado del comercio de la sesión
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo las del comercio de la sesión (RN-12), de
+        la más reciente a la más antigua. Una aprobada trae fecha_inicio y
+        fecha_fin del periodo.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoSolicitudDestacado'
+      responses:
+        '200':
+          description: Solicitudes del comercio.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/destacados/solicitudes:
+    get:
+      tags: [Destacados]
+      operationId: listarSolicitudesDestacadoAdministracion
+      summary: Solicitudes de destacado de todos los comercios
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo el rol encargado_plataforma, con el acceso
+        auditado del núcleo. Filtros opcionales por estado y comercio.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoSolicitudDestacado'
+        - name: id_comercio
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Solicitudes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/destacados/solicitudes/{id_solicitud_destacado}/aprobar:
+    parameters:
+      - $ref: '#/components/parameters/IdSolicitudDestacado'
+    post:
+      tags: [Destacados]
+      operationId: aprobarSolicitudDestacado
+      summary: Aprobar una solicitud de destacado
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. El periodo empieza
+        en el momento de aprobar y dura los días solicitados. Se genera un
+        cargo con la tarifa guardada en la solicitud, que se descuenta de la
+        liquidación del comercio (ver x-interfaz-php-comercial). El periodo
+        corre aunque el producto se oculte (agotado, desactivado o comercio
+        suspendido) y no se reembolsa.
+
+        - 409 ERR-M1-002 si el comercio ya tiene 3 destacados activos en ese
+          periodo (cuentan los pagados y los de la administración).
+        - 409 ERR-M1-003 si la solicitud ya fue resuelta o el producto ya está
+          destacado en ese periodo.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Solicitud aprobada, con fecha_inicio y fecha_fin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoDestacado'
+
+  /administracion/destacados/solicitudes/{id_solicitud_destacado}/rechazar:
+    parameters:
+      - $ref: '#/components/parameters/IdSolicitudDestacado'
+    post:
+      tags: [Destacados]
+      operationId: rechazarSolicitudDestacado
+      summary: Rechazar una solicitud de destacado
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. El motivo es
+        obligatorio y lo ve el comercio. No genera cargo.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RechazoSolicitudDestacado'
+      responses:
+        '200':
+          description: Solicitud rechazada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitudDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoDestacado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/destacados:
+    post:
+      tags: [Destacados]
+      operationId: destacarProductoPlataforma
+      summary: La administración destaca un producto por su cuenta, sin costo
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma, por ejemplo para una
+        campaña. Fechas libres con fecha y hora; no genera cargo. Aplica el
+        máximo de 3 destacados activos del comercio del producto en esas fechas
+        (409 ERR-M1-002) y no permite destacar dos veces el mismo producto en
+        fechas que se cruzan (409 ERR-M1-003).
+      x-consumidores: [Panel de la administración (M2)]
+      x-dependencias: [M3.obtenerProducto (comercio del producto)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevoDestacadoPlataforma'
+      responses:
+        '201':
+          description: Destacado creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DestacadoPlataforma'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoDestacado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /administracion/destacados/tarifas/{periodo_dias}:
+    parameters:
+      - name: periodo_dias
+        in: path
+        required: true
+        schema:
+          type: integer
+          enum: [7, 15, 30]
+    put:
+      tags: [Destacados]
+      operationId: definirTarifaDestacado
+      summary: Definir la tarifa de un periodo de destacado
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Crea o reemplaza la
+        tarifa fija del periodo. Las solicitudes ya hechas conservan la tarifa
+        con la que se solicitaron.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosTarifaDestacado'
+      responses:
+        '200':
+          description: Tarifa guardada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TarifaDestacado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /promociones:
+    get:
+      tags: [Promociones]
+      operationId: listarPromocionesVigentes
+      summary: Promociones vigentes de la sección del portal
+      description: |
+        Nuevo en 1.4.0 (SC-08). Las promociones que rebajan el precio ahora
+        (activas, no ocultas y dentro de su periodo), en el orden que decide la
+        plataforma (las sin orden van al final, por fecha de inicio). Cada una
+        trae su producto, solo si M3 lo publica y su comercio está activo.
+      x-consumidores: [Frontend del portal]
+      x-dependencias: [M3.buscarProductos (filtro ids), M2.ObtenerResumenComerciosLote, M4.consultarDisponibilidadProductoLote]
+      security: []
+      responses:
+        '200':
+          description: Promociones vigentes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PromocionVigente'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+
+  /noticias:
+    get:
+      tags: [Noticias]
+      operationId: listarNoticias
+      summary: Noticias publicadas de la plataforma
+      description: |
+        Nuevo en 1.4.0 (SC-08). Noticias publicadas y dentro de su periodo
+        (fecha_publicacion <= ahora <= fecha_fin), de la más reciente a la más
+        antigua. Los borradores y las archivadas no se muestran. Contenido
+        informativo distinto de las promociones (comercios nuevos, campañas de
+        temporada, avisos de mantenimiento, cambios en políticas).
+      x-consumidores: [Frontend del portal]
+      x-dependencias: []
+      security: []
+      parameters:
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: por_pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Página de noticias publicadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListadoNoticias'
+        '422':
+          $ref: '#/components/responses/PaginacionInvalida'
+
+  /noticias/{slug}:
+    parameters:
+      - $ref: '#/components/parameters/SlugNoticia'
+    get:
+      tags: [Noticias]
+      operationId: obtenerNoticia
+      summary: Detalle de una noticia publicada
+      description: |
+        Nuevo en 1.4.0 (SC-08). La noticia con su contenido y las promociones
+        que enlaza que estén vigentes y visibles (mismo esquema que
+        listarPromocionesVigentes). Una noticia puede enlazar promociones,
+        pero es una entidad aparte. Si M3 no responde, la noticia se muestra
+        igual con promociones vacío.
+      x-consumidores: [Frontend del portal]
+      x-dependencias: [M3.buscarProductos (filtro ids), M2.ObtenerResumenComerciosLote, M4.consultarDisponibilidadProductoLote]
+      security: []
+      responses:
+        '200':
+          description: Noticia publicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticiaDetalle'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+
+  /comercio/promociones:
+    post:
+      tags: [Promociones]
+      operationId: crearPromocion
+      summary: El comercio crea una promoción para uno de sus productos
+      description: |
+        Nuevo en 1.4.0 (SC-08). Rol encargado_comercio; el comercio sale de la
+        sesión (RN-12). Solo dos tipos: porcentaje (mayor que 0 y menor que
+        100) o precio_fijo (menor que el precio normal de cada variación
+        afectada). Fecha y hora de inicio y de fin obligatorias: se puede
+        programar por adelantado y se activa y desactiva sola. Al producto
+        completo o a variaciones específicas.
+
+        - 404 ERR-004 si el producto no existe, no está publicado o es de otro comercio.
+        - 409 ERR-M1-004 si el producto o una de sus variaciones ya tiene otra
+          promoción activa en fechas que se cruzan.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      x-dependencias: [M3.obtenerProducto (comercio y precios de las variaciones)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosPromocion'
+      responses:
+        '201':
+          description: Promoción creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoPromocion'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '503':
+          $ref: '#/components/responses/DependenciaNoDisponible'
+    get:
+      tags: [Promociones]
+      operationId: listarPromocionesComercio
+      summary: Promociones del comercio de la sesión
+      description: Nuevo en 1.4.0 (SC-08). Solo las del comercio de la sesión (RN-12), de la más reciente a la más antigua.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoPromocion'
+      responses:
+        '200':
+          description: Promociones del comercio.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /comercio/promociones/{id_promocion}:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    put:
+      tags: [Promociones]
+      operationId: actualizarPromocion
+      summary: Modificar una promoción del comercio
+      description: |
+        Nuevo en 1.4.0 (SC-08). Una promoción programada (no ha empezado) se
+        reemplaza completa con DatosPromocion, sin cambiar el producto. Una que
+        ya empezó solo acepta {fecha_fin}, para adelantar el fin (entre el
+        momento actual y el fin vigente); cualquier otro campo responde 422.
+        Una finalizada o desactivada responde 409 ERR-M1-005.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/DatosPromocion'
+                - $ref: '#/components/schemas/AdelantoPromocion'
+      responses:
+        '200':
+          description: Promoción actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoPromocion'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /comercio/promociones/{id_promocion}/desactivar:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    post:
+      tags: [Promociones]
+      operationId: desactivarPromocion
+      summary: Desactivar una promoción del comercio
+      description: |
+        Nuevo en 1.4.0 (SC-08). Deja de rebajar el precio de inmediato y no se
+        puede reactivar. 409 ERR-M1-005 si ya terminó o ya estaba desactivada.
+      x-consumidores: [Panel del comercio (M2)]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Promoción desactivada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoPromocion'
+
+  /administracion/promociones:
+    get:
+      tags: [Promociones]
+      operationId: listarPromocionesAdministracion
+      summary: Promociones de todos los comercios
+      description: Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Filtros opcionales por estado y comercio.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoPromocion'
+        - name: id_comercio
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Promociones.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/promociones/{id_promocion}/orden:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    put:
+      tags: [Promociones]
+      operationId: ordenarPromocion
+      summary: Posición de una promoción en la sección del portal
+      description: Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. 1 va primero; null la manda al final.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrdenPromocion'
+      responses:
+        '200':
+          description: Promoción con su nueva posición.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
         '404':
           $ref: '#/components/responses/RecursoNoEncontrado'
         '422':
           $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/promociones/{id_promocion}/ocultar:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    post:
+      tags: [Promociones]
+      operationId: ocultarPromocion
+      summary: Ocultar una promoción que incumple las políticas
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma, con motivo
+        obligatorio. Mientras está oculta no se muestra ni rebaja el precio
+        (el carrito vuelve al precio normal). Sigue contando para los traslapes.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OcultamientoPromocion'
+      responses:
+        '200':
+          description: Promoción oculta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/promociones/{id_promocion}/mostrar:
+    parameters:
+      - $ref: '#/components/parameters/IdPromocion'
+    post:
+      tags: [Promociones]
+      operationId: mostrarPromocion
+      summary: Volver a mostrar una promoción oculta
+      description: Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Vuelve a rebajar el precio si sigue dentro de su periodo.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Promoción visible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promocion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+
+  /administracion/noticias:
+    post:
+      tags: [Noticias]
+      operationId: crearNoticia
+      summary: La administración crea una noticia en borrador
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma; los comercios no
+        publican noticias. Queda en borrador hasta publicarNoticia. El slug se
+        genera a partir del título (único; si ya existe se agrega -2, -3...).
+        Sin fecha_fin, se muestra un año desde que se publica.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosNoticia'
+      responses:
+        '201':
+          description: Noticia creada en borrador.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+    get:
+      tags: [Noticias]
+      operationId: listarNoticiasAdministracion
+      summary: Todas las noticias, para la administración
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Todas las noticias
+        (borradores, publicadas y archivadas), de la modificada más
+        recientemente a la más antigua, con filtro opcional por estado.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoNoticia'
+      responses:
+        '200':
+          description: Noticias.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/noticias/{id_noticia}:
+    parameters:
+      - $ref: '#/components/parameters/IdNoticia'
+    put:
+      tags: [Noticias]
+      operationId: actualizarNoticia
+      summary: Editar una noticia
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Reemplaza los datos
+        de un borrador o de una publicada (los enlaces a promociones también).
+        El slug cambia con el título solo mientras es borrador. 409 ERR-M1-006
+        si está archivada.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosNoticia'
+      responses:
+        '200':
+          description: Noticia actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNoticia'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/noticias/{id_noticia}/publicar:
+    parameters:
+      - $ref: '#/components/parameters/IdNoticia'
+    post:
+      tags: [Noticias]
+      operationId: publicarNoticia
+      summary: Publicar un borrador
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. La fecha de
+        publicación es ahora, o fecha_publicacion para programarla; desde ese
+        momento se muestra en el portal hasta fecha_fin. 409 ERR-M1-006 si ya
+        está publicada o archivada.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicacionNoticia'
+      responses:
+        '200':
+          description: Noticia publicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNoticia'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/noticias/{id_noticia}/archivar:
+    parameters:
+      - $ref: '#/components/parameters/IdNoticia'
+    post:
+      tags: [Noticias]
+      operationId: archivarNoticia
+      summary: Archivar una noticia
+      description: |
+        Nuevo en 1.4.0 (SC-08). Solo encargado_plataforma. Un borrador o una
+        publicada deja de mostrarse y ya no se modifica. 409 ERR-M1-006 si ya
+        estaba archivada.
+      x-consumidores: [Panel de la administración (M2)]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Noticia archivada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Noticia'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNoticia'
 
 components:
   securitySchemes:
@@ -639,6 +1536,56 @@ components:
         type: integer
         minimum: 1
 
+    IdSolicitudDestacado:
+      name: id_solicitud_destacado
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    IdPromocion:
+      name: id_promocion
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    EstadoPromocion:
+      name: estado
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [programada, vigente, finalizada, desactivada, oculta]
+    IdNoticia:
+      name: id_noticia
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    SlugNoticia:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 170
+        pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+    EstadoNoticia:
+      name: estado
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [borrador, publicada, archivada]
+    EstadoSolicitudDestacado:
+      name: estado
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [pendiente, aprobada, rechazada]
   schemas:
     Disponibilidad:
       type: string
@@ -690,6 +1637,8 @@ components:
           $ref: '#/components/schemas/Disponibilidad'
         comercio:
           $ref: '#/components/schemas/ComercioResumen'
+        promocion:
+          $ref: '#/components/schemas/PromocionResumen'
 
     ResultadoBusqueda:
       type: object
@@ -795,6 +1744,16 @@ components:
         comprable:
           type: boolean
           description: true solo si M3 declara la variación disponible para la venta y M4 informa unidades.
+        precio_promocional:
+          type: number
+          description: Nuevo en 1.4.0, solo si la variación tiene una promoción vigente. Precio con la promoción, a 2 decimales.
+        id_promocion:
+          type: integer
+          description: Nuevo en 1.4.0, solo si la variación tiene una promoción vigente.
+        fin_promocion:
+          type: string
+          format: date-time
+          description: Nuevo en 1.4.0, solo si la variación tiene una promoción vigente.
 
     FichaProducto:
       type: object
@@ -940,51 +1899,81 @@ components:
                     type: string
         productos:
           $ref: '#/components/schemas/ResultadoBusqueda'
+        productos_disponibles:
+          type: boolean
+          description: |
+            Nuevo en 1.3.0, opcional. false cuando M3 no respondió: productos
+            viene vacío y el portal muestra un aviso en lugar de "sin
+            productos". true cuando la lista viene de M3 (aunque esté vacía,
+            caso A2). Si no viene, se asume true.
 
     DatosCliente:
+      description: |
+        Datos de la persona compradora que se envían al actualizar. Desde
+        1.2.0 los largos coinciden con la tabla clientes (nombre 80,
+        apellidos 120) y direccion_envio ya no forma parte de la entrada.
       type: object
-      required: [nombre, apellidos, correo_electronico, telefono, direccion_envio]
+      required: [nombre, apellidos, correo_electronico, telefono]
       properties:
         nombre:
           type: string
-          maxLength: 100
+          maxLength: 80
         apellidos:
           type: string
-          maxLength: 150
+          maxLength: 120
         correo_electronico:
           type: string
           format: email
           maxLength: 150
         telefono:
           type: string
+          minLength: 1
           maxLength: 20
-        direccion_envio:
-          type: string
-          maxLength: 300
-          description: |
-            Dirección principal del cliente en texto, tal como la usan M5 y M6
-            desde la versión 1.0.0. Desde 1.1.0 corresponde a la dirección
-            marcada como principal en direcciones_cliente; para elegir otra
-            dirección, usar las operaciones de Direcciones.
+          description: Obligatorio desde 1.2.0; no puede quedar en blanco.
 
     RegistroCliente:
-      description: Nuevo en 1.1.0. Datos para el autorregistro; incluye la contraseña de la cuenta que crea el núcleo.
+      description: |
+        Nuevo en 1.1.0. Datos para el autorregistro; incluye la contraseña de
+        la cuenta que crea el núcleo. Desde 1.2.0 incluye la cédula y la
+        dirección principal desglosada (objeto direccion).
       allOf:
         - $ref: '#/components/schemas/DatosCliente'
         - type: object
-          required: [contrasena]
+          required: [cedula, contrasena, direccion]
           properties:
+            cedula:
+              type: string
+              minLength: 1
+              maxLength: 20
+              description: Nuevo en 1.2.0. Obligatoria y única (clientes.cedula).
             contrasena:
               type: string
               format: password
               minLength: 8
               writeOnly: true
-              description: Se entrega al núcleo para crear la cuenta; M1 no la guarda.
+              description: Se entrega al núcleo para crear la cuenta; M1 no la guarda. Mínimo 8 caracteres, la misma regla de ServicioIdentidad::crearCuenta.
+            direccion:
+              description: Nuevo en 1.2.0. Se guarda como la dirección principal del cliente; es_principal se ignora.
+              allOf:
+                - $ref: '#/components/schemas/DatosDireccionCliente'
 
     Cliente:
       allOf:
         - $ref: '#/components/schemas/ClienteId'
         - $ref: '#/components/schemas/DatosCliente'
+        - type: object
+          required: [direccion_envio]
+          properties:
+            direccion_envio:
+              type: string
+              readOnly: true
+              description: |
+                Dirección principal del cliente en texto, tal como la usan M5 y
+                M6 desde la versión 1.0.0. No se guarda: se arma con la
+                dirección marcada como principal en direcciones_cliente (otras
+                señas, distrito, cantón, provincia), o es una cadena vacía si
+                el cliente no tiene direcciones. Desde 1.2.0 solo es de salida;
+                para cambiarla, usar las operaciones de Direcciones.
 
     ClienteId:
       type: object
@@ -1034,6 +2023,459 @@ components:
               type: integer
         - $ref: '#/components/schemas/DatosDireccionCliente'
 
+    DatosPromocion:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Cuerpo de crearPromocion y de actualizarPromocion para
+        una programada. Con alcance variaciones, la lista de id_variacion del
+        producto; con alcance producto, se omite.
+      required: [id_producto, titulo, tipo, valor, alcance, fecha_inicio, fecha_fin]
+      properties:
+        id_producto:
+          type: integer
+          minimum: 1
+        titulo:
+          type: string
+          minLength: 1
+          maxLength: 120
+        descripcion:
+          type: string
+          maxLength: 500
+          nullable: true
+        tipo:
+          type: string
+          enum: [porcentaje, precio_fijo]
+        valor:
+          type: number
+          description: Porcentaje mayor que 0 y menor que 100, o precio fijo menor que el precio normal de cada variación afectada. Hasta 2 decimales.
+        alcance:
+          type: string
+          enum: [producto, variaciones]
+        variaciones:
+          type: array
+          items:
+            type: integer
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+          description: Posterior a fecha_inicio y al momento actual.
+    AdelantoPromocion:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de actualizarPromocion para una que ya empezó.
+      required: [fecha_fin]
+      properties:
+        fecha_fin:
+          type: string
+          format: date-time
+    Promocion:
+      type: object
+      description: Nuevo en 1.4.0. Promoción de un comercio.
+      required: [id_promocion, id_comercio, id_producto, titulo, tipo, valor, alcance, variaciones, fecha_inicio, fecha_fin, estado]
+      properties:
+        id_promocion:
+          type: integer
+        id_comercio:
+          type: integer
+        id_producto:
+          type: integer
+        titulo:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        tipo:
+          type: string
+          enum: [porcentaje, precio_fijo]
+        valor:
+          type: number
+        alcance:
+          type: string
+          enum: [producto, variaciones]
+        variaciones:
+          type: array
+          items:
+            type: integer
+          description: Vacía con alcance producto.
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+        estado:
+          type: string
+          enum: [programada, vigente, finalizada, desactivada, oculta]
+        orden:
+          type: integer
+          nullable: true
+        motivo_ocultamiento:
+          type: string
+          nullable: true
+    PromocionResumen:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Promoción vigente de un producto, en ProductoResumen
+        (solo si tiene una). precio_promocional es el precio desde con la
+        promoción cuando aplica a todo el producto; con variaciones
+        específicas va null y el precio de cada una está en la ficha.
+      required: [id_promocion, titulo, tipo, valor, alcance, fecha_fin]
+      properties:
+        id_promocion:
+          type: integer
+        titulo:
+          type: string
+        tipo:
+          type: string
+          enum: [porcentaje, precio_fijo]
+        valor:
+          type: number
+        alcance:
+          type: string
+          enum: [producto, variaciones]
+        precio_promocional:
+          type: number
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date-time
+    PromocionVigente:
+      description: Nuevo en 1.4.0. Promoción de la sección del portal con su producto.
+      allOf:
+        - $ref: '#/components/schemas/Promocion'
+        - type: object
+          required: [producto]
+          properties:
+            producto:
+              $ref: '#/components/schemas/ProductoResumen'
+    OrdenPromocion:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de ordenarPromocion.
+      required: [orden]
+      properties:
+        orden:
+          type: integer
+          minimum: 1
+          maximum: 32767
+          nullable: true
+    OcultamientoPromocion:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de ocultarPromocion.
+      required: [motivo]
+      properties:
+        motivo:
+          type: string
+          minLength: 1
+          maxLength: 500
+    DatosNoticia:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de crearNoticia y actualizarNoticia.
+      required: [titulo, resumen, contenido]
+      properties:
+        titulo:
+          type: string
+          minLength: 1
+          maxLength: 150
+        resumen:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: Texto corto para la portada y el listado.
+        contenido:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        imagen_url:
+          type: string
+          format: uri
+          maxLength: 255
+          nullable: true
+          description: URL http o https de la imagen.
+        fecha_fin:
+          type: string
+          format: date-time
+          nullable: true
+          description: Hasta cuándo se muestra; debe ser futura. Sin valor, un año desde hoy.
+        ids_promocion:
+          type: array
+          maxItems: 10
+          items:
+            type: integer
+            minimum: 1
+          description: Promociones de M1 que enlaza la noticia (deben existir). Sin valor, ninguna.
+    PublicacionNoticia:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo opcional de publicarNoticia.
+      properties:
+        fecha_publicacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: Para programar la publicación; debe ser anterior a fecha_fin. Sin valor, ahora.
+    Noticia:
+      type: object
+      description: Nuevo en 1.4.0. Noticia completa, para la administración.
+      required: [id_noticia, titulo, slug, resumen, contenido, imagen_url, estado, fecha_publicacion, fecha_fin, visible_en_portal, ids_promocion, id_usuario_autor]
+      properties:
+        id_noticia:
+          type: integer
+        titulo:
+          type: string
+        slug:
+          type: string
+        resumen:
+          type: string
+        contenido:
+          type: string
+        imagen_url:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          enum: [borrador, publicada, archivada]
+        fecha_publicacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: null mientras es borrador.
+        fecha_fin:
+          type: string
+          format: date-time
+        visible_en_portal:
+          type: boolean
+          description: true si está publicada y dentro de su periodo.
+        ids_promocion:
+          type: array
+          items:
+            type: integer
+        id_usuario_autor:
+          type: integer
+    NoticiaResumen:
+      type: object
+      description: Nuevo en 1.4.0. Noticia en la portada y en el listado.
+      required: [id_noticia, titulo, slug, resumen, imagen_url, fecha_publicacion]
+      properties:
+        id_noticia:
+          type: integer
+        titulo:
+          type: string
+        slug:
+          type: string
+        resumen:
+          type: string
+        imagen_url:
+          type: string
+          nullable: true
+        fecha_publicacion:
+          type: string
+          format: date-time
+    NoticiaDetalle:
+      description: Nuevo en 1.4.0. Noticia publicada con su contenido y las promociones enlazadas vigentes.
+      allOf:
+        - $ref: '#/components/schemas/NoticiaResumen'
+        - type: object
+          required: [contenido, promociones]
+          properties:
+            contenido:
+              type: string
+            promociones:
+              type: array
+              items:
+                $ref: '#/components/schemas/PromocionVigente'
+    ListadoNoticias:
+      type: object
+      description: Nuevo en 1.4.0. Página de noticias publicadas.
+      required: [pagina, por_pagina, total, noticias]
+      properties:
+        pagina:
+          type: integer
+        por_pagina:
+          type: integer
+        total:
+          type: integer
+        noticias:
+          type: array
+          items:
+            $ref: '#/components/schemas/NoticiaResumen'
+    PrecioVigente:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Precio de una variación con su promoción vigente, como
+        lo entrega PortalPublicoContract::obtenerPreciosVigentes (M5).
+      required: [id_variacion, precio_base, precio_final, id_promocion, fin_promocion]
+      properties:
+        id_variacion:
+          type: integer
+        precio_base:
+          type: number
+        precio_final:
+          type: number
+        id_promocion:
+          type: integer
+          nullable: true
+        fin_promocion:
+          type: string
+          format: date-time
+          nullable: true
+    TarifaDestacado:
+      type: object
+      description: Nuevo en 1.4.0. Tarifa fija de un periodo de producto destacado.
+      required: [periodo_dias, monto, moneda]
+      properties:
+        periodo_dias:
+          type: integer
+          enum: [7, 15, 30]
+        monto:
+          type: number
+          minimum: 0
+        moneda:
+          type: string
+          example: CRC
+        actualizada:
+          type: string
+          format: date-time
+          nullable: true
+    DatosTarifaDestacado:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de definirTarifaDestacado.
+      required: [monto]
+      properties:
+        monto:
+          type: number
+          minimum: 0
+          description: Monto fijo del periodo, con hasta 2 decimales.
+    NuevaSolicitudDestacado:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de solicitarDestacado. El comercio sale de la sesión.
+      required: [id_producto, periodo_dias]
+      properties:
+        id_producto:
+          type: integer
+          minimum: 1
+        periodo_dias:
+          type: integer
+          enum: [7, 15, 30]
+    SolicitudDestacado:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Solicitud de un comercio para destacar uno de sus
+        productos. monto es la tarifa vigente al solicitar, la que se cobra al
+        aprobar. fecha_inicio y fecha_fin vienen solo si está aprobada.
+      required: [id_solicitud_destacado, id_comercio, id_producto, periodo_dias, monto, moneda, estado]
+      properties:
+        id_solicitud_destacado:
+          type: integer
+        id_comercio:
+          type: integer
+        id_producto:
+          type: integer
+        periodo_dias:
+          type: integer
+          enum: [7, 15, 30]
+        monto:
+          type: number
+        moneda:
+          type: string
+        estado:
+          type: string
+          enum: [pendiente, aprobada, rechazada]
+        motivo_rechazo:
+          type: string
+          nullable: true
+        fecha_solicitud:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_resolucion:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_inicio:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date-time
+          nullable: true
+    RechazoSolicitudDestacado:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de rechazarSolicitudDestacado.
+      required: [motivo]
+      properties:
+        motivo:
+          type: string
+          minLength: 1
+          maxLength: 500
+    NuevoDestacadoPlataforma:
+      type: object
+      description: Nuevo en 1.4.0. Cuerpo de destacarProductoPlataforma.
+      required: [id_producto, fecha_inicio, fecha_fin]
+      properties:
+        id_producto:
+          type: integer
+          minimum: 1
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+          description: Posterior a fecha_inicio y al momento actual.
+    DestacadoPlataforma:
+      type: object
+      description: Nuevo en 1.4.0. Producto destacado por la administración, sin costo.
+      required: [id_producto_destacado, id_producto, id_comercio, origen, fecha_inicio, fecha_fin]
+      properties:
+        id_producto_destacado:
+          type: integer
+        id_producto:
+          type: integer
+        id_comercio:
+          type: integer
+        origen:
+          type: string
+          enum: [solicitud, plataforma]
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+    CargoDestacado:
+      type: object
+      description: |
+        Nuevo en 1.4.0. Cargo de un destacado pagado que se aprobó; se descuenta
+        de la liquidación del comercio. Lo entrega
+        ComercialPortalContract::listarCargosDestacado (x-interfaz-php-comercial).
+      required: [id_cargo_destacado, id_comercio, id_solicitud_destacado, id_producto, periodo_dias, monto, moneda, fecha_cargo, fecha_inicio, fecha_fin]
+      properties:
+        id_cargo_destacado:
+          type: integer
+        id_comercio:
+          type: integer
+        id_solicitud_destacado:
+          type: integer
+        id_producto:
+          type: integer
+        periodo_dias:
+          type: integer
+          enum: [7, 15, 30]
+        monto:
+          type: number
+        moneda:
+          type: string
+        fecha_cargo:
+          type: string
+          format: date-time
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
     Error:
       type: object
       description: |
@@ -1059,6 +2501,18 @@ components:
               description: En ERR-005, un mapa campo → mensaje.
 
   responses:
+    PaginacionInvalida:
+      description: Nuevo en 1.3.0. pagina o por_pagina no es un entero dentro del rango (pagina >= 1, por_pagina de 1 a 50).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-005
+              mensaje: Los datos enviados no son válidos.
+              detalles:
+                por_pagina: Debe estar entre 1 y 50.
     CriterioInvalido:
       description: El término está vacío o tiene menos de 2 caracteres y no se envió categoría (RN-M1-08).
       content:
@@ -1093,8 +2547,13 @@ components:
               codigo: ERR-001
               mensaje: Tu sesión expiró, inicia sesión de nuevo.
               detalles: null
-    AccesoDenegado:
-      description: Solo en las rutas web. La persona con sesión intenta ver o editar los datos de otro cliente (RN-M1-16).
+    ClienteNoAccesible:
+      description: |
+        Solo en las rutas web. El cliente pedido no es la persona con sesión,
+        o la cuenta con sesión no pertenece a ningún cliente (RN-M1-16,
+        RNF-M1-08). Desde 1.2.0 responde 404 con ERR-003, igual que el
+        aislamiento del núcleo, y no revela si ese cliente existe. En 1.1.0 se
+        documentaba como 403.
       content:
         application/json:
           schema:
@@ -1137,6 +2596,61 @@ components:
               codigo: ERR-M1-001
               mensaje: Ya existe una cuenta con ese correo.
               detalles: null
+    RolSinPermiso:
+      description: Nuevo en 1.4.0. La cuenta con sesión no tiene el rol que pide la ruta (núcleo).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-002
+              mensaje: No se encuentra autorizado para realizar esta acción.
+              detalles: null
+    ConflictoDestacado:
+      description: |
+        Nuevo en 1.4.0. Errores propios del negocio de M1 para destacados:
+        ERR-M1-002 si el comercio ya tiene 3 destacados activos en ese periodo;
+        ERR-M1-003 si el producto ya está destacado o tiene una solicitud
+        pendiente, o la solicitud ya fue resuelta.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-M1-002
+              mensaje: El comercio ya tiene el máximo de 3 productos destacados activos en ese periodo.
+              detalles: null
+    ConflictoPromocion:
+      description: |
+        Nuevo en 1.4.0. Errores propios del negocio de M1 para promociones:
+        ERR-M1-004 si el producto o una de sus variaciones ya tiene otra
+        promoción activa en fechas que se cruzan; ERR-M1-005 si la promoción ya
+        terminó o fue desactivada y no se puede modificar.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-M1-004
+              mensaje: El producto o una de sus variaciones ya tiene otra promoción activa en esas fechas.
+              detalles: null
+    ConflictoNoticia:
+      description: |
+        Nuevo en 1.4.0. ERR-M1-006 si la noticia está archivada (no se edita,
+        no se publica ni se vuelve a archivar) o si ya está publicada y se
+        intenta publicarla de nuevo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-M1-006
+              mensaje: La noticia está archivada y no se puede editar.
+              detalles: null
     DatosInvalidos:
       description: Faltan datos obligatorios o tienen un formato incorrecto.
       content:
@@ -1151,14 +2665,14 @@ components:
                 correo_electronico: No tiene un formato de correo válido.
 
 # ---------------------------------------------------------------
-# Interfaz PHP App\Contracts\M1\PortalPublicoContract
+# Interfaz PHP App\Contracts\M1_Portal\PortalPublicoContract
 # Es el contrato que usan M5 y M6 dentro de la misma aplicación Laravel.
 # ---------------------------------------------------------------
 x-interfaz-php:
-  interfaz: App\Contracts\M1\PortalPublicoContract
-  ubicacion: app/Contracts/M1/PortalPublicoContract.php
+  interfaz: App\Contracts\M1_Portal\PortalPublicoContract
+  ubicacion: app/Contracts/M1_Portal/PortalPublicoContract.php
   excepciones:
-    ubicacion: app/Contracts/M1/Exceptions/
+    ubicacion: app/Contracts/M1_Portal/Exceptions/
     base: PortalPublicoException (extiende RuntimeException y expone codigo() con el código de error de la ruta web equivalente)
     lista:
       - ClienteNoEncontradoException (ERR-004)
@@ -1168,6 +2682,11 @@ x-interfaz-php:
       - DatosInvalidosException (ERR-005, con detalles campo → mensaje)
       - DependenciaNoDisponibleException (ERR-006)
       - CorreoYaRegistradoException (ERR-M1-001)
+      - LimiteDestacadosException (ERR-M1-002, desde 1.4.0; solo en las rutas web de destacados)
+      - ConflictoDestacadoException (ERR-M1-003, desde 1.4.0; solo en las rutas web de destacados)
+      - TraslapePromocionException (ERR-M1-004, desde 1.4.0; solo en las rutas web de promociones)
+      - PromocionNoModificableException (ERR-M1-005, desde 1.4.0; solo en las rutas web de promociones)
+      - NoticiaNoModificableException (ERR-M1-006, desde 1.4.0; solo en las rutas web de noticias)
   doble_de_prueba: tests/Doubles/M1/PortalPublicoFake.php
   metodos:
     - firma: "obtenerCliente(int $idCliente): array"
@@ -1198,6 +2717,15 @@ x-interfaz-php:
       excepciones:
         - ClienteNoEncontradoException (equivale a ERR-004). Se lanza si la cuenta no tiene un cliente asociado.
       notas: La usa el middleware EstablecerCliente del núcleo para registrar el id_cliente en ContextoCliente sin leer la tabla clientes. Sin sesión de usuario.
+    - firma: "obtenerPreciosVigentes(array $idsVariacion): array"
+      desde: 1.4.0
+      consumidores: [M5]
+      retorna: Arreglo indexado por id_variacion con la estructura del esquema PrecioVigente. precio_final es el precio_base si la variación no tiene una promoción vigente. Las que M3 no encuentra se omiten.
+      parametros: Entre 1 y 100 id_variacion enteros mayores o iguales a 1.
+      excepciones:
+        - DatosInvalidosException (equivale a ERR-005) si la lista no es válida.
+        - DependenciaNoDisponibleException (equivale a ERR-006) si M3 no responde.
+      notas: M5 la usa al agregar al carrito y al confirmar el pedido para cobrar el precio rebajado; la comisión se calcula sobre ese precio. Sin sesión de usuario. Va en PortalPublicoContract porque M5 ya la consume ahí y su doble PortalStub ya la implementa.
   metodos_de_uso_interno:
     descripcion: |
       Los usan los controladores de M1, que son una capa delgada sobre la
@@ -1207,24 +2735,47 @@ x-interfaz-php:
       - firma: "buscarProductos(?string $termino, ?int $idCategoria = null, ?int $idComercio = null, int $pagina = 1, int $porPagina = 20, ?int $idMarca = null, ?float $precioMinimo = null, ?float $precioMaximo = null, ?string $orden = null): array"
         notas: Los filtros de 1.1.0 se agregan al final como opcionales, así las llamadas de 1.0.0 siguen funcionando.
         excepciones: [CriterioInvalidoException, DependenciaNoDisponibleException]
-      - firma: "listarDestacados(int $limite = 8): array"
+      - firma: "listarDestacados(int $limite = 12): array"
       - firma: "listarCategoriasPortal(): array"
         excepciones: [DependenciaNoDisponibleException]
       - firma: "obtenerFichaProducto(int $idProducto): array"
         excepciones: [RecursoNoEncontradoException, DependenciaNoDisponibleException]
       - firma: "listarComercios(int $pagina = 1, int $porPagina = 20): array"
-        excepciones: [DependenciaNoDisponibleException]
+        notas: Desde 1.3.0, pagina menor que 1 o por_pagina fuera de 1 a 50 lanza DatosInvalidosException.
+        excepciones: [DatosInvalidosException, DependenciaNoDisponibleException]
       - firma: "obtenerMicrositio(int $idComercio, int $pagina = 1, int $porPagina = 20): array"
-        excepciones: [RecursoNoEncontradoException, DependenciaNoDisponibleException]
+        notas: Desde 1.3.0, si M3 no responde devuelve el micrositio con productos vacíos y productos_disponibles en false. pagina o por_pagina fuera de rango lanza DatosInvalidosException.
+        excepciones: [RecursoNoEncontradoException, DatosInvalidosException, DependenciaNoDisponibleException]
       - firma: "registrarCliente(array $datos): int"
-        notas: $datos sigue el esquema RegistroCliente. La contraseña se entrega al núcleo y M1 no la guarda.
+        notas: $datos sigue el esquema RegistroCliente (desde 1.2.0 con cedula y direccion). La contraseña se entrega al núcleo y M1 no la guarda.
         excepciones: [CorreoYaRegistradoException, DatosInvalidosException]
       - firma: "actualizarCliente(int $idCliente, array $datos): int"
+        notas: $datos sigue el esquema DatosCliente. Desde 1.2.0 no modifica direcciones ni la cédula.
         excepciones: [ClienteNoEncontradoException, CorreoYaRegistradoException, DatosInvalidosException]
       - firma: "agregarDireccionCliente(int $idCliente, array $datos): array"
         excepciones: [ClienteNoEncontradoException, DatosInvalidosException]
       - firma: "actualizarDireccionCliente(int $idCliente, int $idDireccionCliente, array $datos): array"
         excepciones: [DireccionNoEncontradaException, DatosInvalidosException]
+
+# ---------------------------------------------------------------
+# Interfaz PHP App\Contracts\M1_Portal\ComercialPortalContract (desde 1.4.0)
+# Va aparte de PortalPublicoContract para que quienes ya la implementan (por
+# ejemplo, el doble de M5) no tengan que agregar métodos.
+# ---------------------------------------------------------------
+x-interfaz-php-comercial:
+  interfaz: App\Contracts\M1_Portal\ComercialPortalContract
+  ubicacion: app/Contracts/M1_Portal/ComercialPortalContract.php
+  doble_de_prueba: tests/Doubles/M1/ComercialPortalFake.php
+  solicitud_de_cambio: SC-08
+  metodos:
+    - firma: "listarCargosDestacado(int $idComercio, string $desde, string $hasta): array"
+      desde: 1.4.0
+      consumidores: [M2 o M7 (liquidación al comercio; por confirmar en el Comité)]
+      retorna: Lista con la estructura del esquema CargoDestacado, ordenada por fecha_cargo.
+      parametros: $desde y $hasta en formato AAAA-MM-DD; se incluyen los dos días completos.
+      excepciones:
+        - DatosInvalidosException (equivale a ERR-005) si una fecha no tiene el formato o $desde es posterior a $hasta.
+      notas: Sin sesión de usuario. Los destacados que pone la administración no generan cargo.
 
 # ---------------------------------------------------------------
 # Dependencias que M1 consume (validadas contra las versiones corregidas)
@@ -1300,3 +2851,59 @@ x-historial-versiones:
       interfaz PHP, que no cambia. Por eso se publica como versión menor. Si el
       Comité considera que deben tratarse como cambios que rompen, se renombra
       esta versión como 2.0.0 sin modificar su contenido.
+  - version: 1.2.0
+    cambios:
+      - Largos de DatosCliente alineados con la tabla clientes (nombre 80, apellidos 120).
+      - Teléfono del cliente obligatorio y no vacío.
+      - RegistroCliente agrega cedula (obligatoria, única, máximo 20) y direccion (DatosDireccionCliente), que se guarda como la dirección principal.
+      - direccion_envio sale de la entrada (DatosCliente) y queda solo en la salida (Cliente), calculada a partir de la dirección principal (tercera forma normal; no se guarda en texto).
+      - actualizarCliente ya no modifica direcciones; se usan las operaciones de Direcciones.
+      - Nueva ruta web GET /clientes/sesion (obtenerClienteSesion) con los datos de la persona con sesión.
+      - RN-M1-16 responde 404 ERR-003 (respuesta ClienteNoAccesible) en lugar de 403, alineado con la tabla de errores del núcleo (ERR-003 = 404) y sin revelar si el cliente existe.
+      - Temporal - el correo del cliente no se puede cambiar hasta que el núcleo ofrezca actualizarCorreo.
+      - actualizarDireccionCliente no permite desmarcar la dirección principal; se cambia marcando otra.
+    nota_de_compatibilidad: |
+      Sin cambios en las firmas de la interfaz PHP. El esquema Cliente que
+      reciben M5 y M6 por obtenerCliente conserva los mismos campos
+      (id_cliente, nombre, apellidos, correo_electronico, telefono,
+      direccion_envio); solo se acotan los largos y telefono deja de venir
+      vacío, lo que no afecta a quien lo lee. Los cambios de entrada solo
+      afectan a POST y PUT /clientes, cuyo único consumidor es el frontend
+      del propio M1. Por eso se publica como versión menor.
+  - version: 1.3.0
+    cambios:
+      - Micrositio agrega el campo opcional productos_disponibles (false cuando M3 no responde); en ese caso el micrositio se muestra con la información del comercio y la lista de productos vacía, en lugar de fallar (CU-009).
+      - GET /comercios y GET /comercios/{id_comercio}/micrositio responden 422 con ERR-005 (respuesta PaginacionInvalida) cuando pagina o por_pagina no es un entero dentro del rango.
+      - listarComercios y obtenerMicrositio de la interfaz PHP documentan DatosInvalidosException para la paginación fuera de rango.
+    solicitud_de_cambio: SC-07
+    nota_de_compatibilidad: |
+      Sin cambios en las firmas de la interfaz PHP. productos_disponibles es
+      un campo opcional nuevo: quien no lo lee no se ve afectado. La
+      respuesta 422 solo aplica a las rutas web de comercios y micrositio,
+      cuyo único consumidor es el frontend del propio M1; ningún otro módulo
+      llama a listarComercios ni a obtenerMicrositio. Por eso se publica como
+      versión menor.
+  - version: 1.4.0
+    cambios:
+      - GET /destacados muestra hasta 12 productos y comercios (limite por defecto y máximo 12, antes 8 y 24); un valor mayor se ajusta a 12 sin error.
+      - Productos destacados con máximo 3 por comercio, sin los agotados (reaparecen solos al recuperar existencias) y rotados por turnos de 15 minutos cuando hay más de 12.
+      - listarDestacados de la interfaz PHP cambia su valor por defecto de 8 a 12.
+      - Solicitud, aprobación y cobro de productos destacados. Rutas web nuevas - listarTarifasDestacado, solicitarDestacado, listarSolicitudesDestacado (comercio), listarSolicitudesDestacadoAdministracion, aprobarSolicitudDestacado, rechazarSolicitudDestacado, destacarProductoPlataforma y definirTarifaDestacado.
+      - Máximo 3 destacados activos por comercio al aprobar o al destacar desde la administración (ERR-M1-002) y sin destacar dos veces el mismo producto en fechas que se cruzan (ERR-M1-003).
+      - Nueva interfaz PHP ComercialPortalContract (x-interfaz-php-comercial) con listarCargosDestacado, para quien liquida al comercio. PortalPublicoContract no agrega métodos.
+      - Nuevos códigos propios ERR-M1-002 y ERR-M1-003 (409) y respuesta RolSinPermiso (403, ERR-002 del núcleo).
+      - Promociones de los comercios (M1 es el dueño de los datos) - porcentaje o precio fijo, con fecha y hora de inicio y fin, al producto completo o a variaciones específicas, sin traslapes (ERR-M1-004). Rutas web nuevas - listarPromocionesVigentes, crearPromocion, listarPromocionesComercio, actualizarPromocion, desactivarPromocion (ERR-M1-005), listarPromocionesAdministracion, ordenarPromocion, ocultarPromocion y mostrarPromocion.
+      - ProductoResumen agrega el campo opcional promocion (PromocionResumen) y VariacionFicha los campos opcionales precio_promocional, id_promocion y fin_promocion; solo vienen cuando hay una promoción vigente.
+      - Nuevo método de la interfaz PHP para M5 - obtenerPreciosVigentes (esquema PrecioVigente).
+      - Noticias de la plataforma, que publica únicamente la administración (encargado_plataforma), con título, resumen, contenido, imagen (URL) y fecha de publicación; pueden enlazar promociones (tabla noticia_promociones de M1) pero son una entidad aparte. Rutas web nuevas - listarNoticias, obtenerNoticia (públicas), crearNoticia, listarNoticiasAdministracion, actualizarNoticia, publicarNoticia y archivarNoticia. Nuevo código propio ERR-M1-006 (409, noticia archivada o ya publicada).
+    solicitud_de_cambio: SC-08
+    nota_de_compatibilidad: |
+      Sin cambios en el esquema Destacados ni en la firma de listarDestacados,
+      salvo el valor por defecto del límite. Un consumidor que pida más de 12
+      recibe hasta 12, sin error, porque el límite ya se ajustaba al rango.
+      Las operaciones de destacados pagados y de promociones son rutas nuevas,
+      los campos de promoción son opcionales y solo aparecen con una promoción
+      vigente, y ComercialPortalContract va aparte. obtenerPreciosVigentes se
+      agrega a PortalPublicoContract; el único que la implementa fuera de M1
+      es el doble PortalStub de M5, que ya la tiene con la misma firma. Por
+      eso se publica como versión menor.
