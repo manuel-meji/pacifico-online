@@ -4,8 +4,8 @@
 
 | Nombre | Herramienta | Tarea | Archivos involucrados | Verificación personal |
 |---|---|---|---|---|
-| Yan Enils Ortiz Barrantes | ChatGPT | Análisis técnico de requisitos PC4, contrato OpenAPI, estrategia de pruebas y revisión de dependencias | Contrato M3, pruebas y documentación PC4 | La sesión de trabajo produjo el análisis y las propuestas; Yan debe confirmar personalmente los resultados que presente |
-| Yan Enils Ortiz Barrantes | OpenCode | Inspección del repositorio, edición de los archivos de alcance, ejecución de PHPUnit/Pint, comprobación de cobertura, Git y empaquetado de evidencia | `tests/Feature/M3_Catalogo/Contratos/M3_ProveedorContratoTest.php`; `tests/Feature/M3_Catalogo/Aceptacion/M3_ConsultaEscenariosAceptacionTest.php`; `docs/M3_PC4_*.md`; `docs/declaracion-uso-ia-PC4-M3-Yan.md` | OpenCode reportó las salidas de comandos: pruebas M3, `php -m`, `php artisan route:list`, `git shortlog` y validaciones de archivos. La revisión personal de Yan sigue siendo necesaria |
+| Yan Enils Ortiz Barrantes | ChatGPT | Planificación de PC4, análisis de requisitos y contrato OpenAPI, diseño de pruebas, revisión de dependencias y apoyo en documentación | Contrato M3, pruebas y documentación PC4 | Yan revisó los resultados y conserva como pendientes las verificaciones que no se pudieron completar |
+| Yan Enils Ortiz Barrantes | OpenCode | Inspección del repositorio, edición de pruebas y documentos propios, ejecución de PHPUnit, comprobaciones de cobertura, PostgreSQL local aislado, Git y evidencias | `tests/Feature/M3_Catalogo/Contratos/M3_ProveedorContratoTest.php`; `tests/Feature/M3_Catalogo/Aceptacion/M3_ConsultaEscenariosAceptacionTest.php`; documentos `M3_PC4_*`; `docs/declaracion-uso-ia-PC4-M3-Yan.md` | Se comprobaron las salidas de PHPUnit, Xdebug, `pdo_pgsql`, migraciones/seeder locales, `git shortlog` y estado Git; las omisiones y el prefijo pendiente se mantienen declarados |
 
 ## Pendientes de información
 

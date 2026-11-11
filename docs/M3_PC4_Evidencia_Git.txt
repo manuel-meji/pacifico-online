@@ -4,17 +4,29 @@ Comando ejecutado:
 
 git shortlog -sne origin/desarrollo -- app/Services/M3_Catalogo app/Models/M3_Catalogo tests/Feature/M3_Catalogo tests/Unit/M3_Catalogo database/migrations/M3_Catalogo
 
-Resultado:
+Resultado real del historial integrado hasta `ae61861`:
 
-3	Jeaustin Morales <JEAUSTIN.MORALES@ucr.ac.cr>
-1	Joshua Soto Hernandez <joshdz1605@gmail.com>
+6	Jeaustin Morales <JEAUSTIN.MORALES@ucr.ac.cr>
+3	Joshua Soto Hernandez <joshdz1605@gmail.com>
+2	Javier Contreras <javiercl180906@gmail.com>
+1	Jeaustin Morales Hidalgo <jeausti222@gmail.com>
 1	Justin Marenco <jusherramarenco@gmail.com>
 1	MANUEL.MEJICANO <manuel.mejicano@ucr.ac.cr>
+1	Yan Enils Ortiz Barrantes <yanenils24@gmail.com>
+
+Commit propio verificable:
+
+`50ce897 feat(M3): incorpora entregables iniciales PC4` — Yan Enils Ortiz Barrantes.
+
+Otros commits propios verificables:
+
+- `482ebe3 docs: add AI usage declaration for M3`.
+- `dd63c83 docs: update complete AI usage declaration for M3`.
 
 Observación:
 
-No aparece una identidad de Yan en el alcance solicitado. La revisión de todo el historial encontró la identidad `Yan Enils Ortiz Barrantes <yanenils24@gmail.com>`, pero únicamente en dos commits de `docs/declaracion-uso-ia-M3.md`, fuera del alcance del comando solicitado. No se encontró otra identidad confirmada de Yan.
+La identidad de Yan aparece una vez en el alcance solicitado. La revisión de todo el historial confirma además los tres commits propios documentados arriba. El `shortlog` agrupa autores reales del alcance; no convierte esos commits de compañeros en contribuciones de Yan.
 
 Los autores parecidos encontrados en todo el historial fueron `Josuedob <jortizbermudez14@gmail.com>` y `Manuel Mejicano Ortiz <122234471+manuel-meji@users.noreply.github.com>`; no se atribuyen a Yan.
 
-No se modificaron `.mailmap`, la identidad Git ni el historial. La contribución de Yan a las rutas M3 solicitadas no puede demostrarse con el historial disponible.
+No se modificaron `.mailmap`, la identidad Git ni el historial. Los commits integrados posteriores pertenecen a sus autores originales y no se atribuyen a Yan.
