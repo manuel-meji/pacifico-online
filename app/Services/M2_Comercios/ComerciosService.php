@@ -412,13 +412,8 @@ class ComerciosService implements ComerciosServiceInterface
             'id_comercio' => $idComercio,
         ]);
 
-        $ruta = $this->discoImagenes()->putFile(
-            "m2/comercios/{$idComercio}/logotipo",
-            $archivo
-        );
-
         $micrositio->cambiarLogotipo(
-            $this->discoImagenes()->url($ruta)
+            $this->guardarImagen("m2/comercios/{$idComercio}/logotipo", $archivo)
         );
 
         return $micrositio;
@@ -599,7 +594,7 @@ class ComerciosService implements ComerciosServiceInterface
                     isset($datos['imagen'])
                     && $datos['imagen'] instanceof UploadedFile
                 ) {
-                    $rutaNueva = $this->discoImagenes()->putFile(
+                    $urlNueva = $this->guardarImagen(
                         "m2/comercios/{$idComercio}/banners",
                         $datos['imagen']
                     );
@@ -608,7 +603,7 @@ class ComerciosService implements ComerciosServiceInterface
                         $rutasEliminar[] = $ruta;
                     }
 
-                    $ruta = $this->discoImagenes()->url($rutaNueva);
+                    $ruta = $urlNueva;
                 }
 
                 if ($ruta === null) {
@@ -696,7 +691,7 @@ class ComerciosService implements ComerciosServiceInterface
                     isset($datos['imagen'])
                     && $datos['imagen'] instanceof UploadedFile
                 ) {
-                    $rutaNueva = $this->discoImagenes()->putFile(
+                    $urlNueva = $this->guardarImagen(
                         "m2/comercios/{$idComercio}/galeria",
                         $datos['imagen']
                     );
@@ -705,7 +700,7 @@ class ComerciosService implements ComerciosServiceInterface
                         $rutasEliminar[] = $ruta;
                     }
 
-                    $ruta = $this->discoImagenes()->url($rutaNueva);
+                    $ruta = $urlNueva;
                 }
 
                 if ($ruta === null) {
@@ -1340,6 +1335,26 @@ class ComerciosService implements ComerciosServiceInterface
     private function discoImagenes(): FilesystemAdapter
     {
         return Storage::disk(config('m2.disco_imagenes', 'public'));
+    }
+
+    /**
+     * Sube la imagen al disco de M2 y devuelve su URL pública.
+     * Si el disco no la guarda (putFile devuelve false), lanza ERR-006 en vez de guardar una URL rota.
+     */
+    private function guardarImagen(string $carpeta, UploadedFile $archivo): string
+    {
+        $ruta = $this->discoImagenes()->putFile($carpeta, $archivo);
+
+        if ($ruta === false) {
+            throw ErrorNucleoException::paraModulo(
+                self::MODULO,
+                'ERR-006',
+                503,
+                'No se pudo guardar la imagen. Intentá de nuevo en unos minutos.'
+            );
+        }
+
+        return $this->discoImagenes()->url($ruta);
     }
 
     private function eliminarArchivoPublico(?string $ruta): void
