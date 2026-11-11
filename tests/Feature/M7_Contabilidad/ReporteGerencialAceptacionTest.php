@@ -79,7 +79,8 @@ class ReporteGerencialAceptacionTest extends TestCase
         string $tipo,
         string $codigoCuenta,
         float $debe,
-        float $haber
+        float $haber,
+        string $fecha = '2026-11-08 12:00:00'
     ): void {
         $idCuenta = DB::table('cuentas_contables')
             ->where('id_comercio', $comercio)
@@ -88,7 +89,7 @@ class ReporteGerencialAceptacionTest extends TestCase
 
         $idAsiento = DB::table('asientos_contables')->insertGetId([
             'id_comercio' => $comercio,
-            'fecha' => '2026-11-08 12:00:00',
+            'fecha' => $fecha,
             'tipo' => $tipo,
             'estado' => 'REGISTRADO',
         ], 'id_asiento');
@@ -144,5 +145,46 @@ class ReporteGerencialAceptacionTest extends TestCase
         $respuesta->assertJsonPath('data.resumen.ingresos', '1000.00')
             ->assertJsonPath('data.resumen.costos', '0.00')
             ->assertJsonPath('data.resumen.utilidad_bruta', '1000.00');
+    }
+    public function test_el_reporte_respeta_el_periodo_solicitado(): void
+    {
+        $this->crearAsiento(
+            1,
+            'VENTA',
+            '4.1.01',
+            0,
+            1000,
+            '2026-11-08 12:00:00'
+        );
+
+        $this->crearAsiento(
+            1,
+            'VENTA',
+            '4.1.01',
+            0,
+            5000,
+            '2026-10-15 12:00:00'
+        );
+
+        $usuario = $this->usuarioComercio(1);
+
+        $respuesta = $this->actingAs($usuario, 'web')
+            ->getJson('/api/m7/v1/reporte-gerencial?fecha_desde=2026-11-01&fecha_hasta=2026-11-30');
+
+        $respuesta->assertOk()
+            ->assertJsonPath('data.resumen.ingresos', '1000.00')
+            ->assertJsonPath('data.resumen.costos', '0.00')
+            ->assertJsonPath('data.resumen.utilidad_bruta', '1000.00');
+    }
+    public function test_rechaza_un_periodo_con_fecha_hasta_anterior_a_fecha_desde(): void
+    {
+        $usuario = $this->usuarioComercio(1);
+
+        $respuesta = $this->actingAs($usuario, 'web')
+            ->getJson('/api/m7/v1/reporte-gerencial?fecha_desde=2026-11-30&fecha_hasta=2026-11-01');
+
+        $respuesta->assertUnprocessable()
+            ->assertJsonPath('error.codigo', 'ERR-005')
+            ->assertJsonPath('error.detalles.fecha_hasta.0', 'The fecha hasta field must be a date after or equal to fecha desde.');
     }
 }
