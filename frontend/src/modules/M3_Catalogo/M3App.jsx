@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { listarCategorias, listarMarcas } from './services/m3Api';
 import {
   AlertCircle,
@@ -44,6 +44,23 @@ export default function M3App() {
   const [destacado, setDestacado] = useState(false);
   const [variaciones, setVariaciones] = useState([variacionVacia()]);
   const [imagenes, setImagenes] = useState([]);
+
+  // Genera vistas previas locales para las imágenes seleccionadas.
+  const vistasPrevias = useMemo(
+    () =>
+      imagenes.map((archivo) => ({
+        archivo,
+        url: URL.createObjectURL(archivo),
+      })),
+    [imagenes]
+  );
+
+  // Libera las URL temporales cuando cambian las imágenes o se desmonta el componente.
+  useEffect(() => {
+    return () => {
+      vistasPrevias.forEach(({ url }) => URL.revokeObjectURL(url));
+    };
+  }, [vistasPrevias]);
   const [mensaje, setMensaje] = useState(null);
   const [categorias, setCategorias] = useState([]);
   const [marcas, setMarcas] = useState([]);
@@ -716,24 +733,36 @@ export default function M3App() {
             />
 
             {imagenes.length > 0 && (
-              <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                {imagenes.map((imagen, indice) => (
-                  <li
-                    key={`${imagen.name}-${indice}`}
-                    className="flex flex-wrap items-center justify-between gap-2"
+              <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+                {vistasPrevias.map(({ archivo, url }, indice) => (
+                  <div
+                    key={`${archivo.name}-${indice}`}
+                    className="overflow-hidden rounded-lg border border-slate-200 bg-white"
                   >
-                    <span className="break-all">{imagen.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => eliminarImagen(indice)}
-                      className="inline-flex items-center gap-1 text-red-700 underline"
-                    >
-                      <Trash2 size={16} aria-hidden="true" />
-                      Quitar
-                    </button>
-                  </li>
+                    <img
+                      src={url}
+                      alt={`Vista previa de ${archivo.name}`}
+                      className="h-32 w-full object-cover"
+                    />
+                    <div className="p-2">
+                      <p className="truncate text-xs text-slate-700" title={archivo.name}>
+                        {archivo.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {(archivo.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => eliminarImagen(indice)}
+                        className="mt-2 inline-flex items-center gap-1 text-sm text-red-700 underline"
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
 
             <p className="mt-3 text-sm text-slate-600">

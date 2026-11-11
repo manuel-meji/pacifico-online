@@ -1,13 +1,15 @@
-
+﻿
 <?php
 
 use App\Http\Controllers\M3_Catalogo\ProductoController;
+use App\Http\Controllers\M3_Catalogo\CategoriaController;
+use App\Http\Controllers\M3_Catalogo\MarcaController;
 use App\Http\Controllers\M3_Catalogo\VariacionController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| M3 - Catálogo de Productos
+| M3 - CatÃ¡logo de Productos
 |--------------------------------------------------------------------------
 | Prefijo: /api/m3/v1
 | Nombre de ruta: api.m3.v1.*
@@ -30,3 +32,8 @@ Route::get('/productos/{id_producto}', [ProductoController::class, 'show'])
 Route::get('/variaciones/{id_variacion}', [VariacionController::class, 'show'])
     ->whereNumber('id_variacion')
     ->name('variaciones.show');
+
+// Consultar categorías y marcas
+Route::get('/categorias', [CategoriaController::class, 'index'])->name('categorias.index');
+Route::get('/marcas', [MarcaController::class, 'index'])->name('marcas.index');
+
