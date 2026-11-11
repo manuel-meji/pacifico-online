@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, FileText, Store, ShieldCheck } from 'lucide-react';
+import { Boxes, ClipboardList, FileText, Store, ShieldCheck } from 'lucide-react';
 import { cerrarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
 import { AvisoError, C, Cargando, Encabezado, SesionContexto, textoDeError } from './components/comunes';
 import SolicitudIncorporacion from './views/SolicitudIncorporacion';
@@ -79,6 +79,13 @@ export default function M2App() {
               <a href="/m4.html"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <Boxes size={18} /> Inventario
+              </a>
+            )}
+            {/* Enlace a los pedidos del comercio en M5 (/carrito.html?pantalla=comercio): misma sesión del núcleo. */}
+            {usuario?.rol === 'encargado_comercio' && (
+              <a href="/carrito.html?pantalla=comercio"
+                className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
+                <ClipboardList size={18} /> Pedidos
               </a>
             )}
           </div>

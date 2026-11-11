@@ -35,6 +35,7 @@ Route::post('/pedidos/{id_pedido}/pago-confirmado', [ControladorPedido::class, '
 
 // Subpedidos
 Route::get('/subpedidos/{id_subpedido}', [ControladorPedido::class, 'obtenerSubpedido'])->name('subpedidos.detalle');
+Route::post('/subpedidos/{id_subpedido}/preparar', [ControladorPedido::class, 'prepararSubpedido'])->name('subpedidos.preparar');
 Route::post('/subpedidos/{id_subpedido}/despachar', [ControladorPedido::class, 'despacharSubpedido'])->name('subpedidos.despachar');
 Route::post('/subpedidos/{id_subpedido}/entregar', [ControladorPedido::class, 'confirmarEntregaSubpedido'])->name('subpedidos.entregar');
 Route::post('/subpedidos/{id_subpedido}/cancelar', [ControladorPedido::class, 'cancelarSubpedido'])->name('subpedidos.cancelar');

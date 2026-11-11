@@ -417,4 +417,76 @@ class ControladoresM5Test extends TestCase
         $this->assertEqualsWithDelta(10000.00, (float) $lineaPromo->descuento, 0.001);
         $this->assertSame(22, (int) $lineaPromo->id_promocion);
     }
+
+    public function test_portal_comercio_m2_lista_subpedidos_y_transiciona_por_en_preparacion_despachado_entregado(): void
+    {
+        $this->configurarMocks();
+        $this->app->instance(CatalogoServiceInterface::class, new CatalogoStub);
+
+        // Cliente #2 crea un pedido con productos del comercio #1 (variación 2) y comercio #4 (variación 3)
+        $this->postJson('/m5/carrito/items', ['id_cliente' => 2, 'id_variacion' => 2, 'cantidad' => 1])->assertStatus(201);
+        $this->postJson('/m5/carrito/items', ['id_cliente' => 2, 'id_variacion' => 3, 'cantidad' => 1])->assertStatus(201);
+
+        $resCheckout = $this->postJson('/m5/pedidos', [
+            'id_cliente' => 2,
+            'metodoPago' => 'tarjeta',
+        ])->assertStatus(201);
+
+        $idPedido = (int) $resCheckout->json('id_pedido');
+
+        // Confirmar pago del pedido maestro -> ambos subpedidos pasan a 'pagado'
+        $this->postJson("/m5/pedidos/{$idPedido}/pago-confirmado", [
+            'referencia_pago' => 'REF-M2-REAL-01',
+        ])->assertStatus(200);
+
+        // El encargado del comercio #1 inicia sesión y consulta sus pedidos desde el portal integrado
+        $encargadoComercio1 = new Usuario;
+        $encargadoComercio1->forceFill([
+            'id_usuario' => 701,
+            'rol' => 'encargado_comercio',
+            'id_comercio' => 1,
+        ]);
+
+        $resLista = $this->actingAs($encargadoComercio1)
+            ->getJson('/m5/pedidos?modo_comercio=1&id_comercio=1')
+            ->assertStatus(200);
+
+        $subpedidosComercio1 = $resLista->json('pedidos.0.subpedidos');
+        $this->assertCount(1, $subpedidosComercio1);
+        $this->assertSame(1, (int) $subpedidosComercio1[0]['id_comercio']);
+        $this->assertNotEmpty($subpedidosComercio1[0]['nombre_comercio']);
+
+        $idSubpedido1 = (int) $subpedidosComercio1[0]['id_subpedido'];
+
+        // 1. Pasar de 'pagado' a 'en_preparacion'
+        $this->actingAs($encargadoComercio1)
+            ->postJson("/m5/subpedidos/{$idSubpedido1}/preparar")
+            ->assertStatus(200)
+            ->assertJsonPath('estado_subpedido', 'en_preparacion');
+
+        // Una vez en 'en_preparacion', RN-M5-05 impide cancelar el subpedido
+        $this->actingAs($encargadoComercio1)
+            ->postJson("/m5/subpedidos/{$idSubpedido1}/cancelar", ['motivo' => 'Intento tardío'])
+            ->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M5-003');
+
+        // 2. Pasar de 'en_preparacion' a 'despachado'
+        $this->actingAs($encargadoComercio1)
+            ->postJson("/m5/subpedidos/{$idSubpedido1}/despachar", ['guia_transporte' => 'GUIA-CR-999'])
+            ->assertStatus(200)
+            ->assertJsonPath('estado_subpedido', 'despachado')
+            ->assertJsonPath('guia_seguimiento', 'GUIA-CR-999');
+
+        // 3. Pasar de 'despachado' a 'entregado'
+        $this->actingAs($encargadoComercio1)
+            ->postJson("/m5/subpedidos/{$idSubpedido1}/entregar")
+            ->assertStatus(200)
+            ->assertJsonPath('estado_subpedido', 'entregado');
+
+        // Como el subpedido del comercio #2 aún sigue en 'pagado', el pedido maestro NO debe haberse marcado entregado prematuramente
+        $this->assertDatabaseHas('pedidos_maestros', [
+            'id_pedido' => $idPedido,
+            'estado_pedido' => 'pagado',
+        ]);
+    }
 }

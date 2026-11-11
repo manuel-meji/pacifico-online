@@ -174,7 +174,14 @@ export default function M5App() {
     }
   }
 
-  const [pantalla, setPantalla] = useState('carrito');
+  const [pantalla, setPantalla] = useState(() => {
+    if (typeof window === 'undefined') return 'carrito';
+    const p = new URLSearchParams(window.location.search).get('pantalla');
+    if (p === 'comercio' || p === 'panel-comercio') return 'panel-comercio';
+    if (p === 'mis-pedidos') return 'mis-pedidos';
+    if (p === 'deseos') return 'deseos';
+    return 'carrito';
+  });
   const [pedidoCreado, setPedidoCreado] = useState(null); // { pedido: respuesta 201, grupos: grupos_comercio }
   const [aviso, setAviso] = useState(null);
 
