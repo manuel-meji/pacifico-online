@@ -24,3 +24,23 @@ export const nombreDia = (diaSemana) => DIAS[diaSemana - 1] ?? '';
 
 // Texto de una variación a partir de sus atributos: "Talla: M · Color: Azul".
 export const textoAtributos = (atributos = []) => atributos.map((a) => `${a.tipo_atributo}: ${a.valor}`).join(' · ');
+
+// Un <input type="datetime-local"> entrega la fecha y hora sin zona ("2026-11-10T14:30"). En el panel de
+// gestión siempre es hora de Costa Rica (UTC-6, sin horario de verano), igual que aIsoCostaRica de
+// destacadosApi.js, sin importar la zona horaria de la máquina.
+const DESFASE_COSTA_RICA_MS = 6 * 60 * 60 * 1000;
+const FORMATO_HORA_LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
+
+// ISO 8601 del contrato → valor del campo en hora de Costa Rica. '' si la fecha no es válida.
+export const isoAHoraLocal = (iso) => {
+  const fecha = new Date(iso);
+  if (!iso || Number.isNaN(fecha.getTime())) return '';
+  return new Date(fecha.getTime() - DESFASE_COSTA_RICA_MS).toISOString().slice(0, 16);
+};
+
+// Valor del campo (hora de Costa Rica) → ISO 8601 con desfase -06:00. null si la fecha no es válida.
+export const horaLocalAIso = (valor) => {
+  if (!valor || !FORMATO_HORA_LOCAL.test(valor)) return null;
+  const iso = `${valor.length === 16 ? `${valor}:00` : valor}-06:00`;
+  return Number.isNaN(new Date(iso).getTime()) ? null : iso;
+};
