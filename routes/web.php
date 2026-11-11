@@ -49,9 +49,10 @@ Route::prefix('m2')
     ->name('m2.')
     ->group(base_path('routes/modules/m2_comercios.php'));
 
-// M3: Catálogo de Productos
-Route::prefix('m3')
-    ->name('m3.')
+
+// M3: Catálogo de Productos - API v1
+Route::prefix('api/m3/v1')
+    ->name('api.m3.v1.')
     ->group(base_path('routes/modules/m3_catalogo.php'));
 
 // M4: Inventario Multiempresa

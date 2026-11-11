@@ -1,5 +1,6 @@
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { listarCategorias, listarMarcas } from './services/m3Api';
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,21 +9,6 @@ import {
   Trash2,
   ArrowRight,
 } from 'lucide-react';
-
-// Datos de demostración. Sustituir por catálogos oficiales de M3
-// cuando estén disponibles.
-const CATEGORIAS = [
-  { id: 'cat-ropa', nombre: 'Ropa' },
-  { id: 'cat-accesorios', nombre: 'Accesorios' },
-  { id: 'cat-hogar', nombre: 'Hogar' },
-  { id: 'cat-deportes', nombre: 'Deportes' },
-];
-
-const MARCAS = [
-  { id: 'marca-demo-1', nombre: 'Marca de demostración 1' },
-  { id: 'marca-demo-2', nombre: 'Marca de demostración 2' },
-  { id: 'marca-demo-3', nombre: 'Marca de demostración 3' },
-];
 
 // Las etiquetas se conservan en el catálogo porque RN-M3-13 las menciona.
 // Su correspondencia con el modelo de datos queda pendiente de definición
@@ -59,6 +45,53 @@ export default function M3App() {
   const [variaciones, setVariaciones] = useState([variacionVacia()]);
   const [imagenes, setImagenes] = useState([]);
   const [mensaje, setMensaje] = useState(null);
+  const [categorias, setCategorias] = useState([]);
+  const [marcas, setMarcas] = useState([]);
+  const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
+  const [errorCatalogos, setErrorCatalogos] = useState('');
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarCatalogos() {
+      setCargandoCatalogos(true);
+      setErrorCatalogos('');
+
+      try {
+        const [resultadoCategorias, resultadoMarcas] = await Promise.all([
+          listarCategorias(),
+          listarMarcas(),
+        ]);
+
+        if (!activo) return;
+
+        if (!resultadoCategorias.ok || !resultadoMarcas.ok) {
+          setErrorCatalogos(
+            resultadoCategorias.error?.mensaje ||
+              resultadoMarcas.error?.mensaje ||
+              'No fue posible cargar las categorías y marcas.'
+          );
+          return;
+        }
+
+        // El contrato define ambas respuestas como arreglos de objetos.
+        setCategorias(Array.isArray(resultadoCategorias.datos) ? resultadoCategorias.datos : []);
+        setMarcas(Array.isArray(resultadoMarcas.datos) ? resultadoMarcas.datos : []);
+      } catch {
+        if (activo) {
+          setErrorCatalogos('Ocurrió un problema al cargar las categorías y marcas.');
+        }
+      } finally {
+        if (activo) setCargandoCatalogos(false);
+      }
+    }
+
+    cargarCatalogos();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   function actualizarVariacion(id, campo, valor) {
     setVariaciones((actuales) =>
@@ -294,7 +327,6 @@ export default function M3App() {
       estado: 'borrador',
     };
 
-    console.log('Producto de prueba validado:', productoPrueba);
 
     setMensaje({
       tipo: 'exito',
@@ -341,6 +373,18 @@ export default function M3App() {
           </a>
         </header>
 
+        {cargandoCatalogos && (
+          <p className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+            Cargando categorías y marcas...
+          </p>
+        )}
+
+        {errorCatalogos && (
+          <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+            {errorCatalogos}
+          </p>
+        )}
+
         <form onSubmit={validarProducto} className="space-y-6">
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <h2 className="mb-4 text-lg font-semibold text-[#1e3a8a]">
@@ -366,18 +410,16 @@ export default function M3App() {
                   value={idCategoria}
                   onChange={(evento) => setIdCategoria(evento.target.value)}
                   required
+                  disabled={cargandoCatalogos || Boolean(errorCatalogos)}
                   className={CAMPO}
                 >
                   <option value="">Selecciona una categoría</option>
-                  {CATEGORIAS.map((categoria) => (
-                    <option key={categoria.id} value={categoria.id}>
+                  {categorias.map((categoria) => (
+                    <option key={categoria.id_categoria} value={categoria.id_categoria}>
                       {categoria.nombre}
                     </option>
                   ))}
                 </select>
-                <span className="mt-1 block text-xs text-slate-500">
-                  Opciones de demostración; sustituir por el catálogo oficial.
-                </span>
               </label>
 
               <label className="text-sm font-medium">
@@ -385,18 +427,16 @@ export default function M3App() {
                 <select
                   value={idMarca}
                   onChange={(evento) => setIdMarca(evento.target.value)}
+                  disabled={cargandoCatalogos || Boolean(errorCatalogos)}
                   className={CAMPO}
                 >
                   <option value="">Sin marca</option>
-                  {MARCAS.map((marca) => (
-                    <option key={marca.id} value={marca.id}>
+                  {marcas.map((marca) => (
+                    <option key={marca.id_marca} value={marca.id_marca}>
                       {marca.nombre}
                     </option>
                   ))}
                 </select>
-                <span className="mt-1 block text-xs text-slate-500">
-                  Opciones de demostración; sustituir por el catálogo oficial.
-                </span>
               </label>
 
               <label className="text-sm font-medium">

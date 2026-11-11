@@ -1,211 +1,175 @@
-
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Search,
   SlidersHorizontal,
   RotateCcw,
   PackageSearch,
-  Tag,
   CheckCircle2,
-  XCircle,
+  AlertCircle,
   ArrowRight,
 } from 'lucide-react';
-
-// Datos de demostración para el prototipo.
-// Las etiquetas se conservan porque RN-M3-13 las menciona.
-// Su correspondencia con el modelo de datos queda pendiente de definición
-// con el Comité. Este catálogo no consulta ni guarda datos en el servidor.
-const productosIniciales = [
-  {
-    id: 1,
-    nombre: 'Camiseta deportiva',
-    marca: 'Pacific Sport',
-    categoria: 'Ropa',
-    etiquetas: ['deporte', 'verano'],
-    descripcion: 'Camiseta ligera para actividades deportivas.',
-    destacado: true,
-    variaciones: [
-      {
-        sku: 'CAM-AZU-M',
-        atributos: [
-          { tipo_atributo: 'Color', valor: 'Azul' },
-          { tipo_atributo: 'Talla', valor: 'M' },
-        ],
-        precio: 8500,
-        tarifa_impuesto: 13,
-        disponible: true,
-      },
-      {
-        sku: 'CAM-ROJ-L',
-        atributos: [
-          { tipo_atributo: 'Color', valor: 'Rojo' },
-          { tipo_atributo: 'Talla', valor: 'L' },
-        ],
-        precio: 9000,
-        tarifa_impuesto: 13,
-        disponible: false,
-      },
-    ],
-  },
-  {
-    id: 2,
-    nombre: 'Botella reutilizable',
-    marca: 'EcoVida',
-    categoria: 'Accesorios',
-    etiquetas: ['ecologico', 'oficina'],
-    descripcion: 'Botella reutilizable para llevar bebidas.',
-    destacado: false,
-    variaciones: [
-      {
-        sku: 'BOT-VER-750',
-        atributos: [
-          { tipo_atributo: 'Color', valor: 'Verde' },
-          { tipo_atributo: 'Capacidad', valor: '750 ml' },
-        ],
-        precio: 5500,
-        tarifa_impuesto: 13,
-        disponible: true,
-      },
-      {
-        sku: 'BOT-AZU-500',
-        atributos: [
-          { tipo_atributo: 'Color', valor: 'Azul' },
-          { tipo_atributo: 'Capacidad', valor: '500 ml' },
-        ],
-        precio: 4200,
-        tarifa_impuesto: 13,
-        disponible: true,
-      },
-    ],
-  },
-  {
-    id: 3,
-    nombre: 'Mochila urbana',
-    marca: 'Pacific Sport',
-    categoria: 'Accesorios',
-    etiquetas: ['viaje', 'oficina'],
-    descripcion: 'Mochila para uso diario.',
-    destacado: false,
-    variaciones: [
-      {
-        sku: 'MOC-NEG-20',
-        atributos: [
-          { tipo_atributo: 'Color', valor: 'Negro' },
-          { tipo_atributo: 'Capacidad', valor: '20 litros' },
-        ],
-        precio: 14500,
-        tarifa_impuesto: 13,
-        disponible: true,
-      },
-    ],
-  },
-  {
-    id: 4,
-    nombre: 'Taza cerámica',
-    marca: 'Hogar Tico',
-    categoria: 'Hogar',
-    etiquetas: ['oficina', 'regalo'],
-    descripcion: 'Taza de cerámica para bebidas calientes.',
-    destacado: false,
-    variaciones: [
-      {
-        sku: 'TAZ-BLA-01',
-        atributos: [
-          { tipo_atributo: 'Color', valor: 'Blanco' },
-          { tipo_atributo: 'Capacidad', valor: '300 ml' },
-        ],
-        precio: 3000,
-        tarifa_impuesto: 13,
-        disponible: false,
-      },
-    ],
-  },
-];
-
-const dinero = (precio) =>
-  new Intl.NumberFormat('es-CR', {
-    style: 'currency',
-    currency: 'CRC',
-    maximumFractionDigits: 0,
-  }).format(precio);
+import {
+  buscarProductos,
+  listarCategorias,
+  listarMarcas,
+} from '../services/m3Api';
 
 const CAMPO =
-  'mt-1 block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900 focus:border-[#3b82f6] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/20';
+  'mt-1 block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900 focus:border-[#3b82f6] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/20 disabled:cursor-not-allowed disabled:bg-slate-100';
 
 const BOTON_SECUNDARIO =
   'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#3b82f6]';
+
+const dinero = (precio) => {
+  if (precio === null || precio === undefined || precio === '') {
+    return 'Precio no disponible';
+  }
+
+  return new Intl.NumberFormat('es-CR', {
+    style: 'currency',
+    currency: 'CRC',
+    maximumFractionDigits: 0,
+  }).format(Number(precio));
+};
+
+function obtenerDatos(respuesta) {
+  if (!respuesta?.ok) {
+    throw new Error(
+      respuesta?.error?.mensaje || 'No fue posible consultar el catálogo.'
+    );
+  }
+
+  return respuesta.datos;
+}
+
+function obtenerLista(respuesta, posiblesClaves = []) {
+  const datos = obtenerDatos(respuesta);
+
+  if (Array.isArray(datos)) return datos;
+
+  for (const clave of posiblesClaves) {
+    if (Array.isArray(datos?.[clave])) return datos[clave];
+  }
+
+  return [];
+}
+
+function nombreRelacionado(valor) {
+  if (!valor) return '';
+  if (typeof valor === 'string') return valor;
+  return valor.nombre || valor.descripcion || '';
+}
 
 export default function CatalogoView() {
   const [busqueda, setBusqueda] = useState('');
   const [marca, setMarca] = useState('');
   const [categoria, setCategoria] = useState('');
-  const [etiqueta, setEtiqueta] = useState('');
-  const [soloDisponibles, setSoloDisponibles] = useState(false);
 
-  const marcas = [
-    ...new Set(productosIniciales.map((producto) => producto.marca)),
-  ];
+  const [productos, setProductos] = useState([]);
+  const [marcas, setMarcas] = useState([]);
+  const [categorias, setCategorias] = useState([]);
 
-  const categorias = [
-    ...new Set(productosIniciales.map((producto) => producto.categoria)),
-  ];
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
+  const [cargandoFiltros, setCargandoFiltros] = useState(true);
+  const [errorCatalogo, setErrorCatalogo] = useState('');
+  const [errorFiltros, setErrorFiltros] = useState('');
+  const [totalResultados, setTotalResultados] = useState(0);
 
-  const etiquetas = [
-    ...new Set(productosIniciales.flatMap((producto) => producto.etiquetas)),
-  ];
+  useEffect(() => {
+    let activo = true;
 
-  const productosFiltrados = useMemo(() => {
-    const texto = busqueda.trim().toLowerCase();
+    async function cargarFiltros() {
+      setCargandoFiltros(true);
+      setErrorFiltros('');
 
-    return productosIniciales.filter((producto) => {
-      const coincideTexto =
-        !texto ||
-        producto.nombre.toLowerCase().includes(texto) ||
-        producto.marca.toLowerCase().includes(texto) ||
-        producto.variaciones.some((variacion) => {
-          const textoAtributos = variacion.atributos
-            .map(
-              (atributo) =>
-                `${atributo.tipo_atributo} ${atributo.valor}`
-            )
-            .join(' ')
-            .toLowerCase();
+      try {
+        const [respuestaCategorias, respuestaMarcas] = await Promise.all([
+          listarCategorias(),
+          listarMarcas(),
+        ]);
 
-          return (
-            variacion.sku.toLowerCase().includes(texto) ||
-            textoAtributos.includes(texto)
+        const listaCategorias = obtenerLista(respuestaCategorias, [
+          'categorias',
+        ]);
+        const listaMarcas = obtenerLista(respuestaMarcas, ['marcas']);
+
+        if (activo) {
+          setCategorias(listaCategorias);
+          setMarcas(listaMarcas);
+        }
+      } catch (error) {
+        if (activo) {
+          setErrorFiltros(
+            error.message || 'No fue posible cargar las categorías y marcas.'
           );
-        });
+        }
+      } finally {
+        if (activo) setCargandoFiltros(false);
+      }
+    }
 
-      const coincideMarca = !marca || producto.marca === marca;
-      const coincideCategoria =
-        !categoria || producto.categoria === categoria;
-      const coincideEtiqueta =
-        !etiqueta || producto.etiquetas.includes(etiqueta);
+    cargarFiltros();
 
-      const tieneDisponibles = producto.variaciones.some(
-        (variacion) => variacion.disponible
-      );
+    return () => {
+      activo = false;
+    };
+  }, []);
 
-      const coincideDisponibilidad =
-        !soloDisponibles || tieneDisponibles;
+  useEffect(() => {
+    let activo = true;
 
-      return (
-        coincideTexto &&
-        coincideMarca &&
-        coincideCategoria &&
-        coincideEtiqueta &&
-        coincideDisponibilidad
-      );
-    });
-  }, [busqueda, marca, categoria, etiqueta, soloDisponibles]);
+    async function cargarProductos() {
+      setCargandoCatalogo(true);
+      setErrorCatalogo('');
+
+      try {
+        const filtros = {
+          q: busqueda.trim() || undefined,
+          id_marca: marca || undefined,
+          id_categoria: categoria || undefined,
+          pagina: 1,
+          por_pagina: 100,
+        };
+
+        const respuesta = await buscarProductos(filtros);
+        const datos = obtenerDatos(respuesta);
+
+        const listaProductos = Array.isArray(datos)
+          ? datos
+          : datos?.productos || datos?.data || [];
+
+        if (activo) {
+          setProductos(listaProductos);
+          setTotalResultados(
+            datos?.total_resultados ??
+              datos?.total ??
+              listaProductos.length
+          );
+        }
+      } catch (error) {
+        if (activo) {
+          setProductos([]);
+          setTotalResultados(0);
+          setErrorCatalogo(
+            error.message || 'No fue posible cargar los productos.'
+          );
+        }
+      } finally {
+        if (activo) setCargandoCatalogo(false);
+      }
+    }
+
+    cargarProductos();
+
+    return () => {
+      activo = false;
+    };
+  }, [busqueda, marca, categoria]);
 
   function limpiarFiltros() {
     setBusqueda('');
     setMarca('');
     setCategoria('');
-    setEtiqueta('');
-    setSoloDisponibles(false);
   }
 
   return (
@@ -221,7 +185,7 @@ export default function CatalogoView() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-600">
-            Consulta los productos, sus variaciones, precios y disponibilidad.
+            Consulta los productos publicados en el catálogo.
           </p>
 
           <a
@@ -239,7 +203,7 @@ export default function CatalogoView() {
             Buscar y filtrar
           </h2>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm font-medium">
               <span className="inline-flex items-center gap-2">
                 <Search size={16} aria-hidden="true" />
@@ -249,7 +213,7 @@ export default function CatalogoView() {
                 type="search"
                 value={busqueda}
                 onChange={(evento) => setBusqueda(evento.target.value)}
-                placeholder="Nombre, marca, SKU..."
+                placeholder="Nombre o SKU..."
                 className={CAMPO}
               />
             </label>
@@ -260,11 +224,12 @@ export default function CatalogoView() {
                 value={marca}
                 onChange={(evento) => setMarca(evento.target.value)}
                 className={CAMPO}
+                disabled={cargandoFiltros || Boolean(errorFiltros)}
               >
                 <option value="">Todas las marcas</option>
-                {marcas.map((nombreMarca) => (
-                  <option key={nombreMarca} value={nombreMarca}>
-                    {nombreMarca}
+                {marcas.map((item) => (
+                  <option key={item.id_marca} value={item.id_marca}>
+                    {item.nombre}
                   </option>
                 ))}
               </select>
@@ -276,47 +241,24 @@ export default function CatalogoView() {
                 value={categoria}
                 onChange={(evento) => setCategoria(evento.target.value)}
                 className={CAMPO}
+                disabled={cargandoFiltros || Boolean(errorFiltros)}
               >
                 <option value="">Todas las categorías</option>
-                {categorias.map((nombreCategoria) => (
-                  <option key={nombreCategoria} value={nombreCategoria}>
-                    {nombreCategoria}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="text-sm font-medium">
-              <span className="inline-flex items-center gap-2">
-                <Tag size={16} aria-hidden="true" />
-                Etiqueta
-              </span>
-              <select
-                value={etiqueta}
-                onChange={(evento) => setEtiqueta(evento.target.value)}
-                className={CAMPO}
-              >
-                <option value="">Todas las etiquetas</option>
-                {etiquetas.map((nombreEtiqueta) => (
-                  <option key={nombreEtiqueta} value={nombreEtiqueta}>
-                    {nombreEtiqueta}
+                {categorias.map((item) => (
+                  <option key={item.id_categoria} value={item.id_categoria}>
+                    {item.nombre}
                   </option>
                 ))}
               </select>
             </label>
           </div>
 
-          <label className="mt-4 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={soloDisponibles}
-              onChange={(evento) =>
-                setSoloDisponibles(evento.target.checked)
-              }
-              className="h-4 w-4 accent-[#1e3a8a]"
-            />
-            Mostrar solo productos con variaciones disponibles
-          </label>
+          {errorFiltros && (
+            <p className="mt-3 flex items-start gap-2 text-sm text-red-700">
+              <AlertCircle size={17} className="mt-0.5 shrink-0" />
+              {errorFiltros}
+            </p>
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
@@ -333,15 +275,55 @@ export default function CatalogoView() {
               aria-live="polite"
               aria-atomic="true"
             >
-              {productosFiltrados.length}{' '}
-              {productosFiltrados.length === 1
-                ? 'producto encontrado'
-                : 'productos encontrados'}
+              {cargandoCatalogo
+                ? 'Consultando catálogo...'
+                : `${totalResultados} ${
+                    totalResultados === 1
+                      ? 'producto encontrado'
+                      : 'productos encontrados'
+                  }`}
             </p>
           </div>
         </section>
 
-        {productosFiltrados.length === 0 ? (
+        {cargandoCatalogo ? (
+          <section
+            className="rounded-xl border border-slate-200 bg-white p-8 text-center"
+            aria-live="polite"
+          >
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-[#1e3a8a]" />
+            <p className="mt-3 text-sm text-slate-600">
+              Cargando productos...
+            </p>
+          </section>
+        ) : errorCatalogo ? (
+          <section
+            className="rounded-xl border border-red-200 bg-white p-8 text-center"
+            role="alert"
+          >
+            <AlertCircle
+              size={36}
+              className="mx-auto text-red-600"
+              aria-hidden="true"
+            />
+            <h2 className="mt-3 font-semibold text-[#1e3a8a]">
+              No se pudo cargar el catálogo
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">{errorCatalogo}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setBusqueda((valor) => `${valor}`);
+                setMarca((valor) => `${valor}`);
+                setCategoria((valor) => `${valor}`);
+              }}
+              className={`${BOTON_SECUNDARIO} mt-4`}
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+              Volver a intentar
+            </button>
+          </section>
+        ) : productos.length === 0 ? (
           <section className="rounded-xl border border-slate-200 bg-white p-8 text-center">
             <PackageSearch
               size={36}
@@ -351,7 +333,6 @@ export default function CatalogoView() {
             <h2 className="mt-3 font-semibold text-[#1e3a8a]">
               No se encontraron productos
             </h2>
-
             <p className="mt-2 text-sm text-slate-600">
               Prueba con otra búsqueda o cambia los filtros.
             </p>
@@ -361,100 +342,94 @@ export default function CatalogoView() {
             aria-label="Resultados del catálogo"
             className="grid grid-cols-1 gap-4 md:grid-cols-2"
           >
-            {productosFiltrados.map((producto) => (
-              <article
-                key={producto.id}
-                className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-[#1e3a8a]">
-                      {producto.marca}
-                    </p>
+            {productos.map((producto) => {
+              const marcaNombre =
+                nombreRelacionado(producto.marca) || producto.nombre_marca;
+              const categoriaNombre =
+                nombreRelacionado(producto.categoria) ||
+                producto.nombre_categoria;
+              const precioDesde =
+                producto.precio_desde ?? producto.precio_minimo;
+              const precioHasta =
+                producto.precio_hasta ?? producto.precio_maximo;
+              const imagen =
+                producto.imagen_principal_url || producto.imagen_url;
 
-                    <h2 className="mt-1 break-words text-lg font-bold">
-                      {producto.nombre}
-                    </h2>
-                  </div>
+              return (
+                <article
+                  key={producto.id_producto}
+                  className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                >
+                  {imagen && (
+                    <img
+                      src={imagen}
+                      alt={`Imagen de ${producto.nombre}`}
+                      className="h-48 w-full bg-slate-100 object-contain"
+                      loading="lazy"
+                    />
+                  )}
 
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
-                    {producto.categoria}
-                  </span>
-                </div>
-
-                {producto.destacado && (
-                  <p className="mt-2 inline-block rounded-md bg-[#a3be4d]/20 px-2 py-1 text-xs font-semibold text-slate-800">
-                    Producto destacado
-                  </p>
-                )}
-
-                <p className="mt-2 text-sm text-slate-600">
-                  {producto.descripcion}
-                </p>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {producto.etiquetas.map((nombreEtiqueta) => (
-                    <span
-                      key={nombreEtiqueta}
-                      className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs text-[#1e3a8a]"
-                    >
-                      <Tag size={12} aria-hidden="true" />
-                      {nombreEtiqueta}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {producto.variaciones.map((variacion) => (
-                    <div
-                      key={variacion.sku}
-                      className="rounded-lg border border-slate-200 p-3"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="break-all text-sm font-semibold">
-                            {variacion.sku}
+                  <div className="p-4 sm:p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        {marcaNombre && (
+                          <p className="text-sm font-medium text-[#1e3a8a]">
+                            {marcaNombre}
                           </p>
-
-                          <ul className="mt-1 space-y-1 text-sm text-slate-600">
-                            {variacion.atributos.map((atributo) => (
-                              <li key={atributo.tipo_atributo}>
-                                {atributo.tipo_atributo}: {atributo.valor}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        <p className="font-bold">
-                          {dinero(variacion.precio)}
-                        </p>
+                        )}
+                        <h2 className="mt-1 break-words text-lg font-bold">
+                          {producto.nombre}
+                        </h2>
                       </div>
 
-                      <p
-                        className={`mt-2 flex items-center gap-2 text-sm font-medium ${
-                          variacion.disponible
-                            ? 'text-emerald-700'
-                            : 'text-red-700'
-                        }`}
-                      >
-                        {variacion.disponible ? (
-                          <CheckCircle2 size={16} aria-hidden="true" />
-                        ) : (
-                          <XCircle size={16} aria-hidden="true" />
-                        )}
-                        {variacion.disponible ? 'Disponible' : 'Agotado'}
+                      {categoriaNombre && (
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                          {categoriaNombre}
+                        </span>
+                      )}
+                    </div>
+
+                    {producto.destacado && (
+                      <p className="mt-2 inline-block rounded-md bg-[#a3be4d]/20 px-2 py-1 text-xs font-semibold text-slate-800">
+                        Producto destacado
+                      </p>
+                    )}
+
+                    {producto.descripcion && (
+                      <p className="mt-2 text-sm text-slate-600">
+                        {producto.descripcion}
+                      </p>
+                    )}
+
+                    <div className="mt-4 border-t border-slate-100 pt-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Precio
+                      </p>
+                      <p className="mt-1 text-lg font-bold text-[#1e3a8a]">
+                        {precioDesde === undefined && precioHasta === undefined
+                          ? 'Precio no disponible'
+                          : precioHasta === undefined ||
+                              Number(precioDesde) === Number(precioHasta)
+                            ? dinero(precioDesde)
+                            : `${dinero(precioDesde)} - ${dinero(precioHasta)}`}
                       </p>
                     </div>
-                  ))}
-                </div>
-              </article>
-            ))}
+
+                    {producto.estado_producto && (
+                      <p className="mt-3 flex items-center gap-2 text-sm text-emerald-700">
+                        <CheckCircle2 size={16} aria-hidden="true" />
+                        {producto.estado_producto}
+                      </p>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </section>
         )}
 
         <p className="mt-6 text-xs text-slate-500">
-          Prototipo de consulta M3 con datos de demostración. Todavía no consulta
-          el servicio real de catálogo ni la base de datos.
+          Los productos mostrados provienen del servicio de catálogo M3.
         </p>
       </div>
     </main>
