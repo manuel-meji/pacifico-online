@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Aviso, BotonPrincipal, CampoConIcono } from './componentes';
-import { camposDireccion, datosDireccion, validarDireccion } from '../services/camposDireccion';
+import { Aviso, BotonPrincipal, CampoDireccion } from './componentes';
+import { cambiarCampo, camposDireccion, datosDireccion, validarDireccion } from '../services/camposDireccion';
 import { actualizarDireccion, agregarDireccion, listarDirecciones } from '../services/m1Api';
 
 const vacio = Object.fromEntries(camposDireccion.map((c) => [c.id, '']));
@@ -32,7 +32,7 @@ function FormularioDireccion({ original, onGuardar, onCancelar }) {
   const [errores, setErrores] = useState({});
   const [enviando, setEnviando] = useState(false);
   const eraPrincipal = !!original?.es_principal;
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const cambiar = (k) => (valor) => setF((anterior) => cambiarCampo(anterior, k, valor));
   const prefijo = original ? `dir-${original.id_direccion_cliente}` : 'dir-nueva';
   const enfocarPrimerError = (errs) => {
     const campo = camposDireccion.find((c) => errs[c.id]);
@@ -57,10 +57,11 @@ function FormularioDireccion({ original, onGuardar, onCancelar }) {
     <form onSubmit={enviar} noValidate className="space-y-4 rounded-lg border border-gray-200 p-3 sm:p-4">
       <p className="text-sm font-bold text-gray-800">{original ? `Editar «${original.alias_direccion}»` : 'Nueva dirección'}</p>
       {errores.general && <Aviso>{errores.general}</Aviso>}
-      {camposDireccion.map(({ id, etiqueta, icono, type, multilinea, autoComplete }) => (
-        <CampoConIcono key={id} id={`${prefijo}-${id}`} etiqueta={etiqueta} icono={icono} type={type} multilinea={multilinea}
-          autoComplete={autoComplete} value={f[id]} onChange={set(id)} error={errores[id]} />
-      ))}
+      <div className="grid gap-4 md:grid-cols-2">
+        {camposDireccion.map((c) => (
+          <CampoDireccion key={c.id} campo={c} id={`${prefijo}-${c.id}`} valor={f[c.id]} onCambio={cambiar(c.id)} error={errores[c.id]} formulario={f} />
+        ))}
+      </div>
       <div>
         <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-800">
           <input type="checkbox" checked={principal} disabled={eraPrincipal}
