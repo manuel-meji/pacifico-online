@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { Aviso, BotonPrincipal, CampoConIcono, EnlaceCuenta, PaginaCuenta } from '../components/componentes';
-import { camposDireccion, datosDireccion, validarDireccion } from '../services/camposDireccion';
+import { Aviso, BotonPrincipal, CampoConIcono, CampoDireccion, EnlaceCuenta, PaginaCuenta } from '../components/componentes';
+import { cambiarCampo, camposDireccion, datosDireccion, validarDireccion } from '../services/camposDireccion';
 
 const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Campos del esquema RegistroCliente (contracts/m1-portal/v1/openapi.yaml, versión 1.2.0) y sus
 // límites, iguales a las columnas de la tabla clientes. `confirmar` solo existe en pantalla y no se envía.
+// El orden es el de la pantalla: en pantallas anchas van de a dos por fila y `completo` ocupa la fila entera.
 const camposCliente = [
   { id: 'nombre', etiqueta: 'Nombre', icono: 'persona', max: 80, falta: 'Ingrese su nombre.', autoComplete: 'given-name' },
   { id: 'apellidos', etiqueta: 'Apellidos', icono: 'persona', max: 120, falta: 'Ingrese sus apellidos.', autoComplete: 'family-name' },
   { id: 'cedula', etiqueta: 'Cédula', icono: 'persona', max: 20, falta: 'Ingrese su cédula.', autoComplete: 'off' },
-  { id: 'correo_electronico', etiqueta: 'Correo electrónico', icono: 'correo', max: 150, falta: 'Ingrese su correo electrónico.', type: 'email', autoComplete: 'email' },
   { id: 'telefono', etiqueta: 'Teléfono', icono: 'telefono', max: 20, falta: 'Ingrese su teléfono.', type: 'tel', autoComplete: 'tel' },
+  { id: 'correo_electronico', etiqueta: 'Correo electrónico', icono: 'correo', max: 150, falta: 'Ingrese su correo electrónico.', type: 'email', autoComplete: 'email', completo: true },
   { id: 'contrasena', etiqueta: 'Contraseña', icono: 'candado', falta: 'Ingrese una contraseña.', type: 'password', autoComplete: 'new-password' },
   { id: 'confirmar', etiqueta: 'Confirmar contraseña', icono: 'candado', falta: 'Confirme su contraseña.', type: 'password', autoComplete: 'new-password' },
 ];
@@ -71,6 +72,7 @@ export default function CrearCuentaView({ onRegistrar, onIrIngresar }) {
   const [enviando, setEnviando] = useState(false);
   const [creada, setCreada] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const cambiar = (k) => (valor) => setF((anterior) => cambiarCampo(anterior, k, valor));
   const enfocarPrimerError = (errs) => document.getElementById(campos.find((c) => errs[c.id])?.id)?.focus();
 
   async function enviar(e) {
@@ -87,9 +89,9 @@ export default function CrearCuentaView({ onRegistrar, onIrIngresar }) {
     enfocarPrimerError(errsServidor);
   }
 
-  const campo = ({ id, etiqueta, icono, type, multilinea, autoComplete }) => (
+  const campo = ({ id, etiqueta, icono, type, multilinea, autoComplete, completo }) => (
     <CampoConIcono key={id} id={id} etiqueta={etiqueta} icono={icono} type={type} multilinea={multilinea}
-      autoComplete={autoComplete} value={f[id]} onChange={set(id)} error={errores[id]} />
+      autoComplete={autoComplete} value={f[id]} onChange={set(id)} error={errores[id]} clase={completo ? 'md:col-span-2' : ''} />
   );
 
   if (creada) {
@@ -104,16 +106,24 @@ export default function CrearCuentaView({ onRegistrar, onIrIngresar }) {
   }
 
   return (
-    <PaginaCuenta migas="Crear cuenta" titulo="Crear cuenta">
-      <form onSubmit={enviar} noValidate className="space-y-4">
+    <PaginaCuenta migas="Crear cuenta" titulo="Crear cuenta" amplia>
+      <form onSubmit={enviar} noValidate className="space-y-6">
         {errores.general && <Aviso>{errores.general}</Aviso>}
-        {camposCliente.map(campo)}
-        <fieldset className="space-y-4 border-t border-gray-200 pt-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          {camposCliente.map(campo)}
+        </div>
+        <fieldset className="border-t border-gray-200 pt-4">
           <legend className="text-base font-bold text-gray-800">Dirección de envío principal</legend>
-          <p className="text-sm text-gray-600">Después podrá agregar otras direcciones desde su cuenta.</p>
-          {camposDireccion.map(campo)}
+          <p className="mb-4 mt-1 text-sm text-gray-600">Después podrá agregar otras direcciones desde su cuenta.</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            {camposDireccion.map((c) => (
+              <CampoDireccion key={c.id} campo={c} id={c.id} valor={f[c.id]} onCambio={cambiar(c.id)} error={errores[c.id]} formulario={f} />
+            ))}
+          </div>
         </fieldset>
-        <BotonPrincipal type="submit" disabled={enviando}>{enviando ? 'Enviando…' : 'Crear cuenta'}</BotonPrincipal>
+        <div className="md:mx-auto md:max-w-sm">
+          <BotonPrincipal type="submit" disabled={enviando}>{enviando ? 'Enviando…' : 'Crear cuenta'}</BotonPrincipal>
+        </div>
       </form>
       <EnlaceCuenta pregunta="¿Ya tiene cuenta?" texto="Ingresar" onClick={onIrIngresar} />
     </PaginaCuenta>
