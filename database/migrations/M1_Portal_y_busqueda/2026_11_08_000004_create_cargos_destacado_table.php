@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Schema;
  * descuenta, consultándolo con ComercialPortalContract::listarCargosDestacado.
  * El periodo corre aunque el producto se oculte y no se reembolsa, así que el
  * cargo no se modifica después de creado.
+ *
+ * id_producto es una referencia lógica a M3 (sin llave física, frontera de datos
+ * del PC3); las demás llaves son de M1 o hacia comercios (M2).
  */
 return new class extends Migration
 {
@@ -38,8 +41,6 @@ return new class extends Migration
                 ->references('id_solicitud_destacado')->on('solicitudes_destacado');
             $table->foreign('id_producto_destacado', 'fk_cargos_destacado_productos_destacados')
                 ->references('id_producto_destacado')->on('productos_destacados');
-            $table->foreign('id_producto', 'fk_cargos_destacado_productos')
-                ->references('id_producto')->on('productos');
         });
 
         DB::statement('ALTER TABLE cargos_destacado ADD CONSTRAINT chk_cargos_destacado_monto
