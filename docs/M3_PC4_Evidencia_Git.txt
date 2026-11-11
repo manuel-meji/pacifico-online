@@ -4,15 +4,15 @@ Comando ejecutado:
 
 git shortlog -sne origin/desarrollo -- app/Services/M3_Catalogo app/Models/M3_Catalogo tests/Feature/M3_Catalogo tests/Unit/M3_Catalogo database/migrations/M3_Catalogo
 
-Resultado real del historial integrado hasta `ae61861`:
+Resultado real del historial integrado hasta `3f8c489`:
 
-6	Jeaustin Morales <JEAUSTIN.MORALES@ucr.ac.cr>
-3	Joshua Soto Hernandez <joshdz1605@gmail.com>
+7	Jeaustin Morales <JEAUSTIN.MORALES@ucr.ac.cr>
+5	Joshua Soto Hernandez <joshdz1605@gmail.com>
+3	Yan Enils Ortiz Barrantes <yanenils24@gmail.com>
 2	Javier Contreras <javiercl180906@gmail.com>
-1	Jeaustin Morales Hidalgo <jeausti222@gmail.com>
+2	Jeaustin Morales Hidalgo <jeausti222@gmail.com>
 1	Justin Marenco <jusherramarenco@gmail.com>
 1	MANUEL.MEJICANO <manuel.mejicano@ucr.ac.cr>
-1	Yan Enils Ortiz Barrantes <yanenils24@gmail.com>
 
 Commit propio verificable:
 
@@ -22,6 +22,7 @@ Otros commits propios verificables:
 
 - `482ebe3 docs: add AI usage declaration for M3`.
 - `dd63c83 docs: update complete AI usage declaration for M3`.
+- `52cc562 Merge origin/desarrollo into feature/M3-pruebas-contrato` (integración, no atribuye cambios del equipo a Yan).
 
 Observación:
 

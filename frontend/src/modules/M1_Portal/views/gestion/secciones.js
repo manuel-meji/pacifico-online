@@ -1,5 +1,6 @@
 import DestacadosGestion from './DestacadosGestion';
 import NoticiasGestion from './NoticiasGestion';
+import PromocionesGestion from './PromocionesGestion';
 
 // Registro de las pestañas del panel de gestión de M1 (pantalla=gestion).
 //
@@ -13,7 +14,7 @@ import NoticiasGestion from './NoticiasGestion';
 //   Vista:  componente de la sección
 export const SECCIONES_GESTION = [
   { clave: 'destacados', nombre: 'Productos destacados', icono: 'estrella', roles: ['encargado_comercio', 'encargado_plataforma'], Vista: DestacadosGestion },
-  // { clave: 'promociones', nombre: 'Promociones', icono: 'etiqueta', roles: ['encargado_comercio', 'encargado_plataforma'], Vista: PromocionesGestion },
+  { clave: 'promociones', nombre: 'Promociones', icono: 'etiqueta', roles: ['encargado_comercio', 'encargado_plataforma'], Vista: PromocionesGestion },
   { clave: 'noticias', nombre: 'Noticias', icono: 'noticia', roles: ['encargado_plataforma'], Vista: NoticiasGestion },
 ];
 

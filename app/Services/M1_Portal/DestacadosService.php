@@ -525,8 +525,10 @@ class DestacadosService
             return null;
         }
 
+        // Se pasa a la zona de la aplicación (UTC) antes de guardar: las columnas timestamp no guardan
+        // el desfase, así que un "2026-11-20T08:00:00-06:00" quedaría como 08:00 UTC, seis horas antes.
         try {
-            return Carbon::parse($valor);
+            return Carbon::parse($valor)->setTimezone(config('app.timezone'));
         } catch (Throwable) {
             return null;
         }
