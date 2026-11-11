@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Aviso, Encabezado, NavegacionCuentaContext } from './components/componentes';
-import { PortalContext } from './components/PaginaPortal';
+import PaginaPortal, { PortalContext } from './components/PaginaPortal';
 import { obtenerCantidadCarrito } from './services/carritoApi';
 import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
 import { listarCategorias, registrarCliente } from './services/m1Api';
@@ -198,18 +197,10 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     return <PortalContext.Provider value={portal}>{vista}</PortalContext.Provider>;
   }
 
-  
+  // Pantallas de cuenta: mismo marco del portal (encabezado, ancho y pie) que el resto.
   return (
-    <NavegacionCuentaContext.Provider value={navegar}>
-    <div className="min-h-screen overflow-x-hidden bg-brandLightBg font-sans font-normal text-gray-800">
-      <Encabezado pantalla={pantalla} onIr={navegar} usuario={usuario} onCerrarSesion={cerrar} />
-
-      {errorCierre && (
-        <div className="mx-auto w-full max-w-5xl px-4 pt-4">
-          <Aviso>No se pudo cerrar la sesión. Intente de nuevo.</Aviso>
-        </div>
-      )}
-
+    <PortalContext.Provider value={portal}>
+    <PaginaPortal>
       {pantalla === 'ingresar' && (
         <IniciarSesionView
           onIngresar={ingresar}
@@ -225,9 +216,9 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
       )}
 
       {pantalla === 'perfil' && (
-        <PerfilView onIrIngresar={() => navegar('ingresar')} />
+        <PerfilView onIrIngresar={() => navegar('ingresar')} onCerrarSesion={cerrar} errorCierre={errorCierre} />
       )}
-    </div>
-    </NavegacionCuentaContext.Provider>
+    </PaginaPortal>
+    </PortalContext.Provider>
   );
 }

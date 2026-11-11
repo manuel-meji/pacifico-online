@@ -62,8 +62,7 @@ Pantallas de ingreso y autorregistro del cliente. El registro respeta el esquema
 |---|---|
 | `views/IniciarSesionView.jsx` | Correo y contraseña, con validación en pantalla |
 | `views/CrearCuentaView.jsx` | Nombre, apellidos, correo, teléfono, dirección de envío, contraseña y confirmación (no se envía), con los límites de `RegistroCliente` |
-| `components/componentes.jsx` | Encabezado, migas de pan, campo con ícono, avisos y botón principal de estas pantallas |
-| `components/Logo.jsx` | Logotipo (`assets/logo-pacificos.png`) con el nombre al lado |
+| `components/componentes.jsx` | migas de pan, campo con ícono, avisos y botón principal de estas pantallas |
 | `services/datosMock.js` | Respuestas simuladas: ERR-M1-001 y credenciales incorrectas (solo con `?simular=`) |
 | `services/m1Api.js` | Cliente HTTP de `/api/m1/v1` con el token CSRF de Sanctum; hoy expone `registrarCliente` |
 
