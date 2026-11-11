@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, CreditCard, LoaderCircle, MapPin, RefreshCw, Tag, Truck } from 'lucide-react';
+import { ArrowRight, Check, CreditCard, LoaderCircle, MapPin, Plus, RefreshCw, Tag, Truck } from 'lucide-react';
 import { Alerta, Boton, Campo, clasesInput, Encabezado, TarjetaComercio, Total } from '../components/componentes';
 import { colones, validarCheckout } from '../services/calculos';
 import { crearPedido, obtenerCarrito, obtenerDirecciones } from '../services/m5Api';
@@ -194,7 +194,16 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
           {/* Columna izquierda: Formularios de Envío/Pago, Opcional y Resumen por comercio */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-6">
             <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-5 space-y-4">
-              <Titulo icono={Truck}>Dirección de entrega</Titulo>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <Titulo icono={Truck}>Dirección de entrega</Titulo>
+                <a
+                  href="/app.html?pantalla=perfil&motivo=checkout_dir"
+                  className="text-xs font-semibold text-brandDarkBlue hover:text-brandBlue inline-flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 text-brandGreen" aria-hidden="true" />
+                  <span>Gestionar direcciones</span>
+                </a>
+              </div>
               <Campo id="idDireccion" etiqueta="Dirección de envío" error={errores.idDireccion}>
                 <div className="relative">
                   <MapPin className="w-4 h-4 text-gray-400 absolute left-3 top-3" aria-hidden="true" />
@@ -215,21 +224,35 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                     ))}
                   </select>
                 </div>
-                <p id="idDireccion-ayuda" className="mt-1 text-xs text-gray-500">
-                  Las direcciones las administra M1 (Portal).
-                </p>
               </Campo>
-              {sinDirecciones && (
-                <Alerta tipo="aviso" titulo="Sin dirección de envío">
-                  No tiene direcciones registradas. Agregue una dirección en su perfil para poder confirmar el pedido.
-                </Alerta>
-              )}
-              <div className="rounded-lg bg-blue-50/60 border border-blue-100 p-3.5 flex items-center gap-3 text-xs text-brandDarkBlue">
-                <CreditCard className="w-4 h-4 shrink-0 text-brandBlue" aria-hidden="true" />
-                <span>
-                  <strong>Método de pago:</strong> Seleccionará y autorizará su método de pago (Tarjeta, SINPE o PayPal) de forma segura en la pasarela de pagos (M6) en el siguiente paso.
-                </span>
+
+              <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                <p id="idDireccion-ayuda" className="text-xs text-gray-500">
+                  Seleccione dónde desea recibir su pedido.
+                </p>
+                <a
+                  href="/app.html?pantalla=perfil&motivo=checkout_dir"
+                  className="text-xs font-bold text-brandBlue hover:text-brandDarkBlue inline-flex items-center gap-1 transition hover:underline"
+                >
+                  + Agregar nueva dirección
+                </a>
               </div>
+
+              {sinDirecciones && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <Alerta tipo="aviso" titulo="Sin dirección de envío">
+                    No tiene direcciones registradas en su cuenta. Debe agregar al menos una dirección para poder confirmar el pedido.
+                  </Alerta>
+                  <div className="pt-1">
+                    <a
+                      href="/app.html?pantalla=perfil&motivo=checkout_dir"
+                      className="inline-flex items-center gap-2 rounded-lg bg-brandDarkBlue hover:bg-brandBlue text-white text-xs font-bold py-2 px-4 shadow-xs transition"
+                    >
+                      <Plus className="w-4 h-4" /> Agregar dirección ahora
+                    </a>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-5 space-y-4">

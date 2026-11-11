@@ -22,6 +22,10 @@ Rama: `feature/integracion-general` · Responsable: Coordinación SG5 (M5 Carrit
 | 10/11/2026 | `frontend/src/modules/M5_Pedidos/components/componentes.jsx`, `M5App.jsx`, `MisPedidosView.jsx` | M5 | Encabezado idéntico al portal M1, modal amigable de autenticación requerida para pagar y aviso en Mis Pedidos para usuarios no autenticados. | Estándar de diseño y experiencia de usuario amigable. | No aplica (M5) |
 | 10/11/2026 | `frontend/src/modules/M1_Portal/M1App.jsx` | M1 | Aviso contextual al llegar a login desde checkout (`?motivo=checkout`) y redirección automática de vuelta a `/carrito.html` tras login/registro exitoso. | Flujo amigable de compra sin perder el carrito. | Notificado al usuario |
 | 10/11/2026 | `bootstrap/providers.php`, `config/auth.php`, `frontend/src/modules/Nucleo/services/sesionApi.js` | Núcleo | Registro del provider `SanctumServiceProvider` y guard `sanctum` en `config/auth.php`, y sobrecarga flexible de argumentos en `iniciarSesion`. Corrige error HTTP 500 (`Auth guard [sanctum] is not defined`) en `/api/user`. | Permitir persistencia real de sesión autenticada en toda la aplicación. | Notificado al usuario |
+| 10/11/2026 | `app/Services/M5_Pedidos/Dobles/PortalStub.php`, `ControladorCarrito.php` | M5 | Consulta de direcciones reales en `direcciones_cliente` y resolución de `id_cliente` por `id_usuario` contra el modelo `Cliente` de M1 en lugar de dirección mock fija. | Mostrar las direcciones de entrega reales del usuario en el Checkout. | No aplica (M5) |
+| 10/11/2026 | `frontend/src/modules/M5_Pedidos/views/CheckoutView.jsx` | M5 | Botón «+ Agregar nueva dirección» y «Gestionar direcciones» con enlace directo a `/app.html?pantalla=perfil&motivo=checkout_dir`. | Permitir registrar direcciones de envío sin perder el flujo de compra. | No aplica (M5) |
+| 10/11/2026 | `frontend/src/modules/M1_Portal/views/PerfilView.jsx`, `DireccionesSeccion.jsx` | M1 | Detección de `motivo=checkout_dir` para desplegar aviso contextual y botón directo «← Volver al checkout». | Experiencia de usuario integrada y amigable. | Notificado al usuario |
+
 
 
 
