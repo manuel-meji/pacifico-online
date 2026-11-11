@@ -33,6 +33,7 @@ use App\Services\M2_Comercios\Comision\CalculoPorcentaje;
 use App\Services\Nucleo\ContextoComercio;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -411,13 +412,8 @@ class ComerciosService implements ComerciosServiceInterface
             'id_comercio' => $idComercio,
         ]);
 
-        $ruta = Storage::disk('public')->putFile(
-            "m2/comercios/{$idComercio}/logotipo",
-            $archivo
-        );
-
         $micrositio->cambiarLogotipo(
-            Storage::disk('public')->url($ruta)
+            $this->guardarImagen("m2/comercios/{$idComercio}/logotipo", $archivo)
         );
 
         return $micrositio;
@@ -598,7 +594,7 @@ class ComerciosService implements ComerciosServiceInterface
                     isset($datos['imagen'])
                     && $datos['imagen'] instanceof UploadedFile
                 ) {
-                    $rutaNueva = Storage::disk('public')->putFile(
+                    $urlNueva = $this->guardarImagen(
                         "m2/comercios/{$idComercio}/banners",
                         $datos['imagen']
                     );
@@ -607,7 +603,7 @@ class ComerciosService implements ComerciosServiceInterface
                         $rutasEliminar[] = $ruta;
                     }
 
-                    $ruta = Storage::disk('public')->url($rutaNueva);
+                    $ruta = $urlNueva;
                 }
 
                 if ($ruta === null) {
@@ -695,7 +691,7 @@ class ComerciosService implements ComerciosServiceInterface
                     isset($datos['imagen'])
                     && $datos['imagen'] instanceof UploadedFile
                 ) {
-                    $rutaNueva = Storage::disk('public')->putFile(
+                    $urlNueva = $this->guardarImagen(
                         "m2/comercios/{$idComercio}/galeria",
                         $datos['imagen']
                     );
@@ -704,7 +700,7 @@ class ComerciosService implements ComerciosServiceInterface
                         $rutasEliminar[] = $ruta;
                     }
 
-                    $ruta = Storage::disk('public')->url($rutaNueva);
+                    $ruta = $urlNueva;
                 }
 
                 if ($ruta === null) {
@@ -1335,6 +1331,32 @@ class ComerciosService implements ComerciosServiceInterface
         }
     }
 
+    /** Disco de logotipos, banners y galería (config/m2.php): local o Supabase Storage. */
+    private function discoImagenes(): FilesystemAdapter
+    {
+        return Storage::disk(config('m2.disco_imagenes', 'public'));
+    }
+
+    /**
+     * Sube la imagen al disco de M2 y devuelve su URL pública.
+     * Si el disco no la guarda (putFile devuelve false), lanza ERR-006 en vez de guardar una URL rota.
+     */
+    private function guardarImagen(string $carpeta, UploadedFile $archivo): string
+    {
+        $ruta = $this->discoImagenes()->putFile($carpeta, $archivo);
+
+        if ($ruta === false) {
+            throw ErrorNucleoException::paraModulo(
+                self::MODULO,
+                'ERR-006',
+                503,
+                'No se pudo guardar la imagen. Intentá de nuevo en unos minutos.'
+            );
+        }
+
+        return $this->discoImagenes()->url($ruta);
+    }
+
     private function eliminarArchivoPublico(?string $ruta): void
     {
         if ($ruta === null || $ruta === '') {
@@ -1347,13 +1369,14 @@ class ComerciosService implements ComerciosServiceInterface
             return;
         }
 
-        $path = ltrim($path, '/');
-
-        if (str_starts_with($path, 'storage/')) {
-            $path = substr($path, strlen('storage/'));
+        // Sirve para el disco local (/storage/m2/...) y para Supabase Storage
+        // (/storage/v1/object/public/<bucket>/m2/...): todo lo de M2 cuelga de m2/.
+        $inicio = strpos($path, 'm2/');
+        if ($inicio === false) {
+            return;
         }
 
-        Storage::disk('public')->delete($path);
+        $this->discoImagenes()->delete(substr($path, $inicio));
     }
 
     // --- Comisión del subpedido, Ds-03 (Josefh) ---

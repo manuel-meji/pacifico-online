@@ -1,16 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, LoaderCircle, MapPin, RefreshCw, Tag, Truck } from 'lucide-react';
+import { ArrowRight, Check, CreditCard, LoaderCircle, MapPin, Plus, RefreshCw, Tag, Truck } from 'lucide-react';
 import { Alerta, Boton, Campo, clasesInput, Encabezado, TarjetaComercio, Total } from '../components/componentes';
 import { colones, validarCheckout } from '../services/calculos';
 import { crearPedido, obtenerCarrito, obtenerDirecciones } from '../services/m5Api';
-import { guardarMetodoPago } from '../components/PasarelaPagoSimulada';
-
-// Medios de pago de CrearPedidoRequest (contrato M5): el backend los lee como `metodoPago`.
-const METODOS_PAGO = [
-  { valor: 'tarjeta', etiqueta: 'Tarjeta' },
-  { valor: 'sinpe', etiqueta: 'SINPE' },
-  { valor: 'paypal', etiqueta: 'PayPal' },
-];
 
 // Errores de ControladorPedido::procesarCheckout que obligan a volver al carrito.
 const ERRORES_QUE_VUELVEN_AL_CARRITO = {
@@ -50,7 +42,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const [intentoCarga, setIntentoCarga] = useState(0);
 
   const [direcciones, setDirecciones] = useState([]);
-  const [f, setF] = useState({ idDireccion: '', metodoPago: '', cupon: '', tarjetaRegalo: '', nota: '' });
+  const [f, setF] = useState({ idDireccion: '', cupon: '', tarjetaRegalo: '', nota: '' });
   const [errores, setErrores] = useState({});
   const [cuponIngresado, setCuponIngresado] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -102,21 +94,16 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
     try {
       const respuesta = await crearPedido({
         id_direccion_cliente: Number(f.idDireccion),
-        metodoPago: f.metodoPago,
-        medio_pago: f.metodoPago,
         cupon_descuento: f.cupon.trim() || null,
         tarjeta_regalo: f.tarjetaRegalo.trim() || null,
         nota: f.nota.trim() || null,
       });
       // La respuesta 201 no trae direccion_envio_texto; se completa con la dirección elegida.
-      // Tampoco trae el método de pago: se agrega y se recuerda para preseleccionarlo en la pasarela.
       const elegida = direcciones.find((d) => String(d.id_direccion_cliente) === f.idDireccion);
-      guardarMetodoPago(respuesta.id_pedido, f.metodoPago);
       onPedidoCreado(
         {
           ...respuesta,
           direccion_envio_texto: respuesta.direccion_envio_texto ?? elegida?.texto_completo ?? null,
-          metodoPago: respuesta.metodoPago ?? f.metodoPago,
         },
         carrito?.grupos_comercio ?? [],
       );
@@ -207,7 +194,16 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
           {/* Columna izquierda: Formularios de Envío/Pago, Opcional y Resumen por comercio */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-6">
             <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-5 space-y-4">
-              <Titulo icono={Truck}>Envío y pago</Titulo>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <Titulo icono={Truck}>Dirección de entrega</Titulo>
+                <a
+                  href="/app.html?pantalla=perfil&motivo=checkout_dir"
+                  className="text-xs font-semibold text-brandDarkBlue hover:text-brandBlue inline-flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 text-brandGreen" aria-hidden="true" />
+                  <span>Gestionar direcciones</span>
+                </a>
+              </div>
               <Campo id="idDireccion" etiqueta="Dirección de envío" error={errores.idDireccion}>
                 <div className="relative">
                   <MapPin className="w-4 h-4 text-gray-400 absolute left-3 top-3" aria-hidden="true" />
@@ -228,21 +224,35 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                     ))}
                   </select>
                 </div>
-                <p id="idDireccion-ayuda" className="mt-1 text-xs text-gray-500">
-                  Las direcciones las administra M1 (Portal).
+              </Campo>
+
+              <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                <p id="idDireccion-ayuda" className="text-xs text-gray-500">
+                  Seleccione dónde desea recibir su pedido.
                 </p>
-              </Campo>
+                <a
+                  href="/app.html?pantalla=perfil&motivo=checkout_dir"
+                  className="text-xs font-bold text-brandBlue hover:text-brandDarkBlue inline-flex items-center gap-1 transition hover:underline"
+                >
+                  + Agregar nueva dirección
+                </a>
+              </div>
+
               {sinDirecciones && (
-                <Alerta tipo="aviso" titulo="Sin dirección de envío">
-                  No tiene direcciones registradas. Agregue una dirección en su perfil para poder confirmar el pedido.
-                </Alerta>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <Alerta tipo="aviso" titulo="Sin dirección de envío">
+                    No tiene direcciones registradas en su cuenta. Debe agregar al menos una dirección para poder confirmar el pedido.
+                  </Alerta>
+                  <div className="pt-1">
+                    <a
+                      href="/app.html?pantalla=perfil&motivo=checkout_dir"
+                      className="inline-flex items-center gap-2 rounded-lg bg-brandDarkBlue hover:bg-brandBlue text-white text-xs font-bold py-2 px-4 shadow-xs transition"
+                    >
+                      <Plus className="w-4 h-4" /> Agregar dirección ahora
+                    </a>
+                  </div>
+                </div>
               )}
-              <Campo id="metodoPago" etiqueta="Método de pago" error={errores.metodoPago}>
-                <select id="metodoPago" value={f.metodoPago} onChange={set('metodoPago')} aria-invalid={!!errores.metodoPago} className={clasesInput(errores.metodoPago)}>
-                  <option value="">Seleccione una opción</option>
-                  {METODOS_PAGO.map((m) => <option key={m.valor} value={m.valor}>{m.etiqueta}</option>)}
-                </select>
-              </Campo>
             </section>
 
             <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-5 space-y-4">

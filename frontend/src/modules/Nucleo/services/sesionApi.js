@@ -80,8 +80,10 @@ async function llamar(ruta, opciones = {}, reintentado = false) {
 
 // POST /login. 200 → { ok: true, datos: { user: { id_usuario, nombre, correo, rol, id_comercio } } }
 // · 422 ERR-005 (credenciales incorrectas o cuenta inactiva: error.detalles.correo[0]) · 429 ERR-429.
-export function iniciarSesion(correo, contrasena) {
-  return llamar('/login', { method: 'POST', body: JSON.stringify({ correo, contrasena }) });
+export function iniciarSesion(correoOParams, contrasena) {
+  const correo = typeof correoOParams === 'object' && correoOParams !== null ? correoOParams.correo : correoOParams;
+  const pass = typeof correoOParams === 'object' && correoOParams !== null ? correoOParams.contrasena : contrasena;
+  return llamar('/login', { method: 'POST', body: JSON.stringify({ correo, contrasena: pass }) });
 }
 
 // POST /logout. 204 → { ok: true, datos: null } · 401 si no había sesión.

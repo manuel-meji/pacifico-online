@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Aviso } from './components/componentes';
 import PaginaPortal, { PortalContext } from './components/PaginaPortal';
 import { obtenerCantidadCarrito } from './services/carritoApi';
 import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
@@ -30,7 +31,7 @@ const titulos = {
 // Parámetros de las pantallas del portal que viajan en la URL (?pantalla=producto&id=1520, etc.).
 // Los nombres de la búsqueda son los del contrato de buscarProductos.
 const PARAMETROS_NUMERICOS = ['id', 'id_categoria', 'precio_minimo', 'precio_maximo', 'pagina', 'por_pagina'];
-const PARAMETROS_TEXTO = ['q', 'orden', 'slug'];
+const PARAMETROS_TEXTO = ['q', 'orden', 'slug', 'motivo'];
 
 export function leerParametros(busqueda = window.location.search) {
   const url = new URLSearchParams(busqueda);
@@ -152,11 +153,20 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
       await esperar();
       return { ok: false, ...correoDuplicado };
     }
-    return registrarCliente(datos);
+    const respuesta = await registrarCliente(datos);
+    if (respuesta.ok) {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('motivo') === 'checkout' || parametros.motivo === 'checkout') {
+        window.location.href = '/carrito.html';
+        return respuesta;
+      }
+    }
+    return respuesta;
   }
 
   // POST /login del núcleo compartido. Con ?simular=credenciales se muestra, sin backend, el error 422 del ingreso.
-  // Si entra un cliente va al inicio del portal. Los encargados van a /m2.html, que abre el panel según su rol.
+  // Si entra un cliente va al inicio del portal (o de vuelta al carrito si venía de checkout).
+  // Los encargados van a /m2.html, que abre el panel según su rol.
   async function ingresar({ correo, contrasena }) {
     if (simular === 'credenciales') {
       await esperar();
@@ -169,6 +179,11 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
       if (rol === 'encargado_comercio' || rol === 'encargado_plataforma') {
         window.location.href = '/m2.html';
       } else if (rol === 'cliente') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('motivo') === 'checkout' || parametros.motivo === 'checkout') {
+          window.location.href = '/carrito.html';
+          return respuesta;
+        }
         navegar('inicio');
       }
     }
@@ -206,6 +221,14 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   return (
     <PortalContext.Provider value={portal}>
     <PaginaPortal>
+      {(parametros.motivo === 'checkout' || new URLSearchParams(window.location.search).get('motivo') === 'checkout') && (
+        <div className="mx-auto w-full max-w-md px-4 pt-4">
+          <Aviso tipo="info">
+            Inicie sesión o regístrese para continuar con su compra. Los productos de su carrito se encuentran guardados.
+          </Aviso>
+        </div>
+      )}
+
       {pantalla === 'ingresar' && (
         <IniciarSesionView
           onIngresar={ingresar}

@@ -144,6 +144,22 @@ export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre =
 
   return (
     <PaginaCuenta migas="Mi cuenta" titulo="Mi cuenta">
+      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('motivo') === 'checkout_dir' && (
+        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-2">
+          <p className="text-sm font-bold text-brandDarkBlue">Gestionar dirección de entrega</p>
+          <p className="text-xs text-blue-800">
+            Agregue o actualice su dirección de envío aquí. Al terminar, regrese al checkout para completar su compra.
+          </p>
+          <div className="pt-1">
+            <a
+              href="/carrito.html"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-brandDarkBlue hover:bg-brandBlue px-4 py-2 rounded-lg shadow-xs transition"
+            >
+              ← Volver al checkout
+            </a>
+          </div>
+        </div>
+      )}
       <form onSubmit={enviar} noValidate className="space-y-4">
         {guardado && <Aviso tipo="exito">Sus datos se actualizaron.</Aviso>}
         {errores.general && <Aviso>{errores.general}</Aviso>}

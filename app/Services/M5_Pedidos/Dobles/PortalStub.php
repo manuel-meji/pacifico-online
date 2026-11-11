@@ -6,6 +6,8 @@ use App\Contracts\M1_Portal\Exceptions\ClienteNoEncontradoException;
 use App\Contracts\M1_Portal\Exceptions\DireccionNoEncontradaException;
 use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M1_Portal\PortalServiceInterface;
+use App\Models\M1_Portal\Cliente;
+use App\Models\M1_Portal\DireccionCliente;
 
 /**
  * Doble de prueba formal (Stub) para M1 Portal público y búsqueda.
@@ -145,6 +147,36 @@ class PortalStub implements PortalPublicoContract, PortalServiceInterface
             throw ErrorProveedorException::datosInvalidos('Error al consultar direcciones en M1');
         }
 
+        // 1. Si existe el modelo real de M1, obtener las direcciones reales registradas en base de datos
+        if (class_exists(DireccionCliente::class)) {
+            try {
+                $dirsDb = DireccionCliente::where('id_cliente', $idCliente)->get();
+                if ($dirsDb->isNotEmpty()) {
+                    $lista = [];
+                    foreach ($dirsDb as $d) {
+                        $lista[] = [
+                            'id_direccion_cliente' => (int) $d->id_direccion_cliente,
+                            'id_cliente' => (int) $d->id_cliente,
+                            'alias_direccion' => (string) $d->alias_direccion,
+                            'nombre_destinatario' => (string) $d->nombre_destinatario,
+                            'telefono_destinatario' => (string) $d->telefono_destinatario,
+                            'provincia' => (string) $d->provincia,
+                            'canton' => (string) $d->canton,
+                            'distrito' => (string) $d->distrito,
+                            'otras_senas' => (string) $d->otras_senas,
+                            'es_principal' => (bool) $d->es_principal,
+                            'texto_completo' => "{$d->alias_direccion} — {$d->provincia}, {$d->canton}, {$d->distrito}, {$d->otras_senas}",
+                        ];
+                    }
+                    usort($lista, fn ($a, $b) => ($b['es_principal'] <=> $a['es_principal']));
+
+                    return $lista;
+                }
+            } catch (\Throwable) {
+                // Si la BD falla o no está conectada, continuar con datos de prueba
+            }
+        }
+
         $resultado = [];
         foreach ($this->direcciones as $dir) {
             if ($dir['id_cliente'] === $idCliente) {
@@ -182,6 +214,31 @@ class PortalStub implements PortalPublicoContract, PortalServiceInterface
             throw ErrorProveedorException::datosInvalidos('Error al consultar dirección en M1');
         }
 
+        if (class_exists(DireccionCliente::class)) {
+            try {
+                $dirDb = DireccionCliente::where('id_cliente', $idCliente)
+                    ->where('id_direccion_cliente', $idDireccionCliente)
+                    ->first();
+                if ($dirDb !== null) {
+                    return [
+                        'id_direccion_cliente' => (int) $dirDb->id_direccion_cliente,
+                        'id_cliente' => (int) $dirDb->id_cliente,
+                        'alias_direccion' => (string) $dirDb->alias_direccion,
+                        'nombre_destinatario' => (string) $dirDb->nombre_destinatario,
+                        'telefono_destinatario' => (string) $dirDb->telefono_destinatario,
+                        'provincia' => (string) $dirDb->provincia,
+                        'canton' => (string) $dirDb->canton,
+                        'distrito' => (string) $dirDb->distrito,
+                        'otras_senas' => (string) $dirDb->otras_senas,
+                        'es_principal' => (bool) $dirDb->es_principal,
+                        'texto_completo' => "{$dirDb->alias_direccion} — {$dirDb->provincia}, {$dirDb->canton}, {$dirDb->distrito}, {$dirDb->otras_senas}",
+                    ];
+                }
+            } catch (\Throwable) {
+                // Fallback
+            }
+        }
+
         if (isset($this->direcciones[$idDireccionCliente])) {
             $dir = $this->direcciones[$idDireccionCliente];
             if ($dir['id_cliente'] === $idCliente) {
@@ -199,6 +256,18 @@ class PortalStub implements PortalPublicoContract, PortalServiceInterface
 
     public function obtenerIdClientePorUsuario(int $idUsuario): int
     {
+        // 1. Si existe en la base de datos real el modelo Cliente de M1, obtener el id_cliente real asociado al id_usuario
+        if (class_exists(Cliente::class)) {
+            try {
+                $clienteReal = Cliente::where('id_usuario', $idUsuario)->first();
+                if ($clienteReal !== null) {
+                    return (int) $clienteReal->id_cliente;
+                }
+            } catch (\Throwable) {
+                // Si la BD falla, continuar con lógica en memoria
+            }
+        }
+
         if ($idUsuario === 501) {
             return 1;
         }
