@@ -29,7 +29,8 @@ class M3_ProveedorContratoTest extends TestCase
 
     /**
      * El servicio de M3 lee la base: las rutas se comprueban contra datos reales y no contra los
-     * datos fijos de la prueba de concepto. Siembra el producto 1 publicado con la variacion 101.
+     * datos fijos de la prueba de concepto. Siembra el producto 1 publicado con la variacion 101,
+     * una categoria con subcategoria, una marca y un producto relacionado con el producto 1.
      * Los ids 1001 (producto y variacion) no se siembran: deben responder 404.
      */
     private function sembrarCatalogoDelContrato(): void
@@ -38,7 +39,27 @@ class M3_ProveedorContratoTest extends TestCase
         $this->comercioActivo(1);
 
         $categoria = $this->categoria('General');
+        $this->categoria('Camisetas', $categoria);
+
+        DB::table('marcas')->insert([
+            'nombre' => 'Marca del contrato',
+            'logotipo_url' => 'https://example.com/marca.png',
+            'destacada' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $producto = $this->producto(1, $categoria, 'Camiseta de algodon', 'publicado');
+        $relacionado = $this->producto(1, $categoria, 'Gorra de algodon', 'publicado');
+        $this->variacion($relacionado, 1, 'GOR-ALG-U', 8000);
+
+        DB::table('productos_relacionados')->insert([
+            'id_producto' => $producto,
+            'id_producto_relacionado' => $relacionado,
+            'id_comercio' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         // variacion() del trait asigna el id solo; el contrato se prueba con el id fijo 101.
         DB::table('producto_variaciones')->insert([
@@ -148,31 +169,81 @@ class M3_ProveedorContratoTest extends TestCase
         ], ['nombre' => 'Cafe'], 'nombre_all_of');
     }
 
-    public function test_listar_categorias_queda_pendiente_de_publicacion_del_proveedor(): void
+    public function test_listar_categorias_cumple_el_esquema_de_categoria(): void
     {
-        $this->omitOperationUntilAvailable('listarCategorias');
+        $response = $this->getJson(route('m3.categorias.index'));
+
+        $response->assertOk();
+        $this->assertNotEmpty($response->json());
+        $this->assertEsquema($this->esquemaDeRespuesta('/categorias', '200'), $response->json(), 'listarCategorias');
     }
 
-    public function test_listar_marcas_queda_pendiente_de_publicacion_del_proveedor(): void
+    public function test_listar_marcas_cumple_el_esquema_de_marca(): void
     {
-        $this->omitOperationUntilAvailable('listarMarcas');
+        $response = $this->getJson(route('m3.marcas.index'));
+
+        $response->assertOk();
+        $this->assertNotEmpty($response->json());
+        $this->assertEsquema($this->esquemaDeRespuesta('/marcas', '200'), $response->json(), 'listarMarcas');
     }
 
-    public function test_buscar_productos_queda_pendiente_de_publicacion_del_proveedor(): void
+    public function test_buscar_productos_cumple_el_esquema_de_resultado_paginado(): void
     {
-        $this->omitOperationUntilAvailable('buscarProductos');
+        $response = $this->getJson(route('m3.productos.index'));
+
+        $response->assertOk();
+        $this->assertNotEmpty($response->json('productos'));
+        $this->assertEsquema($this->esquemaDeRespuesta('/productos', '200'), $response->json(), 'buscarProductos');
     }
 
-    public function test_listar_relacionados_queda_pendiente_de_publicacion_del_proveedor(): void
+    public function test_buscar_productos_con_filtro_invalido_responde_422_err_005(): void
     {
-        $this->omitOperationUntilAvailable('listarRelacionados');
+        $response = $this->getJson(route('m3.productos.index', ['orden' => 'alfabetico']));
+
+        $response->assertStatus(422)->assertJsonPath('error.codigo', 'ERR-005');
+        $this->assertEsquema($this->esquemaDeRespuesta('/productos', '422'), $response->json(), 'ErrorEstandar');
     }
 
-    private function omitOperationUntilAvailable(string $metodo): void
+    public function test_listar_relacionados_cumple_el_esquema_de_resumen_de_producto(): void
     {
-        $this->markTestSkipped(
-            "Pendiente externo: CatalogoServiceInterface aun no publica {$metodo}; no se inventa una implementacion."
+        $response = $this->getJson(route('m3.productos.relacionados', ['id_producto' => 1]));
+
+        $response->assertOk();
+        $this->assertNotEmpty($response->json());
+        $this->assertEsquema(
+            $this->esquemaDeRespuesta('/productos/{id_producto}/relacionados', '200'),
+            $response->json(),
+            'listarRelacionados'
         );
+    }
+
+    public function test_listar_relacionados_de_producto_inexistente_responde_404_err_004(): void
+    {
+        $response = $this->getJson(route('m3.productos.relacionados', ['id_producto' => 1001]));
+
+        $response->assertNotFound()->assertJsonPath('error.codigo', 'ERR-004');
+        $this->assertEsquema(
+            $this->esquemaDeRespuesta('/productos/{id_producto}/relacionados', '404'),
+            $response->json(),
+            'ErrorEstandar'
+        );
+    }
+
+    /**
+     * Esquema que el contrato declara para la respuesta GET de esa ruta y ese estado.
+     *
+     * @return array<string, mixed>
+     */
+    private function esquemaDeRespuesta(string $ruta, string $estado): array
+    {
+        $respuesta = $this->contrato()['paths'][$ruta]['get']['responses'][$estado];
+
+        if (isset($respuesta['$ref'])) {
+            $nombre = substr($respuesta['$ref'], strlen('#/components/responses/'));
+            $respuesta = $this->contrato()['components']['responses'][$nombre];
+        }
+
+        return $respuesta['content']['application/json']['schema'];
     }
 
     private function endpoint(string $routeName, int $id): string
