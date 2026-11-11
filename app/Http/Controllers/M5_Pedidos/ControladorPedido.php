@@ -194,7 +194,8 @@ class ControladorPedido extends Controller
         $pedidoMaestro = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->find($idPedido);
 
         // 6. Publicar eventos canónicos (D3: PedidoConfirmado se emite al confirmar el checkout)
-        if ($pedidoMaestro) {
+        if ($pedidoMaestro) { // este trozo de código lo agregó JustinM6 con concentimiento de Marcos Ortega
+            $pedidoMaestro->actualizarEstado('confirmado', 'Checkout confirmado'); // <-- línea nueva
             event(new PedidoConfirmado($pedidoMaestro));
             event(new PedidoCreado($pedidoMaestro));
         }

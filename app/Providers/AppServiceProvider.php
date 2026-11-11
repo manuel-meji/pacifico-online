@@ -6,6 +6,7 @@ use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
+use App\Contracts\M5_Pedidos\GestionPedidosServiceInterface;
 use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 // Contratos (Interfaces)
 use App\Contracts\M6_Pagos\PagosServiceInterface;
@@ -73,20 +74,37 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Puertos de salida de M6 hacia M1, M2, M5 y M7
      */
+    /**
+     * Puertos de salida de M6 hacia M1, M2, M5 y M7.
+     * Cada puerto elige doble o adaptador real según config('m6.doble_por_modulo.mX')
+     * y, si no está definido, según config('m6.usar_dobles').
+     */
     private function registrarPuertosM6(): void
     {
         $puertos = [
-            PedidoClient::class => [FakePedidoClient::class, AdaptadorM5::class],
-            ClienteClient::class => [FakeClienteClient::class, AdaptadorM1::class],
-            ComercioClient::class => [FakeComercioClient::class, AdaptadorM2::class],
-            ContabilidadClient::class => [FakeContabilidadClient::class, AdaptadorM7::class],
+            'm5' => [PedidoClient::class, FakePedidoClient::class, AdaptadorM5::class],
+            'm1' => [ClienteClient::class, FakeClienteClient::class, AdaptadorM1::class],
+            'm2' => [ComercioClient::class, FakeComercioClient::class, AdaptadorM2::class],
+            'm7' => [ContabilidadClient::class, FakeContabilidadClient::class, AdaptadorM7::class],
         ];
 
-        foreach ($puertos as $puerto => [$doble, $adaptador]) {
+        // M5 se entrega con carga diferida: PedidosService depende de PagosService,
+        // que depende de este adaptador. Resolver M5 solo al usarlo rompe el ciclo.
+        $this->app->bind(AdaptadorM5::class, fn (Application $app): AdaptadorM5 => new AdaptadorM5(
+            static fn (): GestionPedidosServiceInterface => $app->make(GestionPedidosServiceInterface::class),
+            static fn (): PedidosServiceInterface => $app->make(PedidosServiceInterface::class),
+        ));
+
+        foreach ($puertos as $modulo => [$puerto, $doble, $adaptador]) {
             $this->app->scoped($puerto, fn (Application $app): object => $app->make(
-                config('m6.usar_dobles', true) ? $doble : $adaptador
+                $this->usaDoble($modulo) ? $doble : $adaptador
             ));
         }
+    }
+
+    private function usaDoble(string $modulo): bool
+    {
+        return (bool) (config("m6.doble_por_modulo.{$modulo}") ?? config('m6.usar_dobles', true));
     }
 
     /**

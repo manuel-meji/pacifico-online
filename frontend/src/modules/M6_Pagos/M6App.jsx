@@ -4,12 +4,28 @@ import ResultadoPago from './components/ResultadoPago';
 import FacturasPedidoView from './views/FacturasPedidoView';
 import HistorialComercioView from './views/HistorialComercioView';
 
+// Pedido de prueba por defecto (dobles). Con ?pedido=ID&monto=MONTO se usa un pedido real de M5.
 const PEDIDO_PRUEBA = {
   id_pedido: 8942,
   estado: 'confirmado',
   monto_total: 59840.0,
   subpedidos: [],
 };
+
+function pedidoDesdeUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const id = Number(params.get('pedido'));
+  const monto = Number(params.get('monto'));
+
+  if (!Number.isInteger(id) || id <= 0 || !Number.isFinite(monto) || monto <= 0) {
+    return PEDIDO_PRUEBA;
+  }
+
+  // El estado "confirmado" solo habilita el botón; el backend valida el estado real en M5.
+  return { id_pedido: id, estado: 'confirmado', monto_total: monto, subpedidos: [] };
+}
+
+const PEDIDO_ACTUAL = pedidoDesdeUrl();
 
 const PESTANAS = [
   ['pago', 'Pagar pedido'],
@@ -41,7 +57,7 @@ export default function M6App() {
       </nav>
 
       {pantalla === 'pago' && (
-        <FormularioPago key={intento} pedido={PEDIDO_PRUEBA} onResultado={verResultado} />
+        <FormularioPago key={intento} pedido={PEDIDO_ACTUAL} />
       )}
 
       {pantalla === 'resultado' && pago && (
@@ -55,7 +71,7 @@ export default function M6App() {
       )}
 
       {pantalla === 'factura' && (
-        <FacturasPedidoView idPedido={pago?.id_pedido ?? PEDIDO_PRUEBA.id_pedido} />
+        <FacturasPedidoView idPedido={pago?.id_pedido ?? PEDIDO_ACTUAL.id_pedido} />
       )}
 
       {pantalla === 'historial' && (

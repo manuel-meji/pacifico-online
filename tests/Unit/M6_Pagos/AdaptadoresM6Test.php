@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\M6_Pagos;
 
+use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
 use App\Exceptions\M6_Pagos\ErrorContratoException;
 use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Services\M6_Pagos\Adaptadores\AdaptadorM1;
@@ -148,17 +149,29 @@ class AdaptadoresM6Test extends TestCase
         $this->assertSame('COMERCIO_NO_ENCONTRADO', $this->codigo(fn () => $adaptador->obtenerDatosFiscales(MockComerciosService::COMERCIO_INEXISTENTE)));
     }
 
-    public function test_m7_provisional_responde_err_006_en_ambas_operaciones(): void
+    public function test_m7_consulta_el_registro_contable_a_traves_del_contrato(): void
     {
-        $adaptador = new AdaptadorM7;
-
-        foreach ([fn () => $adaptador->enviarEventoFinanciero(1, 'PagoConfirmado'), fn () => $adaptador->consultarRegistroContablePago(1)] as $operacion) {
-            try {
-                $operacion();
-                $this->fail('Debió lanzar ERR-006.');
-            } catch (ErrorNucleoException $e) {
-                $this->assertSame('ERR-006', $e->codigo);
+        $m7 = new class implements ContabilidadServiceInterface
+        {
+            public function registrarAsientoDespacho(int $pedidoId, float $totalVenta, float $costoVentas): bool
+            {
+                return true;
             }
-        }
+
+            public function consultarRegistroContablePago(int $idPago): array
+            {
+                return [
+                    'id_pago' => $idPago,
+                    'registrado' => $idPago === 5,
+                    'asiento_id' => $idPago === 5 ? 90 : null,
+                    'fecha_registro' => null,
+                ];
+            }
+        };
+
+        $adaptador = new AdaptadorM7($m7);
+
+        $this->assertTrue($adaptador->consultarRegistroContablePago(5));
+        $this->assertFalse($adaptador->consultarRegistroContablePago(6));
     }
 }
