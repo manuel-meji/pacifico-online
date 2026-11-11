@@ -1,0 +1,61 @@
+[35mapp/Events/M5_Pedidos/PedidoConfirmado.php[m[36m:[mclass [1;31mPedidoConfirmado[m
+[35mapp/Events/M5_Pedidos/PedidoCreado.php[m[36m:[mclass PedidoCreado extends [1;31mPedidoConfirmado[m
+[35mapp/Events/PedidoConfirmado.php[m[36m:[muse App\Events\M5_Pedidos\[1;31mPedidoConfirmado[m as Evento[1;31mPedidoConfirmado[mM5;
+[35mapp/Events/PedidoConfirmado.php[m[36m:[mclass [1;31mPedidoConfirmado[m extends Evento[1;31mPedidoConfirmado[mM5 {}
+[35mapp/Http/Controllers/M5_Pedidos/ControladorPedido.php[m[36m:[muse App\Events\M5_Pedidos\[1;31mPedidoConfirmado[m;
+[35mapp/Http/Controllers/M5_Pedidos/ControladorPedido.php[m[36m:[m        // 6. Publicar eventos canónicos (D3: [1;31mPedidoConfirmado[m se emite al confirmar el checkout)
+[35mapp/Http/Controllers/M5_Pedidos/ControladorPedido.php[m[36m:[m            event(new [1;31mPedidoConfirmado[m($pedidoMaestro));
+[35mapp/Listeners/M4_Inventario/ProcesarEventosPedidoListener.php[m[36m:[muse App\Events\M5_Pedidos\[1;31mPedidoConfirmado[m;
+[35mapp/Listeners/M4_Inventario/ProcesarEventosPedidoListener.php[m[36m:[m    /** [1;31mPedidoConfirmado[m (M5): ACTIVA → CONFIRMADA con el pedido y el subpedido de cada reserva. */
+[35mapp/Listeners/M4_Inventario/ProcesarEventosPedidoListener.php[m[36m:[m    public function alConfirmarPedido([1;31mPedidoConfirmado[m $evento): void
+[35mapp/Listeners/M4_Inventario/ProcesarEventosPedidoListener.php[m[36m:[m        $this->procesarUnaVez($this->nucleo, $evento->id_evento, '[1;31mPedidoConfirmado[m', function () use ($evento): void {
+[35mapp/Listeners/M4_Inventario/ProcesarEventosPedidoListener.php[m[36m:[m                    $this->porReserva('[1;31mPedidoConfirmado[m', $idReserva, fn () => $this->reservas->confirmar(
+[35mapp/Providers/InventarioServiceProvider.php[m[36m:[muse App\Events\M5_Pedidos\[1;31mPedidoConfirmado[m;
+[35mapp/Providers/InventarioServiceProvider.php[m[36m:[m        Event::listen([1;31mPedidoConfirmado[m::class, [$listener, 'alConfirmarPedido']);
+[35mapp/Services/M7_Contabilidad/AsientoService.php[m[36m:[m        return $this->crear($datos->eventoId, $datos->fecha, $datos->pedidoId, $datos->subpedidoId, $datos->comercioId, $datos->subtotal, '[1;31mPedidoConfirmado[m', 'VENTA', '1.1.02', '4.1.01', $verificarExistente);
+[35mapp/Services/M7_Contabilidad/ContabilidadService.php[m[36m:[m         * Según el PC3 colectivo, [1;31mPedidoConfirmado[m originará el asiento de venta
+[35mapp/Services/M7_Contabilidad/ProcesarPedidoConfirmadoService.php[m[36m:[mfinal class Procesar[1;31mPedidoConfirmado[mService
+[35mapp/Services/M7_Contabilidad/ProcesarPedidoConfirmadoService.php[m[36m:[m        $this->eventos->procesar($eventoId, '[1;31mPedidoConfirmado[m', function (bool $yaProcesado) use ($ventas, $eventoId): void {
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.1.0.yaml[m[36m:[m        sin borrar la fecha original. [1;31mPedidoConfirmado[m del catálogo utiliza la misma operación de dominio. La ruta
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.1.0.yaml[m[36m:[m    Evento[1;31mPedidoConfirmado[m:
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.1.0.yaml[m[36m:[m  - nombre: [1;31mPedidoConfirmado[m
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.1.0.yaml[m[36m:[m      $ref: '#/components/schemas/Evento[1;31mPedidoConfirmado[m'
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.2.0.yaml[m[36m:[m        sin borrar la fecha original. [1;31mPedidoConfirmado[m del catálogo utiliza la misma operación de dominio. La ruta
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.2.0.yaml[m[36m:[m    Evento[1;31mPedidoConfirmado[m:
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.2.0.yaml[m[36m:[m  - nombre: [1;31mPedidoConfirmado[m
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.2.0.yaml[m[36m:[m      $ref: '#/components/schemas/Evento[1;31mPedidoConfirmado[m'
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.3.0.yaml[m[36m:[m        sin borrar la fecha original. [1;31mPedidoConfirmado[m del catálogo utiliza la misma operación de dominio. La ruta
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.3.0.yaml[m[36m:[m    Evento[1;31mPedidoConfirmado[m:
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.3.0.yaml[m[36m:[m  - nombre: [1;31mPedidoConfirmado[m
+[35mcontracts/m4-inventario/v1/openapi_M4_v1.3.0.yaml[m[36m:[m      $ref: '#/components/schemas/Evento[1;31mPedidoConfirmado[m'
+[35mcontracts/m5-pedidos/v1/openapi.yaml[m[36m:[m        6. Publica el evento `[1;31mPedidoConfirmado[m` y solicita el cobro síncrono a M6 (`ProcesarPagoPedido`,
+[35mcontracts/m5-pedidos/v1/openapi.yaml[m[36m:[m    [1;31mPedidoConfirmado[mEvento:
+[35mcontracts/m5-pedidos/v1/openapi.yaml[m[36m:[m        Payload del evento canónico [1;31mPedidoConfirmado[m (ADR-005) hacia M4, M6, M2 y M7.
+[35mcontracts/m5-pedidos/v1/openapi.yaml[m[36m:[m        `id_comercio`, `id_subpedido` y `reservas` requeridos por el schema `Evento[1;31mPedidoConfirmado[m` de M4.
+[35mcontracts/m5-pedidos/v1/openapi.yaml[m[36m:[m          description: Comercio del subpedido (requerido por M4 en Evento[1;31mPedidoConfirmado[m).
+[35mcontracts/m5-pedidos/v1/openapi.yaml[m[36m:[m          description: Subpedido confirmado (requerido por M4 en Evento[1;31mPedidoConfirmado[m).
+[35mcontracts/m5-pedidos/v1/openapi.yaml[m[36m:[m    - nombre: [1;31mPedidoConfirmado[m
+[35mcontracts/m5-pedidos/v1/openapi.yaml[m[36m:[m        $ref: '#/components/schemas/[1;31mPedidoConfirmado[mEvento'
+[35mcontracts/m5-pedidos/v1/openapi_v1.1.0.yaml[m[36m:[m        6. Publica el evento `[1;31mPedidoConfirmado[m` y solicita el cobro síncrono a M6 (`ProcesarPagoPedido`,
+[35mcontracts/m5-pedidos/v1/openapi_v1.1.0.yaml[m[36m:[m    [1;31mPedidoConfirmado[mEvento:
+[35mcontracts/m5-pedidos/v1/openapi_v1.1.0.yaml[m[36m:[m        Payload del evento canónico [1;31mPedidoConfirmado[m (ADR-005) hacia M4, M6, M2 y M7.
+[35mcontracts/m5-pedidos/v1/openapi_v1.1.0.yaml[m[36m:[m        `id_comercio`, `id_subpedido` y `reservas` requeridos por el schema `Evento[1;31mPedidoConfirmado[m` de M4.
+[35mcontracts/m5-pedidos/v1/openapi_v1.1.0.yaml[m[36m:[m          description: Comercio del subpedido (requerido por M4 en Evento[1;31mPedidoConfirmado[m).
+[35mcontracts/m5-pedidos/v1/openapi_v1.1.0.yaml[m[36m:[m          description: Subpedido confirmado (requerido por M4 en Evento[1;31mPedidoConfirmado[m).
+[35mcontracts/m5-pedidos/v1/openapi_v1.1.0.yaml[m[36m:[m    - nombre: [1;31mPedidoConfirmado[m
+[35mcontracts/m5-pedidos/v1/openapi_v1.1.0.yaml[m[36m:[m        $ref: '#/components/schemas/[1;31mPedidoConfirmado[mEvento'
+[35mdocs/solicitudes-cambio/SC-05 Correcciones PC2 M4.md[m[36m:[m  - **Contratos:** se nombró ObtenerSedesComercio la operación requerida de M2 y se agregaron los eventos del catálogo: publicados ExistenciaReservada y ExistenciaAgotada, consumidos [1;31mPedidoConfirmado[m y ComercioSuspendido (SC-M4-04). Se agregó la operación consultarInventarioAuditoria para el rol de Soporte/Auditoría (SC-M4-13).
+[35mdocs/solicitudes-cambio/SC-05 Correcciones PC2 M4.md[m[36m:[m- **Otros módulos afectados:** M2 (nombre de la operación ObtenerSedesComercio y evento ComercioSuspendido), M5 (eventos [1;31mPedidoConfirmado[m y ExistenciaReservada), M1 y M3 (evento ExistenciaAgotada) y núcleo compartido (rol de Soporte/Auditoría).
+[35mtests/Feature/M4_Inventario/ListenersPedidoM4Test.php[m[36m:[muse App\Events\M5_Pedidos\[1;31mPedidoConfirmado[m;
+[35mtests/Feature/M4_Inventario/ListenersPedidoM4Test.php[m[36m:[m        $confirmado = $this->evento([1;31mPedidoConfirmado[m::class, [
+[35mtests/Feature/M5_Pedidos/Eventos/M5_EventosTest.php[m[36m:[muse App\Events\M5_Pedidos\[1;31mPedidoConfirmado[m;
+[35mtests/Feature/M5_Pedidos/Eventos/M5_EventosTest.php[m[36m:[m        Event::fake([[1;31mPedidoConfirmado[m::class, PedidoCreado::class]);
+[35mtests/Feature/M5_Pedidos/Eventos/M5_EventosTest.php[m[36m:[m        Event::assertDispatched([1;31mPedidoConfirmado[m::class, function ([1;31mPedidoConfirmado[m $evento) use ($pedidoId) {
+[35mtests/Feature/M7_Contabilidad/RegistroAsientosTest.php[m[36m:[muse App\Services\M7_Contabilidad\Procesar[1;31mPedidoConfirmado[mService;
+[35mtests/Feature/M7_Contabilidad/RegistroAsientosTest.php[m[36m:[m        $procesador = app(Procesar[1;31mPedidoConfirmado[mService::class);
+[35mtests/Feature/M7_Contabilidad/RegistroAsientosTest.php[m[36m:[m        $procesador = app(Procesar[1;31mPedidoConfirmado[mService::class);
+[35mtests/Feature/M7_Contabilidad/RegistroAsientosTest.php[m[36m:[m            app(ContextoComercio::class)->ejecutarComoSistema(fn () => app(Procesar[1;31mPedidoConfirmado[mService::class)->procesar($ventas[0]->eventoId, $ventas));
+[35mtests/Feature/M7_Contabilidad/RegistroAsientosTest.php[m[36m:[m        $procesador = app(Procesar[1;31mPedidoConfirmado[mService::class);
+[35mtests/Feature/M7_Contabilidad/RegistroAsientosTest.php[m[36m:[m        $procesador = app(Procesar[1;31mPedidoConfirmado[mService::class);
+[35mtests/Feature/M7_Contabilidad/RegistroAsientosTest.php[m[36m:[m            app(Procesar[1;31mPedidoConfirmado[mService::class)->procesar($ventas[0]->eventoId, $ventas);
+[35mtests/Feature/M7_Contabilidad/RegistroAsientosTest.php[m[36m:[m        $contexto->ejecutarComoSistema(fn () => app(Procesar[1;31mPedidoConfirmado[mService::class)->procesar($venta->eventoId, [$venta]));
