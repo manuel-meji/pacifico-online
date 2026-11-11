@@ -9,7 +9,9 @@ use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Services\M7_Contabilidad\DTOs\CostoVentaDTO;
 use App\Services\M7_Contabilidad\ProcesarSubpedidoDespachadoService;
 use App\Services\Nucleo\ContextoComercio;
+use Illuminate\Support\Facades\Log;
 use LogicException;
+use Throwable;
 
 final class ProcesarSubpedidoDespachadoListener
 {
@@ -17,10 +19,21 @@ final class ProcesarSubpedidoDespachadoListener
         private readonly CostosProductosVendidosGatewayInterface $costos,
         private readonly ProcesarSubpedidoDespachadoService $procesador,
         private readonly ContextoComercio $contexto,
-    ) {
-    }
+    ) {}
 
     public function handle(SubpedidoDespachado $evento): void
+    {
+        try {
+            $this->procesar($evento);
+        } catch (Throwable $error) {
+            Log::error('M7: no se pudo procesar el evento SubpedidoDespachado.', [
+                'id_evento' => $evento->id_evento ?? null,
+                'exception' => $error,
+            ]);
+        }
+    }
+
+    private function procesar(SubpedidoDespachado $evento): void
     {
         $resultado = $this->costos
             ->obtenerCostosProductosVendidos($evento->id_subpedido);

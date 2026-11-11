@@ -8,16 +8,29 @@ use App\Events\M5_Pedidos\PedidoConfirmado;
 use App\Services\M7_Contabilidad\DTOs\VentaDTO;
 use App\Services\M7_Contabilidad\ProcesarPedidoConfirmadoService;
 use App\Services\Nucleo\ContextoComercio;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 final class ProcesarPedidoConfirmadoListener
 {
     public function __construct(
         private readonly ProcesarPedidoConfirmadoService $procesador,
         private readonly ContextoComercio $contexto,
-    ) {
-    }
+    ) {}
 
     public function handle(PedidoConfirmado $evento): void
+    {
+        try {
+            $this->procesar($evento);
+        } catch (Throwable $error) {
+            Log::error('M7: no se pudo procesar el evento PedidoConfirmado.', [
+                'id_evento' => $evento->id_evento ?? null,
+                'exception' => $error,
+            ]);
+        }
+    }
+
+    private function procesar(PedidoConfirmado $evento): void
     {
         $ventas = [];
 
