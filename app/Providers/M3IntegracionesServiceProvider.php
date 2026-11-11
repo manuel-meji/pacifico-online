@@ -18,6 +18,9 @@ use InvalidArgumentException;
  * config/integraciones.php (clave m3). Cambiar M3_M2_MODO=real en el .env
  * conecta M2 real sin tocar código. Es un enlace contextual: solo afecta a
  * las clases de M3 listadas en CONSUMIDORES_M3.
+ *
+ * También registra la API del contrato en /api/m3/v1
+ * (routes/modules/m3_catalogo_api.php), igual que M2 y M4.
  */
 class M3IntegracionesServiceProvider extends ServiceProvider
 {
@@ -38,6 +41,11 @@ class M3IntegracionesServiceProvider extends ServiceProvider
                 ->needs($interfaz)
                 ->give(fn (Application $app): object => $this->resolver($app, $proveedor, $interfaz));
         }
+    }
+
+    public function boot(): void
+    {
+        $this->loadRoutesFrom(base_path('routes/modules/m3_catalogo_api.php'));
     }
 
     /**
