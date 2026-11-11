@@ -174,7 +174,21 @@ export default function DireccionesSeccion({ idCliente }) {
 
       {carga.estado === 'listo' && (editando === 'nueva'
         ? <FormularioDireccion original={null} onGuardar={guardar} onCancelar={() => setEditando(null)} />
-        : <BotonSecundario onClick={() => { setAviso(null); setEditando('nueva'); }} disabled={editando !== null}>Agregar dirección</BotonSecundario>)}
+        : (
+          <div className="flex items-center gap-3 flex-wrap">
+            <BotonSecundario onClick={() => { setAviso(null); setEditando('nueva'); }} disabled={editando !== null}>
+              Agregar dirección
+            </BotonSecundario>
+            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('motivo') === 'checkout_dir' && (
+              <a
+                href="/carrito.html"
+                className="text-xs font-bold text-brandDarkBlue hover:text-brandBlue hover:underline transition"
+              >
+                ← Volver al checkout
+              </a>
+            )}
+          </div>
+        ))}
     </section>
   );
 }

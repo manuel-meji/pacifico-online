@@ -8,6 +8,7 @@ use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Http\Controllers\Controller;
+use App\Models\M1_Portal\DireccionCliente;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Services\M5_Pedidos\PedidosService;
@@ -323,9 +324,42 @@ class ControladorCarrito extends Controller
     {
         if ($this->m1Portal && method_exists($this->m1Portal, 'listarDireccionesCliente')) {
             try {
-                return $this->m1Portal->listarDireccionesCliente($clienteId);
+                $dirs = $this->m1Portal->listarDireccionesCliente($clienteId);
+                if (! empty($dirs)) {
+                    return $dirs;
+                }
             } catch (\Throwable) {
-                // Si el proveedor M1 no responde o falla, continuar con direcciones de respaldo
+                // Si el proveedor M1 no responde o falla, continuar con consulta directa o respaldo
+            }
+        }
+
+        // Consultar directamente la tabla direcciones_cliente de M1
+        if (class_exists(DireccionCliente::class)) {
+            try {
+                $dirsDb = DireccionCliente::where('id_cliente', $clienteId)->get();
+                if ($dirsDb->isNotEmpty()) {
+                    $lista = [];
+                    foreach ($dirsDb as $d) {
+                        $lista[] = [
+                            'id_direccion_cliente' => (int) $d->id_direccion_cliente,
+                            'id_cliente' => (int) $d->id_cliente,
+                            'alias_direccion' => (string) $d->alias_direccion,
+                            'nombre_destinatario' => (string) $d->nombre_destinatario,
+                            'telefono_destinatario' => (string) $d->telefono_destinatario,
+                            'provincia' => (string) $d->provincia,
+                            'canton' => (string) $d->canton,
+                            'distrito' => (string) $d->distrito,
+                            'otras_senas' => (string) $d->otras_senas,
+                            'es_principal' => (bool) $d->es_principal,
+                            'texto_completo' => "{$d->alias_direccion} — {$d->provincia}, {$d->canton}, {$d->distrito}, {$d->otras_senas}",
+                        ];
+                    }
+                    usort($lista, fn ($a, $b) => ($b['es_principal'] <=> $a['es_principal']));
+
+                    return $lista;
+                }
+            } catch (\Throwable) {
+                // Continuar a respaldo
             }
         }
 

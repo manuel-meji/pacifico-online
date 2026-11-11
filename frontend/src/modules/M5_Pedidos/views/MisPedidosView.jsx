@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, ClipboardList, LoaderCircle, RefreshCw, ShoppingCart } from 'lucide-react';
+import { ChevronRight, ClipboardList, LoaderCircle, RefreshCw, ShoppingCart, User } from 'lucide-react';
 import { Alerta, Boton, Encabezado } from '../components/componentes';
 import { colones } from '../services/calculos';
 import { formatearFecha, infoEstado } from '../services/estados';
 import { listarPedidos } from '../services/m5Api';
+import { obtenerUsuario } from '../../Nucleo/services/sesionApi';
 
 // Etiqueta de color con el estado del pedido.
 export function EtiquetaEstado({ estado }) {
@@ -19,10 +20,11 @@ const fechaOrden = (p) => new Date(p.fecha_creacion ?? p.created_at ?? 0).getTim
 const ordenarRecientes = (pedidos) =>
   [...pedidos].sort((a, b) => fechaOrden(b) - fechaOrden(a) || Number(b.id_pedido) - Number(a.id_pedido));
 
-// Historial de pedidos del cliente: GET /api/m5/v1/pedidos (cliente 1 por defecto).
-// La respuesta es { pagina, por_pagina, total_resultados, pedidos }; hoy el backend devuelve todos los pedidos.
+// Historial de pedidos del cliente: GET /api/m5/v1/pedidos.
+// Si el usuario no ha iniciado sesión, se le invita amigablemente a ingresar.
 export default function MisPedidosView({ idSeleccionado, onVerDetalle, onVolver }) {
   const [pedidos, setPedidos] = useState([]);
+  const [conSesion, setConSesion] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [intento, setIntento] = useState(0);
@@ -31,10 +33,28 @@ export default function MisPedidosView({ idSeleccionado, onVerDetalle, onVolver 
     let vigente = true;
     setCargando(true);
     setError(null);
-    listarPedidos()
-      .then((r) => { if (vigente) setPedidos(ordenarRecientes(r.pedidos ?? [])); })
-      .catch((e) => { if (vigente) setError(e); })
-      .finally(() => { if (vigente) setCargando(false); });
+
+    obtenerUsuario()
+      .then((u) => {
+        if (!vigente) return;
+        if (!u?.ok || !u?.datos?.user) {
+          setConSesion(false);
+          setCargando(false);
+          return;
+        }
+        setConSesion(true);
+        listarPedidos()
+          .then((r) => { if (vigente) setPedidos(ordenarRecientes(r.pedidos ?? [])); })
+          .catch((e) => { if (vigente) setError(e); })
+          .finally(() => { if (vigente) setCargando(false); });
+      })
+      .catch(() => {
+        if (vigente) {
+          setConSesion(false);
+          setCargando(false);
+        }
+      });
+
     return () => { vigente = false; };
   }, [intento]);
 
@@ -61,6 +81,28 @@ export default function MisPedidosView({ idSeleccionado, onVerDetalle, onVolver 
       <div className="py-16 flex flex-col items-center gap-3 text-gray-500" aria-live="polite">
         <LoaderCircle className="w-8 h-8 animate-spin text-brandBlue" aria-hidden="true" />
         <p className="text-sm font-medium">Cargando sus pedidos…</p>
+      </div>
+    );
+  } else if (conSesion === false) {
+    contenido = (
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-8 sm:p-12 max-w-md mx-auto text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-blue-50 text-brandDarkBlue mx-auto flex items-center justify-center">
+          <User className="w-8 h-8" aria-hidden="true" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Inicie sesión para ver sus pedidos</h2>
+          <p className="mt-1.5 text-xs sm:text-sm text-gray-500 leading-relaxed">
+            Para consultar el historial de sus compras, el seguimiento de sus entregas y devoluciones, debe identificarse con su cuenta.
+          </p>
+        </div>
+        <div className="pt-2">
+          <a
+            href="/app.html?pantalla=ingresar"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brandDarkBlue hover:bg-brandBlue text-white font-semibold px-6 py-3 transition text-sm shadow-xs cursor-pointer w-full"
+          >
+            Iniciar sesión o Registrarse
+          </a>
+        </div>
       </div>
     );
   } else if (error) {

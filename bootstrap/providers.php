@@ -8,9 +8,11 @@ use App\Providers\M4IntegracionesServiceProvider;
 use App\Providers\M5IntegracionesServiceProvider;
 use App\Providers\M6_PagosServiceProvider;
 use App\Providers\M7ContabilidadServiceProvider;
+use Laravel\Sanctum\SanctumServiceProvider;
 
 return [
     AppServiceProvider::class,
+    SanctumServiceProvider::class,
     M1IntegracionesServiceProvider::class,
     M2ComerciosServiceProvider::class,
     M4IntegracionesServiceProvider::class,

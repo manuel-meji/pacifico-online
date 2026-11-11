@@ -2,6 +2,7 @@
 
 namespace App\Services\M5_Pedidos\Dobles;
 
+use App\Services\M1_Portal\Dobles\DatosPrueba;
 use App\Services\M2_Comercios\Dobles\ComerciosDobleBase;
 
 /**
@@ -85,9 +86,24 @@ class ComerciosStub extends ComerciosDobleBase
     public function obtenerResumenComerciosLote(array $idsComercio): array
     {
         $comercios = [];
+        $portalComercios = DatosPrueba::comercios();
+
         foreach ($idsComercio as $id) {
             $estaSuspendido = $this->forzarSuspendido ?? ($id === self::COMERCIO_SUSPENDIDO);
             if (! $estaSuspendido) {
+                if (isset($portalComercios[$id])) {
+                    $c = $portalComercios[$id];
+                    $comercios[] = [
+                        'id_comercio' => $id,
+                        'nombre_comercial' => $c['nombre_comercial'] ?? $c['nombre'] ?? 'Comercio '.$id,
+                        'logo_url' => $c['logo_url'] ?? "https://pacifico.test/storage/comercios/{$id}/logo.png",
+                        'estado' => 'Activo',
+                        'destacado' => false,
+                    ];
+
+                    continue;
+                }
+
                 $nombre = match ($id) {
                     1 => 'Café Don Manuel S.A.',
                     4 => 'Mercado Artesanal Pacífico S.A.',
@@ -121,6 +137,21 @@ class ComerciosStub extends ComerciosDobleBase
 
         if ($estaSuspendido) {
             throw ErrorProveedorException::comercioSuspendido('Comercio suspendido');
+        }
+
+        $portalComercios = DatosPrueba::comercios();
+        if (isset($portalComercios[$comercioId])) {
+            $c = $portalComercios[$comercioId];
+
+            return [
+                'id_comercio' => $comercioId,
+                'nombre' => $c['nombre_comercial'] ?? $c['nombre'] ?? 'Comercio '.$comercioId,
+                'nombre_comercial' => $c['nombre_comercial'] ?? $c['nombre'] ?? 'Comercio '.$comercioId,
+                'estado' => 'activo',
+                'activo' => true,
+                'costo_envio' => $this->costoEnvio > 0 ? $this->costoEnvio : 1500.00,
+                'logo_url' => $c['logo_url'] ?? "https://pacifico.test/storage/comercios/{$comercioId}/logo.png",
+            ];
         }
 
         return match ($comercioId) {
