@@ -28,11 +28,7 @@ export default function IniciarSesionView({ onIngresar, onIrCrear }) {
     setEnviando(true);
     const respuesta = await onIngresar({ correo: f.correo.trim(), contrasena: f.contrasena });
     setEnviando(false);
-    if (respuesta.ok) {
-      // Los clientes son redirigidos al inicio por M1App; aquí solo llegan los roles sin panel todavía.
-      setResultado({ tipo: 'exito', texto: 'Ingresó correctamente. Su rol todavía no tiene un panel disponible en el portal.' });
-      return;
-    }
+    if (respuesta.ok) return;
     // 422 ERR-005: el mensaje del campo llega en error.detalles.correo (arreglo); se muestra junto al correo.
     const mensajeCorreo = respuesta.error.detalles?.correo?.[0];
     if (mensajeCorreo) {

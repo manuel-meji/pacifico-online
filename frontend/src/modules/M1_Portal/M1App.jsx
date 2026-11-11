@@ -156,7 +156,7 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   }
 
   // POST /login del núcleo compartido. Con ?simular=credenciales se muestra, sin backend, el error 422 del ingreso.
-  // Si entra un cliente va al inicio del portal. Los encargados todavía no tienen panel: la vista les avisa.
+  // Si entra un cliente va al inicio del portal. Los encargados van a /m2.html, que abre el panel según su rol.
   async function ingresar({ correo, contrasena }) {
     if (simular === 'credenciales') {
       await esperar();
@@ -164,8 +164,13 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     }
     const respuesta = await iniciarSesion(correo, contrasena);
     if (respuesta.ok) {
+      const { rol } = respuesta.datos.user;
       setUsuario(respuesta.datos.user);
-      if (respuesta.datos.user.rol === 'cliente') navegar('inicio');
+      if (rol === 'encargado_comercio' || rol === 'encargado_plataforma') {
+        window.location.href = '/m2.html';
+      } else if (rol === 'cliente') {
+        navegar('inicio');
+      }
     }
     return respuesta;
   }

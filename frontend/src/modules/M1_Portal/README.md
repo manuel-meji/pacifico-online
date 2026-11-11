@@ -91,4 +91,6 @@ Debajo, la sección Direcciones de envío (`components/DireccionesSeccion.jsx`) 
 direcciones (la principal primero), permite agregar, editar y marcar otra como principal. La principal no se
 desmarca directamente. Los campos y su validación están en `services/camposDireccion.js`, compartidos con el registro.
 
-Pendiente: panel para `encargado_comercio` y `encargado_plataforma`; hoy, al ingresar, solo ven un aviso.
+Los tres roles usan este mismo inicio de sesión. Al ingresar, `encargado_comercio` y `encargado_plataforma` son
+redirigidos a `/m2.html`, que abre el panel correspondiente a su rol; en Mi cuenta, si la cuenta no es de cliente,
+estos roles ven el botón "Ir a mi panel" hacia la misma página.

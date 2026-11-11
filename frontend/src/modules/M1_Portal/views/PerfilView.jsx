@@ -61,6 +61,8 @@ function CerrarSesion({ onCerrarSesion, errorCierre }) {
 // se puede cambiar hasta que el núcleo lo permita.
 export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre = false }) {
   const cierre = <CerrarSesion onCerrarSesion={onCerrarSesion} errorCierre={errorCierre} />;
+  const { usuario } = usePortal();
+  const esEncargado = ['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol);
   const [cliente, setCliente] = useState(null);
   const [f, setF] = useState(null);
   const [carga, setCarga] = useState({ estado: 'cargando' });
@@ -131,6 +133,9 @@ export default function PerfilView({ onIrIngresar, onCerrarSesion, errorCierre =
             {!sinSesion && !noEsCliente && carga.error.mensaje}
           </Aviso>
           {sinSesion && <BotonPrincipal type="button" onClick={onIrIngresar}>Ingresar</BotonPrincipal>}
+          {noEsCliente && esEncargado && (
+            <BotonPrincipal type="button" onClick={() => { window.location.href = '/m2.html'; }}>Ir a mi panel</BotonPrincipal>
+          )}
         </div>
         {cierre}
       </PaginaCuenta>
