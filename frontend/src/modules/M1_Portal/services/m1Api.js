@@ -114,7 +114,14 @@ export function actualizarDireccion(idCliente, idDireccionCliente, datos) {
 // ---------------------------------------------------------------------------
 
 // Arma "?a=1&b=2" con los parámetros que tienen valor (omite null, undefined y '').
-function consulta(parametros) {
+// Llamada genérica a /api/m1/v1 para los clientes de API de cada sección del panel de gestión
+// (services/destacadosApi.js, promocionesApi.js, noticiasApi.js), con el mismo CSRF y formato de error.
+export function llamarM1(ruta, opciones = {}) {
+  return llamar(ruta, opciones);
+}
+
+// Cadena de consulta (?a=1&b=2) sin los parámetros vacíos.
+export function consulta(parametros) {
   const pares = Object.entries(parametros).filter(([, valor]) => valor !== null && valor !== undefined && valor !== '');
   return pares.length ? `?${new URLSearchParams(pares).toString()}` : '';
 }

@@ -13,7 +13,9 @@ use Illuminate\Support\Facades\Schema;
  * vio y la que se cobra al aprobar. Un producto tiene como máximo una
  * solicitud pendiente a la vez (índice único parcial).
  *
- * Llaves foráneas hacia comercios (M2), productos (M3) y usuarios (núcleo).
+ * Llaves foráneas hacia comercios (M2) y usuarios (núcleo). id_producto es una
+ * referencia lógica a M3 (sin llave física, frontera de datos del PC3): M1 valida
+ * el producto con CatalogoServiceInterface al solicitar.
  */
 return new class extends Migration
 {
@@ -36,8 +38,6 @@ return new class extends Migration
             $table->index(['id_comercio', 'estado'], 'ix_solicitudes_destacado_comercio_estado');
             $table->foreign('id_comercio', 'fk_solicitudes_destacado_comercios')
                 ->references('id_comercio')->on('comercios');
-            $table->foreign('id_producto', 'fk_solicitudes_destacado_productos')
-                ->references('id_producto')->on('productos');
             $table->foreign('id_usuario_solicita', 'fk_solicitudes_destacado_usuario_solicita')
                 ->references('id_usuario')->on('usuarios');
             $table->foreign('id_usuario_resuelve', 'fk_solicitudes_destacado_usuario_resuelve')

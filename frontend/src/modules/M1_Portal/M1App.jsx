@@ -13,6 +13,7 @@ import InicioView from './views/InicioView';
 import PerfilView from './views/PerfilView';
 import FichaProductoView from './views/FichaProductoView';
 import NoticiaView from './views/NoticiaView';
+import GestionView from './views/gestion/GestionView';
 
 const esperar = () => new Promise((r) => setTimeout(r, 600));
 
@@ -26,12 +27,13 @@ const titulos = {
   ingresar: 'Pacíficos Online · M1 Iniciar sesión',
   crear: 'Pacíficos Online · M1 Crear cuenta',
   perfil: 'Pacíficos Online · M1 Mi cuenta',
+  gestion: 'Pacíficos Online · Panel de gestión',
 };
 
 // Parámetros de las pantallas del portal que viajan en la URL (?pantalla=producto&id=1520, etc.).
 // Los nombres de la búsqueda son los del contrato de buscarProductos.
 const PARAMETROS_NUMERICOS = ['id', 'id_categoria', 'precio_minimo', 'precio_maximo', 'pagina', 'por_pagina'];
-const PARAMETROS_TEXTO = ['q', 'orden', 'slug', 'motivo'];
+const PARAMETROS_TEXTO = ['q', 'orden', 'slug', 'motivo', 'seccion'];
 
 export function leerParametros(busqueda = window.location.search) {
   const url = new URLSearchParams(busqueda);
@@ -63,6 +65,8 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   const [parametros, setParametros] = useState(() => leerParametros());
   // Persona con sesión ({ id_usuario, nombre, correo, rol, id_comercio }) o null. Viene de GET /api/user.
   const [usuario, setUsuario] = useState(null);
+  // true hasta que responde GET /api/user (el panel de gestión espera para no mostrar "sin acceso" por un instante).
+  const [cargandoUsuario, setCargandoUsuario] = useState(true);
   const [errorCierre, setErrorCierre] = useState(false);
   // Menú de GET /categorias, compartido por el encabezado y los filtros. Si falla, el menú no se muestra.
   const [categorias, setCategorias] = useState([]);
@@ -80,7 +84,9 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   useEffect(() => {
     let activo = true;
     obtenerUsuario().then((respuesta) => {
-      if (activo && respuesta.ok) setUsuario(respuesta.datos.user);
+      if (!activo) return;
+      if (respuesta.ok) setUsuario(respuesta.datos.user);
+      setCargandoUsuario(false);
     });
     return () => { activo = false; };
   }, []);
@@ -202,7 +208,7 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     navegar('ingresar');
   }
 
-  const portal = useMemo(() => ({ ir: navegar, categorias, usuario, cantidadCarrito }), [categorias, usuario, cantidadCarrito, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
+  const portal = useMemo(() => ({ ir: navegar, categorias, usuario, cargandoUsuario, cantidadCarrito }), [categorias, usuario, cargandoUsuario, cantidadCarrito, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pantallas del portal público (encabezado con buscador y categorías).
   if (!['ingresar', 'crear', 'perfil'].includes(pantalla)) {
@@ -212,6 +218,7 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     else if (pantalla === 'producto') vista = <FichaProductoView key={id} idProducto={id} />;
     else if (pantalla === 'comercio') vista = <FichaComercioView key={id} idComercio={id} criterio={criterio} />;
     else if (pantalla === 'noticia') vista = <NoticiaView key={criterio.slug} slug={criterio.slug} />;
+    else if (pantalla === 'gestion') vista = <GestionView seccion={criterio.seccion} />;
     else vista = <InicioView />;
 
     return <PortalContext.Provider value={portal}>{vista}</PortalContext.Provider>;

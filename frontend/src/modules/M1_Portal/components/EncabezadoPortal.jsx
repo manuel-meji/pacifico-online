@@ -7,7 +7,8 @@ import Imagen from './Imagen';
 // `categorias` es la respuesta de GET /categorias (CategoriaPortal: id_categoria, nombre, icono_url, subcategorias).
 // La validación del término (RN-M1-08) la hace la vista de búsqueda, para mostrar el aviso junto a los resultados.
 // `cantidadCarrito` son las unidades del carrito de M5; con null o 0 no se muestra la insignia.
-export default function EncabezadoPortal({ categorias = [], terminoInicial = '', conSesion = false, cantidadCarrito = null, onInicio, onBuscar, onCategoria, onMiCuenta }) {
+// `onGestion` solo llega para los encargados (comercio o plataforma): muestra el acceso al panel de gestión.
+export default function EncabezadoPortal({ categorias = [], terminoInicial = '', conSesion = false, cantidadCarrito = null, onInicio, onBuscar, onCategoria, onMiCuenta, onGestion = null }) {
   const [termino, setTermino] = useState(terminoInicial);
   const conProductos = Number.isInteger(cantidadCarrito) && cantidadCarrito > 0;
   const etiquetaCarrito = conProductos
@@ -49,6 +50,13 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
           </form>
 
           <nav className="ml-auto flex shrink-0 items-center gap-5 text-sm font-medium text-gray-700 sm:ml-0" aria-label="Cuenta y carrito">
+            {onGestion && (
+              <button type="button" onClick={onGestion} aria-label="Panel de gestión"
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue">
+                <Icono nombre="panel" className="h-5 w-5" />
+                <span className="hidden sm:inline">Gestión</span>
+              </button>
+            )}
             <button type="button" onClick={onMiCuenta} aria-label={conSesion ? 'Mi cuenta' : 'Ingresar'}
               className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue">
               <Icono nombre="usuario" className="h-5 w-5" />
