@@ -4,6 +4,7 @@ use App\Providers\AppServiceProvider;
 use App\Providers\InventarioServiceProvider;
 use App\Providers\M1IntegracionesServiceProvider;
 use App\Providers\M2ComerciosServiceProvider;
+use App\Providers\M3IntegracionesServiceProvider;
 use App\Providers\M4IntegracionesServiceProvider;
 use App\Providers\M5IntegracionesServiceProvider;
 use App\Providers\M6_PagosServiceProvider;
@@ -13,6 +14,7 @@ return [
     AppServiceProvider::class,
     M1IntegracionesServiceProvider::class,
     M2ComerciosServiceProvider::class,
+    M3IntegracionesServiceProvider::class,
     M4IntegracionesServiceProvider::class,
     InventarioServiceProvider::class,
     M5IntegracionesServiceProvider::class,
