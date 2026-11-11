@@ -28,6 +28,11 @@ use Throwable;
  * (M2), disponibilidad Agotado y comprable falso (M4), y en la ficha un
  * ComercioDTO con solo el id_comercio (M2).
  *
+ * Compatible con dos versiones del contrato de M3: la 1.2.x (obtenerProducto,
+ * imagen_principal, moneda; la usa el doble CatalogoFake) y la 1.3.0
+ * (CatalogoConsultasInterface aparte, obtenerDetalleProducto con null,
+ * imagen_principal_url, imágenes como objetos y sin moneda).
+ *
  * Mientras M3 no publique estas operaciones en CatalogoServiceInterface, se
  * llaman con las firmas que el contrato de M1 espera de M3 1.2.0 (las mismas
  * de CatalogoFake); si el servicio real no las tiene, se informa ERR-006.
@@ -37,6 +42,12 @@ class CatalogoClient
     use LlamaProveedor;
 
     private const MAXIMO_POR_PAGINA_M3 = 50;
+
+    /**
+     * Moneda cuando M3 no la envía. El contrato M3 1.3.0 no la incluye en
+     * Producto ni en ProductoResumenBusqueda; la plataforma vende en colones.
+     */
+    private const MONEDA_POR_DEFECTO = 'CRC';
 
     private const RELACIONADOS = 4;
 
@@ -73,7 +84,7 @@ class CatalogoClient
         );
 
         return new ResultadoBusquedaDTO(
-            productos: array_map(fn (array $producto): ProductoResumenDTO => $this->resumen($producto), $respuesta['productos']),
+            productos: $this->resumenes($respuesta['productos']),
             totalResultados: $respuesta['total_resultados'],
             pagina: $respuesta['pagina'],
             porPagina: $respuesta['por_pagina'],
@@ -103,8 +114,8 @@ class CatalogoClient
                 'por_pagina' => count($lote),
             ]));
 
-            foreach ($respuesta['productos'] as $producto) {
-                $encontrados[$producto['id_producto']] = $this->resumen($producto);
+            foreach ($this->resumenes($respuesta['productos']) as $producto) {
+                $encontrados[$producto->idProducto] = $producto;
             }
         }
 
@@ -171,11 +182,21 @@ class CatalogoClient
      */
     public function obtenerProducto(int $idProducto): FichaProductoDTO
     {
+        // Contrato M3 1.2.x: obtenerProducto lanza ERR-004. Contrato M3 1.3.0:
+        // obtenerDetalleProducto devuelve null si no existe o no está visible.
         $producto = $this->llamar(
             'M3',
-            fn (): array => $this->contrato->obtenerProducto($idProducto),
+            fn (): ?array => method_exists($this->contrato, 'obtenerProducto')
+                ? $this->contrato->obtenerProducto($idProducto)
+                : $this->contrato->obtenerDetalleProducto($idProducto),
             $this->traducirNoEncontrado(...),
         );
+
+        if ($producto === null) {
+            throw new RecursoNoEncontradoException('El producto no existe o no está disponible.');
+        }
+
+        $imagenesProducto = $producto['imagenes'] ?? [];
 
         return new FichaProductoDTO(
             idProducto: $producto['id_producto'],
@@ -183,14 +204,16 @@ class CatalogoClient
             descripcion: $producto['descripcion'] ?? null,
             marca: $this->nombreMarca($producto['id_marca'] ?? null),
             videoUrl: $producto['video_url'] ?? null,
-            moneda: $producto['moneda'],
-            imagenes: $producto['imagenes'] ?? [],
+            moneda: $producto['moneda'] ?? self::MONEDA_POR_DEFECTO,
+            imagenes: $this->urlsImagenes($imagenesProducto),
             variaciones: array_map(fn (array $variacion): VariacionDTO => new VariacionDTO(
                 idVariacion: $variacion['id_variacion'],
                 sku: $variacion['sku'],
                 atributos: $variacion['atributos'] ?? [],
                 precio: (float) $variacion['precio'],
-                imagenes: $variacion['imagenes'] ?? [],
+                imagenes: isset($variacion['imagenes'])
+                    ? $this->urlsImagenes($variacion['imagenes'])
+                    : $this->urlsImagenes($imagenesProducto, $variacion['id_variacion']),
                 ventaHabilitada: (bool) $variacion['disponible'],
                 disponibilidad: Disponibilidad::Agotado,
                 comprable: false,
@@ -219,13 +242,14 @@ class CatalogoClient
      */
     public function listarRelacionados(int $idProducto): array
     {
+        // M3 1.3.0 devuelve null si el producto origen no está visible: sin relacionados.
         $relacionados = $this->llamar(
             'M3',
-            fn (): array => $this->contrato->listarRelacionados($idProducto, self::RELACIONADOS),
+            fn (): ?array => $this->contrato->listarRelacionados($idProducto, self::RELACIONADOS),
             $this->traducirNoEncontrado(...),
         );
 
-        return array_map(fn (array $producto): ProductoResumenDTO => $this->resumen($producto), $relacionados);
+        return $this->resumenes($relacionados ?? []);
     }
 
     /**
@@ -255,6 +279,51 @@ class CatalogoClient
     }
 
     /**
+     * Resúmenes de M3 en el mismo orden. Se omiten los que no tienen precio
+     * (M3 1.3.0 envía precio_desde null si ninguna variación está disponible),
+     * para no mostrar productos a precio cero.
+     *
+     * @param  list<array<string, mixed>>  $productos
+     * @return list<ProductoResumenDTO>
+     */
+    private function resumenes(array $productos): array
+    {
+        return array_values(array_map(
+            fn (array $producto): ProductoResumenDTO => $this->resumen($producto),
+            array_filter($productos, fn (array $producto): bool => isset($producto['precio_desde'])),
+        ));
+    }
+
+    /**
+     * URLs de las imágenes. Acepta la lista de URLs (M3 1.2.x) o la de objetos
+     * con imagen_url, orden e id_variacion (M3 1.3.0). Con $idVariacion, solo
+     * las de esa variación.
+     *
+     * @param  list<string|array<string, mixed>>  $imagenes
+     * @return list<string>
+     */
+    private function urlsImagenes(array $imagenes, ?int $idVariacion = null): array
+    {
+        $urls = [];
+
+        foreach ($imagenes as $imagen) {
+            if (is_string($imagen)) {
+                if ($idVariacion === null) {
+                    $urls[] = $imagen;
+                }
+            } elseif (is_array($imagen) && is_string($imagen['imagen_url'] ?? null)
+                && ($idVariacion === null || ($imagen['id_variacion'] ?? null) === $idVariacion)) {
+                $urls[] = $imagen['imagen_url'];
+            }
+        }
+
+        return $urls;
+    }
+
+    /**
+     * Acepta ProductoResumen de M3 1.2.x (imagen_principal, moneda) y
+     * ProductoResumenBusqueda de M3 1.3.0 (imagen_principal_url, sin moneda).
+     *
      * @param  array<string, mixed>  $producto  Resultado de búsqueda de M3.
      */
     private function resumen(array $producto): ProductoResumenDTO
@@ -268,10 +337,10 @@ class CatalogoClient
             idProducto: $producto['id_producto'],
             idComercio: $producto['id_comercio'],
             nombre: $producto['nombre'],
-            imagenPrincipal: $producto['imagen_principal'] ?? null,
+            imagenPrincipal: $producto['imagen_principal'] ?? $producto['imagen_principal_url'] ?? null,
             precio: $precio,
             precioHasta: $precioHasta,
-            moneda: $producto['moneda'],
+            moneda: $producto['moneda'] ?? self::MONEDA_POR_DEFECTO,
             nombreComercio: '',
             disponibilidad: Disponibilidad::Agotado,
         );
