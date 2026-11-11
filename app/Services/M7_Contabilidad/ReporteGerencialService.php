@@ -45,7 +45,7 @@ final class ReporteGerencialService
             ->whereIn('a.tipo', ['VENTA', 'COSTO_VENTA'])
             ->whereDate('a.fecha', '>=', $fechaDesde)
             ->whereDate('a.fecha', '<=', $fechaHasta)
-            ->selectRaw("TO_CHAR(a.fecha, 'YYYY-MM') AS periodo")
+            ->selectRaw("SUBSTR(CAST(a.fecha AS TEXT), 1, 7) AS periodo")
             ->selectRaw("
                 SUM(
                     CASE
@@ -64,7 +64,7 @@ final class ReporteGerencialService
                     END
                 ) AS costos
             ")
-            ->groupByRaw("TO_CHAR(a.fecha, 'YYYY-MM')")
+            ->groupByRaw("SUBSTR(CAST(a.fecha AS TEXT), 1, 7)")
             ->orderBy('periodo')
             ->get();
 
