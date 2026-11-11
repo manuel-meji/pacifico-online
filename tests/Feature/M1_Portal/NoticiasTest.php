@@ -169,6 +169,24 @@ class NoticiasTest extends PruebaM1
         $this->getJson(route('api.m1.v1.noticias.mostrar', 'feria-navidena-en-liberia'))->assertNotFound();
     }
 
+    public function test_las_fechas_con_hora_de_costa_rica_se_guardan_en_el_instante_correcto(): void
+    {
+        // AHORA es 12:00 UTC (6:00 en Costa Rica). Se publica a las 7:00 de Costa Rica, o sea 13:00 UTC.
+        $id = $this->crear(['fecha_fin' => '2026-11-30T18:00:00-06:00'])
+            ->assertCreated()
+            ->assertJsonPath('fecha_fin', '2026-12-01T00:00:00+00:00')
+            ->json('id_noticia');
+
+        $this->comoAdministracion()->postJson(route('api.m1.v1.administracion.noticias.publicar', $id), ['fecha_publicacion' => '2026-11-10T07:00:00-06:00'])
+            ->assertOk()
+            ->assertJsonPath('fecha_publicacion', '2026-11-10T13:00:00+00:00')
+            ->assertJsonPath('visible_en_portal', false);
+        $this->app['auth']->forgetGuards();
+
+        Carbon::setTestNow('2026-11-10 13:00:00');
+        $this->getJson(route('api.m1.v1.noticias'))->assertJsonPath('total', 1);
+    }
+
     public function test_la_paginacion_invalida_responde_422(): void
     {
         $this->getJson(route('api.m1.v1.noticias', ['por_pagina' => 51, 'pagina' => 'abc']))
