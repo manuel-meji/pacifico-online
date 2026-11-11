@@ -15,7 +15,10 @@ export default function CarritoPage({
   const vaciando = pendientes?.has('vaciar') ?? false;
   const cerrarModalVaciar = useCallback(() => setConfirmandoVaciar(false), []);
 
-  const demo = <AgregarProductoDemo ocupado={pendientes?.has('agregar')} aviso={avisoDemo} onAgregar={onAgregar} />;
+  const esModoDemo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('demo');
+  const demo = esModoDemo ? (
+    <AgregarProductoDemo ocupado={pendientes?.has('agregar')} aviso={avisoDemo} onAgregar={onAgregar} />
+  ) : null;
 
   if (cargando) {
     return (
@@ -59,10 +62,20 @@ export default function CarritoPage({
         <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
           {aviso && <Alerta tipo={aviso.tipo} titulo={aviso.titulo}>{aviso.texto}</Alerta>}
           {demo}
-          <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-8 sm:p-12 max-w-md mx-auto text-center">
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-8 sm:p-12 max-w-md mx-auto text-center space-y-4">
             <ShoppingCart className="w-16 h-16 stroke-1 text-gray-300 mx-auto" aria-hidden="true" />
-            <p className="mt-4 text-xl font-bold text-gray-800">Su carrito está vacío</p>
-            <p className="mt-1 text-sm text-gray-500">No ha agregado productos a su carrito de compras.</p>
+            <div>
+              <p className="text-xl font-bold text-gray-800">Su carrito está vacío</p>
+              <p className="mt-1 text-sm text-gray-500">No ha agregado productos a su carrito de compras.</p>
+            </div>
+            <div>
+              <a
+                href="/app.html"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brandDarkBlue hover:bg-brandBlue text-white font-semibold px-5 py-2.5 transition text-sm shadow-xs cursor-pointer"
+              >
+                Explorar productos en la tienda
+              </a>
+            </div>
           </div>
         </main>
       </>
@@ -150,7 +163,7 @@ export default function CarritoPage({
                 onClick={onContinuar}
                 className="w-full text-base py-3"
               >
-                Proceder al checkout
+                Proceder al pago
               </Boton>
 
               {hayBloqueo && (

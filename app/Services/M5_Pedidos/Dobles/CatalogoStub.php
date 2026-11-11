@@ -3,6 +3,7 @@
 namespace App\Services\M5_Pedidos\Dobles;
 
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
+use App\Services\M1_Portal\Dobles\DatosPrueba;
 
 /**
  * Doble de prueba formal (Stub) para M3 Catálogo y Productos.
@@ -85,6 +86,31 @@ class CatalogoStub implements CatalogoServiceInterface
 
         if ($inexistente) {
             throw ErrorProveedorException::noEncontrado('Variación inexistente o no disponible');
+        }
+
+        // Si la variación existe en el conjunto de DatosPrueba del portal (M1/M3), usar sus datos reales
+        $datosPortal = DatosPrueba::buscarVariacion($variacionId);
+        if ($this->idComercio === null && $datosPortal !== null) {
+            ['producto' => $producto, 'variacion' => $variacion] = $datosPortal;
+            $nombreVar = ! empty($variacion['atributos'])
+                ? ($producto['nombre'].' - '.implode(', ', array_column($variacion['atributos'], 'valor')))
+                : $producto['nombre'];
+
+            return [
+                'id_variacion' => $variacionId,
+                'id_producto' => (int) $producto['id_producto'],
+                'nombre' => $nombreVar,
+                'sku' => $variacion['sku'] ?? ('SKU-VAR-'.$variacionId),
+                'imagen' => $this->imagen ?: ($producto['imagenes'][0] ?? ''),
+                'precio' => (float) ($variacion['precio'] ?? 10000.00),
+                'tarifa_impuesto' => 13.00,
+                'id_comercio' => (int) ($producto['id_comercio'] ?? 35),
+                'producto' => [
+                    'id_producto' => (int) $producto['id_producto'],
+                    'id_comercio' => (int) ($producto['id_comercio'] ?? 35),
+                    'nombre' => $producto['nombre'],
+                ],
+            ];
         }
 
         if ($this->idComercio === null && $variacionId === 2) {
