@@ -26,6 +26,7 @@
         <env name="DB_CONNECTION" force="true" value="sqlite"/>
         <env name="DB_DATABASE" force="true" value=":memory:"/>
         <env name="DB_URL" force="true" value=""/>
+        <env name="M2_DISCO_IMAGENES" force="true" value="public"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

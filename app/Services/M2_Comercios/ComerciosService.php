@@ -33,6 +33,7 @@ use App\Services\M2_Comercios\Comision\CalculoPorcentaje;
 use App\Services\Nucleo\ContextoComercio;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -411,13 +412,13 @@ class ComerciosService implements ComerciosServiceInterface
             'id_comercio' => $idComercio,
         ]);
 
-        $ruta = Storage::disk('public')->putFile(
+        $ruta = $this->discoImagenes()->putFile(
             "m2/comercios/{$idComercio}/logotipo",
             $archivo
         );
 
         $micrositio->cambiarLogotipo(
-            Storage::disk('public')->url($ruta)
+            $this->discoImagenes()->url($ruta)
         );
 
         return $micrositio;
@@ -598,7 +599,7 @@ class ComerciosService implements ComerciosServiceInterface
                     isset($datos['imagen'])
                     && $datos['imagen'] instanceof UploadedFile
                 ) {
-                    $rutaNueva = Storage::disk('public')->putFile(
+                    $rutaNueva = $this->discoImagenes()->putFile(
                         "m2/comercios/{$idComercio}/banners",
                         $datos['imagen']
                     );
@@ -607,7 +608,7 @@ class ComerciosService implements ComerciosServiceInterface
                         $rutasEliminar[] = $ruta;
                     }
 
-                    $ruta = Storage::disk('public')->url($rutaNueva);
+                    $ruta = $this->discoImagenes()->url($rutaNueva);
                 }
 
                 if ($ruta === null) {
@@ -695,7 +696,7 @@ class ComerciosService implements ComerciosServiceInterface
                     isset($datos['imagen'])
                     && $datos['imagen'] instanceof UploadedFile
                 ) {
-                    $rutaNueva = Storage::disk('public')->putFile(
+                    $rutaNueva = $this->discoImagenes()->putFile(
                         "m2/comercios/{$idComercio}/galeria",
                         $datos['imagen']
                     );
@@ -704,7 +705,7 @@ class ComerciosService implements ComerciosServiceInterface
                         $rutasEliminar[] = $ruta;
                     }
 
-                    $ruta = Storage::disk('public')->url($rutaNueva);
+                    $ruta = $this->discoImagenes()->url($rutaNueva);
                 }
 
                 if ($ruta === null) {
@@ -1190,6 +1191,132 @@ class ComerciosService implements ComerciosServiceInterface
         ];
     }
 
+    // --- Destacar comercios: publicidad del comercio (Diego) ---
+
+    /**
+     * Destacar un comercio por 7, 15 o 30 días. Si la solicita el encargado del comercio
+     * queda Pendiente hasta que la plataforma la apruebe; si la crea la plataforma queda
+     * Aprobada de inmediato (destacado por cuenta de la plataforma, sin costo).
+     */
+    public function solicitarPublicidad(int $idComercio, int $dias, bool $porPlataforma): PublicidadComercio
+    {
+        $this->exigirDiasDePublicidad($dias);
+
+        return DB::transaction(function () use ($idComercio, $dias, $porPlataforma): PublicidadComercio {
+            $comercio = Comercio::query()->lockForUpdate()->find($idComercio)
+                ?? throw $this->noEncontrado('El comercio no existe.');
+
+            if (! $comercio->estaActivo()) {
+                $this->exigirValidos(['estado' => ['Solo se puede destacar un comercio Activo.']]);
+            }
+            if (! $porPlataforma && $comercio->publicidades()->where('estado', PublicidadComercio::PENDIENTE)->exists()) {
+                $this->exigirValidos(['dias' => ['Ya tenés una solicitud de destacado pendiente de revisión.']]);
+            }
+
+            $publicidad = $comercio->publicidades()->create([
+                'ubicacion' => 'portada',
+                'inicio' => now()->toDateString(),
+                'fin' => now()->addDays($dias - 1)->toDateString(),
+                'activa' => true,
+                'estado' => $porPlataforma ? PublicidadComercio::APROBADA : PublicidadComercio::PENDIENTE,
+                'dias_solicitados' => $dias,
+            ]);
+
+            if ($porPlataforma) {
+                $this->nucleo->registrarAuditoria('destacar_comercio', 'publicidad_comercio', $publicidad->id_publicidad_comercio, [
+                    'modulo' => 'M2', 'id_comercio' => $comercio->id_comercio, 'dias' => $dias,
+                ]);
+            }
+
+            return $publicidad;
+        });
+    }
+
+    /**
+     * Diseño (tabla 4.1): la plataforma aprueba o rechaza una solicitud de destacado.
+     * Al aprobar, el periodo empieza el día de la aprobación.
+     */
+    public function gestionarPublicidad(int $idPublicidad, string $accion): PublicidadComercio
+    {
+        if (! in_array($accion, ['aprobar', 'rechazar'], true)) {
+            $this->exigirValidos(['accion' => ['La acción debe ser aprobar o rechazar.']]);
+        }
+
+        return DB::transaction(function () use ($idPublicidad, $accion): PublicidadComercio {
+            $publicidad = PublicidadComercio::query()->lockForUpdate()->find($idPublicidad)
+                ?? throw $this->noEncontrado('La solicitud de destacado no existe.');
+
+            if (! $publicidad->estaPendiente()) {
+                $this->exigirValidos(['estado' => ['La solicitud de destacado ya fue revisada.']]);
+            }
+
+            if ($accion === 'aprobar') {
+                $dias = $publicidad->dias_solicitados ?? 7;
+                $publicidad->fill([
+                    'estado' => PublicidadComercio::APROBADA,
+                    'inicio' => now()->toDateString(),
+                    'fin' => now()->addDays($dias - 1)->toDateString(),
+                ]);
+            } else {
+                $publicidad->fill(['estado' => PublicidadComercio::RECHAZADA, 'activa' => false]);
+            }
+            $publicidad->save();
+
+            $this->nucleo->registrarAuditoria($accion.'_destacado_comercio', 'publicidad_comercio', $publicidad->id_publicidad_comercio, [
+                'modulo' => 'M2', 'id_comercio' => $publicidad->id_comercio,
+            ]);
+
+            return $publicidad;
+        });
+    }
+
+    /** Publicidades de un comercio, la más reciente primero. */
+    public function listarPublicidadComercio(int $idComercio): array
+    {
+        $comercio = $this->buscar($idComercio);
+
+        return [
+            'id_comercio' => $comercio->id_comercio,
+            'destacado' => $comercio->publicidades()->vigentes()->exists(),
+            'publicidades' => $comercio->publicidades()->orderByDesc('id_publicidad_comercio')->get()
+                ->map(fn (PublicidadComercio $p): array => $this->datosPublicidad($p))->values()->all(),
+        ];
+    }
+
+    /** Solicitudes de destacado que esperan revisión de la plataforma. */
+    public function listarPublicidadPendiente(): array
+    {
+        return [
+            'publicidades' => PublicidadComercio::query()->with('comercio')
+                ->where('estado', PublicidadComercio::PENDIENTE)
+                ->orderBy('id_publicidad_comercio')->get()
+                ->map(fn (PublicidadComercio $p): array => $this->datosPublicidad($p) + [
+                    'nombre_comercial' => $p->comercio?->nombre_comercial,
+                ])->values()->all(),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function datosPublicidad(PublicidadComercio $p): array
+    {
+        return [
+            'id_publicidad_comercio' => $p->id_publicidad_comercio,
+            'id_comercio' => $p->id_comercio,
+            'estado' => $p->estado ?? PublicidadComercio::APROBADA,
+            'dias_solicitados' => $p->dias_solicitados,
+            'inicio' => $p->inicio?->toDateString(),
+            'fin' => $p->fin?->toDateString(),
+            'vigente' => $p->estaVigente(),
+        ];
+    }
+
+    private function exigirDiasDePublicidad(int $dias): void
+    {
+        if (! in_array($dias, PublicidadComercio::DIAS_PERMITIDOS, true)) {
+            $this->exigirValidos(['dias' => ['El periodo debe ser de 7, 15 o 30 días.']]);
+        }
+    }
+
     private function noEncontrado(string $mensaje): ErrorNucleoException
     {
         return ErrorNucleoException::paraModulo(self::MODULO, 'ERR-004', 404, $mensaje);
@@ -1209,6 +1336,12 @@ class ComerciosService implements ComerciosServiceInterface
         }
     }
 
+    /** Disco de logotipos, banners y galería (config/m2.php): local o Supabase Storage. */
+    private function discoImagenes(): FilesystemAdapter
+    {
+        return Storage::disk(config('m2.disco_imagenes', 'public'));
+    }
+
     private function eliminarArchivoPublico(?string $ruta): void
     {
         if ($ruta === null || $ruta === '') {
@@ -1221,13 +1354,14 @@ class ComerciosService implements ComerciosServiceInterface
             return;
         }
 
-        $path = ltrim($path, '/');
-
-        if (str_starts_with($path, 'storage/')) {
-            $path = substr($path, strlen('storage/'));
+        // Sirve para el disco local (/storage/m2/...) y para Supabase Storage
+        // (/storage/v1/object/public/<bucket>/m2/...): todo lo de M2 cuelga de m2/.
+        $inicio = strpos($path, 'm2/');
+        if ($inicio === false) {
+            return;
         }
 
-        Storage::disk('public')->delete($path);
+        $this->discoImagenes()->delete(substr($path, $inicio));
     }
 
     // --- Comisión del subpedido, Ds-03 (Josefh) ---

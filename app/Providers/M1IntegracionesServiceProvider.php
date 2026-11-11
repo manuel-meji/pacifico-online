@@ -15,6 +15,7 @@ use App\Events\M4_Inventario\ExistenciaRepuesta;
 use App\Listeners\M1_Portal\EventosComercioListener;
 use App\Listeners\M1_Portal\EventosExistenciaListener;
 use App\Services\M1_Portal\ComercialPortalService;
+use App\Services\M1_Portal\Integraciones\CachePortal;
 use App\Services\M1_Portal\Integraciones\CarritoClient;
 use App\Services\M1_Portal\Integraciones\CatalogoClient;
 use App\Services\M1_Portal\Integraciones\ComercioClient;
@@ -22,6 +23,7 @@ use App\Services\M1_Portal\Integraciones\InventarioClient;
 use App\Services\M1_Portal\PortalPublicoService;
 use App\Services\M1_Portal\PortalService;
 use App\Services\M1_Portal\ResolvedorCliente;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -87,6 +89,17 @@ class M1IntegracionesServiceProvider extends ServiceProvider
         // destacados para quien liquida al comercio. Va en una interfaz aparte
         // para no obligar a los dobles de PortalPublicoContract a cambiar.
         $this->app->bind(ComercialPortalContract::class, ComercialPortalService::class);
+
+        // Caché del portal (RNF-M1-06, máximo 5 s): si la caché por defecto es
+        // la base de datos compartida, M1 usa archivos locales. Cada lectura de
+        // la caché en la base costaba dos consultas a Supabase (≈ 170 ms cada
+        // una) y la escritura otra, así que la caché hacía más lento el portal.
+        // Con otra caché por defecto (array en pruebas, redis, etc.) se usa esa.
+        $this->app->when(CachePortal::class)
+            ->needs(Repository::class)
+            ->give(fn (Application $app): Repository => $app['cache']->store(
+                $app['config']->get('cache.default') === 'database' ? 'file' : null,
+            ));
 
         // Lo que pide el middleware EstablecerCliente del núcleo para fijar el
         // ámbito de cliente de la petición (tareas 18 y 23 del PC4). Solo tiene

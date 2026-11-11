@@ -87,7 +87,7 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
 
   // Unidades del carrito de M5 para la insignia del encabezado. Solo se consulta con sesión de cliente
   // (sin sesión M5 no tiene a quién asociar el carrito). Se refresca al cambiar de pantalla y al volver
-  // a la pestaña, por ejemplo después de agregar productos en el carrito de M5 (app.html).
+  // a la pestaña, por ejemplo después de agregar productos en el carrito de M5 (carrito.html).
   const [cantidadCarrito, setCantidadCarrito] = useState(null);
   const esCliente = usuario?.rol === 'cliente';
 

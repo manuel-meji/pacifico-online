@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Ban, Check, CircleX, CreditCard, History, LoaderCircle, MapPin, Minus, Package, RefreshCw, Store, Truck,
+  ArrowLeft, Ban, Check, CircleX, CreditCard, History, LoaderCircle, MapPin, Minus, Package, RefreshCw, RotateCcw, Store, Truck,
 } from 'lucide-react';
 import { nombreComercio, nombreVariacion } from '../services/nombres';
 import { Alerta, Boton, Encabezado, Total } from '../components/componentes';
 import PasarelaPagoSimulada, { esPasarelaSimulada } from '../components/PasarelaPagoSimulada';
 import { colones } from '../services/calculos';
 import { etiquetaEstado, formatearFecha } from '../services/estados';
-import { cancelarPedido, obtenerPedido } from '../services/m5Api';
+import { cancelarPedido, obtenerPedido, solicitarDevolucionSubpedido } from '../services/m5Api';
 import { EtiquetaEstado } from './MisPedidosView';
 
 // Los montos llegan como texto decimal ("35400.00") por los casts del modelo.
@@ -146,7 +146,100 @@ function TarjetaSubpedido({ subpedido, numero, historial }) {
           <dt className="font-bold">Total del subpedido</dt><dd className="font-extrabold">{monto(subpedido.total)}</dd>
         </div>
       </dl>
+
+      {normalizar(subpedido.estado_subpedido) === 'entregado' && (
+        <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+          <span className="text-xs text-gray-500">¿Problemas con el producto recibido?</span>
+          <button
+            type="button"
+            onClick={() => onSolicitarDevolucion?.(subpedido)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" /> Solicitar devolución
+          </button>
+        </div>
+      )}
     </section>
+  );
+}
+
+function ModalDevolucion({ subpedido, ocupado, error, onConfirmar, onCerrar }) {
+  const [motivo, setMotivo] = useState('');
+  const [intentado, setIntentado] = useState(false);
+  const campoRef = useRef(null);
+
+  useEffect(() => {
+    if (!subpedido) return undefined;
+    setMotivo('');
+    setIntentado(false);
+    campoRef.current?.focus();
+    return undefined;
+  }, [subpedido]);
+
+  useEffect(() => {
+    if (!subpedido) return undefined;
+    const alTeclear = (e) => { if (e.key === 'Escape' && !ocupado) onCerrar(); };
+    document.addEventListener('keydown', alTeclear);
+    return () => document.removeEventListener('keydown', alTeclear);
+  }, [subpedido, ocupado, onCerrar]);
+
+  if (!subpedido) return null;
+  const vacio = motivo.trim() === '';
+
+  function enviar(e) {
+    e.preventDefault();
+    setIntentado(true);
+    if (vacio || ocupado) return;
+    onConfirmar(motivo.trim());
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+      <form onSubmit={enviar} noValidate role="dialog" aria-modal="true" aria-labelledby="devolucion-titulo"
+        className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-xl space-y-4">
+        <div>
+          <h2 id="devolucion-titulo" className="text-base font-bold text-gray-900">
+            Solicitar devolución · Subpedido #{subpedido.id_subpedido}
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Indique la razón de la devolución (producto defectuoso, artículo incorrecto, etc.). Se registrará la solicitud formal y se solicitará el reembolso correspondiente a Pagos.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="motivo-devolucion" className="text-xs font-medium text-gray-600 block mb-1">Motivo detallado (obligatorio)</label>
+          <textarea
+            ref={campoRef}
+            id="motivo-devolucion"
+            rows={3}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            disabled={ocupado}
+            placeholder="Ejemplo: El producto llegó con daño físico o no corresponde con la talla solicitada."
+            aria-invalid={intentado && vacio}
+            aria-describedby={intentado && vacio ? 'motivo-dev-error' : undefined}
+            className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-hidden ${
+              intentado && vacio ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-brandBlue'
+            }`}
+          />
+          {intentado && vacio && <p id="motivo-dev-error" role="alert" className="mt-1 text-xs text-red-600">Indique el motivo de la devolución.</p>}
+        </div>
+
+        {error && <Alerta tipo="error" titulo="No se pudo procesar la solicitud">{error}</Alerta>}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onCerrar} disabled={ocupado}
+            className="min-h-11 px-4 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-semibold transition cursor-pointer disabled:opacity-50">
+            Volver
+          </button>
+          <button type="submit" disabled={ocupado}
+            className="min-h-11 px-5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70">
+            {ocupado ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /> : <RotateCcw className="w-4 h-4" aria-hidden="true" />}
+            {ocupado ? 'Enviando…' : 'Confirmar devolución'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -244,6 +337,11 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
   const cancelandoRef = useRef(false);
   const [pasarelaAbierta, setPasarelaAbierta] = useState(false);
 
+  // Devolución de subpedidos
+  const [subpedidoDevolucion, setSubpedidoDevolucion] = useState(null);
+  const [devolviendo, setDevolviendo] = useState(false);
+  const [errorDevolucion, setErrorDevolucion] = useState(null);
+
   useEffect(() => {
     let vigente = true;
     setCargando(true);
@@ -291,6 +389,25 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
     } finally {
       cancelandoRef.current = false;
       setCancelando(false);
+    }
+  }
+
+  async function confirmarDevolucion(motivo) {
+    if (!subpedidoDevolucion || devolviendo) return;
+    setDevolviendo(true);
+    setErrorDevolucion(null);
+    try {
+      await solicitarDevolucionSubpedido(subpedidoDevolucion.id_subpedido, { motivo });
+      setSubpedidoDevolucion(null);
+      setExito({
+        titulo: 'Devolución solicitada',
+        texto: `Se registró la solicitud de devolución del subpedido #${subpedidoDevolucion.id_subpedido}. Se solicitará el reembolso a Pagos.`,
+      });
+      setIntento((n) => n + 1);
+    } catch (e) {
+      setErrorDevolucion(`${e.mensaje || e.message}${e.codigo ? ` (${e.codigo})` : ''}`);
+    } finally {
+      setDevolviendo(false);
     }
   }
 
@@ -389,7 +506,18 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
         {/* Subpedidos */}
         <div className="space-y-4">
           <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Subpedidos por comercio</h2>
-          {subpedidos.map((s, n) => <TarjetaSubpedido key={s.id_subpedido} subpedido={s} numero={n + 1} historial={historial} />)}
+          {subpedidos.map((s, n) => (
+            <TarjetaSubpedido
+              key={s.id_subpedido}
+              subpedido={s}
+              numero={n + 1}
+              historial={historial}
+              onSolicitarDevolucion={(sub) => {
+                setErrorDevolucion(null);
+                setSubpedidoDevolucion(sub);
+              }}
+            />
+          ))}
         </div>
 
         {/* Historial de estados */}
@@ -426,6 +554,14 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
         error={errorCancelar}
         onConfirmar={confirmarCancelacion}
         onCerrar={cerrarModal}
+      />
+
+      <ModalDevolucion
+        subpedido={subpedidoDevolucion}
+        ocupado={devolviendo}
+        error={errorDevolucion}
+        onConfirmar={confirmarDevolucion}
+        onCerrar={() => setSubpedidoDevolucion(null)}
       />
 
       <PasarelaPagoSimulada
