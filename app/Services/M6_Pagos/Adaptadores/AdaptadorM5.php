@@ -13,13 +13,18 @@ use App\Models\M6_Pagos\EstadoPago;
 use App\Services\M6_Pagos\Clients\PedidoClient;
 use App\Services\M6_Pagos\Clients\PedidoDTO;
 use App\Services\M6_Pagos\Clients\SubpedidoDTO;
+use Closure;
 use RuntimeException;
 
 final class AdaptadorM5 implements PedidoClient
 {
+    /**
+     * Acepta el servicio o una función que lo crea. La función se ejecuta la primera vez
+     * que se necesita, no al construir el adaptador (evita la dependencia circular M5 <-> M6).
+     */
     public function __construct(
-        private readonly GestionPedidosServiceInterface $gestion,
-        private readonly PedidosServiceInterface $pedidos,
+        private GestionPedidosServiceInterface|Closure $gestion,
+        private PedidosServiceInterface|Closure $pedidos,
     ) {}
 
     public function consultarEstadoPedido(int $idPedido): string
@@ -55,7 +60,7 @@ final class AdaptadorM5 implements PedidoClient
             return;
         }
 
-        if (! $this->pedidos->marcarComoPagado($idPedido, "pago-{$idPago}")) {
+        if (! $this->pedidosM5()->marcarComoPagado($idPedido, "pago-{$idPago}")) {
             throw new RuntimeException("M5 no pudo marcar el pedido {$idPedido} como pagado.");
         }
     }
@@ -64,7 +69,7 @@ final class AdaptadorM5 implements PedidoClient
     private function pedido(int $idPedido): array
     {
         try {
-            return $this->gestion->obtenerPedido($idPedido);
+            $pedido = $this->gestionM5()->obtenerPedido($idPedido);
         } catch (ErrorNucleoException $e) {
             if ($e->codigo === 'ERR-004') {
                 throw ErrorContratoException::de(CodigoErrorM6::PedidoNoEncontrado);
@@ -72,5 +77,31 @@ final class AdaptadorM5 implements PedidoClient
 
             throw $e;
         }
+
+        // M5 devuelve un pedido de relleno (sin fecha de creación real ni historial) cuando
+        // el id no existe en la base; un pedido real siempre trae "historial_estados".
+        if (! array_key_exists('historial_estados', $pedido)) {
+            throw ErrorContratoException::de(CodigoErrorM6::PedidoNoEncontrado);
+        }
+
+        return $pedido;
+    }
+
+    private function gestionM5(): GestionPedidosServiceInterface
+    {
+        if ($this->gestion instanceof Closure) {
+            $this->gestion = ($this->gestion)();
+        }
+
+        return $this->gestion;
+    }
+
+    private function pedidosM5(): PedidosServiceInterface
+    {
+        if ($this->pedidos instanceof Closure) {
+            $this->pedidos = ($this->pedidos)();
+        }
+
+        return $this->pedidos;
     }
 }

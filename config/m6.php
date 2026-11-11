@@ -17,6 +17,13 @@
 return [
 
     'usar_dobles' => (bool) env('M6_USAR_DOBLES', true),
+    // Sobrescribe M6_USAR_DOBLES por módulo. Si la variable no existe vale null y se usa la global.
+    'doble_por_modulo' => [
+        'm1' => env('M6_M1_DOBLE'),
+        'm2' => env('M6_M2_DOBLE'),
+        'm5' => env('M6_M5_DOBLE'),
+        'm7' => env('M6_M7_DOBLE'),
+    ],
 
     'confirmacion_inmediata' => (bool) env('M6_CONFIRMACION_INMEDIATA', true),
 

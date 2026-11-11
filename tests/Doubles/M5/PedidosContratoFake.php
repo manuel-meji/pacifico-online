@@ -102,6 +102,7 @@ final class PedidosContratoFake implements GestionPedidosServiceInterface, Pedid
             'monto_total' => $total,
             'estado_pedido' => $estado,
             'subpedidos' => $subpedidos,
+            'historial_estados' => [],
         ];
     }
 
