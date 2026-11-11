@@ -2,17 +2,13 @@
 
 namespace Tests\Doubles\M3_Catalogo;
 
+use App\Exceptions\M3_Catalogo\ErrorCatalogoException;
+
+/** Simula que M2 no responde (ERR-006, 503). */
 class ComerciosNoDisponible extends ComerciosStub
 {
-    public function obtenerMicrositio(int $comercioId): array
+    public function obtenerComercioActivo(int $idComercio): array
     {
-        throw ErrorProveedorException::noDisponible('M2');
-    }
-
-    public function registrarComision(
-        int $pedidoId,
-        float $subtotalPedido
-    ): bool {
-        throw ErrorProveedorException::noDisponible('M2');
+        throw ErrorCatalogoException::proveedorNoDisponible('M2');
     }
 }

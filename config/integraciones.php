@@ -4,6 +4,7 @@ use App\Services\M1_Portal\Dobles\CarritoFake;
 use App\Services\M1_Portal\Dobles\CatalogoFake;
 use App\Services\M1_Portal\Dobles\ComerciosStub;
 use App\Services\M1_Portal\Dobles\InventarioStub;
+use App\Services\M3_Catalogo\Dobles\ComerciosStub as M3ComerciosStub;
 use App\Services\M4_Inventario\Dobles\AutorizacionesStub as M4AutorizacionesStub;
 use App\Services\M4_Inventario\Dobles\CatalogoStub as M4CatalogoStub;
 use App\Services\M4_Inventario\Dobles\ComerciosStub as M4ComerciosStub;
@@ -38,6 +39,7 @@ return [
             'modo' => env('M1_M3_MODO', 'doble'),
             'doble' => CatalogoFake::class,
         ],
+        
         'm4' => [
             'modo' => env('M1_M4_MODO', 'doble'),
             'doble' => InventarioStub::class,
@@ -62,6 +64,18 @@ return [
         ],
     ],
 
+  /*
+    |--------------------------------------------------------------------------
+    | Dependencias de M3 Catálogo
+    |--------------------------------------------------------------------------
+    */
+
+    'm3' => [
+        'm2' => [
+            'modo' => env('M3_M2_MODO', 'doble'),
+            'doble' => M3ComerciosStub::class,
+        ],
+    ],
     /*
     |--------------------------------------------------------------------------
     | Dependencias de M4 Inventario multiempresa
