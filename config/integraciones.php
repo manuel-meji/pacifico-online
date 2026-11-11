@@ -39,7 +39,7 @@ return [
             'modo' => env('M1_M3_MODO', 'doble'),
             'doble' => CatalogoFake::class,
         ],
-        
+
         'm4' => [
             'modo' => env('M1_M4_MODO', 'doble'),
             'doble' => InventarioStub::class,
@@ -64,7 +64,7 @@ return [
         ],
     ],
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Dependencias de M3 Catálogo
     |--------------------------------------------------------------------------
@@ -207,7 +207,7 @@ return [
             'doble' => M5PortalStub::class,
         ],
         'm2' => [
-            'modo' => env('M5_M2_MODO', 'doble'),
+            'modo' => env('M5_M2_MODO', env('APP_ENV') === 'testing' ? 'doble' : 'real'),
             'doble' => M5ComerciosStub::class,
         ],
         'm3' => [

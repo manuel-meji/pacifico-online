@@ -93,8 +93,8 @@ export const eliminarItem = (idItemCarrito, idCliente = ID_CLIENTE_POR_DEFECTO) 
 
 // ---------- Pedidos ----------
 
-export const listarPedidos = ({ estado_pedido, pagina, por_pagina } = {}, idCliente = ID_CLIENTE_POR_DEFECTO) =>
-  llamar(armarRuta('/pedidos', idCliente, { estado_pedido, pagina, por_pagina }));
+export const listarPedidos = ({ estado_pedido, pagina, por_pagina, id_comercio, modo_comercio } = {}, idCliente = ID_CLIENTE_POR_DEFECTO) =>
+  llamar(armarRuta('/pedidos', idCliente, { estado_pedido, pagina, por_pagina, id_comercio, modo_comercio }));
 
 // datos: { id_direccion_cliente, medio_pago, cupon_descuento, tarjeta_regalo, nota }
 export const crearPedido = (datos = {}, idCliente = ID_CLIENTE_POR_DEFECTO) =>
@@ -117,6 +117,9 @@ export const confirmarPago = (idPedido, referenciaPago, idCliente = ID_CLIENTE_P
   });
 
 // ---------- Subpedidos ----------
+
+export const prepararSubpedido = (idSubpedido, idCliente = ID_CLIENTE_POR_DEFECTO) =>
+  llamar(armarRuta(`/subpedidos/${idSubpedido}/preparar`, idCliente), { method: 'POST' });
 
 export const despacharSubpedido = (idSubpedido, { guia_transporte = null } = {}, idCliente = ID_CLIENTE_POR_DEFECTO) =>
   llamar(armarRuta(`/subpedidos/${idSubpedido}/despachar`, idCliente), {

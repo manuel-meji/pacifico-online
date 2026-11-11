@@ -231,7 +231,10 @@ class Subpedido extends Model
             return;
         }
 
-        $maestro = $this->pedidoMaestro()->with('subpedidos')->first();
+        $maestro = $this->pedidoMaestro()
+            ->withoutGlobalScope('cliente')
+            ->with(['subpedidos' => fn ($q) => $q->withoutGlobalScope('comercio')])
+            ->first();
         if (! $maestro || $maestro->subpedidos->isEmpty()) {
             return;
         }

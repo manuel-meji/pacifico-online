@@ -680,9 +680,9 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 }
 
                 // Si todos los subpedidos están cancelados, cancelar el maestro
-                $pedidoMaestro = $subpedido->pedidoMaestro;
+                $pedidoMaestro = $subpedido->pedidoMaestro()->withoutGlobalScope('cliente')->first();
                 if ($pedidoMaestro) {
-                    $activos = $pedidoMaestro->subpedidos()->where('estado_subpedido', '!=', 'cancelado')->count();
+                    $activos = $pedidoMaestro->subpedidos()->withoutGlobalScope('comercio')->where('estado_subpedido', '!=', 'cancelado')->count();
                     if ($activos === 0 && strtolower((string) $pedidoMaestro->estado_pedido) !== 'cancelado') {
                         $pedidoMaestro->actualizarEstado('cancelado', $motivo);
                     }
