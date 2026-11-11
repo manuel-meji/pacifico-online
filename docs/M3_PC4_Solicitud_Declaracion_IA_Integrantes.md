@@ -17,7 +17,7 @@ Para completar la declaración colectiva de PC4, solicito a cada integrante pend
 | Integrante | Nombre/modelo | Período | Tarea PC4 | Archivos | Verificación | Estado |
 |---|---|---|---|---|---|---|
 | Jeaustin Morales Hidalgo | Antecedente PC3 únicamente | Pendiente | No se atribuyen tareas PC4 sin confirmación | Pendiente | Pendiente | Confirmación PC4 pendiente |
-| Joshua Soto Hernández | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente | Declaración pendiente de recibir |
+| Joshua Soto Hernández (C4K209) | Claude (chat) y Claude Code (VS Code) | Pendiente | JO1, JO2 y JO3: CatalogoService, listeners y sus pruebas; redacción de código y pruebas, ejecución de pruebas, commits y rebase | Pendiente | Joshua definió el alcance y las restricciones, tomó las decisiones de diseño, revisó cada resultado y ejecutó la suite; también subió las ramas y abrió los PR. Los commits llevan la línea `Co-Authored-By`. | Declaración confirmada; archivos y fechas no proporcionados |
 | Adrián Duran Madrigal | Pendiente de herramienta/modelo | Pendiente | React, Tailwind, Vite, integración inicial con API Laravel, categorías, marcas, controladores, compilación y apoyo en errores/Git; se menciona PR #239 | Pendiente | Pendiente | Confirmación individual pendiente |
 | Javier Contreras López | Pendiente de herramienta/modelo | Pendiente | Análisis de requerimientos, arquitectura modular, implementación M3, gestión de productos, variaciones, imágenes y pruebas | Pendiente | Pendiente | Confirmación individual pendiente |
 
@@ -25,7 +25,7 @@ Para completar la declaración colectiva de PC4, solicito a cada integrante pend
 
 - El texto identificado como Justin se conserva sin atribuirlo a Jeaustin ni a otro integrante hasta confirmar su identidad.
 - De Adrián y Javier solo se registra la información proporcionada; faltan herramienta/modelo, período, archivos y verificación individual.
-- La declaración de Joshua continúa pendiente de recibir.
+- Joshua confirmó personalmente sus herramientas, propósito, alcance JO1–JO3 y responsabilidades de revisión, suite, ramas, PR y `Co-Authored-By`; no se agregan fechas, modelos ni archivos no confirmados.
 - La información de PC3 de Jeaustin se conserva únicamente como antecedente; no se usa para completar tareas PC4.
 
 ## Integrantes pendientes
