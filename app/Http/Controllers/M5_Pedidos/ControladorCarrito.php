@@ -91,7 +91,7 @@ class ControladorCarrito extends Controller
         }
 
         // 3. Verificar existencias en M4_Inventario (Contrato M4 v1.1.0)
-        $comercioId = (int) ($datosVariacion['id_comercio'] ?? $datosVariacion['producto']['id_comercio'] ?? 1);
+        $comercioId = $this->resolverIdComercioVariacion($datosVariacion);
         $ubicacionId = (int) ($datosVariacion['id_ubicacion'] ?? 1);
 
         $stockDisponible = $this->consultarStockVariacion($comercioId, $idVariacion, $ubicacionId);
@@ -164,7 +164,7 @@ class ControladorCarrito extends Controller
         if ($this->m3Catalogo) {
             try {
                 $variacion = $this->m3Catalogo->obtenerVariacion((int) $item->id_variacion);
-                $comercioId = (int) ($variacion['id_comercio'] ?? 1);
+                $comercioId = $this->resolverIdComercioVariacion($variacion);
             } catch (\Throwable) {
             }
         }
@@ -427,6 +427,16 @@ class ControladorCarrito extends Controller
         }
 
         return (int) $request->input('id_cliente', 1);
+    }
+
+    /**
+     * Extrae el id_comercio tanto de la raíz (dobles) como de producto (contrato M3 v1.3.0).
+     *
+     * @param  array<string, mixed>|null  $variacion
+     */
+    private function resolverIdComercioVariacion(?array $variacion): int
+    {
+        return (int) ($variacion['id_comercio'] ?? $variacion['producto']['id_comercio'] ?? 1);
     }
 
     private function consultarStockVariacion(int $comercioId, int $idVariacion, int $ubicacionId = 1): int

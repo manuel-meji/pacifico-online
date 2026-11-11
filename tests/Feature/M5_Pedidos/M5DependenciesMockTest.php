@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\M5_Pedidos;
 
+use App\Http\Controllers\M5_Pedidos\ControladorDeseos;
 use App\Services\M5_Pedidos\Dobles\CatalogoStub;
 use App\Services\M5_Pedidos\Dobles\ComerciosStub;
 use App\Services\M5_Pedidos\Dobles\ErrorProveedorException;
@@ -169,5 +170,20 @@ class M5DependenciesMockTest extends TestCase
         $this->assertInstanceOf(InventarioStub::class, $propInventario->getValue($servicio));
         $this->assertInstanceOf(PagosStub::class, $propPagos->getValue($servicio));
         $this->assertInstanceOf(PortalStub::class, $propPortal->getValue($servicio));
+    }
+
+    public function test_controlador_deseos_recibe_dobles_por_contenedor_en_modo_doble(): void
+    {
+        config()->set('integraciones.m5.m3.modo', 'doble');
+        config()->set('integraciones.m5.m1.modo', 'doble');
+
+        $controlador = $this->app->make(ControladorDeseos::class);
+
+        $ref = new \ReflectionClass($controlador);
+        $propCatalogo = $ref->getProperty('m3Catalogo');
+        $propPortal = $ref->getProperty('m1Portal');
+
+        $this->assertInstanceOf(CatalogoStub::class, $propCatalogo->getValue($controlador));
+        $this->assertInstanceOf(PortalStub::class, $propPortal->getValue($controlador));
     }
 }
