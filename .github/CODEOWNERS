@@ -5,7 +5,7 @@
 
 # Regla global por defecto (Archivos raíz, configuración, base de datos, núcleo)
 # Nota: En GitHub CODEOWNERS se utiliza '*' en lugar de '-' para la regla raíz por defecto
-* @iMiauto @Doffyexe @Diego-Alfaro-Alvarado @Jeaustin-cyber @Giorgio6016 @manuel-meji @jusMa13 @Dercross44t
+* @iMiauto @Doffyexe @Diego-Alfaro-Alvarado @Jeaustin-cyber @Giorgio6016 @manuel-meji @jusMa13 @Dercross44t @KristelSamanta
 
 # Núcleo (Rutas específicas)
 /app/Contracts/Nucleo/ @iMiauto
