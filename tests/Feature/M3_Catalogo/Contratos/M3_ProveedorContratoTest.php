@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\M3_Catalogo\Contratos;
 
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\Yaml\Yaml;
+use Tests\Feature\M3_Catalogo\EsquemaCatalogoPrueba;
 use Tests\TestCase;
 
 class M3_ProveedorContratoTest extends TestCase
 {
+    use EsquemaCatalogoPrueba;
+
     private const CONTRATO = 'contracts/m3-catalogo/v1/openapi_M3_v1.3.0.yaml';
 
     private const PREFIJO_CONTRATO = '/api/m3/v1';
@@ -20,6 +24,59 @@ class M3_ProveedorContratoTest extends TestCase
     {
         parent::setUp();
         $this->app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('m', 32)));
+        $this->prepararCatalogo(1);
+
+        DB::statement('CREATE TABLE estado_comercios_catalogo (
+            id_comercio INTEGER PRIMARY KEY,
+            activo BOOLEAN NOT NULL DEFAULT 0,
+            fecha_ultimo_evento DATETIME NULL,
+            id_ultimo_evento VARCHAR(36) NULL,
+            created_at DATETIME NULL,
+            updated_at DATETIME NULL
+        )');
+
+        $ahora = now();
+        DB::table('estado_comercios_catalogo')->insert([
+            'id_comercio' => 1,
+            'activo' => true,
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ]);
+        DB::table('categorias')->insert([
+            'id_categoria' => 1,
+            'nombre' => 'Categoria de prueba',
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ]);
+        DB::table('productos')->insert([
+            'id_producto' => 1,
+            'id_comercio' => 1,
+            'id_categoria' => 1,
+            'nombre' => 'Producto Ejemplo',
+            'estado_producto' => 'publicado',
+            'destacado' => false,
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ]);
+        DB::table('producto_variaciones')->insert([
+            'id_variacion' => 101,
+            'id_producto' => 1,
+            'id_comercio' => 1,
+            'sku' => 'SKU-001-AZUL',
+            'precio' => 15000,
+            'tarifa_impuesto' => 13,
+            'disponible' => true,
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ]);
+        DB::table('atributos_variacion')->insert([
+            'id_atributo' => 1,
+            'id_variacion' => 101,
+            'tipo_atributo' => 'Color',
+            'valor' => 'Azul',
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ]);
     }
 
     public function test_el_contrato_declara_las_seis_operaciones_del_proveedor(): void
@@ -116,31 +173,70 @@ class M3_ProveedorContratoTest extends TestCase
         ], ['nombre' => 'Cafe'], 'nombre_all_of');
     }
 
-    public function test_listar_categorias_queda_pendiente_de_publicacion_del_proveedor(): void
+    public function test_listar_categorias_en_ruta_actual_cumple_el_esquema(): void
     {
-        $this->omitOperationUntilAvailable('listarCategorias');
+        $response = $this->getJson(route('m3.categorias.index'));
+
+        $response->assertOk();
+        $this->assertEsquema([
+            'type' => 'array',
+            'items' => ['$ref' => '#/components/schemas/Categoria'],
+        ], $response->json(), 'categorias');
     }
 
-    public function test_listar_marcas_queda_pendiente_de_publicacion_del_proveedor(): void
+    public function test_listar_marcas_en_ruta_actual_cumple_el_esquema(): void
     {
-        $this->omitOperationUntilAvailable('listarMarcas');
+        $response = $this->getJson(route('m3.marcas.index', ['destacada' => true]));
+
+        $response->assertOk();
+        $this->assertEsquema([
+            'type' => 'array',
+            'items' => ['$ref' => '#/components/schemas/Marca'],
+        ], $response->json(), 'marcas');
     }
 
-    public function test_buscar_productos_queda_pendiente_de_publicacion_del_proveedor(): void
+    public function test_buscar_productos_en_ruta_actual_cumple_el_esquema(): void
     {
-        $this->omitOperationUntilAvailable('buscarProductos');
+        $response = $this->getJson(route('m3.productos.index', ['q' => 'Producto']));
+
+        $response->assertOk();
+        $this->assertEsquema(['$ref' => '#/components/schemas/ResultadoProductos'], $response->json(), 'resultado');
     }
 
-    public function test_listar_relacionados_queda_pendiente_de_publicacion_del_proveedor(): void
+    public function test_listar_relacionados_en_ruta_actual_cumple_el_esquema(): void
     {
-        $this->omitOperationUntilAvailable('listarRelacionados');
+        $response = $this->getJson(route('m3.productos.relacionados', 1));
+
+        $response->assertOk();
+        $this->assertEsquema([
+            'type' => 'array',
+            'items' => ['$ref' => '#/components/schemas/ProductoResumenBusqueda'],
+        ], $response->json(), 'relacionados');
     }
 
-    private function omitOperationUntilAvailable(string $metodo): void
+    public function test_listar_relacionados_de_producto_invisible_responde_error_estandar_404(): void
     {
-        $this->markTestSkipped(
-            "Pendiente externo: CatalogoServiceInterface aun no publica {$metodo}; no se inventa una implementacion."
-        );
+        $response = $this->getJson(route('m3.productos.relacionados', 999));
+
+        $response->assertNotFound();
+        $this->assertEsquema(['$ref' => '#/components/schemas/ErrorEstandar'], $response->json(), 'ErrorEstandar');
+    }
+
+    public function test_buscar_productos_rechaza_parametros_fuera_de_contrato(): void
+    {
+        $response = $this->getJson(route('m3.productos.index', [
+            'por_pagina' => 101,
+            'precio_minimo' => -1,
+            'orden' => 'invalido',
+        ]));
+
+        $response->assertStatus(422);
+        $payload = $response->json();
+        $this->assertArrayHasKey('error', $payload);
+        $this->assertSame('ERR-005', $payload['error']['codigo']);
+        $this->assertArrayHasKey('por_pagina', $payload['error']['detalles']);
+        $this->assertArrayHasKey('precio_minimo', $payload['error']['detalles']);
+        $this->assertArrayHasKey('orden', $payload['error']['detalles']);
     }
 
     private function endpoint(string $routeName, int $id): string
