@@ -80,6 +80,21 @@ class PromocionesTest extends PruebaM1
         $this->assertSame(18500.0, $this->precio(DatosPrueba::VARIACION_CAMISA_S)['precio_final']);
     }
 
+    public function test_las_fechas_con_hora_de_costa_rica_se_guardan_en_el_instante_correcto(): void
+    {
+        // AHORA es 12:00 UTC (6:00 en Costa Rica). Inicia a las 7:00 de Costa Rica, o sea 13:00 UTC.
+        $this->crear(['fecha_inicio' => '2026-11-10T07:00:00-06:00', 'fecha_fin' => '2026-11-10T20:00:00-06:00'])
+            ->assertCreated()
+            ->assertJsonPath('estado', 'programada')
+            ->assertJsonPath('fecha_inicio', '2026-11-10T13:00:00+00:00')
+            ->assertJsonPath('fecha_fin', '2026-11-11T02:00:00+00:00');
+
+        $this->assertSame(18500.0, $this->precio(DatosPrueba::VARIACION_CAMISA_S)['precio_final']);
+
+        Carbon::setTestNow('2026-11-10 13:00:00');
+        $this->assertSame(14800.0, $this->precio(DatosPrueba::VARIACION_CAMISA_S)['precio_final']);
+    }
+
     public function test_solo_hay_dos_tipos_y_el_porcentaje_va_de_0_a_100(): void
     {
         $this->crear(['tipo' => '2x1'])->assertStatus(422)->assertJsonStructure(['error' => ['detalles' => ['tipo']]]);
