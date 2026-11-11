@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 use Tests\Unit\M3_Catalogo\Concerns\PreparaEsquemaM3;
 
-/** Reglas CHECK de la variacion: precio, tarifa de IVA y descuento (D1). */
+/** Reglas CHECK de la variacion: precio y tarifa de IVA. */
 class VariacionChecksBaseDatosTest extends TestCase
 {
     use PreparaEsquemaM3;
@@ -48,11 +48,8 @@ class VariacionChecksBaseDatosTest extends TestCase
     public static function casosInvalidos(): array
     {
         return [
-            'porcentaje mayor a 100' => [['tipo_descuento' => 'porcentaje', 'valor_descuento' => 150]],
-            'monto fijo mayor al precio' => [['tipo_descuento' => 'monto_fijo', 'valor_descuento' => 12000]],
-            'valor con tipo ninguno' => [['tipo_descuento' => 'ninguno', 'valor_descuento' => 5]],
-            'tipo de descuento desconocido' => [['tipo_descuento' => 'cupon', 'valor_descuento' => 5]],
             'precio negativo' => [['precio' => -1]],
+            'IVA negativo' => [['tarifa_impuesto' => -1]],
             'IVA mayor a 100' => [['tarifa_impuesto' => 101]],
         ];
     }
@@ -67,18 +64,11 @@ class VariacionChecksBaseDatosTest extends TestCase
         $this->crearVariacion($datos);
     }
 
-    public function test_descuento_porcentaje_valido_es_aceptado(): void
+    public function test_precio_e_iva_validos_son_aceptados(): void
     {
-        $variacion = $this->crearVariacion(['tipo_descuento' => 'porcentaje', 'valor_descuento' => 5, 'sku' => 'OK-1']);
+        $variacion = $this->crearVariacion(['precio' => 0, 'tarifa_impuesto' => 0, 'sku' => 'OK-1']);
 
-        $this->assertSame('porcentaje', $variacion->tipo_descuento);
         $this->assertSame(1, (int) $variacion->id_comercio);
-    }
-
-    public function test_descuento_monto_fijo_valido_es_aceptado(): void
-    {
-        $variacion = $this->crearVariacion(['tipo_descuento' => 'monto_fijo', 'valor_descuento' => 1000, 'sku' => 'OK-2']);
-
-        $this->assertSame('monto_fijo', $variacion->tipo_descuento);
+        $this->assertSame('OK-1', $variacion->sku);
     }
 }
