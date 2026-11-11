@@ -23,7 +23,7 @@ class ControladorDeseos extends Controller
 
     public function __construct(
         ?CatalogoServiceInterface $catalogoService = null,
-        ?PortalServiceInterface $portalService = null
+        ?PortalPublicoContract $portalService = null
     ) {
         $this->m3Catalogo = $catalogoService ?? (app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null);
         $this->m1Portal = $portalService ?? (app()->bound(PortalPublicoContract::class) ? app(PortalPublicoContract::class) : (app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null));

@@ -80,6 +80,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         $grupos = [];
         $itemsEnriquecidos = [];
         $cacheComercios = [];
+        $cacheDetallesProducto = [];
         $hayComercioSuspendido = false;
 
         $idsVariacion = $carrito->items
@@ -108,7 +109,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             $tarifaIva = (float) ($variacion['tarifa_impuesto'] ?? 13.00);
             $nombreProducto = (string) ($variacion['nombre'] ?? $variacion['producto']['nombre'] ?? 'Producto #'.$idVariacionItem);
             $sku = (string) ($variacion['sku'] ?? 'SKU-VAR-'.$idVariacionItem);
-            $imagen = (string) ($variacion['imagen'] ?? $variacion['imagen_url'] ?? '');
+            $imagen = $this->resolverImagenVariacion($variacion, $idVariacionItem, $catalogo, $cacheDetallesProducto);
 
             // Precio vigente desde M1 (Contrato M1 v1.4.0 / SC-08)
             $infoPromocion = $preciosVigentesM1[$idVariacionItem] ?? null;
@@ -271,6 +272,66 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             ],
             'hay_comercio_suspendido' => $hayComercioSuspendido,
         ];
+    }
+
+    /**
+     * Obtiene la URL de imagen de la variación y, cuando el contrato de M3
+     * no la incluye en obtenerVariacion, la resuelve mediante obtenerDetalleProducto.
+     *
+     * @param  array<string, mixed>|null  $variacion
+     * @param  array<int, array<string, mixed>|null>  $cacheDetallesProducto
+     */
+    private function resolverImagenVariacion(
+        ?array $variacion,
+        int $idVariacion,
+        ?CatalogoServiceInterface $catalogo,
+        array &$cacheDetallesProducto
+    ): string {
+        $imagen = (string) ($variacion['imagen'] ?? $variacion['imagen_url'] ?? '');
+        if ($imagen !== '' || ! $catalogo) {
+            return $imagen;
+        }
+
+        $idProducto = (int) ($variacion['id_producto'] ?? $variacion['producto']['id_producto'] ?? 0);
+        if ($idProducto <= 0) {
+            return '';
+        }
+
+        if (! array_key_exists($idProducto, $cacheDetallesProducto)) {
+            try {
+                $cacheDetallesProducto[$idProducto] = $catalogo->obtenerDetalleProducto($idProducto);
+            } catch (\Throwable) {
+                $cacheDetallesProducto[$idProducto] = null;
+            }
+        }
+
+        $detalle = $cacheDetallesProducto[$idProducto];
+        $imagenes = is_array($detalle) ? ($detalle['imagenes'] ?? []) : [];
+        if (! is_array($imagenes) || $imagenes === []) {
+            return '';
+        }
+
+        $primeraUrl = '';
+        foreach ($imagenes as $img) {
+            if (! is_array($img)) {
+                continue;
+            }
+
+            $url = (string) ($img['imagen_url'] ?? $img['url'] ?? '');
+            if ($url === '') {
+                continue;
+            }
+
+            if ((int) ($img['id_variacion'] ?? 0) === $idVariacion) {
+                return $url;
+            }
+
+            if ($primeraUrl === '') {
+                $primeraUrl = $url;
+            }
+        }
+
+        return $primeraUrl;
     }
 
     /**

@@ -78,7 +78,7 @@ class AceptacionM5Test extends TestCase
         $this->assertDatabaseHas('pedidos_maestros', [
             'id_pedido' => $checkout->json('pedido.id_pedido'),
             'id_cliente' => $idCliente,
-            'estado_pedido' => 'pendiente',
+            'estado_pedido' => 'confirmado',
         ]);
         $this->assertDatabaseCount('pedidos_subpedidos', 2);
         $this->assertDatabaseHas('pedidos_subpedidos', ['id_comercio' => 1, 'estado_subpedido' => 'pendiente']);

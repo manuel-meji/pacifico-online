@@ -13,6 +13,7 @@ use App\Contracts\M5_Pedidos\GestionPedidosServiceInterface;
 use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Http\Controllers\M5_Pedidos\ControladorCarrito;
+use App\Http\Controllers\M5_Pedidos\ControladorDeseos;
 use App\Http\Controllers\M5_Pedidos\ControladorPedido;
 use App\Services\M5_Pedidos\PedidosService;
 use Illuminate\Contracts\Foundation\Application;
@@ -22,7 +23,7 @@ use InvalidArgumentException;
 /**
  * Proveedor de integraciones para el Módulo 5 (M5_Pedidos).
  *
- * Elige para los consumidores de M5 (PedidosService, ControladorCarrito, ControladorPedido)
+ * Elige para los consumidores de M5 (PedidosService, ControladorCarrito, ControladorDeseos, ControladorPedido)
  * entre el doble de prueba formal (app/Services/M5_Pedidos/Dobles) y el servicio real
  * según config/integraciones.php (clave m5).
  *
@@ -54,6 +55,7 @@ class M5IntegracionesServiceProvider extends ServiceProvider
     public const CONSUMIDORES_M5 = [
         PedidosService::class,
         ControladorCarrito::class,
+        ControladorDeseos::class,
         ControladorPedido::class,
     ];
 

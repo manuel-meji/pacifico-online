@@ -8,6 +8,7 @@ use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemDeseo;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Models\Nucleo\Usuario;
 use Tests\TestCase;
 
 class AlcanceDeseosYDevolucionesTest extends TestCase
@@ -120,5 +121,23 @@ class AlcanceDeseosYDevolucionesTest extends TestCase
 
         $res->assertStatus(409)
             ->assertJsonPath('error.codigo', 'ERR-M5-002');
+    }
+
+    public function test_lista_de_deseos_usa_dobles_de_m3_y_m1_cuando_modo_es_doble(): void
+    {
+        config()->set('integraciones.m5.m3.modo', 'doble');
+        config()->set('integraciones.m5.m1.modo', 'doble');
+
+        $usuario = new Usuario;
+        $usuario->forceFill(['id_usuario' => 501]);
+
+        ItemDeseo::create(['id_cliente' => 1, 'id_variacion' => 2]);
+
+        $res = $this->actingAs($usuario)->getJson('/api/m5/v1/deseos');
+
+        $res->assertOk()
+            ->assertJsonPath('id_cliente', 1)
+            ->assertJsonPath('items.0.producto.id_variacion', 2)
+            ->assertJsonPath('items.0.producto.nombre', 'Café Tarrazú Reserva Especial');
     }
 }
