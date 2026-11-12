@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | URL del frontend
+    |--------------------------------------------------------------------------
+    |
+    | Origen del frontend React (app.html). Lo usan los enlaces de los correos
+    | que llevan a una pantalla del portal, como la invitación del Encargado
+    | del comercio.
+    |
+    */
+
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |
