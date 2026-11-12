@@ -1,52 +1,33 @@
 <?php
 
 // M1 Portal y Búsqueda
-// Llaves foráneas de M1 hacia M3 Catálogo (tablas productos y categorias, creadas en
-// M3_Catalogo/2026_10_20_000003_create_productos_table.php y
-// M3_Catalogo/2026_10_20_000001_create_categorias_table.php). Sección 6.5.
-// Va aparte de las migraciones create de M1 para declarar en un solo lugar
-// la dependencia de M1 con M3.
+// Antes creaba llaves foráneas de M1 hacia las tablas productos y categorias de
+// M3 Catálogo (sección 6.5). Se dejó sin efecto el 2026-11-13: M1 guarda
+// id_producto e id_categoria como referencias lógicas a M3, sin llave física
+// (frontera de datos del PC3), igual que las migraciones de destacados del
+// 2026-11-08. M1 lee productos y categorías solo por el contrato de M3.
+//
+// Motivos:
+// - Una llave física acopla las tablas de M3 a M1: M3 no podría borrar o
+//   reemplazar productos o categorías sin que M1 lo bloquee.
+// - Se acordó con M3 que M1 no cambiaría la estructura de sus tablas.
+// - productos_destacados guarda ids del catálogo de prueba (1520 a 1525) que
+//   no existen en M3, así que la llave fallaría al crearse.
+//
+// La migración se conserva vacía para que el historial explique la decisión y
+// para que quede registrada como aplicada en todas las bases.
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('productos_destacados', function (Blueprint $table) {
-            $table->foreign('id_producto', 'fk_productos_destacados_productos')
-                ->references('id_producto')->on('productos');
-        });
-
-        Schema::table('categorias_portal', function (Blueprint $table) {
-            $table->foreign('id_categoria', 'fk_categorias_portal_categorias')
-                ->references('id_categoria')->on('categorias');
-        });
-
-        Schema::table('promociones_portal', function (Blueprint $table) {
-            $table->foreign('id_producto', 'fk_promociones_portal_productos')
-                ->references('id_producto')->on('productos');
-
-            $table->foreign('id_categoria', 'fk_promociones_portal_categorias')
-                ->references('id_categoria')->on('categorias');
-        });
+        // Sin llaves hacia M3: referencias lógicas por el contrato de M3.
     }
 
     public function down(): void
     {
-        Schema::table('promociones_portal', function (Blueprint $table) {
-            $table->dropForeign('fk_promociones_portal_categorias');
-            $table->dropForeign('fk_promociones_portal_productos');
-        });
-
-        Schema::table('categorias_portal', function (Blueprint $table) {
-            $table->dropForeign('fk_categorias_portal_categorias');
-        });
-
-        Schema::table('productos_destacados', function (Blueprint $table) {
-            $table->dropForeign('fk_productos_destacados_productos');
-        });
+        // Nada que revertir.
     }
 };
