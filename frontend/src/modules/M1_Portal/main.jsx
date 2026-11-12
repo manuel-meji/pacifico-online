@@ -5,7 +5,7 @@ import M1App from './M1App';
 // Entrada propia de M1 (m1.html) para no tocar src/main.jsx, que hoy abre el prototipo de M5.
 // Modo de simulación del registro y del ingreso sin backend: window.SIMULAR_M1 o ?simular=correo|credenciales.
 const simular = window.SIMULAR_M1 || new URLSearchParams(location.search).get('simular');
-// Pantalla inicial: window.PANTALLA_M1 o ?pantalla=inicio|busqueda|producto|comercio|ingresar|crear|perfil.
+// Pantalla inicial: window.PANTALLA_M1 o ?pantalla=inicio|busqueda|producto|comercio|ingresar|crear|crear-contrasena|perfil.
 // Sin ninguno, la página principal. Los demás parámetros (id, q, id_categoria, ...) los lee M1App de la URL.
 const pantalla = window.PANTALLA_M1 || new URLSearchParams(location.search).get('pantalla') || undefined;
 

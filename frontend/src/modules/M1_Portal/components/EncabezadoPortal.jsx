@@ -8,7 +8,8 @@ import Imagen from './Imagen';
 // La validación del término (RN-M1-08) la hace la vista de búsqueda, para mostrar el aviso junto a los resultados.
 // `cantidadCarrito` son las unidades del carrito de M5; con null o 0 no se muestra la insignia.
 // `onGestion` solo llega para los encargados (comercio o plataforma): muestra el acceso al panel de gestión.
-export default function EncabezadoPortal({ categorias = [], terminoInicial = '', conSesion = false, cantidadCarrito = null, onInicio, onBuscar, onCategoria, onMiCuenta, onGestion = null }) {
+// `mostrarVender` agrega en la franja superior el enlace a la solicitud de incorporación de comercios (M2).
+export default function EncabezadoPortal({ categorias = [], terminoInicial = '', conSesion = false, cantidadCarrito = null, mostrarVender = false, onInicio, onBuscar, onCategoria, onMiCuenta, onGestion = null }) {
   const [termino, setTermino] = useState(terminoInicial);
   const conProductos = Number.isInteger(cantidadCarrito) && cantidadCarrito > 0;
   const etiquetaCarrito = conProductos
@@ -25,6 +26,12 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
             <span className="flex items-center gap-1.5"><Icono nombre="ubicacion" className="h-4 w-4 text-brandGreen" /> Envíos rápidos a todo Costa Rica</span>
             <span className="flex items-center gap-1.5"><Icono nombre="telefono" className="h-4 w-4 text-brandGreen" /> Soporte y Ventas: +506 2000-0000</span>
           </div>
+          {/* La solicitud de incorporación es de M2 (m2.html). El margen negativo da 44 px de área táctil sin engrosar la franja. */}
+          {mostrarVender && (
+            <a href="/m2.html" className="-my-3.5 ml-4 flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-sm font-semibold transition hover:text-brandGreen hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+              <Icono nombre="tienda" className="h-4 w-4 text-brandGreen" /> Vendé en Pacíficos Online
+            </a>
+          )}
         </div>
       </div>
 

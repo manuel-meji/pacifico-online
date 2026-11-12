@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => ({
       '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/login': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/logout': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/crear-contrasena': { target: 'http://127.0.0.1:8000', changeOrigin: true },
     },
   },
   build: { rollupOptions: { input: mode === 'single' ? 'carrito.html' : PAGINAS } },
