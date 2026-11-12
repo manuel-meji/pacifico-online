@@ -4,10 +4,10 @@ namespace Tests\Feature\M7_Contabilidad;
 
 use App\Models\Nucleo\Usuario;
 use Database\Factories\UsuarioFactory;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Tests\TestCase;
 
 class ReporteGerencialAceptacionTest extends TestCase
@@ -146,6 +146,7 @@ class ReporteGerencialAceptacionTest extends TestCase
             ->assertJsonPath('data.resumen.costos', '0.00')
             ->assertJsonPath('data.resumen.utilidad_bruta', '1000.00');
     }
+
     public function test_el_reporte_respeta_el_periodo_solicitado(): void
     {
         $this->crearAsiento(
@@ -176,6 +177,7 @@ class ReporteGerencialAceptacionTest extends TestCase
             ->assertJsonPath('data.resumen.costos', '0.00')
             ->assertJsonPath('data.resumen.utilidad_bruta', '1000.00');
     }
+
     public function test_rechaza_un_periodo_con_fecha_hasta_anterior_a_fecha_desde(): void
     {
         $usuario = $this->usuarioComercio(1);

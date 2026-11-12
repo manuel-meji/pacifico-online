@@ -10,8 +10,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use LogicException;
-use Tests\TestCase;
 use ReflectionClass;
+use Tests\TestCase;
 
 class PedidoConfirmadoListenerTest extends TestCase
 {
@@ -130,8 +130,8 @@ class PedidoConfirmadoListenerTest extends TestCase
         $this->crearCuentas(1);
 
         $evento = $this->crearEventoPedidoConfirmado(
-    '22222222-2222-4222-8222-222222222222'
-);
+            '22222222-2222-4222-8222-222222222222'
+        );
 
         $listener = app(ProcesarPedidoConfirmadoListener::class);
 
@@ -144,32 +144,32 @@ class PedidoConfirmadoListenerTest extends TestCase
     }
 
     private function crearEventoPedidoConfirmado(
-    string $eventoId = '11111111-1111-4111-8111-111111111111'
-): PedidoConfirmado {
-    $reflexion = new ReflectionClass(PedidoConfirmado::class);
+        string $eventoId = '11111111-1111-4111-8111-111111111111'
+    ): PedidoConfirmado {
+        $reflexion = new ReflectionClass(PedidoConfirmado::class);
 
-    /** @var PedidoConfirmado $evento */
-    $evento = $reflexion->newInstanceWithoutConstructor();
+        /** @var PedidoConfirmado $evento */
+        $evento = $reflexion->newInstanceWithoutConstructor();
 
-    $evento->id_evento = $eventoId;
-    $evento->fecha_evento = '2026-11-10T12:00:00Z';
-    $evento->id_pedido = 10;
-    $evento->id_cliente = 20;
-    $evento->id_comercio = 1;
-    $evento->id_subpedido = 11;
-    $evento->monto_total = 100.25;
-    $evento->reservas = [];
-    $evento->subpedidos = [
-        [
-            'id_subpedido' => 11,
-            'id_comercio' => 1,
-            'subtotal' => 100.25,
-            'costo_envio' => 0.0,
-            'impuesto' => 0.0,
-            'reservas' => [],
-        ],
-    ];
+        $evento->id_evento = $eventoId;
+        $evento->fecha_evento = '2026-11-10T12:00:00Z';
+        $evento->id_pedido = 10;
+        $evento->id_cliente = 20;
+        $evento->id_comercio = 1;
+        $evento->id_subpedido = 11;
+        $evento->monto_total = 100.25;
+        $evento->reservas = [];
+        $evento->subpedidos = [
+            [
+                'id_subpedido' => 11,
+                'id_comercio' => 1,
+                'subtotal' => 100.25,
+                'costo_envio' => 0.0,
+                'impuesto' => 0.0,
+                'reservas' => [],
+            ],
+        ];
 
-    return $evento;
-}
+        return $evento;
+    }
 }

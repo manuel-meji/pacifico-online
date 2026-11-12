@@ -261,8 +261,8 @@ class PlanCuentasApiTest extends TestCase
         $respuesta
             ->assertForbidden()
             ->assertJsonPath(
-            'error.codigo',
-            'ERR-002');
+                'error.codigo',
+                'ERR-002');
     }
 
     public function test_usuario_no_autenticado_no_puede_consultar_plan_de_cuentas(): void

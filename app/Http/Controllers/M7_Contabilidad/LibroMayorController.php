@@ -38,19 +38,20 @@ final class LibroMayorController extends Controller
             'data' => $resultado,
         ]);
     }
+
     public function listarCuentas(Request $request): JsonResponse
-{
-    $filtrosValidados = $request->validate([
-        'id_comercio' => ['nullable', 'integer', 'min:1'],
-    ]);
+    {
+        $filtrosValidados = $request->validate([
+            'id_comercio' => ['nullable', 'integer', 'min:1'],
+        ]);
 
-    $resultado = $this->libroMayorService->listarCuentas(
-        $filtrosValidados
-    );
+        $resultado = $this->libroMayorService->listarCuentas(
+            $filtrosValidados
+        );
 
-    return response()->json([
-        'success' => true,
-        'data' => $resultado,
-    ]);
-}
+        return response()->json([
+            'success' => true,
+            'data' => $resultado,
+        ]);
+    }
 }

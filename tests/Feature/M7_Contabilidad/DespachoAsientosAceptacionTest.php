@@ -28,6 +28,7 @@ class DespachoAsientosAceptacionTest extends TestCase
     use LazilyRefreshDatabase;
 
     private const EVENTO_PEDIDO = '11111111-1111-4111-8111-aaaaaaaaaaaa';
+
     private const EVENTO_DESPACHO = '33333333-3333-4333-8333-bbbbbbbbbbbb';
 
     protected function migrateFreshUsing(): array
@@ -248,7 +249,7 @@ class DespachoAsientosAceptacionTest extends TestCase
             $respuesta->json('data.totalHaber'),
             0.001
         );
-        //100.25 de la venta + 40.50 del costo.
+        // 100.25 de la venta + 40.50 del costo.
         $this->assertEqualsWithDelta(140.75, $respuesta->json('data.totalDebe'), 0.001);
     }
 
@@ -277,7 +278,7 @@ class DespachoAsientosAceptacionTest extends TestCase
 
     public function test_sin_plan_de_cuentas_no_se_generan_asientos_ni_se_rompe_el_despacho(): void
     {
-        //Escenario del reinicio de Supabase del 10/11: sin cuentas cargadas.
+        // Escenario del reinicio de Supabase del 10/11: sin cuentas cargadas.
         $this->recorrerPedidoYDespacho();
 
         $this->assertDatabaseCount('asientos_contables', 0);
