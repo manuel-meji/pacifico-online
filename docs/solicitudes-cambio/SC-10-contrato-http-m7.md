@@ -23,7 +23,7 @@
 
 Se solicita al Comité revisar y decidir cómo alinear el [contrato OpenAPI detallado v1.0.0](../../contracts/m7-contabilidad/v1/openapi_M7_v1.0.0.yaml) con las rutas y respuestas observadas en M7. La matriz siguiente compara las 14 operaciones publicadas con las rutas registradas.
 
-El [OpenAPI v1.1.0 de la implementación observada](../../contracts/m7-contabilidad/v1/openapi_M7_v1.1.0.yaml) describe las ocho rutas registradas, identifica las operaciones y eventos pendientes y conserva las definiciones de v1.0.0 que no se sustituyeron. Esta versión está pendiente de revisión de compatibilidad y aprobación; no reemplaza el contrato vigente ni elimina obligaciones pendientes.
+El [OpenAPI v1.1.0 de la implementación observada](../../contracts/m7-contabilidad/v1/openapi_M7_v1.1.0.yaml) describe las ocho rutas registradas, identifica las operaciones y eventos pendientes y conserva las definiciones de v1.0.0 que no se sustituyeron. **v1.1.0 es únicamente una propuesta en revisión**, no un contrato aprobado ni publicado; no reemplaza el contrato vigente ni elimina obligaciones pendientes. Si el Comité confirma cambios incompatibles, la estrategia SemVer exige incrementar la versión mayor y acordar un período de convivencia.
 
 Las principales discrepancias son:
 
@@ -31,7 +31,8 @@ Las principales discrepancias son:
 2. El contrato publica JWT bearer; las rutas protegidas usan `auth:sanctum` y las pruebas observadas emplean sesión web. Se deben acordar y verificar los mecanismos válidos para cada consumidor.
 3. Las respuestas y parámetros de cuentas y libros difieren de los publicados; varias operaciones publicadas no tienen ruta registrada.
 4. La ruta web de consulta de pago no declara autenticación ni control por comercio y el servicio consulta por pago sin filtro de comercio. Se solicita una revisión prioritaria antes de autorizar su exposición.
-5. El contrato de eventos y el registro actual de listeners divergen. El tratamiento de eventos fallidos no garantiza reintento durable.
+5. `GET /api/m7/v1/libro-diario` no acepta `id_comercio`; en modo sistema, el servicio omite el filtro por comercio y puede incluir asientos de varios comercios en la misma respuesta. Aunque el acceso global puede ser auditado, se requiere decidir y verificar el alcance autorizado y su conformidad con RN-12.
+6. El contrato de eventos y el registro actual de listeners divergen. El tratamiento de eventos fallidos no garantiza reintento durable.
 
 ### Comparación de operaciones de v1.0.0
 
@@ -44,7 +45,7 @@ Las rutas publicadas son relativas al servidor `/api/v1/m7`; las rutas observada
 | `consultarRegistroContablePago` | `GET /pagos/{id_pago}/registro-contable` | Diferente: `GET /m7/pagos/{idPago}/registro-contable`; retorna `registrado: false` si no encuentra asiento y carece de controles de autenticación y comercio declarados. |
 | `obtenerResumenFinancieroComercio` | `GET /comercios/{id_comercio}/resumen-financiero` | Sin ruta exacta; el reporte gerencial ofrece ingresos, costos y utilidad bruta, no el esquema completo publicado. |
 | `consultarRentabilidadComercio` | `GET /comercios/{id_comercio}/rentabilidad` | Sin ruta correspondiente para rentabilidad por centro de costo. |
-| `consultarLibroDiario` | `GET /comercios/{id_comercio}/libro-diario` | Diferente: `GET /api/m7/v1/libro-diario`; utiliza `fecha_desde` y `fecha_hasta` opcionales, otros filtros y devuelve `success` y `data` con asientos y totales. |
+| `consultarLibroDiario` | `GET /comercios/{id_comercio}/libro-diario` | Diferente: `GET /api/m7/v1/libro-diario`; utiliza `fecha_desde` y `fecha_hasta` opcionales, otros filtros y devuelve `success` y `data` con asientos y totales. En modo sistema omite el filtro por comercio y puede reunir asientos de varios comercios. |
 | `consultarLibroMayor` | `GET /comercios/{id_comercio}/libro-mayor` | Diferente: `GET /api/m7/v1/libro-mayor`; utiliza `id_cuenta_contable`, fechas opcionales con otros nombres y devuelve `success` y `data`. |
 | `consultarEstadoResultados` | `GET /comercios/{id_comercio}/estado-resultados` | Sin ruta correspondiente; el reporte gerencial no demuestra equivalencia con el esquema publicado. |
 | `consultarBalanceGeneral` | `GET /comercios/{id_comercio}/balance-general` | Sin ruta correspondiente registrada. |
@@ -77,6 +78,7 @@ Las rutas adicionales observadas son `GET /api/m7/v1/libro-mayor/cuentas`, `GET 
 - **M5 y M6:** revisar dependencias y consumidores conocidos de estados contables y pagos; identificar cualquier cliente adicional antes de decidir una retirada. Los eventos y las interfaces PHP no deben confundirse con llamadas HTTP.
 - **M4 y M2:** coordinar cualquier cambio que afecte dependencias contables o intercambio de información; no se propone modificar sus contratos aquí.
 - **Núcleo:** acordar autenticación, permisos, aislamiento y formato de errores.
+- **Aislamiento del libro diario:** la consulta en modo sistema puede incluir asientos de múltiples comercios porque no aplica `a.id_comercio` y la ruta no permite seleccionar un comercio. Debe evaluarse el riesgo de exposición y acordarse si corresponde exigir un comercio o permitir acceso global auditado bajo condiciones explícitas.
 - **Compatibilidad:** eliminar o cambiar rutas, parámetros obligatorios, respuestas o seguridad puede romper a consumidores de v1.0.0. Se requiere revisar las 14 operaciones y acordar si se implementan, conservan mediante adaptación o sustituyen formalmente.
 - **Versionado:** el contrato vigente pide versión mayor y período de convivencia para cambios incompatibles según acuerdo del Comité. No se propone publicar `v1.1.0` como compatible sin ese análisis y aprobación. La versión definitiva y su período de convivencia están pendientes.
 - **Artefactos posteriores:** contrato aprobado, inventario de consumidores, plan de migración, pruebas de proveedor/consumidor y documentación de integración; código y pruebas cuando se asigne su implementación.
@@ -85,7 +87,7 @@ Las rutas adicionales observadas son `GET /api/m7/v1/libro-mayor/cuentas`, `GET 
 ## 5. Decisiones solicitadas
 
 1. Confirmar el alcance obligatorio de cada operación de v1.0.0 y el tratamiento de las que carecen de ruta o difieren.
-2. Elegir rutas canónicas, autenticación, autorización, contexto de comercio, formatos y errores, incluyendo la protección de la consulta de pago.
+2. Elegir rutas canónicas, autenticación, autorización, contexto de comercio, formatos y errores, incluyendo la protección de la consulta de pago y el alcance del libro diario en modo sistema.
 3. Determinar la versión contractual, compatibilidad y convivencia, y el tratamiento del [OpenAPI básico alternativo](../../contracts/m7-contabilidad/v1/openapi.yaml).
 4. Ratificar el reconocimiento de venta y coordinar con M4, M5, M6 y Núcleo el contrato de eventos, costo y recuperación de fallos.
 5. Asignar responsables, pruebas y fecha de implementación antes de publicar o retirar cualquier operación.

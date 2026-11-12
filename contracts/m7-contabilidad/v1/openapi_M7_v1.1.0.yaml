@@ -4,9 +4,11 @@ info:
   version: 1.1.0
   description: >
     Especificación de las rutas HTTP y eventos observados en la implementación
-    de M7 en desarrollo d22f9c8. Esta versión está pendiente de revisión y
-    aprobación del Comité; no reemplaza el contrato v1.0.0. Sus diferencias de
-    rutas, respuestas y seguridad pueden ser incompatibles con ese contrato.
+    de M7 en desarrollo d22f9c8. La versión v1.1.0 es únicamente una propuesta
+    en revisión, no un contrato aprobado ni publicado, y no reemplaza v1.0.0.
+    Sus diferencias de rutas, respuestas y seguridad pueden ser incompatibles
+    con ese contrato. Si el Comité confirma cambios incompatibles, la estrategia
+    SemVer exige incrementar la versión mayor y acordar un período de convivencia.
     La autenticación, los errores y la conformidad de las respuestas requieren
     validación adicional.
 servers:
@@ -21,7 +23,7 @@ x-owner: SG7 - ERP contable y reportes gerenciales
 x-versioning:
   strategy: SemVer
   breakingChange: Incrementar versión mayor y mantener periodo de convivencia según acuerdo del Comité
-  estado: Versión 1.1.0 pendiente de revisión de compatibilidad y aprobación del Comité
+  estado: Propuesta v1.1.0 no aprobada; versión definitiva pendiente de revisión de compatibilidad y decisión del Comité
 
 x-dependencies:
   M2:
@@ -58,9 +60,11 @@ x-dependencies:
 x-pending-decisions:
   compatibilidad:
     estado: Pendiente de revisión del Comité
+    bloquea_publicacion_definitiva: true
     descripcion: >
       El inventario HTTP difiere de v1.0.0 y no incluye todas las operaciones
-      publicadas. El Comité debe acordar versión, convivencia y obligaciones.
+      publicadas. Si se confirman cambios incompatibles, corresponde incrementar
+      la versión mayor. El Comité debe acordar versión, convivencia y obligaciones.
   reconocimiento_venta:
     estado: Pendiente de ratificación del Comité
     bloquea_publicacion_definitiva: true
