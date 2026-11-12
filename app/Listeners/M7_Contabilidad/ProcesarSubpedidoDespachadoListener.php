@@ -38,6 +38,12 @@ final class ProcesarSubpedidoDespachadoListener
         $resultado = $this->costos
             ->obtenerCostosProductosVendidos($evento->id_subpedido);
 
+        if ((int) ($resultado['id_subpedido'] ?? 0) !== $evento->id_subpedido) {
+            throw new LogicException(
+                'El subpedido devuelto por M4 no coincide con el evento de M5.'
+            );
+        }
+
         $idComercio = (int) ($resultado['id_comercio'] ?? 0);
         $costoTotal = (float) ($resultado['costo_total'] ?? 0);
 
