@@ -6,6 +6,8 @@ use App\Models\M1_Portal\BusquedaUsuario;
 use App\Models\M1_Portal\CategoriaPortal;
 use App\Models\M1_Portal\Cliente;
 use App\Models\M1_Portal\ComercioDestacado;
+use App\Models\M1_Portal\Cupon;
+use App\Models\M1_Portal\CuponUso;
 use App\Models\M1_Portal\DireccionCliente;
 use App\Models\M1_Portal\FiltroAplicado;
 use App\Models\M1_Portal\NoticiaPortal;
@@ -47,6 +49,8 @@ class ModelosTest extends TestCase
             'noticias_portal' => [NoticiaPortal::class, 'noticias_portal', 'id_noticia_portal'],
             'busquedas_usuario' => [BusquedaUsuario::class, 'busquedas_usuario', 'id_busqueda_usuario'],
             'filtros_aplicados' => [FiltroAplicado::class, 'filtros_aplicados', 'id_filtro_aplicado'],
+            'cupones' => [Cupon::class, 'cupones', 'id_cupon'],
+            'cupon_usos' => [CuponUso::class, 'cupon_usos', 'id_cupon_uso'],
         ];
     }
 

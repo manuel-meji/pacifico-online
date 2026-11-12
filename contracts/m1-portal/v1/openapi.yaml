@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: M1 Portal público y búsqueda — Contrato del módulo
-  version: 1.4.0
+  version: 1.5.0
   description: |
     Contrato formal del módulo M1 Portal público y búsqueda de Pacíficos Online
     (IF6100, II Ciclo 2026, subgrupo SG1).
@@ -57,6 +57,8 @@ servers:
   - url: /api/m1/v1
     description: Ruta base del módulo en el ambiente de integración (propuesta SG1)
 tags:
+  - name: Cupones
+    description: Nuevo en 1.5.0 (SC-11). Cupones de descuento; M5 los valida en el checkout y registra su uso.
   - name: Noticias
     description: Nuevo en 1.4.0 (SC-08). Noticias de la plataforma; las publica solo la administración.
   - name: Promociones
@@ -1495,6 +1497,273 @@ paths:
         '409':
           $ref: '#/components/responses/ConflictoNoticia'
 
+  /cupones/validar:
+    post:
+      tags: [Cupones]
+      operationId: validarCupon
+      summary: Validar un cupón de descuento en el checkout
+      description: |
+        Nuevo en 1.5.0 (SC-11). La persona compradora con sesión consulta si un
+        cupón aplica a su carrito y cuánto descuenta, antes de confirmar el
+        pedido. No registra el uso: eso lo hace M5 al confirmar el pedido, por
+        la interfaz PHP (registrarUsoCupon).
+
+        - El cliente es el de la sesión. Si el cuerpo trae id_cliente, debe ser
+          el mismo (404 ERR-003 en otro caso).
+        - Un cupón global de la plataforma descuenta sobre subtotal. Un cupón
+          de un comercio descuenta solo sobre el subtotal de ese comercio: el
+          de subtotales_por_comercio o, si el carrito es de un solo comercio,
+          subtotal.
+        - subtotal va sin envío ni impuesto, con los precios de promoción ya
+          aplicados.
+        - Un cupón que no aplica responde 200 con valido=false, el motivo y un
+          mensaje para mostrar. Un código inexistente y uno desactivado
+          responden igual (motivo no_disponible).
+        - Máximo 30 consultas por minuto.
+      x-consumidores: [Checkout del frontend (M5)]
+      x-reglas: [RN-M1-16]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidarCuponRequest'
+            example:
+              codigo: PACIFICO10
+              id_cliente: 5
+              subtotal: 25000.00
+              ids_comercios: [1, 3]
+      responses:
+        '200':
+          description: Resultado de la validación, aplique o no el cupón.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoCupon'
+              examples:
+                aplicado:
+                  value:
+                    valido: true
+                    id_cupon: 12
+                    id_comercio: null
+                    tipo_descuento: porcentaje
+                    valor: 10.0
+                    monto_descuento: 2500.00
+                    motivo: null
+                    mensaje: Cupón de 10 % aplicado.
+                rechazado:
+                  value:
+                    valido: false
+                    id_cupon: null
+                    id_comercio: null
+                    tipo_descuento: null
+                    valor: null
+                    monto_descuento: 0.00
+                    motivo: vencido
+                    mensaje: El cupón ya venció.
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/ClienteNoAccesible'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /comercio/cupones:
+    post:
+      tags: [Cupones]
+      operationId: crearCuponComercio
+      summary: El comercio crea un cupón para sus productos
+      description: |
+        Nuevo en 1.5.0 (SC-11). Rol encargado_comercio; el comercio sale de la
+        sesión (RN-12). El cupón descuenta solo sobre los productos de ese
+        comercio. El código es único en toda la plataforma (409 ERR-M1-007) y
+        se guarda en mayúsculas. Un cupón no se edita: se desactiva y se crea
+        otro.
+      x-consumidores: [Panel de gestión de M1]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosCupon'
+      responses:
+        '201':
+          description: Cupón creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cupon'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '409':
+          $ref: '#/components/responses/ConflictoCupon'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+    get:
+      tags: [Cupones]
+      operationId: listarCuponesComercio
+      summary: Cupones del comercio de la sesión
+      description: Nuevo en 1.5.0 (SC-11). Solo los del comercio de la sesión (RN-12), del más reciente al más antiguo.
+      x-consumidores: [Panel de gestión de M1]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoCupon'
+      responses:
+        '200':
+          description: Cupones del comercio.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cupon'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /comercio/cupones/{id_cupon}/desactivar:
+    parameters:
+      - $ref: '#/components/parameters/IdCupon'
+    post:
+      tags: [Cupones]
+      operationId: desactivarCuponComercio
+      summary: Desactivar un cupón del comercio
+      description: |
+        Nuevo en 1.5.0 (SC-11). Deja de aceptarse en el checkout de inmediato y
+        no se puede reactivar. Desactivar uno ya desactivado responde 200 sin
+        cambios. 404 ERR-004 si no existe o es de otro comercio.
+      x-consumidores: [Panel de gestión de M1]
+      x-reglas: [RN-12]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Cupón desactivado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cupon'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+
+  /administracion/cupones:
+    post:
+      tags: [Cupones]
+      operationId: crearCuponGlobal
+      summary: La administración crea un cupón global de la plataforma
+      description: |
+        Nuevo en 1.5.0 (SC-11). Solo encargado_plataforma. El cupón queda sin
+        comercio (id_comercio null) y descuenta sobre todo el subtotal del
+        carrito. 409 ERR-M1-007 si el código ya existe.
+      x-consumidores: [Panel de gestión de M1]
+      security:
+        - sesionNucleo: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatosCupon'
+      responses:
+        '201':
+          description: Cupón global creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cupon'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '409':
+          $ref: '#/components/responses/ConflictoCupon'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+    get:
+      tags: [Cupones]
+      operationId: listarCuponesAdministracion
+      summary: Cupones de la plataforma y de todos los comercios
+      description: |
+        Nuevo en 1.5.0 (SC-11). Solo encargado_plataforma. Filtros opcionales:
+        estado, id_comercio (los de ese comercio) y ambito=global (solo los de
+        la plataforma; tiene prioridad sobre id_comercio).
+      x-consumidores: [Panel de gestión de M1]
+      security:
+        - sesionNucleo: []
+      parameters:
+        - $ref: '#/components/parameters/EstadoCupon'
+        - name: id_comercio
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: ambito
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [global]
+      responses:
+        '200':
+          description: Cupones.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cupon'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /administracion/cupones/{id_cupon}/desactivar:
+    parameters:
+      - $ref: '#/components/parameters/IdCupon'
+    post:
+      tags: [Cupones]
+      operationId: desactivarCuponAdministracion
+      summary: La administración desactiva cualquier cupón
+      description: |
+        Nuevo en 1.5.0 (SC-11). Solo encargado_plataforma. Desactiva un cupón
+        global o el de un comercio (por ejemplo, si incumple las políticas).
+        404 ERR-004 si no existe.
+      x-consumidores: [Panel de gestión de M1]
+      security:
+        - sesionNucleo: []
+      responses:
+        '200':
+          description: Cupón desactivado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cupon'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/RolSinPermiso'
+        '404':
+          $ref: '#/components/responses/RecursoNoEncontrado'
+
 components:
   securitySchemes:
     sesionNucleo:
@@ -1510,6 +1779,22 @@ components:
         esquema tokenNucleo de la versión 1.0.0.
 
   parameters:
+    IdCupon:
+      name: id_cupon
+      in: path
+      required: true
+      description: Nuevo en 1.5.0.
+      schema:
+        type: integer
+        minimum: 1
+    EstadoCupon:
+      name: estado
+      in: query
+      required: false
+      description: Nuevo en 1.5.0. Deja solo los cupones en ese estado.
+      schema:
+        type: string
+        enum: [programado, vigente, vencido, agotado, desactivado]
     IdCliente:
       name: id_cliente
       in: path
@@ -2507,6 +2792,167 @@ components:
               additionalProperties: true
               description: En ERR-005, un mapa campo → mensaje.
 
+    DatosCupon:
+      type: object
+      description: |
+        Nuevo en 1.5.0. Cuerpo de crearCuponComercio y crearCuponGlobal. El
+        comercio sale de la sesión; un cupón de la administración queda global.
+      required: [codigo, tipo_descuento, valor, fecha_inicio, fecha_fin]
+      properties:
+        codigo:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{2,49}$'
+          description: Letras sin tilde, números, guion o guion bajo, sin espacios. Se guarda en mayúsculas y es único en toda la plataforma.
+        descripcion:
+          type: string
+          maxLength: 255
+          nullable: true
+        tipo_descuento:
+          type: string
+          enum: [porcentaje, monto_fijo]
+        valor:
+          type: number
+          description: Porcentaje mayor que 0 y menor que 100, o monto fijo en colones mayor que 0. Hasta 2 decimales.
+        monto_minimo_compra:
+          type: number
+          minimum: 0
+          nullable: true
+          description: Subtotal mínimo sobre el que aplica el cupón (el del comercio, si el cupón es de un comercio). null si no hay mínimo.
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+          description: Posterior a fecha_inicio y al momento actual.
+        limite_usos_total:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Usos máximos entre todos los clientes. null si no hay límite.
+        limite_usos_por_cliente:
+          type: integer
+          minimum: 1
+          default: 1
+          description: No puede ser mayor que limite_usos_total.
+    Cupon:
+      type: object
+      description: Nuevo en 1.5.0. Cupón de descuento de un comercio o global de la plataforma.
+      required: [id_cupon, id_comercio, codigo, descripcion, tipo_descuento, valor, monto_minimo_compra, fecha_inicio, fecha_fin, limite_usos_total, usos_actuales, limite_usos_por_cliente, activo, estado]
+      properties:
+        id_cupon:
+          type: integer
+        id_comercio:
+          type: integer
+          nullable: true
+          description: null en un cupón global de la plataforma.
+        codigo:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        tipo_descuento:
+          type: string
+          enum: [porcentaje, monto_fijo]
+        valor:
+          type: number
+        monto_minimo_compra:
+          type: number
+          nullable: true
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+        limite_usos_total:
+          type: integer
+          nullable: true
+        usos_actuales:
+          type: integer
+        limite_usos_por_cliente:
+          type: integer
+        activo:
+          type: boolean
+        estado:
+          type: string
+          enum: [programado, vigente, vencido, agotado, desactivado]
+          description: desactivado manda sobre los demás; agotado es que llegó a limite_usos_total.
+    ValidarCuponRequest:
+      type: object
+      description: Nuevo en 1.5.0. Cuerpo de validarCupon.
+      required: [codigo, subtotal]
+      properties:
+        codigo:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: No distingue mayúsculas.
+        id_cliente:
+          type: integer
+          minimum: 1
+          description: Opcional. Si viene, debe ser el cliente de la sesión.
+        subtotal:
+          type: number
+          minimum: 0
+          description: Subtotal del carrito, sin envío ni impuesto.
+        ids_comercios:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: Comercios presentes en el carrito.
+        subtotales_por_comercio:
+          type: array
+          description: Subtotal de cada comercio del carrito. Necesario para un cupón de comercio cuando el carrito tiene productos de varios comercios.
+          items:
+            type: object
+            required: [id_comercio, subtotal]
+            properties:
+              id_comercio:
+                type: integer
+                minimum: 1
+              subtotal:
+                type: number
+                minimum: 0
+    ResultadoCupon:
+      type: object
+      description: |
+        Nuevo en 1.5.0. Resultado de validar un cupón, en la ruta web
+        validarCupon y en el método validarCupon de la interfaz PHP.
+      required: [valido, id_cupon, id_comercio, tipo_descuento, valor, monto_descuento, motivo, mensaje]
+      properties:
+        valido:
+          type: boolean
+        id_cupon:
+          type: integer
+          nullable: true
+          description: null si no aplica. Es el que se pasa a registrarUsoCupon.
+        id_comercio:
+          type: integer
+          nullable: true
+          description: Comercio sobre cuyo subtotal se descuenta; null en un cupón global o si no aplica.
+        tipo_descuento:
+          type: string
+          enum: [porcentaje, monto_fijo]
+          nullable: true
+        valor:
+          type: number
+          nullable: true
+        monto_descuento:
+          type: number
+          description: Monto en colones a restar, a 2 decimales. Nunca supera la base del descuento. 0 si no aplica.
+        motivo:
+          type: string
+          nullable: true
+          enum: [no_disponible, no_iniciado, vencido, agotado, limite_cliente, comercio_no_aplica, requiere_subtotal_comercio, monto_minimo, sin_descuento, null]
+          description: Por qué no aplica; null si aplica.
+        mensaje:
+          type: string
+          description: Texto para mostrar a la persona compradora.
+
   responses:
     PaginacionInvalida:
       description: Nuevo en 1.3.0. pagina o por_pagina no es un entero dentro del rango (pagina >= 1, por_pagina de 1 a 50).
@@ -2658,6 +3104,17 @@ components:
               codigo: ERR-M1-006
               mensaje: La noticia está archivada y no se puede editar.
               detalles: null
+    ConflictoCupon:
+      description: Nuevo en 1.5.0. ERR-M1-007 si ya existe un cupón con ese código, de cualquier comercio o de la plataforma.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              codigo: ERR-M1-007
+              mensaje: Ya existe un cupón con ese código.
+              detalles: null
     DatosInvalidos:
       description: Faltan datos obligatorios o tienen un formato incorrecto.
       content:
@@ -2694,6 +3151,7 @@ x-interfaz-php:
       - TraslapePromocionException (ERR-M1-004, desde 1.4.0; solo en las rutas web de promociones)
       - PromocionNoModificableException (ERR-M1-005, desde 1.4.0; solo en las rutas web de promociones)
       - NoticiaNoModificableException (ERR-M1-006, desde 1.4.0; solo en las rutas web de noticias)
+      - CuponDuplicadoException (ERR-M1-007, desde 1.5.0; solo en las rutas web de cupones)
   doble_de_prueba: tests/Doubles/M1/PortalPublicoFake.php
   metodos:
     - firma: "obtenerCliente(int $idCliente): array"
@@ -2767,14 +3225,38 @@ x-interfaz-php:
 # ---------------------------------------------------------------
 # Interfaz PHP App\Contracts\M1_Portal\ComercialPortalContract (desde 1.4.0)
 # Va aparte de PortalPublicoContract para que quienes ya la implementan (por
-# ejemplo, el doble de M5) no tengan que agregar métodos.
+# ejemplo, el doble de M5) no tengan que agregar métodos. Desde 1.5.0 incluye
+# los cupones de descuento que consume M5.
 # ---------------------------------------------------------------
 x-interfaz-php-comercial:
   interfaz: App\Contracts\M1_Portal\ComercialPortalContract
   ubicacion: app/Contracts/M1_Portal/ComercialPortalContract.php
   doble_de_prueba: tests/Doubles/M1/ComercialPortalFake.php
-  solicitud_de_cambio: SC-08
+  solicitud_de_cambio: SC-08 (1.4.0) y SC-11 (1.5.0)
   metodos:
+    - firma: "validarCupon(string $codigo, int $idCliente, float $subtotal, array $idsComercios = [], array $subtotalesPorComercio = []): array"
+      desde: 1.5.0
+      consumidores: [M5 (checkout y confirmación del pedido)]
+      retorna: Estructura del esquema ResultadoCupon.
+      parametros: |
+        $subtotal sin envío ni impuesto. $idsComercios es la lista de comercios
+        del carrito. $subtotalesPorComercio es un arreglo id_comercio => subtotal;
+        hace falta para un cupón de comercio en un carrito de varios comercios.
+      excepciones:
+        - DatosInvalidosException (equivale a ERR-005) si un parámetro no tiene el formato.
+      notas: |
+        Sin sesión de usuario. No registra el uso. Un cupón que no aplica no
+        lanza excepción: responde valido=false con motivo y mensaje.
+    - firma: "registrarUsoCupon(int $idCupon, int $idCliente, int $idPedido): bool"
+      desde: 1.5.0
+      consumidores: [M5 (dentro de la confirmación del pedido)]
+      retorna: true si el uso quedó registrado (o ya lo estaba para ese pedido); false si el cupón no existe o ya no se puede usar.
+      excepciones:
+        - DatosInvalidosException (equivale a ERR-005) si un identificador es menor que 1.
+      notas: |
+        Idempotente por pedido. Bloquea el cupón dentro de una transacción para
+        que dos pedidos simultáneos no superen el límite de usos. Si responde
+        false, M5 no debe aplicar el descuento.
     - firma: "listarCargosDestacado(int $idComercio, string $desde, string $hasta): array"
       desde: 1.4.0
       consumidores: [M2 o M7 (liquidación al comercio; por confirmar en el Comité)]
@@ -2915,3 +3397,18 @@ x-historial-versiones:
       agrega a PortalPublicoContract; el único que la implementa fuera de M1
       es el doble PortalStub de M5, que ya la tiene con la misma firma. Por
       eso se publica como versión menor.
+  - version: 1.5.0
+    cambios:
+      - Cupones de descuento (M1 es el dueño de los datos; antes se mencionaban en el alcance de M5). Tablas nuevas cupones y cupon_usos.
+      - Cada comercio crea cupones para sus productos y la administración crea los globales de la plataforma. Porcentaje o monto fijo, con fecha y hora de inicio y fin, monto mínimo de compra, límite de usos total y por cliente. El código es único en toda la plataforma (ERR-M1-007).
+      - Rutas web nuevas - validarCupon (checkout, cliente con sesión), crearCuponComercio, listarCuponesComercio, desactivarCuponComercio, crearCuponGlobal, listarCuponesAdministracion y desactivarCuponAdministracion.
+      - Un cupón global descuenta sobre todo el subtotal; uno de comercio, solo sobre el subtotal de los productos de ese comercio (subtotales_por_comercio).
+      - ComercialPortalContract agrega validarCupon y registrarUsoCupon para M5 (esquema ResultadoCupon). PortalPublicoContract no agrega métodos.
+      - Nuevo código propio ERR-M1-007 (409, código de cupón repetido).
+    solicitud_de_cambio: SC-11
+    nota_de_compatibilidad: |
+      Todas las operaciones de cupones son rutas y esquemas nuevos; ninguna
+      operación ni esquema existente cambia. Los dos métodos nuevos van en
+      ComercialPortalContract, que fuera de M1 solo implementa el doble
+      tests/Doubles/M1/ComercialPortalFake.php, ya actualizado. Por eso se
+      publica como versión menor.
