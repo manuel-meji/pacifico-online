@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Contracts\M7_Contabilidad\ComerciosM7GatewayInterface;
 use App\Contracts\M7_Contabilidad\CostosProductosVendidosGatewayInterface;
 use App\Events\M5_Pedidos\PedidoConfirmado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Listeners\M7_Contabilidad\ProcesarPedidoConfirmadoListener;
 use App\Listeners\M7_Contabilidad\ProcesarSubpedidoDespachadoListener;
+use App\Services\M7_Contabilidad\Gateways\M2ComerciosGateway;
 use App\Services\M7_Contabilidad\Gateways\M4CostosProductosVendidosGateway;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -20,6 +22,11 @@ final class M7ContabilidadServiceProvider extends ServiceProvider
         $this->app->bind(
             CostosProductosVendidosGatewayInterface::class,
             M4CostosProductosVendidosGateway::class
+        );
+
+        $this->app->bind(
+            ComerciosM7GatewayInterface::class,
+            M2ComerciosGateway::class
         );
     }
 
