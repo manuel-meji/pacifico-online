@@ -6,6 +6,7 @@ use App\Http\Controllers\M7_Contabilidad\ReporteGerencialController;
 use App\Http\Middleware\EstablecerComercio;
 use App\Http\Middleware\RequiereRol;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\M7_Contabilidad\PlanCuentasController;
 
 
 Route::prefix('api/m7/v1')
@@ -18,6 +19,12 @@ Route::prefix('api/m7/v1')
             EstablecerComercio::class,
             RequiereRol::class . ':encargado_comercio,encargado_plataforma',
         ])->group(function (): void {
+            Route::get('cuentas', [PlanCuentasController::class, 'listar'])
+                ->name('cuentas.index');
+
+            Route::get('cuentas/{idCuentaContable}', [PlanCuentasController::class, 'consultar'])
+                ->whereNumber('idCuentaContable')
+                ->name('cuentas.show');
 
             Route::get('libro-diario', [LibroDiarioController::class, 'listar'])
                 ->name('libro-diario');
