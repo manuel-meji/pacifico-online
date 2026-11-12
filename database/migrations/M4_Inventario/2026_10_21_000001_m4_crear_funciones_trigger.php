@@ -20,14 +20,14 @@ return new class extends Migration
         }
 
         DB::unprepared(<<<'SQL'
-CREATE FUNCTION fn_m4_bloquear_modificacion() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION fn_m4_bloquear_modificacion() RETURNS trigger AS $$
 BEGIN
     RAISE EXCEPTION 'La tabla % es inmutable: no se permite %', TG_TABLE_NAME, TG_OP
         USING ERRCODE = '23514';
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE FUNCTION fn_m4_reservas_transicion() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION fn_m4_reservas_transicion() RETURNS trigger AS $$
 BEGIN
     IF NEW.id_estado_reserva = OLD.id_estado_reserva THEN
         RETURN NEW;
