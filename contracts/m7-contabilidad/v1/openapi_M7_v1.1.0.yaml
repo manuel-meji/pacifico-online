@@ -1,0 +1,788 @@
+openapi: 3.0.3
+info:
+  title: Pacíficos Online - M7 ERP Contable y Reportes Gerenciales
+  version: 1.1.0
+  description: >
+    Especificación de las rutas HTTP y eventos observados en la implementación
+    de M7 en desarrollo d22f9c8. Esta versión está pendiente de revisión y
+    aprobación del Comité; no reemplaza el contrato v1.0.0. Sus diferencias de
+    rutas, respuestas y seguridad pueden ser incompatibles con ese contrato.
+    La autenticación, los errores y la conformidad de las respuestas requieren
+    validación adicional.
+servers:
+  - url: /
+    description: Raíz de la aplicación Laravel
+
+security:
+  - sesionSanctum: []
+
+x-module: M7
+x-owner: SG7 - ERP contable y reportes gerenciales
+x-versioning:
+  strategy: SemVer
+  breakingChange: Incrementar versión mayor y mantener periodo de convivencia según acuerdo del Comité
+  estado: Versión 1.1.0 pendiente de revisión de compatibilidad y aprobación del Comité
+
+x-dependencies:
+  M2:
+    estado: Pendiente de integración
+    operaciones:
+      - ObtenerDatosFiscalesComercio(id_comercio)
+      - ObtenerComisionSubpedido(id_subpedido)
+  M4:
+    - operacion: ObtenerCostoProductosVendidos
+      entrada: id_subpedido
+      salida: costos por id_variacion y costo_total
+      comunicacion: Interfaz PHP InventarioModuleInterface en el mismo proceso
+      validaciones: El subpedido y comercio deben coincidir con el evento y el costo total debe ser positivo.
+      manejo_409:
+        codigo: COSTOS_SUBPEDIDO_NO_DISPONIBLES
+        accion: >
+          El contrato v1.0.0 indica mantener pendiente el asiento y reintentar;
+          el listener actual registra el error y no garantiza reintento durable.
+  M5:
+    - Evento interno PedidoConfirmado
+    - Evento interno SubpedidoDespachado
+    - ObtenerSubpedido(id_subpedido), pendiente de integración
+  M6:
+    estado: Pendiente de integración
+    operaciones:
+      - Evento PagoConfirmado
+      - ObtenerFacturaElectronica(id_factura) / listar facturas por id_pedido
+      - Evento ReembolsoProcesado para registrar la reversión contable definitiva
+  Nucleo:
+    - Autenticación mediante auth:sanctum en las rutas API protegidas
+    - Contexto de comercio y verificación de roles
+    - Manejo estándar de errores JSON
+
+x-pending-decisions:
+  compatibilidad:
+    estado: Pendiente de revisión del Comité
+    descripcion: >
+      El inventario HTTP difiere de v1.0.0 y no incluye todas las operaciones
+      publicadas. El Comité debe acordar versión, convivencia y obligaciones.
+  reconocimiento_venta:
+    estado: Pendiente de ratificación del Comité
+    bloquea_publicacion_definitiva: true
+    descripcion: >
+      La implementación actual procesa PedidoConfirmado para registrar la venta
+      por subtotal. La decisión contractual definitiva requiere ratificación.
+  recuperacion_eventos:
+    estado: Pendiente de coordinación
+    descripcion: >
+      Los listeners registran las excepciones sin propagarlas al emisor; el
+      procesamiento observado no garantiza un reintento durable.
+
+x-eventos-consumidos:
+  PedidoConfirmado:
+    productor: M5
+    proposito: Registrar la venta por subtotal para cada subpedido.
+    payload_esperado:
+      id_evento: uuid
+      fecha_evento: date-time
+      id_pedido: int64
+      subpedidos: Lista con id_subpedido, id_comercio y subtotal.
+  SubpedidoDespachado:
+    productor: M5
+    proposito: Registrar el costo de ventas del subpedido despachado.
+    payload_esperado:
+      id_evento: uuid
+      fecha_evento: date-time
+      id_pedido: int64
+      id_subpedido: int64
+      id_comercio: int64
+
+x-eventos-pendientes:
+  SubpedidoEntregado:
+    productor: M5
+    proposito: Registrar el pasivo o cuenta por pagar al comercio.
+    payload_esperado:
+      id_evento: uuid
+      id_pedido: int64
+      id_subpedido: int64
+      id_comercio: int64
+      fecha: date-time
+  PagoConfirmado:
+    productor: M6
+    proposito: Registrar contablemente el pago confirmado.
+    payload_esperado:
+      id_evento: uuid
+      id_pago: int64
+      id_pedido: int64
+      monto: decimal
+      fecha: date-time
+    nota: M6 debe agregar id_evento, o el Comité declarar id_pago como clave idempotente.
+  ReembolsoProcesado:
+    productor: M6
+    proposito: Registrar una reversión contable definitiva después del reembolso y la nota de crédito.
+    payload_esperado:
+      id_evento: uuid
+      id_pedido: int64
+      id_subpedido: int64|null
+      id_comercio: int64|null
+      id_reembolso: int64
+      monto: decimal
+      nota_credito_id: int64|null
+      fecha: date-time
+    nota: La reversión definitiva se registra al recibir ReembolsoProcesado desde M6.
+
+x-operaciones-pendientes-v1:
+  descripcion: >
+    Operaciones publicadas en v1.0.0 sin ruta correspondiente registrada. Su
+    inclusión aquí no indica su retirada ni sustituye el contrato publicado.
+  operaciones:
+    - consultarEstadoContablePedido
+    - consultarEstadoContableSubpedido
+    - obtenerResumenFinancieroComercio
+    - consultarRentabilidadComercio
+    - consultarEstadoResultados
+    - consultarBalanceGeneral
+    - consultarTableroEjecutivo
+    - crearCuentaContable
+    - actualizarCuentaContable
+
+x-componentes-v1:
+  descripcion: >
+    Se conservan las definiciones de v1.0.0 que no corresponden a rutas
+    implementadas para facilitar su revisión. Su presencia en components no
+    indica que las operaciones o respuestas asociadas estén disponibles.
+
+tags:
+  - name: Plan de cuentas
+  - name: Libros contables
+  - name: Reportes
+  - name: Integración
+  - name: Estado
+
+paths:
+  /api/m7/v1/cuentas:
+    get:
+      tags: [Plan de cuentas]
+      summary: Listar cuentas del comercio
+      operationId: listarCuentasContables
+      description: El comercio se obtiene del contexto o se indica en modo sistema; solo_activas filtra las cuentas activas.
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+        - name: solo_activas
+          in: query
+          schema: { type: integer, enum: [0, 1], default: 0 }
+          description: Por HTTP se aceptan los valores 0 y 1.
+      responses:
+        '200':
+          description: Cuentas del comercio
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [id_comercio, cuentas]
+                    properties:
+                      id_comercio: { type: integer }
+                      cuentas:
+                        type: array
+                        items: { $ref: '#/components/schemas/CuentaContable' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/cuentas/{idCuentaContable}:
+    get:
+      tags: [Plan de cuentas]
+      summary: Consultar una cuenta
+      operationId: consultarCuentaContable
+      parameters:
+        - name: idCuentaContable
+          in: path
+          required: true
+          schema: { type: integer }
+          description: La ruta solo acepta dígitos.
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Cuenta del comercio
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { $ref: '#/components/schemas/CuentaContable' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/libro-diario:
+    get:
+      tags: [Libros contables]
+      summary: Consultar el libro diario
+      operationId: consultarLibroDiario
+      description: Usa el contexto del comercio; en modo sistema la consulta no filtra por comercio.
+      parameters:
+        - $ref: '#/components/parameters/FechaDesde'
+        - $ref: '#/components/parameters/FechaHasta'
+        - name: tipo
+          in: query
+          schema: { type: string, maxLength: 40 }
+        - name: estado
+          in: query
+          schema: { type: string, enum: [REGISTRADO, PENDIENTE, ANULADO] }
+        - name: buscar
+          in: query
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Asientos y totales
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { $ref: '#/components/schemas/LibroDiario' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/libro-mayor:
+    get:
+      tags: [Libros contables]
+      summary: Consultar movimientos y saldo de una cuenta
+      operationId: consultarLibroMayor
+      parameters:
+        - name: id_cuenta_contable
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - $ref: '#/components/parameters/IdComercio'
+        - $ref: '#/components/parameters/FechaDesde'
+        - $ref: '#/components/parameters/FechaHasta'
+        - name: incluirAnulados
+          in: query
+          schema: { type: integer, enum: [0, 1], default: 0 }
+          description: Por HTTP se aceptan los valores 0 y 1.
+      responses:
+        '200':
+          description: Movimientos y saldos de la cuenta
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { $ref: '#/components/schemas/LibroMayor' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/libro-mayor/cuentas:
+    get:
+      tags: [Libros contables]
+      summary: Listar cuentas activas para el libro mayor
+      operationId: listarCuentasLibroMayor
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Cuentas activas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [id_comercio, cuentas]
+                    properties:
+                      id_comercio: { type: integer }
+                      cuentas:
+                        type: array
+                        items: { $ref: '#/components/schemas/CuentaMayor' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/reporte-gerencial:
+    get:
+      tags: [Reportes]
+      summary: Consultar ingresos, costos y utilidad bruta
+      operationId: consultarReporteGerencial
+      description: Si se omiten fechas, se utilizan respectivamente el inicio y fin del mes actual.
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+        - $ref: '#/components/parameters/FechaDesde'
+        - $ref: '#/components/parameters/FechaHasta'
+      responses:
+        '200':
+          description: Resumen y serie mensual de asientos registrados de venta y costo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { $ref: '#/components/schemas/ReporteGerencial' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /m7:
+    get:
+      tags: [Estado]
+      summary: Consultar estado básico del módulo
+      operationId: consultarEstadoModulo
+      description: Ruta web sin autenticación declarada; no comprueba disponibilidad de la base de datos.
+      security: []
+      responses:
+        '200':
+          description: Estado básico
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [module, status]
+                properties:
+                  module: { type: string, enum: [M7_Contabilidad] }
+                  status: { type: string, enum: [online] }
+
+  /m7/pagos/{idPago}/registro-contable:
+    get:
+      tags: [Integración]
+      summary: Consultar si existe un asiento registrado para un pago
+      operationId: consultarRegistroContablePago
+      description: |
+        Ruta web que no declara autenticación ni control de comercio. La consulta
+        no filtra por comercio: riesgo pendiente de revisión; no se recomienda
+        su exposición sin autorización. Identificadores no positivos o sin asiento
+        devuelven registrado=false. No demuestra que se genere el asiento del pago.
+      security: []
+      parameters:
+        - name: idPago
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Resultado de la búsqueda
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id_pago, registrado, asiento_id, fecha_registro]
+                properties:
+                  id_pago: { type: integer }
+                  registrado: { type: boolean }
+                  asiento_id: { type: integer, nullable: true }
+                  fecha_registro: { type: string, nullable: true }
+        '500':
+          description: Error del servidor; su formato depende de si la solicitud espera JSON.
+
+components:
+  securitySchemes:
+    sesionSanctum:
+      type: apiKey
+      in: cookie
+      name: NOMBRE_COOKIE_CONFIGURABLE
+      description: |
+        Marcador, no nombre literal: sustituir según SESSION_COOKIE o la configuración
+        derivada de APP_NAME antes de usar este inventario con clientes generados.
+        Se observó auth:sanctum y pruebas con sesión web; la configuración de
+        dominios stateful y otras modalidades de autenticación deben verificarse.
+        Los roles permitidos son encargado_comercio y encargado_plataforma.
+
+  parameters:
+    IdComercio:
+      name: id_comercio
+      in: query
+      required: false
+      description: Opcional para el comercio autenticado; requerido en modo sistema para estas consultas.
+      schema: { type: integer, minimum: 1 }
+    FechaDesde:
+      name: fecha_desde
+      in: query
+      required: false
+      description: Fecha validada por Laravel.
+      schema: { type: string, example: '2026-11-01' }
+    FechaHasta:
+      name: fecha_hasta
+      in: query
+      required: false
+      description: Fecha validada por Laravel; debe ser posterior o igual a fecha_desde cuando ambas se indican.
+      schema: { type: string, example: '2026-11-30' }
+
+
+  # Definiciones de v1.0.0 conservadas para operaciones pendientes.
+    PedidoId:
+      name: id_pedido
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    PagoId:
+      name: id_pago
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    SubpedidoId:
+      name: id_subpedido
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    ComercioId:
+      name: id_comercio
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    CuentaId:
+      name: id_cuenta_contable
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Desde:
+      name: desde
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    Hasta:
+      name: hasta
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    Periodo:
+      name: periodo
+      in: query
+      required: true
+      schema:
+        type: string
+        example: 2026-09
+
+  responses:
+    NoAutenticado:
+      description: Sesión no autenticada (ERR-001).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+    SinPermisos:
+      description: Rol no autorizado (ERR-002); no cubre todos los errores de contexto de comercio.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+    NoEncontrado:
+      description: Cuenta o ruta no encontrada (ERR-004).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+    Validacion:
+      description: Parámetros inválidos (ERR-005).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+    ErrorInterno:
+      description: Error interno (ERR-006), inclusive algunas excepciones de contexto.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+
+
+  # Definiciones de v1.0.0 conservadas para operaciones pendientes.
+    ParametrosInvalidos:
+      description: Parámetros inválidos
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEstandar' }
+
+  x-error-codes:
+    descripcion: Códigos reservados en v1.0.0; su uso en las rutas actuales requiere validación.
+    ERR-M7-001:
+      http: 404
+      descripcion: Recurso contable no encontrado.
+    ERR-M7-002:
+      http: 409
+      descripcion: Conflicto con el estado contable actual.
+    ERR-M7-003:
+      http: 422
+      descripcion: Parámetros o datos contables inválidos.
+
+  schemas:
+    ErrorEstandar:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [codigo, mensaje, detalles]
+          properties:
+            codigo: { type: string }
+            mensaje: { type: string }
+            detalles:
+              type: object
+              nullable: true
+              additionalProperties: true
+    CuentaContable:
+      type: object
+      required: [id_cuenta_contable, codigo, nombre, tipo, naturaleza, nivel, id_cuenta_padre, activa]
+      properties:
+        id_cuenta_contable: { type: integer }
+        codigo: { type: string }
+        nombre: { type: string }
+        tipo: { type: string }
+        naturaleza: { type: string }
+        nivel: { type: integer }
+        id_cuenta_padre: { type: integer, nullable: true }
+        activa: { type: boolean }
+    CuentaMayor:
+      type: object
+      required: [id_cuenta_contable, codigo, nombre, tipo, naturaleza]
+      properties:
+        id_cuenta_contable: { type: integer }
+        codigo: { type: string }
+        nombre: { type: string }
+        tipo: { type: string }
+        naturaleza: { type: string }
+    LibroDiario:
+      type: object
+      required: [asientos, totalDebe, totalHaber, cantidad]
+      properties:
+        asientos:
+          type: array
+          items: { $ref: '#/components/schemas/AsientoDiario' }
+        totalDebe: { type: number }
+        totalHaber: { type: number }
+        cantidad: { type: integer }
+    AsientoDiario:
+      type: object
+      required: [id, numero, fecha, descripcion, tipo, estado, referencia, lineas, totalDebe, totalHaber]
+      properties:
+        id: { type: integer }
+        numero: { type: string }
+        fecha: { type: string }
+        descripcion: { type: string }
+        tipo: { type: string }
+        estado: { type: string }
+        referencia: { type: string }
+        lineas:
+          type: array
+          items:
+            type: object
+            required: [codigo, cuenta, debe, haber, descripcion]
+            properties:
+              codigo: { type: string }
+              cuenta: { type: string }
+              debe: { type: number }
+              haber: { type: number }
+              descripcion: { type: string, nullable: true }
+        totalDebe: { type: number }
+        totalHaber: { type: number }
+    LibroMayor:
+      type: object
+      required: [cuenta, id_comercio, fecha_desde, fecha_hasta, incluir_anulados, saldo_inicial, total_debe, total_haber, saldo_final, movimientos]
+      properties:
+        cuenta:
+          type: object
+          required: [id_cuenta_contable, codigo, nombre, naturaleza]
+          properties:
+            id_cuenta_contable: { type: integer }
+            codigo: { type: string }
+            nombre: { type: string }
+            naturaleza: { type: string }
+        id_comercio: { type: integer }
+        fecha_desde: { type: string, nullable: true }
+        fecha_hasta: { type: string, nullable: true }
+        incluir_anulados: { type: boolean }
+        saldo_inicial: { type: string }
+        total_debe: { type: string }
+        total_haber: { type: string }
+        saldo_final: { type: string }
+        movimientos:
+          type: array
+          items: { $ref: '#/components/schemas/MovimientoMayor' }
+    MovimientoMayor:
+      type: object
+      required: [id_asiento, fecha, numero_linea, asiento, tipo, descripcion, estado, debe, haber, saldo]
+      properties:
+        id_asiento: { type: integer }
+        fecha: { type: string }
+        numero_linea: { type: integer }
+        asiento: { type: string }
+        tipo: { type: string }
+        descripcion: { type: string }
+        estado: { type: string }
+        debe: { type: string }
+        haber: { type: string }
+        saldo: { type: string }
+    ReporteGerencial:
+      type: object
+      required: [id_comercio, fecha_desde, fecha_hasta, resumen, mensual]
+      properties:
+        id_comercio: { type: integer }
+        fecha_desde: { type: string }
+        fecha_hasta: { type: string }
+        resumen: { $ref: '#/components/schemas/ImportesGerenciales' }
+        mensual:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/ImportesGerenciales'
+              - type: object
+                required: [periodo]
+                properties:
+                  periodo: { type: string, example: '2026-11' }
+    ImportesGerenciales:
+      type: object
+      required: [ingresos, costos, utilidad_bruta]
+      properties:
+        ingresos: { type: string }
+        costos: { type: string }
+        utilidad_bruta: { type: string }
+
+  # Definiciones de v1.0.0 conservadas para operaciones pendientes.
+    CuentaContableInput:
+      type: object
+      required: [codigo, nombre, tipo]
+      properties:
+        codigo: { type: string }
+        nombre: { type: string }
+        tipo:
+          type: string
+          enum: [ACTIVO, PASIVO, PATRIMONIO, INGRESO, GASTO]
+        id_cuenta_padre: { type: integer, format: int64, nullable: true }
+        activa: { type: boolean, default: true }
+    DetalleAsiento:
+      type: object
+      required: [id_cuenta_contable, debe, haber]
+      properties:
+        id_cuenta_contable: { type: integer, format: int64 }
+        id_centro_costo: { type: integer, format: int64, nullable: true }
+        debe: { type: number, format: double, minimum: 0 }
+        haber: { type: number, format: double, minimum: 0 }
+        descripcion: { type: string, nullable: true }
+    AsientoContable:
+      type: object
+      required: [id_asiento, tipo, fecha, evento_id, id_comercio, detalles]
+      properties:
+        id_asiento: { type: integer, format: int64 }
+        tipo: { type: string, example: VENTA }
+        fecha: { type: string, format: date-time }
+        evento_id: { type: string, format: uuid }
+        id_pedido: { type: integer, format: int64, nullable: true }
+        id_subpedido: { type: integer, format: int64, nullable: true }
+        id_comercio: { type: integer, format: int64 }
+        descripcion: { type: string }
+        estado:
+          type: string
+          enum: [REGISTRADO, PENDIENTE, ANULADO]
+        detalles:
+          type: array
+          minItems: 2
+          items:
+            $ref: '#/components/schemas/DetalleAsiento'
+    EstadoContablePedido:
+      type: object
+      required: [id_pedido, contabilizado]
+      properties:
+        id_pedido: { type: integer, format: int64 }
+        contabilizado: { type: boolean }
+        asiento_venta_id: { type: integer, format: int64, nullable: true }
+        asiento_costo_id: { type: integer, format: int64, nullable: true }
+        fecha_contabilizacion: { type: string, format: date-time, nullable: true }
+    EstadoContableSubpedido:
+      type: object
+      required: [id_subpedido, id_pedido, id_comercio, contabilizado]
+      properties:
+        id_subpedido: { type: integer, format: int64 }
+        id_pedido: { type: integer, format: int64 }
+        id_comercio: { type: integer, format: int64 }
+        contabilizado: { type: boolean }
+        asiento_venta_id: { type: integer, format: int64, nullable: true }
+        asiento_costo_id: { type: integer, format: int64, nullable: true }
+        fecha_contabilizacion: { type: string, format: date-time, nullable: true }
+    RegistroContablePago:
+      type: object
+      required: [id_pago, registrado]
+      properties:
+        id_pago: { type: integer, format: int64 }
+        registrado: { type: boolean }
+        asiento_id: { type: integer, format: int64, nullable: true }
+        fecha_registro: { type: string, format: date-time, nullable: true }
+    ResumenFinanciero:
+      type: object
+      required: [id_comercio, fecha_inicio, fecha_fin, ingresos, costos, gastos, utilidad]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        fecha_inicio: { type: string, format: date }
+        fecha_fin: { type: string, format: date }
+        ingresos: { type: number, format: double }
+        costos: { type: number, format: double }
+        gastos: { type: number, format: double }
+        utilidad: { type: number, format: double }
+    RentabilidadCentroCosto:
+      type: object
+      required: [id_centro_costo, nombre, ingresos, costos, utilidad]
+      properties:
+        id_centro_costo: { type: integer, format: int64, nullable: true }
+        nombre: { type: string }
+        ingresos: { type: number, format: double }
+        costos: { type: number, format: double }
+        utilidad: { type: number, format: double }
+    Rentabilidad:
+      type: object
+      required: [id_comercio, periodo, ingresos, costos, utilidad, centros_costo]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        periodo: { type: string, example: 2026-09 }
+        ingresos: { type: number, format: double }
+        costos: { type: number, format: double }
+        utilidad: { type: number, format: double }
+        centros_costo:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentabilidadCentroCosto'
+    EstadoResultados:
+      type: object
+      required: [id_comercio, periodo, ingresos, costos, gastos, utilidad]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        periodo: { type: string }
+        ingresos: { type: number, format: double }
+        costos: { type: number, format: double }
+        gastos: { type: number, format: double }
+        utilidad: { type: number, format: double }
+    BalanceGeneral:
+      type: object
+      required: [id_comercio, fecha_corte, activos, pasivos, patrimonio]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        fecha_corte: { type: string, format: date }
+        activos: { type: number, format: double }
+        pasivos: { type: number, format: double }
+        patrimonio: { type: number, format: double }
+    TableroEjecutivo:
+      type: object
+      required: [id_comercio, periodo, indicadores]
+      properties:
+        id_comercio: { type: integer, format: int64 }
+        periodo: { type: string }
+        indicadores:
+          type: object
+          properties:
+            ventas: { type: number, format: double }
+            costos: { type: number, format: double }
+            utilidad: { type: number, format: double }
+            cuentas_por_cobrar: { type: number, format: double }
+            cuentas_por_pagar: { type: number, format: double }
