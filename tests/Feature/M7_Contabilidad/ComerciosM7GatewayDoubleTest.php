@@ -11,7 +11,7 @@ class ComerciosM7GatewayDoubleTest extends TestCase
 {
     public function test_m7_puede_simular_datos_fiscales_de_m2(): void
     {
-        $stub = new ComerciosM7Stub();
+        $stub = new ComerciosM7Stub;
 
         $stub->configurarDatosFiscales(2, [
             'id_comercio' => 2,
@@ -38,9 +38,10 @@ class ComerciosM7GatewayDoubleTest extends TestCase
         $this->assertTrue($respuesta['inscrito_como_contribuyente']);
         $this->assertSame('CRC', $respuesta['comision']['moneda']);
     }
+
     public function test_m7_puede_simular_comision_calculada_de_m2(): void
     {
-        $stub = new ComerciosM7Stub();
+        $stub = new ComerciosM7Stub;
         $stub->configurarComision(10, 1500.00);
 
         $this->app->instance(ComerciosM7GatewayInterface::class, $stub);
@@ -53,7 +54,7 @@ class ComerciosM7GatewayDoubleTest extends TestCase
 
     public function test_m7_puede_simular_datos_fiscales_no_disponibles(): void
     {
-        $stub = new ComerciosM7Stub();
+        $stub = new ComerciosM7Stub;
         $stub->configurarDatosFiscalesNoDisponibles();
 
         $this->expectException(RuntimeException::class);
@@ -65,7 +66,7 @@ class ComerciosM7GatewayDoubleTest extends TestCase
 
     public function test_m7_puede_simular_comision_no_disponible(): void
     {
-        $stub = new ComerciosM7Stub();
+        $stub = new ComerciosM7Stub;
         $stub->configurarComisionNoDisponible();
 
         $this->expectException(RuntimeException::class);
@@ -77,7 +78,7 @@ class ComerciosM7GatewayDoubleTest extends TestCase
 
     public function test_m7_detecta_comercio_no_configurado(): void
     {
-        $stub = new ComerciosM7Stub();
+        $stub = new ComerciosM7Stub;
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionCode(404);
@@ -87,7 +88,7 @@ class ComerciosM7GatewayDoubleTest extends TestCase
 
     public function test_m7_detecta_subpedido_sin_comision_configurada(): void
     {
-        $stub = new ComerciosM7Stub();
+        $stub = new ComerciosM7Stub;
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionCode(404);

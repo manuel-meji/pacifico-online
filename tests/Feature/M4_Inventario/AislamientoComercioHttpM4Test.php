@@ -102,6 +102,26 @@ class AislamientoComercioHttpM4Test extends TestCase
             ->where(['m.id_comercio' => 1, 'm.id_variacion' => 501, 'm.id_ubicacion' => 1])
             ->value('k.saldo_cantidad'));
     }
+
+    public function test_el_seeder_carga_las_variaciones_reales_del_catalogo_de_m3(): void
+    {
+        $this->seed(InventarioDemoSeeder::class);
+
+        // variación => [comercio, producto, sede], como en producto_variaciones (M3) y sedes_comercio (M2).
+        $esperado = [
+            1 => [1, 1, 1], 2 => [1, 2, 1], 3 => [2, 3, 3], 4 => [3, 4, 4], 5 => [3, 5, 4], 6 => [4, 6, 5],
+            7 => [4, 6, 5], 8 => [4, 7, 5], 9 => [5, 8, 6], 10 => [5, 9, 6], 11 => [5, 10, 6],
+        ];
+
+        foreach ($esperado as $variacion => [$comercio, $producto, $sede]) {
+            $this->assertDatabaseHas('existencias', [
+                'id_variacion' => $variacion, 'id_comercio' => $comercio, 'id_producto' => $producto, 'id_ubicacion' => $sede,
+            ]);
+        }
+
+        $this->assertSame(30, (int) DB::table('existencias')
+            ->where(['id_comercio' => 1, 'id_variacion' => 1, 'id_ubicacion' => 1])->value('cantidad_fisica'));
+    }
 }
 
 /** Catálogo de prueba: las variaciones 30 a 39 son del comercio 3. */

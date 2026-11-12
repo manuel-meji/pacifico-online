@@ -279,4 +279,83 @@ class M5_ConsumidorContratoTest extends TestCase
                 && count($evento->datos['subpedidos']) > 0;
         });
     }
+
+    // =========================================================================
+    // 4. Consumidor de M3 (Catálogo - Contrato v1.3.0)
+    // =========================================================================
+
+    public function test_consumidor_m3_actualizar_cantidad_usa_id_comercio_del_producto_y_resuelve_imagen(): void
+    {
+        $mockM3 = $this->createMock(CatalogoServiceInterface::class);
+        $mockM3->method('obtenerVariacion')->willReturnCallback(function (int $idVariacion): array {
+            return [
+                'id_variacion' => $idVariacion,
+                'id_producto' => 10,
+                'sku' => 'SKU-M3-'.$idVariacion,
+                'precio' => 12000.00,
+                'tarifa_impuesto' => 13.00,
+                'disponible' => true,
+                'atributos' => [],
+                'producto' => [
+                    'id_producto' => 10,
+                    'id_comercio' => 7,
+                    'nombre' => 'Café Tarrazú M3',
+                ],
+            ];
+        });
+        $mockM3->expects($this->once())
+            ->method('obtenerDetalleProducto')
+            ->with(10)
+            ->willReturn([
+                'id_producto' => 10,
+                'id_comercio' => 7,
+                'nombre' => 'Café Tarrazú M3',
+                'imagenes' => [
+                    [
+                        'id_imagen' => 1,
+                        'id_producto' => 10,
+                        'id_variacion' => null,
+                        'imagen_url' => 'https://cdn.pacificos.test/cafe-general.jpg',
+                        'orden' => 1,
+                    ],
+                    [
+                        'id_imagen' => 2,
+                        'id_producto' => 10,
+                        'id_variacion' => 101,
+                        'imagen_url' => 'https://cdn.pacificos.test/cafe-101.jpg',
+                        'orden' => 2,
+                    ],
+                ],
+            ]);
+        $this->app->instance(CatalogoServiceInterface::class, $mockM3);
+
+        $mockM4 = $this->createMock(InventarioModuleInterface::class);
+        $mockM4->expects($this->once())
+            ->method('consultarStockDisponible')
+            ->with(7, 101, 1)
+            ->willReturn([
+                'id_comercio' => 7,
+                'id_variacion' => 101,
+                'id_ubicacion' => 1,
+                'cantidad_disponible' => 10,
+                'estado_disponibilidad' => 'disponible',
+                'bajo_stock' => false,
+            ]);
+        $this->app->instance(InventarioModuleInterface::class, $mockM4);
+        $this->app->instance(InventarioServiceInterface::class, $mockM4);
+
+        $carrito = (new Carrito)->obtenerOCrearCarrito(55);
+        $item = (new ItemCarrito)->crearItemCarrito($carrito->id_carrito, 101, 1);
+        (new ItemCarrito)->crearItemCarrito($carrito->id_carrito, 102, 1);
+
+        $response = $this->putJson("{$this->prefix}/carrito/items/{$item->id_item_carrito}", [
+            'cantidad' => 3,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('items.0.id_comercio', 7)
+            ->assertJsonPath('items.0.imagen', 'https://cdn.pacificos.test/cafe-101.jpg')
+            ->assertJsonPath('items.1.imagen', 'https://cdn.pacificos.test/cafe-general.jpg')
+            ->assertJsonPath('grupos_comercio.0.id_comercio', 7);
+    }
 }

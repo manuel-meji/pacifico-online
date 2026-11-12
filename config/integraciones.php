@@ -27,25 +27,29 @@ return [
     | servicio real ('real'), y 'doble' es la clase que se usa en modo doble.
     | Una prueba puede cambiar 'doble' por una variante de tests/Doubles/M1.
     | Solo afecta a los servicios de M1 (ver M1IntegracionesServiceProvider).
+    | M2, M3, M4 y M5 están en 'real' por defecto: cualquier copia del proyecto y
+    | producción quedan conectadas sin tocar el .env. Para trabajar sin un
+    | proveedor, poner M1_M?_MODO=doble en el .env propio. Las pruebas usan
+    | siempre los dobles (PruebaM1).
     |
     */
 
     'm1' => [
         'm2' => [
-            'modo' => env('M1_M2_MODO', 'doble'),
+            'modo' => env('M1_M2_MODO', 'real'),
             'doble' => ComerciosStub::class,
         ],
         'm3' => [
-            'modo' => env('M1_M3_MODO', 'doble'),
+            'modo' => env('M1_M3_MODO', 'real'),
             'doble' => CatalogoFake::class,
         ],
-        
+
         'm4' => [
-            'modo' => env('M1_M4_MODO', 'doble'),
+            'modo' => env('M1_M4_MODO', 'real'),
             'doble' => InventarioStub::class,
         ],
         'm5' => [
-            'modo' => env('M1_M5_MODO', 'doble'),
+            'modo' => env('M1_M5_MODO', 'real'),
             'doble' => CarritoFake::class,
         ],
 
@@ -64,7 +68,7 @@ return [
         ],
     ],
 
-  /*
+    /*
     |--------------------------------------------------------------------------
     | Dependencias de M3 Catálogo
     |--------------------------------------------------------------------------
@@ -207,7 +211,7 @@ return [
             'doble' => M5PortalStub::class,
         ],
         'm2' => [
-            'modo' => env('M5_M2_MODO', 'doble'),
+            'modo' => env('M5_M2_MODO', env('APP_ENV') === 'testing' ? 'doble' : 'real'),
             'doble' => M5ComerciosStub::class,
         ],
         'm3' => [

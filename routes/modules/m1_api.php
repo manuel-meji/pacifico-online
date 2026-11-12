@@ -3,6 +3,7 @@
 use App\Http\Controllers\M1_Portal\BusquedaController;
 use App\Http\Controllers\M1_Portal\ClienteController;
 use App\Http\Controllers\M1_Portal\ComercioController;
+use App\Http\Controllers\M1_Portal\CuponesController;
 use App\Http\Controllers\M1_Portal\DestacadosController;
 use App\Http\Controllers\M1_Portal\DireccionClienteController;
 use App\Http\Controllers\M1_Portal\FichaProductoController;
@@ -87,6 +88,14 @@ Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class
         Route::post('/promociones/{id_promocion}/desactivar', [PromocionesController::class, 'desactivar'])
             ->where('id_promocion', '[1-9][0-9]*')
             ->name('promociones.desactivar');
+
+        // Cupones de descuento del comercio (contrato 1.5.0, SC-11).
+        Route::post('/cupones', [CuponesController::class, 'crearDelComercio'])->name('cupones.crear');
+        Route::get('/cupones', [CuponesController::class, 'delComercio'])->name('cupones.listar');
+
+        Route::post('/cupones/{id_cupon}/desactivar', [CuponesController::class, 'desactivar'])
+            ->where('id_cupon', '[1-9][0-9]*')
+            ->name('cupones.desactivar');
     });
 
 Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class.':encargado_plataforma'])
@@ -124,6 +133,14 @@ Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class
             ->where('id_promocion', '[1-9][0-9]*')
             ->name('promociones.mostrar');
 
+        // Cupones: la administración crea los globales, los lista todos y desactiva cualquiera (contrato 1.5.0, SC-11).
+        Route::post('/cupones', [CuponesController::class, 'crearGlobal'])->name('cupones.crear');
+        Route::get('/cupones', [CuponesController::class, 'administracion'])->name('cupones.listar');
+
+        Route::post('/cupones/{id_cupon}/desactivar', [CuponesController::class, 'desactivar'])
+            ->where('id_cupon', '[1-9][0-9]*')
+            ->name('cupones.desactivar');
+
         // Noticias: solo la administración las publica (contrato 1.4.0, SC-08).
         Route::post('/noticias', [NoticiasController::class, 'crear'])->name('noticias.crear');
         Route::get('/noticias', [NoticiasController::class, 'administracion'])->name('noticias.listar');
@@ -140,6 +157,13 @@ Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class
             ->where('id_noticia', '[1-9][0-9]*')
             ->name('noticias.archivar');
     });
+
+// Validación de un cupón en el checkout de M5 (contrato 1.5.0, SC-11). Requiere
+// la sesión de la persona compradora; máximo 30 intentos por minuto para
+// frenar la búsqueda de códigos por prueba y error.
+Route::post('/cupones/validar', [CuponesController::class, 'validar'])
+    ->middleware(['auth:sanctum', EstablecerCliente::class, 'throttle:30,1'])
+    ->name('cupones.validar');
 
 // CU-010 Registrar cliente. Pública (autorregistro); máximo 10 intentos por
 // minuto por IP para frenar registros masivos y pruebas de correos.

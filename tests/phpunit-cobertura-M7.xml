@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="../vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="../vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="M7 Unit">
+            <directory>Unit/M7_Contabilidad</directory>
+        </testsuite>
+        <testsuite name="M7 Feature">
+            <directory>Feature/M7_Contabilidad</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>../app/Contracts/M7_Contabilidad</directory>
+            <directory>../app/Http/Controllers/M7_Contabilidad</directory>
+            <directory>../app/Listeners/M7_Contabilidad</directory>
+            <directory>../app/Models/M7_Contabilidad</directory>
+            <directory>../app/Services/M7_Contabilidad</directory>
+            <file>../app/Providers/M7ContabilidadServiceProvider.php</file>
+        </include>
+    </source>
+
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="DB_CONNECTION" force="true" value="sqlite"/>
+        <env name="DB_DATABASE" force="true" value=":memory:"/>
+        <env name="DB_URL" force="true" value=""/>
+        <env name="M2_DISCO_IMAGENES" force="true" value="public"/>
+        <env name="M6_M5_DOBLE" force="true" value="(null)"/>
+        <env name="M5_M2_MODO" force="true" value="doble"/>
+        <env name="M5_M6_MODO" force="true" value="doble"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Clock, ExternalLink, Image as ImageIcon, Images, Mail, Phone, Plus, ScrollText, Sparkles, Store, Trash2 } from 'lucide-react';
+import { Clock, Home, Image as ImageIcon, Images, Mail, Phone, Plus, ScrollText, Sparkles, Store, Trash2 } from 'lucide-react';
 import {
   actualizarInformacion, consultarMicrositio, consultarPublicidad, solicitarPublicidad, gestionarBanners, gestionarGaleria,
   guardarContactos, guardarHorarios, guardarLogotipo, guardarPoliticas,
@@ -92,9 +92,9 @@ function VistaPrevia({ nombre, logotipo, descripcion, horarios, contactos }) {
           {redes > 0 && <p className="mt-3 text-xs text-slate-500">{redes === 1 ? '1 red social' : `${redes} redes sociales`}</p>}
         </div>
       </div>
-      <a href="/m1.html" target="_blank" rel="noopener noreferrer"
+      <a href="/m1.html"
         className={`mt-3 inline-flex items-center gap-1 text-sm font-bold ${C.marinoTexto} underline hover:no-underline`}>
-        <ExternalLink size={14} /> Abrir el portal
+        <Home size={14} /> Abrir el portal
       </a>
     </aside>
   );

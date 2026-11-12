@@ -14,6 +14,7 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
   const nav = useContext(NavegacionM5);
   const [termino, setTermino] = useState('');
   const [conSesion, setConSesion] = useState(false);
+  const [esComercio, setEsComercio] = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -21,6 +22,7 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
       .then((r) => {
         if (activo && r?.ok && r?.datos?.user) {
           setConSesion(true);
+          setEsComercio(r.datos.user.rol === 'encargado_comercio');
         }
       })
       .catch(() => {});
@@ -40,8 +42,7 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
   const mostrarPanel = Boolean(
     nav?.abrirPanelComercio &&
     !nav.enPanelComercio &&
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).has('demo')
+    (esComercio || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('demo')))
   );
 
   return (
@@ -153,11 +154,11 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
               <button
                 type="button"
                 onClick={nav.abrirPanelComercio}
-                aria-label="Panel del comercio (demo)"
-                className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 transition cursor-pointer"
+                aria-label="Gestión de pedidos del comercio"
+                className="min-h-11 min-w-11 inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50/70 px-3 text-xs font-bold text-brandDarkBlue hover:bg-blue-100 transition cursor-pointer"
               >
-                <Store className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden lg:inline">Panel demo</span>
+                <Store className="h-4 w-4 text-brandBlue" aria-hidden="true" />
+                <span className="hidden lg:inline">Pedidos comercio</span>
               </button>
             )}
           </nav>

@@ -1,3 +1,4 @@
+import CuponesGestion from './CuponesGestion';
 import DestacadosGestion from './DestacadosGestion';
 import NoticiasGestion from './NoticiasGestion';
 import PromocionesGestion from './PromocionesGestion';
@@ -15,6 +16,7 @@ import PromocionesGestion from './PromocionesGestion';
 export const SECCIONES_GESTION = [
   { clave: 'destacados', nombre: 'Productos destacados', icono: 'estrella', roles: ['encargado_comercio', 'encargado_plataforma'], Vista: DestacadosGestion },
   { clave: 'promociones', nombre: 'Promociones', icono: 'etiqueta', roles: ['encargado_comercio', 'encargado_plataforma'], Vista: PromocionesGestion },
+  { clave: 'cupones', nombre: 'Cupones', icono: 'cupon', roles: ['encargado_comercio', 'encargado_plataforma'], Vista: CuponesGestion },
   { clave: 'noticias', nombre: 'Noticias', icono: 'noticia', roles: ['encargado_plataforma'], Vista: NoticiasGestion },
 ];
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, FileText, Store, ShieldCheck } from 'lucide-react';
+import { Boxes, ClipboardList, FileText, Home, Store, ShieldCheck } from 'lucide-react';
 import { cerrarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
 import { AvisoError, C, Cargando, Encabezado, SesionContexto, textoDeError } from './components/comunes';
 import SolicitudIncorporacion from './views/SolicitudIncorporacion';
@@ -66,6 +66,11 @@ export default function M2App() {
         <Encabezado usuario={usuario} onIngresar={() => { window.location.href = URL_INGRESO; }} onSalir={salir} />
         <nav className={C.marino} aria-label="Secciones de comercios">
           <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2">
+            {/* Regreso al inicio del portal (/m1.html), visible para todos los roles y sin sesión. */}
+            <a href="/m1.html"
+              className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
+              <Home size={18} /> Portal
+            </a>
             {visibles.map(({ clave, corto, icono: Icono }) => (
               <button key={clave} type="button" onClick={() => setVista(clave)}
                 aria-current={clave === vista ? 'page' : undefined}
@@ -81,11 +86,18 @@ export default function M2App() {
                 <Boxes size={18} /> Inventario
               </a>
             )}
+            {/* Enlace a los pedidos del comercio en M5 (/carrito.html?pantalla=comercio): misma sesión del núcleo. */}
+            {usuario?.rol === 'encargado_comercio' && (
+              <a href="/carrito.html?pantalla=comercio"
+                className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
+                <ClipboardList size={18} /> Pedidos
+              </a>
+            )}
           </div>
         </nav>
         <main className="mx-auto max-w-6xl px-4 py-6">
           <p className="mb-4 text-xs text-slate-500">
-            Inicio / Comercios / <span className="font-semibold text-slate-700">{actual.nombre}</span>
+            <a href="/m1.html" className="hover:underline">Inicio</a> / Comercios / <span className="font-semibold text-slate-700">{actual.nombre}</span>
           </p>
           <AvisoError mensaje={errorCierre} />
           {contenido}

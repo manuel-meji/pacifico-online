@@ -23,6 +23,7 @@ use App\Services\Nucleo\ContextoCliente;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class ControladorPedido extends Controller
@@ -324,6 +325,34 @@ class ControladorPedido extends Controller
         return response()->json($respuesta, 200);
     }
 
+    public function prepararSubpedido(int|Request $requestOrId): JsonResponse
+    {
+        $subpedidoId = $requestOrId instanceof Request
+            ? (int) ($requestOrId->route('id_subpedido') ?? $requestOrId->input('id_subpedido'))
+            : (int) $requestOrId;
+
+        $subpedido = Subpedido::with(['pedidoMaestro', 'lineas'])->find($subpedidoId);
+        if (! $subpedido) {
+            return $this->errorRespuesta('ERR-004', 'Subpedido no encontrado', null, 404);
+        }
+
+        $usuarioId = auth()->check() ? (int) (auth()->user()?->id_usuario ?? auth()->id()) : null;
+
+        try {
+            $subpedido->cambiarEstado('en_preparacion', 'Subpedido en preparación por el comercio', $usuarioId ?: null);
+        } catch (DomainException $e) {
+            return $this->errorRespuesta('ERR-M5-002', $e->getMessage(), null, 409);
+        }
+
+        $subpedidoActualizado = $subpedido->fresh(['lineas', 'estados']);
+        $respuesta = array_merge($subpedidoActualizado->toArray(), [
+            'mensaje' => 'Subpedido marcado en preparación',
+            'subpedido' => $subpedidoActualizado,
+        ]);
+
+        return response()->json($respuesta, 200);
+    }
+
     public function despacharSubpedido(int|Request $requestOrId, ?string $guia = null): JsonResponse
     {
         $req = request();
@@ -506,18 +535,56 @@ class ControladorPedido extends Controller
 
     public function listarPedidos(Request $request): JsonResponse
     {
-        $clienteId = $this->resolverIdCliente($request);
-        $query = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->where('id_cliente', $clienteId);
+        $usuario = $request->user();
+        $idComercioSesion = ($usuario !== null && isset($usuario->id_comercio) && (int) $usuario->id_comercio > 0)
+            ? (int) $usuario->id_comercio
+            : null;
+        $idComercioFiltro = $idComercioSesion ?? ($request->filled('id_comercio') ? (int) $request->input('id_comercio') : null);
+        $esModoComercio = $idComercioFiltro !== null || $request->boolean('modo_comercio');
+
+        if ($esModoComercio) {
+            $query = PedidoMaestro::withoutGlobalScope('cliente')
+                ->with([
+                    'subpedidos' => function ($q) use ($idComercioFiltro) {
+                        $q->withoutGlobalScope('comercio')->with(['lineas', 'estados', 'cancelaciones']);
+                        if ($idComercioFiltro !== null) {
+                            $q->where('id_comercio', $idComercioFiltro);
+                        }
+                    },
+                    'estados',
+                    'cancelaciones',
+                ])
+                ->whereHas('subpedidos', function ($q) use ($idComercioFiltro) {
+                    $q->withoutGlobalScope('comercio');
+                    if ($idComercioFiltro !== null) {
+                        $q->where('id_comercio', $idComercioFiltro);
+                    }
+                });
+        } else {
+            $clienteId = $this->resolverIdCliente($request);
+            $query = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->where('id_cliente', $clienteId);
+        }
 
         if ($request->filled('estado_pedido')) {
             $query->where('estado_pedido', $request->input('estado_pedido'));
         }
 
         $pedidos = $query->orderByDesc('fecha_creacion')->get();
+        $nombresComercios = $this->resolverNombresComercios($pedidos);
 
-        $pedidosTransformados = $pedidos->map(function (PedidoMaestro $p) {
+        $pedidosTransformados = $pedidos->map(function (PedidoMaestro $p) use ($nombresComercios) {
             $arr = $p->toArray();
             $arr['direccion_envio_texto'] = $this->resolverTextoDireccion((int) $p->id_cliente, (int) $p->id_direccion_cliente);
+
+            if (! empty($arr['subpedidos']) && is_array($arr['subpedidos'])) {
+                foreach ($arr['subpedidos'] as &$sub) {
+                    $idCom = (int) ($sub['id_comercio'] ?? 0);
+                    if ($idCom > 0 && empty($sub['nombre_comercio'])) {
+                        $sub['nombre_comercio'] = $nombresComercios[$idCom] ?? "Comercio #{$idCom}";
+                    }
+                }
+                unset($sub);
+            }
 
             return $arr;
         });
@@ -528,6 +595,64 @@ class ControladorPedido extends Controller
             'total_resultados' => $pedidos->count(),
             'pedidos' => $pedidosTransformados,
         ], 200);
+    }
+
+    /**
+     * Resuelve los nombres comerciales reales en lote desde M2_Comercios para los subpedidos listados.
+     *
+     * @param  Collection<int, PedidoMaestro>  $pedidos
+     * @return array<int, string>
+     */
+    private function resolverNombresComercios($pedidos): array
+    {
+        $ids = $pedidos
+            ->flatMap(fn (PedidoMaestro $p) => $p->subpedidos->pluck('id_comercio'))
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === [] || ! $this->m2Comercios) {
+            return [];
+        }
+
+        $mapa = [];
+
+        try {
+            if (method_exists($this->m2Comercios, 'obtenerResumenComerciosLote')) {
+                $res = $this->m2Comercios->obtenerResumenComerciosLote($ids);
+                foreach ($res['comercios'] ?? [] as $comercio) {
+                    $idCom = (int) ($comercio['id_comercio'] ?? 0);
+                    if ($idCom > 0 && ! empty($comercio['nombre_comercial'])) {
+                        $mapa[$idCom] = (string) $comercio['nombre_comercial'];
+                    }
+                }
+            } elseif (method_exists($this->m2Comercios, 'obtenerMicrositio')) {
+                foreach ($ids as $idCom) {
+                    $info = $this->m2Comercios->obtenerMicrositio($idCom);
+                    if (! empty($info['nombre_comercial']) || ! empty($info['nombre'])) {
+                        $mapa[$idCom] = (string) ($info['nombre_comercial'] ?? $info['nombre']);
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Si algún comercio está suspendido o falla la consulta por lote, respaldar individualmente
+        }
+
+        foreach ($ids as $idCom) {
+            if (! isset($mapa[$idCom]) && method_exists($this->m2Comercios, 'consultar')) {
+                try {
+                    $info = $this->m2Comercios->consultar($idCom);
+                    if (! empty($info['nombre_comercial'])) {
+                        $mapa[$idCom] = (string) $info['nombre_comercial'];
+                    }
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        return $mapa;
     }
 
     private function resolverTextoDireccion(int $idCliente, ?int $idDireccion): ?string
