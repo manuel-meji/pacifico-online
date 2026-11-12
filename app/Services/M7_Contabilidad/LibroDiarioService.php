@@ -12,8 +12,7 @@ final class LibroDiarioService
 {
     public function __construct(
         private readonly ContextoComercio $contexto,
-    ) {
-    }
+    ) {}
 
     /**
      * Consulta los asientos contables del comercio activo.
@@ -37,7 +36,7 @@ final class LibroDiarioService
         $comercioId = $this->contexto->idActual();
         $modoSistema = $this->contexto->esModoSistema();
 
-        if ($comercioId === null && !$modoSistema) {
+        if ($comercioId === null && ! $modoSistema) {
             throw new LogicException(
                 'No existe un comercio activo ni autorización global para consultar el Libro Diario.'
             );
@@ -53,15 +52,15 @@ final class LibroDiarioService
                         '=',
                         'd.id_cuenta_contable'
                     )->on(
-                            'c.id_comercio',
-                            '=',
-                            'a.id_comercio'
-                        );
+                        'c.id_comercio',
+                        '=',
+                        'a.id_comercio'
+                    );
                 }
             )
             ->when(
-                !$modoSistema,
-                fn($query) => $query->where('a.id_comercio', $comercioId)
+                ! $modoSistema,
+                fn ($query) => $query->where('a.id_comercio', $comercioId)
             )
             ->select([
                 'a.id_asiento',
@@ -80,24 +79,23 @@ final class LibroDiarioService
                 'c.nombre as nombre_cuenta',
             ]);
 
-        if (!empty($filtros['fecha_desde'])) {
+        if (! empty($filtros['fecha_desde'])) {
             $consulta->whereDate('a.fecha', '>=', $filtros['fecha_desde']);
         }
 
-        if (!empty($filtros['fecha_hasta'])) {
+        if (! empty($filtros['fecha_hasta'])) {
             $consulta->whereDate('a.fecha', '<=', $filtros['fecha_hasta']);
         }
 
-        if (!empty($filtros['tipo'])) {
+        if (! empty($filtros['tipo'])) {
             $consulta->where('a.tipo', $filtros['tipo']);
         }
 
-        if (!empty($filtros['estado'])) {
+        if (! empty($filtros['estado'])) {
             $consulta->where('a.estado', $filtros['estado']);
         }
 
-
-        if (!empty($filtros['buscar'])) {
+        if (! empty($filtros['buscar'])) {
             $buscar = trim((string) $filtros['buscar']);
 
             $consulta->where(function ($query) use ($buscar): void {
@@ -139,18 +137,18 @@ final class LibroDiarioService
         foreach ($filas as $fila) {
             $id = (int) $fila->id_asiento;
 
-            if (!isset($asientos[$id])) {
+            if (! isset($asientos[$id])) {
                 $referencia = $fila->id_subpedido !== null
-                    ? 'Subpedido ' . $fila->id_subpedido
+                    ? 'Subpedido '.$fila->id_subpedido
                     : ($fila->id_pedido !== null
-                        ? 'Pedido ' . $fila->id_pedido
+                        ? 'Pedido '.$fila->id_pedido
                         : ($fila->id_pago !== null
-                            ? 'Pago ' . $fila->id_pago
-                            : 'Asiento ' . $id));
+                            ? 'Pago '.$fila->id_pago
+                            : 'Asiento '.$id));
 
                 $asientos[$id] = [
                     'id' => $id,
-                    'numero' => 'ASI-' . str_pad((string) $id, 4, '0', STR_PAD_LEFT),
+                    'numero' => 'ASI-'.str_pad((string) $id, 4, '0', STR_PAD_LEFT),
                     'fecha' => $fila->fecha,
                     'descripcion' => $fila->descripcion_asiento
                         ?? $this->etiquetaTipo((string) $fila->tipo),

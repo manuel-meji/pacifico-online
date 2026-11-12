@@ -16,8 +16,7 @@ final class PlanCuentasController extends Controller
     public function __construct(
         private readonly PlanCuentasService $planCuentas,
         private readonly ContextoComercio $contexto,
-    ) {
-    }
+    ) {}
 
     public function listar(Request $request): JsonResponse
     {

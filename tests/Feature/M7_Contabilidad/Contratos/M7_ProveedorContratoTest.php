@@ -159,7 +159,7 @@ class M7_ProveedorContratoTest extends TestCase
         ]);
     }
 
-    //listarCuentasContables / consultarCuentaContable 
+    // listarCuentasContables / consultarCuentaContable
 
     public function test_listar_cuentas_cumple_el_esquema(): void
     {
@@ -238,7 +238,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertNotFound();
     }
 
-    //consultarLibroDiario 
+    // consultarLibroDiario
 
     public function test_libro_diario_cumple_el_esquema(): void
     {
@@ -271,7 +271,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-005');
     }
 
-    //consultarLibroMayor / listarCuentasLibroMayor 
+    // consultarLibroMayor / listarCuentasLibroMayor
 
     public function test_libro_mayor_cumple_el_esquema(): void
     {
@@ -333,7 +333,7 @@ class M7_ProveedorContratoTest extends TestCase
             ]);
     }
 
-    //consultarReporteGerencial 
+    // consultarReporteGerencial
 
     public function test_reporte_gerencial_cumple_el_esquema(): void
     {
@@ -368,7 +368,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-005');
     }
 
-    //Autorización de las rutas protegidas 
+    // Autorización de las rutas protegidas
 
     /** @return array<string, array{string}> */
     public static function rutasProtegidas(): array
@@ -401,7 +401,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-002');
     }
 
-    //Rutas web (sin autenticación según el contrato v1.1.0)
+    // Rutas web (sin autenticación según el contrato v1.1.0)
 
     public function test_estado_del_modulo(): void
     {

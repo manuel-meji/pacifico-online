@@ -11,8 +11,7 @@ final class M4CostosProductosVendidosGateway implements CostosProductosVendidosG
 {
     public function __construct(
         private readonly InventarioModuleInterface $inventario,
-    ) {
-    }
+    ) {}
 
     public function obtenerCostosProductosVendidos(
         int $subpedidoId

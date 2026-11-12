@@ -12,8 +12,7 @@ final class IntegracionContableController extends Controller
 {
     public function __construct(
         private readonly ContabilidadServiceInterface $contabilidad,
-    ) {
-    }
+    ) {}
 
     public function consultarRegistroContablePago(int $idPago): JsonResponse
     {

@@ -37,13 +37,13 @@ class M7_ConsumidorM4ContratoTest extends TestCase
     {
         $this->assertInstanceOf(
             CostosProductosVendidosGatewayInterface::class,
-            new CostosProductosVendidosStub()
+            new CostosProductosVendidosStub
         );
     }
 
     public function test_la_respuesta_trae_los_campos_que_el_listener_lee(): void
     {
-        $stub = new CostosProductosVendidosStub();
+        $stub = new CostosProductosVendidosStub;
         $stub->configurarCostosDisponibles([
             'id_subpedido' => 10,
             'id_comercio' => 2,

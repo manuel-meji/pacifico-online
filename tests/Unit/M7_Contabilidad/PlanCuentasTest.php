@@ -19,7 +19,7 @@ class PlanCuentasTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->servicio = new PlanCuentasService();
+        $this->servicio = new PlanCuentasService;
     }
 
     private function padre(string $tipo = 'ACTIVO', int $nivel = 1, int $comercio = 1): CuentaContable
