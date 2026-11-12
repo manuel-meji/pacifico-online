@@ -25,6 +25,12 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
             <span className="flex items-center gap-1.5"><Icono nombre="ubicacion" className="h-4 w-4 text-brandGreen" /> Envíos rápidos a todo Costa Rica</span>
             <span className="flex items-center gap-1.5"><Icono nombre="telefono" className="h-4 w-4 text-brandGreen" /> Soporte y Ventas: +506 2000-0000</span>
           </div>
+          {/* Solicitud de incorporación de comercios (M2, CU-0012): /m2.html sin sesión de encargado abre el formulario. */}
+          {!onGestion && (
+            <a href="/m2.html" className="font-semibold text-brandGreen transition hover:text-white">
+              ¿Tenés un comercio? Vendé con nosotros
+            </a>
+          )}
         </div>
       </div>
 
