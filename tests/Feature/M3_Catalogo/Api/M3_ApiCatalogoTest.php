@@ -162,6 +162,26 @@ class M3_ApiCatalogoTest extends TestCase
         $this->assertCount(1, Storage::disk('public')->allFiles());
     }
 
+    public function test_no_permite_superar_ocho_imagenes_por_producto(): void
+    {
+        $this->comoEncargado(self::COMERCIO);
+        $idProducto = $this->productoEnBorrador();
+
+        // Registrar las 8 imágenes permitidas.
+        for ($i = 1; $i <= 8; $i++) {
+            $this->postJson(self::BASE."/productos/{$idProducto}/imagenes", [
+                'imagen_url' => "https://example.com/imagen-{$i}.jpg",
+            ])->assertCreated();
+        }
+
+        // Intentar registrar una novena imagen.
+        $this->postJson(self::BASE."/productos/{$idProducto}/imagenes", [
+            'imagen_url' => 'https://example.com/imagen-9.jpg',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M3-003');
+    }
+
     public function test_otro_comercio_no_puede_agregar_imagen_a_producto_ajeno(): void
     {
         // El comercio original crea su producto.
