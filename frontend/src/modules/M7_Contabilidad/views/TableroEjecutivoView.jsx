@@ -2,11 +2,14 @@
 import { useEffect, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
 import TarjetaIndicador from '../components/TarjetaIndicador';
-import { asientos } from '../services/tableroService';
 import { consultarReporteGerencial } from '../services/reporteGerencialApi';
 
 function formatoMoneda(valor) {
-  return `₡${Number(valor ?? 0).toLocaleString('es-CR', {
+  if (valor === null || valor === undefined || valor === '') {
+    return '—';
+  }
+
+  return `₡${Number(valor).toLocaleString('es-CR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -46,22 +49,24 @@ export default function TableroEjecutivoView({ onNavegar }) {
     };
   }, []);
 
+  const resumen = reporte?.resumen ?? {};
+
   const indicadores = [
     {
       titulo: 'Ingresos',
-      valor: reporte ? formatoMoneda(reporte.resumen.ingresos) : '—',
+      valor: formatoMoneda(resumen.ingresos),
       detalle: 'Ingresos registrados por ventas',
       color: 'azul',
     },
     {
       titulo: 'Costos de ventas',
-      valor: reporte ? formatoMoneda(reporte.resumen.costos) : '—',
+      valor: formatoMoneda(resumen.costos),
       detalle: 'Costos registrados de ventas',
       color: 'verde',
     },
     {
       titulo: 'Utilidad bruta',
-      valor: reporte ? formatoMoneda(reporte.resumen.utilidad_bruta) : '—',
+      valor: formatoMoneda(resumen.utilidad_bruta),
       detalle: 'Ingresos menos costos de ventas',
       color: 'azul',
     },
@@ -72,24 +77,27 @@ export default function TableroEjecutivoView({ onNavegar }) {
   const maximoMensual = Math.max(
     0,
     ...datosMensuales.flatMap((dato) => [
-      Number(dato.ingresos),
-      Number(dato.costos),
+      Number(dato.ingresos) || 0,
+      Number(dato.costos) || 0,
     ])
   ) || 1;
 
   const alturaBarra = (valor) =>
-    (Number(valor) / maximoMensual) * 100;
+    ((Number(valor) || 0) / maximoMensual) * 100;
 
   return (
-  <div className="m7-layout">
-    <EncabezadoM7
-      seccionActiva="Tablero ejecutivo"
-      onNavegar={onNavegar}
-    />
+    <div className="m7-layout">
+      <EncabezadoM7
+        seccionActiva="Tablero ejecutivo"
+        onNavegar={onNavegar}
+      />
+
       <main id="contenido" className="m7-main">
         <div className="m7-page-heading">
           <div>
-            <p className="m7-breadcrumb">Pacíficos Online / M7 / Inicio</p>
+            <p className="m7-breadcrumb">
+              Pacíficos Online / M7 / Inicio
+            </p>
             <h1>Tablero ejecutivo</h1>
             <p className="m7-subtitle">
               Resumen de la información financiera del comercio.
@@ -100,8 +108,8 @@ export default function TableroEjecutivoView({ onNavegar }) {
             <span>Período</span>
             <strong>
               {reporte
-                ? `${reporte.fecha_desde} al ${reporte.fecha_hasta}`
-                : 'Cargando período...'}
+                ? `${reporte.fecha_desde ?? '—'} al ${reporte.fecha_hasta ?? '—'}`
+                : 'No disponible'}
             </strong>
           </div>
         </div>
@@ -112,20 +120,23 @@ export default function TableroEjecutivoView({ onNavegar }) {
             ? 'Cargando información contable...'
             : error
               ? `Error al cargar el reporte: ${error}`
-              : 'Los indicadores y el resumen mensual provienen de registros contables. Las demás secciones son demostrativas.'}
+              : 'Los indicadores y el resumen mensual se muestran con la información disponible del reporte contable.'}
         </div>
 
-<section className="m7-indicators" aria-label="Indicadores financieros">
-  {indicadores.map((indicador) => (
-    <TarjetaIndicador
-      key={indicador.titulo}
-      titulo={indicador.titulo}
-      valor={indicador.valor}
-      detalle={indicador.detalle}
-      color={indicador.color}
-    />
-  ))}
-</section>
+        <section
+          className="m7-indicators"
+          aria-label="Indicadores financieros"
+        >
+          {indicadores.map((indicador) => (
+            <TarjetaIndicador
+              key={indicador.titulo}
+              titulo={indicador.titulo}
+              valor={indicador.valor}
+              detalle={indicador.detalle}
+              color={indicador.color}
+            />
+          ))}
+        </section>
 
         <section className="m7-dashboard-grid">
           <article className="m7-card m7-chart-card">
@@ -146,12 +157,16 @@ export default function TableroEjecutivoView({ onNavegar }) {
                     <div className="m7-bars">
                       <div
                         className="m7-bar ingresos"
-                        style={{ height: `${alturaBarra(dato.ingresos)}%` }}
+                        style={{
+                          height: `${alturaBarra(dato.ingresos)}%`,
+                        }}
                         title={`Ingresos: ${formatoMoneda(dato.ingresos)}`}
                       />
                       <div
                         className="m7-bar costos"
-                        style={{ height: `${alturaBarra(dato.costos)}%` }}
+                        style={{
+                          height: `${alturaBarra(dato.costos)}%`,
+                        }}
                         title={`Costos: ${formatoMoneda(dato.costos)}`}
                       />
                     </div>
@@ -162,14 +177,20 @@ export default function TableroEjecutivoView({ onNavegar }) {
                 <p className="m7-muted">
                   {cargando
                     ? 'Cargando datos...'
-                    : 'No hay movimientos contables para el período consultado.'}
+                    : 'No hay movimientos contables disponibles para el período consultado.'}
                 </p>
               )}
             </div>
 
             <div className="m7-legend">
-              <span><i className="m7-legend-blue" />Ingresos</span>
-              <span><i className="m7-legend-green" />Costo de ventas</span>
+              <span>
+                <i className="m7-legend-blue" />
+                Ingresos
+              </span>
+              <span>
+                <i className="m7-legend-green" />
+                Costo de ventas
+              </span>
             </div>
           </article>
 
@@ -177,36 +198,35 @@ export default function TableroEjecutivoView({ onNavegar }) {
             <div className="m7-section-heading">
               <div>
                 <h2>Situación contable</h2>
-                <p className="m7-muted">Indicadores demostrativos</p>
+                <p className="m7-muted">
+                  Estado de la información contable.
+                </p>
               </div>
             </div>
 
             <div className="m7-status-item">
               <div className="m7-status-label">
                 <span>Asientos registrados</span>
-                <strong>24</strong>
-              </div>
-              <div className="m7-progress">
-                <span className="registrados" />
+                <strong>—</strong>
               </div>
             </div>
 
             <div className="m7-status-item">
               <div className="m7-status-label">
                 <span>Asientos pendientes</span>
-                <strong>3</strong>
-              </div>
-              <div className="m7-progress">
-                <span className="pendientes" />
+                <strong>—</strong>
               </div>
             </div>
 
             <div className="m7-balance">
-              <span className="m7-balance-icon">✓</span>
+              <span className="m7-balance-icon">—</span>
               <div>
                 <p>Balance contable</p>
-                <strong>Cuadrado</strong>
-                <span>Estado ilustrativo para el prototipo.</span>
+                <strong>Sin información</strong>
+                <span>
+                  El estado del balance estará disponible cuando se
+                  cuente con los datos correspondientes.
+                </span>
               </div>
             </div>
           </article>
@@ -216,42 +236,21 @@ export default function TableroEjecutivoView({ onNavegar }) {
           <div className="m7-journal-heading">
             <div>
               <h2>Últimos asientos contables</h2>
-              <p className="m7-muted">Movimientos recientes de ejemplo.</p>
+              <p className="m7-muted">
+                Movimientos registrados en el libro diario.
+              </p>
             </div>
-            <span className="m7-tag">Vista demostrativa</span>
+            <span className="m7-tag">Libro diario</span>
           </div>
 
-
-          {/* Vista móvil: últimos asientos como tarjetas */}
+          {/* Vista móvil */}
           <div className="m7-journal-mobile">
-            {asientos.map((asiento) => (
-              <article className="m7-journal-entry" key={asiento.numero}>
-                <div className="m7-journal-entry-heading">
-                  <strong className="m7-entry-number">
-                    {asiento.numero}
-                  </strong>
-                  <span className="m7-status-badge">
-                    {asiento.estado}
-                  </span>
-                </div>
-
-                <p>
-                  <span>Fecha</span>
-                  <strong>{asiento.fecha}</strong>
-                </p>
-                <p>
-                  <span>Descripción</span>
-                  <strong>{asiento.descripcion}</strong>
-                </p>
-                <p>
-                  <span>Tipo</span>
-                  <strong>{asiento.tipo}</strong>
-                </p>
-              </article>
-            ))}
+            <p className="m7-muted">
+              No hay asientos disponibles para mostrar.
+            </p>
           </div>
 
-          {/* Vista de escritorio: tabla original */}
+          {/* Vista de escritorio */}
           <div className="m7-table-wrap m7-journal-desktop">
             <table>
               <thead>
@@ -264,23 +263,16 @@ export default function TableroEjecutivoView({ onNavegar }) {
                 </tr>
               </thead>
               <tbody>
-                {asientos.map((asiento) => (
-                  <tr key={asiento.numero}>
-                    <td className="m7-entry-number">{asiento.numero}</td>
-                    <td>{asiento.fecha}</td>
-                    <td>{asiento.descripcion}</td>
-                    <td>{asiento.tipo}</td>
-                    <td>
-                      <span className="m7-status-badge">
-                        {asiento.estado}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                <tr>
+                  <td colSpan="5">
+                    <p className="m7-muted">
+                      No hay asientos disponibles para mostrar.
+                    </p>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
-
         </section>
 
         <footer className="m7-footer">
