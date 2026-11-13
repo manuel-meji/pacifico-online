@@ -742,6 +742,10 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         if ($this->hasTable('pedidos_subpedidos')) {
             $subpedido = Subpedido::with(['lineas', 'estados', 'cancelaciones'])->find($idSubpedido);
             if ($subpedido) {
+                $infoVariaciones = $this->resolverInfoVariaciones(
+                    $subpedido->lineas->pluck('id_variacion')->map(fn ($id): int => (int) $id)->all()
+                );
+
                 return [
                     'id_subpedido' => $subpedido->id_subpedido,
                     'id_pedido' => $subpedido->id_pedido,
@@ -755,17 +759,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                     'fecha_despacho' => $subpedido->fecha_despacho?->toIso8601String(),
                     'created_at' => $subpedido->created_at?->toIso8601String(),
                     'updated_at' => $subpedido->updated_at?->toIso8601String(),
-                    'lineas' => $subpedido->lineas->map(fn ($l) => [
-                        'id_linea' => $l->id_linea,
-                        'id_subpedido' => $l->id_subpedido,
-                        'id_variacion' => $l->id_variacion,
-                        'id_reserva' => $l->id_reserva,
-                        'cantidad' => $l->cantidad,
-                        'precio_unitario' => (float) $l->precio_unitario,
-                        'tarifa_impuesto' => (float) $l->tarifa_impuesto,
-                        'descuento' => (float) ($l->descuento ?? 0.0),
-                        'id_promocion' => $l->id_promocion !== null ? (int) $l->id_promocion : null,
-                    ])->all(),
+                    'lineas' => $subpedido->lineas->map(fn ($l) => $this->formatearLineaConCatalogo($l, $infoVariaciones))->all(),
                     'historial_estados' => $subpedido->estados?->toArray() ?? [],
                     'cancelaciones' => $subpedido->cancelaciones?->toArray() ?? [],
                 ];
@@ -793,11 +787,12 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         $subpedido = null;
 
         if ($this->hasTable('pedidos_subpedidos')) {
-            $subpedido = Subpedido::find($subpedidoId);
+            $subpedido = Subpedido::with('lineas')->find($subpedidoId);
             if ($subpedido) {
                 $subpedido->despachar($guiaTransporte);
                 $pedidoId = (int) $subpedido->id_pedido;
                 $subtotal = (float) $subpedido->subtotal;
+                $this->confirmarSalidaLineas($subpedido);
             }
         }
 
@@ -932,6 +927,9 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         $cupon = $codigoCupon !== '' ? strtoupper($codigoCupon) : null;
         $tarjetaRegalo = $datosCheckout['tarjeta_regalo'] ?? null;
         $idReservaDefault = $datosCheckout['id_reserva'] ?? null;
+        $reservasPorVariacion = is_array($datosCheckout['reservas_por_variacion'] ?? null)
+            ? $datosCheckout['reservas_por_variacion']
+            : [];
 
         if ($this->hasTable('pedidos_maestros')) {
             $carrito = $datosCheckout['carrito'] ?? null;
@@ -964,6 +962,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 $cupon,
                 $tarjetaRegalo,
                 $idReservaDefault,
+                $reservasPorVariacion,
                 $carrito,
                 $grupos,
                 $subtotalMaestro,
@@ -1004,7 +1003,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                         $subpedido = $subpedidosCreados[0];
 
                         foreach ($grupo['items'] ?? [] as $itemData) {
-                            $lineaReserva = (string) ($itemData['id_reserva'] ?? $idReservaDefault ?? '');
+                            $idVarLinea = (int) ($itemData['id_variacion'] ?? 0);
+                            $lineaReserva = (string) ($itemData['id_reserva'] ?? $reservasPorVariacion[$idVarLinea] ?? $idReservaDefault ?? '');
                             $descuentoLinea = (float) ($itemData['descuento'] ?? 0.0);
                             $idPromocionLinea = isset($itemData['id_promocion']) && $itemData['id_promocion'] !== null
                                 ? (int) $itemData['id_promocion']
@@ -1079,30 +1079,29 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 'estado' => strtoupper((string) $pedido->estado_pedido),
                 'cupon_descuento' => $pedido->cupon_descuento,
                 'tarjeta_regalo' => $pedido->tarjeta_regalo,
-                'subpedidos' => $pedido->subpedidos->map(fn ($sub) => [
-                    'id_subpedido' => $sub->id_subpedido,
-                    'id_pedido' => $sub->id_pedido,
-                    'id_comercio' => $sub->id_comercio,
-                    'subtotal' => (float) $sub->subtotal,
-                    'costo_envio' => (float) $sub->costo_envio,
-                    'impuesto' => (float) $sub->impuesto,
-                    'impuestos' => (float) $sub->impuesto,
-                    'total' => (float) ($sub->total ?? ($sub->subtotal + $sub->costo_envio + $sub->impuesto)),
-                    'estado_subpedido' => (string) $sub->estado_subpedido,
-                    'guia_seguimiento' => $sub->guia_seguimiento,
-                    'fecha_despacho' => $sub->fecha_despacho?->toIso8601String(),
-                    'lineas' => $sub->lineas->map(fn ($l) => [
-                        'id_linea' => $l->id_linea,
-                        'id_subpedido' => $l->id_subpedido,
-                        'id_variacion' => $l->id_variacion,
-                        'id_reserva' => $l->id_reserva,
-                        'cantidad' => $l->cantidad,
-                        'precio_unitario' => (float) $l->precio_unitario,
-                        'tarifa_impuesto' => (float) $l->tarifa_impuesto,
-                        'descuento' => (float) ($l->descuento ?? 0.0),
-                        'id_promocion' => $l->id_promocion !== null ? (int) $l->id_promocion : null,
-                    ])->all(),
-                ])->all(),
+                'subpedidos' => (function () use ($pedido): array {
+                    $infoVariaciones = $this->resolverInfoVariaciones(
+                        $pedido->subpedidos
+                            ->flatMap(fn ($s) => $s->lineas->pluck('id_variacion'))
+                            ->map(fn ($id): int => (int) $id)
+                            ->all()
+                    );
+
+                    return $pedido->subpedidos->map(fn ($sub) => [
+                        'id_subpedido' => $sub->id_subpedido,
+                        'id_pedido' => $sub->id_pedido,
+                        'id_comercio' => $sub->id_comercio,
+                        'subtotal' => (float) $sub->subtotal,
+                        'costo_envio' => (float) $sub->costo_envio,
+                        'impuesto' => (float) $sub->impuesto,
+                        'impuestos' => (float) $sub->impuesto,
+                        'total' => (float) ($sub->total ?? ($sub->subtotal + $sub->costo_envio + $sub->impuesto)),
+                        'estado_subpedido' => (string) $sub->estado_subpedido,
+                        'guia_seguimiento' => $sub->guia_seguimiento,
+                        'fecha_despacho' => $sub->fecha_despacho?->toIso8601String(),
+                        'lineas' => $sub->lineas->map(fn ($l) => $this->formatearLineaConCatalogo($l, $infoVariaciones))->all(),
+                    ])->all();
+                })(),
                 'historial_estados' => $pedido->estados?->toArray() ?? [],
                 'cancelaciones' => $pedido->cancelaciones?->toArray() ?? [],
             ];
@@ -1173,7 +1172,9 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
     public function marcarComoPagado(int $pedidoId, string $comprobantePago): bool
     {
         if ($this->hasTable('pedidos_maestros')) {
-            $pedido = PedidoMaestro::with('subpedidos.lineas')->find($pedidoId);
+            $pedido = PedidoMaestro::withoutGlobalScope('cliente')
+                ->with(['subpedidos' => fn ($q) => $q->withoutGlobalScope('comercio')->with('lineas')])
+                ->find($pedidoId);
             if (! $pedido) {
                 return false;
             }
@@ -1190,10 +1191,12 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 if (strtolower((string) $subpedido->estado_subpedido) !== 'pagado') {
                     $subpedido->cambiarEstado('pagado', $motivo);
                 }
-                $this->confirmarReservasLineas($subpedido->lineas);
+                $this->confirmarReservasLineas($subpedido->lineas, (int) $pedido->id_pedido, (int) $subpedido->id_subpedido);
             }
 
-            PedidoPagado::dispatch($pedido->fresh('subpedidos.lineas'));
+            PedidoPagado::dispatch(
+                $pedido->fresh(['subpedidos' => fn ($q) => $q->withoutGlobalScope('comercio')->with('lineas')]) ?? $pedido
+            );
         }
 
         return true;
@@ -1204,7 +1207,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
      *
      * @param  iterable<PedidoLinea>  $lineas
      */
-    public function liberarReservasLineas(iterable $lineas, string $motivo = 'Cancelación de pedido'): void
+    public function liberarReservasLineas(iterable $lineas, string $motivo = 'pedido_cancelado'): void
     {
         $inventario = $this->inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
         if (! $inventario || ! method_exists($inventario, 'liberarReserva')) {
@@ -1226,7 +1229,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
      *
      * @param  iterable<PedidoLinea>  $lineas
      */
-    public function confirmarReservasLineas(iterable $lineas): void
+    public function confirmarReservasLineas(iterable $lineas, ?int $idPedidoExplicito = null, ?int $idSubpedidoExplicito = null): void
     {
         $inventario = $this->inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
         if (! $inventario) {
@@ -1237,13 +1240,46 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             if (! empty($linea->id_reserva)) {
                 try {
                     if (method_exists($inventario, 'confirmarReserva')) {
-                        // Contrato M4 v1.3.0: confirmarReserva(id_reserva, id_pedido, id_subpedido).
-                        $inventario->confirmarReserva(
-                            (string) $linea->id_reserva,
-                            (int) $linea->subpedido->id_pedido,
-                            (int) $linea->id_subpedido,
-                        );
+                        $idSubpedido = $idSubpedidoExplicito ?? (int) $linea->id_subpedido;
+                        $idPedido = $idPedidoExplicito ?? (int) ($linea->subpedido()->withoutGlobalScope('comercio')->value('id_pedido') ?? $linea->subpedido?->id_pedido ?? 0);
+
+                        if ($idPedido > 0 && $idSubpedido > 0) {
+                            // Contrato M4 v1.3.0: confirmarReserva(id_reserva, id_pedido, id_subpedido).
+                            $inventario->confirmarReserva(
+                                (string) $linea->id_reserva,
+                                $idPedido,
+                                $idSubpedido,
+                            );
+                        }
                     }
+                } catch (\Throwable) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Confirma en M4 la salida física de inventario para las reservas de un subpedido despachado.
+     */
+    public function confirmarSalidaLineas(Subpedido $subpedido): void
+    {
+        $inventario = $this->inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
+        if (! $inventario || ! method_exists($inventario, 'confirmarSalidaPorReserva')) {
+            return;
+        }
+
+        $subpedido->loadMissing('lineas');
+        $idPedido = (int) $subpedido->id_pedido;
+        $idSubpedido = (int) $subpedido->id_subpedido;
+
+        foreach ($subpedido->lineas as $linea) {
+            if (! empty($linea->id_reserva)) {
+                try {
+                    $inventario->confirmarSalidaPorReserva(
+                        (string) $linea->id_reserva,
+                        $idPedido,
+                        $idSubpedido,
+                    );
                 } catch (\Throwable) {
                 }
             }
@@ -1381,6 +1417,103 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         }
 
         return null;
+    }
+
+    /**
+     * Resuelve nombre legible, nombre del producto, SKU y atributos por id_variacion desde M3.
+     *
+     * @param  list<int>  $idsVariacion
+     * @return array<int, array{nombre: string, nombre_producto: string, sku: ?string, atributos: list<array<string, mixed>>}>
+     */
+    public function resolverInfoVariaciones(array $idsVariacion): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $idsVariacion), fn (int $id): bool => $id > 0)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $catalogo = $this->catalogoService ?? (app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null);
+        if (! $catalogo) {
+            return [];
+        }
+
+        $mapa = [];
+        foreach ($ids as $idVar) {
+            try {
+                $variacion = $catalogo->obtenerVariacion($idVar);
+            } catch (\Throwable) {
+                $variacion = null;
+            }
+
+            if (! is_array($variacion)) {
+                continue;
+            }
+
+            $nombreBase = trim((string) ($variacion['nombre'] ?? $variacion['producto']['nombre'] ?? ''));
+            if ($nombreBase === '') {
+                continue;
+            }
+
+            $atributos = is_array($variacion['atributos'] ?? null) ? array_values($variacion['atributos']) : [];
+            $resumenAtributos = $this->formatearAtributosVariacion($atributos);
+            $nombreCompleto = $resumenAtributos !== '' ? "{$nombreBase} ({$resumenAtributos})" : $nombreBase;
+
+            $mapa[$idVar] = [
+                'nombre' => $nombreCompleto,
+                'nombre_producto' => $nombreBase,
+                'sku' => isset($variacion['sku']) && $variacion['sku'] !== '' ? (string) $variacion['sku'] : null,
+                'atributos' => $atributos,
+            ];
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * @param  array<int, array{nombre: string, nombre_producto: string, sku: ?string, atributos: list<array<string, mixed>>}>  $infoVariaciones
+     * @return array<string, mixed>
+     */
+    private function formatearLineaConCatalogo(mixed $linea, array $infoVariaciones): array
+    {
+        $idVar = (int) $linea->id_variacion;
+        $datos = [
+            'id_linea' => $linea->id_linea,
+            'id_subpedido' => $linea->id_subpedido,
+            'id_variacion' => $idVar,
+            'id_reserva' => $linea->id_reserva,
+            'cantidad' => $linea->cantidad,
+            'precio_unitario' => (float) $linea->precio_unitario,
+            'tarifa_impuesto' => (float) $linea->tarifa_impuesto,
+            'descuento' => (float) ($linea->descuento ?? 0.0),
+            'id_promocion' => $linea->id_promocion !== null ? (int) $linea->id_promocion : null,
+        ];
+
+        if (isset($infoVariaciones[$idVar])) {
+            return array_merge($datos, $infoVariaciones[$idVar]);
+        }
+
+        return $datos;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $atributos
+     */
+    private function formatearAtributosVariacion(array $atributos): string
+    {
+        $partes = [];
+        foreach ($atributos as $attr) {
+            if (! is_array($attr)) {
+                continue;
+            }
+            $tipo = trim((string) ($attr['tipo_atributo'] ?? $attr['nombre'] ?? ''));
+            $valor = trim((string) ($attr['valor'] ?? ''));
+            if ($valor === '') {
+                continue;
+            }
+            $partes[] = $tipo !== '' ? "{$tipo}: {$valor}" : $valor;
+        }
+
+        return implode(', ', $partes);
     }
 
     private function hasTable(string $table): bool

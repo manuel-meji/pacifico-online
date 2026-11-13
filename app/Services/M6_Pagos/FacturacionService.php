@@ -6,7 +6,6 @@ namespace App\Services\M6_Pagos;
 
 use App\Contracts\M6_Pagos\HaciendaInterface;
 use App\Enums\M6_Pagos\CodigoErrorM6;
-use App\Events\M6_Pagos\FacturaGenerada;
 use App\Exceptions\M6_Pagos\ErrorContratoException;
 use App\Models\M6_Pagos\EstadoFacturaHacienda;
 use App\Models\M6_Pagos\EstadoPago;
@@ -22,7 +21,6 @@ use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -192,16 +190,13 @@ class FacturacionService
         $factura->load(['estado', 'pago']);
         $this->enviarAHacienda($factura);
 
-        event(new FacturaGenerada(
-            (string) Str::uuid(),
-            $factura->id_factura_electronica,
-            $pago->id_pedido,
-            $factura->id_subpedido,
-            $factura->id_comercio,
-            (float) $factura->monto_total,
-            $factura->xml_documento,
-            $fecha->toIso8601String(),
-        ));
+        // Conexión M6–M7: el mismo armado que usa ConsultaEventosPagosService,
+        // con el desglose que M5 entregó para este subpedido.
+        event(FabricaEventosM6::facturaGenerada($factura, [
+            'subtotal' => $subpedido->subtotal,
+            'impuesto' => $subpedido->impuesto,
+            'envio' => $subpedido->envio,
+        ]));
 
         return $factura;
     }

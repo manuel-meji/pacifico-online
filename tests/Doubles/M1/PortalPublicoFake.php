@@ -64,6 +64,7 @@ class PortalPublicoFake implements PortalPublicoContract
                 'apellidos' => 'Mora Rojas',
                 'correo_electronico' => 'ana.mora@example.com',
                 'telefono' => '8888-0001',
+                'cedula' => '503450678',
             ],
             self::CLIENTE_SIN_DIRECCIONES => [
                 'id_cliente' => self::CLIENTE_SIN_DIRECCIONES,
@@ -72,6 +73,8 @@ class PortalPublicoFake implements PortalPublicoContract
                 'apellidos' => 'Castillo',
                 'correo_electronico' => 'fulano@example.com',
                 'telefono' => '8888-0002',
+                // La misma cédula que usa el FakeClienteClient de M6 para el cliente 77.
+                'cedula' => '116540892',
             ],
             3 => [
                 'id_cliente' => 3,
@@ -80,6 +83,7 @@ class PortalPublicoFake implements PortalPublicoContract
                 'apellidos' => 'Vargas Solís',
                 'correo_electronico' => 'luis.vargas@example.com',
                 'telefono' => '8888-0003',
+                'cedula' => '501230456',
             ],
         ];
 
@@ -111,6 +115,8 @@ class PortalPublicoFake implements PortalPublicoContract
             'direccion_envio' => $principal === null
                 ? ''
                 : "{$principal['otras_senas']}, {$principal['distrito']}, {$principal['canton']}, {$principal['provincia']}",
+            // Desde 1.7.0 (SC-14): la cédula del cliente, para la factura de M6.
+            'identificacion_tributaria' => $cliente['cedula'],
         ];
     }
 
@@ -174,6 +180,7 @@ class PortalPublicoFake implements PortalPublicoContract
             'apellidos' => $datos['apellidos'],
             'correo_electronico' => $datos['correo_electronico'],
             'telefono' => $datos['telefono'],
+            'cedula' => trim($datos['cedula']),
         ];
 
         $this->guardarDireccion($this->siguienteIdDireccion++, $idCliente, $direccion);

@@ -247,7 +247,7 @@ class PortalPublicoServiceTest extends PruebaM1
         $direcciones = $portal->listarDireccionesCliente(5);
 
         $this->assertCumpleEsquema('Cliente', $cliente);
-        $this->assertSame(['id_cliente', 'nombre', 'apellidos', 'correo_electronico', 'telefono', 'direccion_envio'], array_keys($cliente));
+        $this->assertSame(['id_cliente', 'nombre', 'apellidos', 'correo_electronico', 'telefono', 'direccion_envio', 'identificacion_tributaria'], array_keys($cliente));
         $this->assertCumpleEsquema('DireccionCliente', $direcciones[0]);
         $this->assertCumpleEsquema('DireccionCliente', $portal->obtenerDireccionCliente(5, 11));
         $this->assertSame(5, $portal->obtenerIdClientePorUsuario(501));

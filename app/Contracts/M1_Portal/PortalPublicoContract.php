@@ -36,8 +36,10 @@ interface PortalPublicoContract
     /**
      * Datos de la persona compradora. Sin sesión de usuario; puede llamarse
      * desde procesos en segundo plano. Desde 1.0.0, sin cambios en 1.1.0.
+     * Desde 1.7.0 (SC-14) agrega identificacion_tributaria, la cédula del
+     * cliente, que M6 usa en la factura.
      *
-     * @return array{id_cliente: int, nombre: string, apellidos: string, correo_electronico: string, telefono: string, direccion_envio: string} Esquema Cliente.
+     * @return array{id_cliente: int, nombre: string, apellidos: string, correo_electronico: string, telefono: string, direccion_envio: string, identificacion_tributaria?: string} Esquema Cliente.
      *
      * @throws ClienteNoEncontradoException ERR-004.
      */

@@ -2,11 +2,11 @@
 
 namespace App\Services\M7_Contabilidad;
 
-use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
+use App\Contracts\M7_Contabilidad\ContabilidadComercioServiceInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class ContabilidadService implements ContabilidadServiceInterface
+class ContabilidadService implements ContabilidadComercioServiceInterface
 {
     public function registrarAsientoDespacho(int $pedidoId, float $totalVenta, float $costoVentas): bool
     {
@@ -23,7 +23,18 @@ class ContabilidadService implements ContabilidadServiceInterface
         return true;
     }
 
-    public function consultarRegistroContablePago(int $idPago): array
+        public function consultarRegistroContablePago(int $idPago): array
+    {
+        return $this->buscarRegistroPago($idPago, null);
+    }
+
+    /** Uso HTTP de M7: limita la búsqueda a los asientos del comercio indicado. */
+    public function consultarRegistroContablePagoDeComercio(int $idPago, int $idComercio): array
+    {
+        return $this->buscarRegistroPago($idPago, $idComercio);
+    }
+
+    private function buscarRegistroPago(int $idPago, ?int $idComercio): array
     {
         if ($idPago <= 0) {
             return [
@@ -37,6 +48,7 @@ class ContabilidadService implements ContabilidadServiceInterface
         $asiento = DB::table('asientos_contables')
             ->where('id_pago', $idPago)
             ->where('estado', 'REGISTRADO')
+            ->when($idComercio !== null, fn ($consulta) => $consulta->where('id_comercio', $idComercio))
             ->orderByDesc('fecha')
             ->orderByDesc('id_asiento')
             ->first();

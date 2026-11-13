@@ -2,95 +2,17 @@
 import { useMemo, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
 
-// Datos ficticios para el prototipo.
-// Los costos reales deberán provenir de registros contables validados.
-const centrosIniciales = [
-  {
-    id: 1,
-    codigo: 'CC-001',
-    nombre: 'Administración',
-    responsable: 'Gerencia administrativa',
-    tipo: 'Administrativo',
-    presupuesto: 500000,
-    costo: 350000,
-    estado: 'Activo',
-  },
-  {
-    id: 2,
-    codigo: 'CC-002',
-    nombre: 'Comercialización',
-    responsable: 'Coordinación comercial',
-    tipo: 'Operativo',
-    presupuesto: 300000,
-    costo: 180000,
-    estado: 'Activo',
-  },
-  {
-    id: 3,
-    codigo: 'CC-003',
-    nombre: 'Servicios y operaciones',
-    responsable: 'Jefatura de operaciones',
-    tipo: 'Operativo',
-    presupuesto: 150000,
-    costo: 95000,
-    estado: 'Activo',
-  },
-  {
-    id: 4,
-    codigo: 'CC-004',
-    nombre: 'Tecnología',
-    responsable: 'Coordinación tecnológica',
-    tipo: 'Administrativo',
-    presupuesto: 250000,
-    costo: 275000,
-    estado: 'Activo',
-  },
-  {
-    id: 5,
-    codigo: 'CC-005',
-    nombre: 'Logística',
-    responsable: 'Jefatura logística',
-    tipo: 'Operativo',
-    presupuesto: 400000,
-    costo: 320000,
-    estado: 'Activo',
-  },
-  {
-    id: 6,
-    codigo: 'CC-006',
-    nombre: 'Proyectos especiales',
-    responsable: 'Dirección de proyectos',
-    tipo: 'Proyecto',
-    presupuesto: 200000,
-    costo: 0,
-    estado: 'Inactivo',
-  },
-  {
-    id: 7,
-    codigo: 'CC-007',
-    nombre: 'Atención al comercio',
-    responsable: 'Coordinación de servicio',
-    tipo: 'Operativo',
-    presupuesto: 180000,
-    costo: 120000,
-    estado: 'Activo',
-  },
-  {
-    id: 8,
-    codigo: 'CC-008',
-    nombre: 'Dirección general',
-    responsable: 'Dirección general',
-    tipo: 'Administrativo',
-    presupuesto: 350000,
-    costo: 210000,
-    estado: 'Activo',
-  },
-];
+// Los centros se mostrarán cuando estén disponibles los registros reales.
+const centrosIniciales = [];
 
 const opcionesTipo = ['Administrativo', 'Operativo', 'Proyecto'];
 const opcionesEstado = ['Activo', 'Inactivo'];
 
 function formatoMoneda(monto) {
+  if (monto === null || monto === undefined || monto === '') {
+    return '—';
+  }
+
   return new Intl.NumberFormat('es-CR', {
     style: 'currency',
     currency: 'CRC',
@@ -133,6 +55,16 @@ export default function CentrosCostoView({ onNavegar }) {
   }, [busqueda, tipoSeleccionado, estadoSeleccionado]);
 
   const resumen = useMemo(() => {
+    if (centrosIniciales.length === 0) {
+      return {
+        cantidad: null,
+        activos: null,
+        presupuesto: null,
+        costo: null,
+        disponible: null,
+      };
+    }
+
     const activos = centrosIniciales.filter(
       (centro) => centro.estado === 'Activo'
     ).length;
@@ -216,17 +148,17 @@ export default function CentrosCostoView({ onNavegar }) {
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Centros registrados</p>
             <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
-              {resumen.cantidad}
+              {resumen.cantidad ?? '—'}
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              Total del catálogo demostrativo
+              Total de centros registrados en el sistema
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Centros activos</p>
             <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
-              {resumen.activos}
+              {resumen.activos ?? '—'}
             </p>
             <p className="mt-1 text-xs text-gray-500">
               Considerados en el resumen financiero
@@ -245,79 +177,105 @@ export default function CentrosCostoView({ onNavegar }) {
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Costo acumulado</p>
+
             <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
               {formatoMoneda(resumen.costo)}
             </p>
-            <p className={`mt-1 text-xs ${
-              resumen.disponible >= 0 ? 'text-green-700' : 'text-red-700'
-            }`}>
-              {resumen.disponible >= 0 ? 'Disponible: ' : 'Exceso: '}
-              {formatoMoneda(Math.abs(resumen.disponible))}
+
+            <p
+              className={`mt-1 text-xs ${resumen.disponible === null
+                  ? 'text-gray-500'
+                  : resumen.disponible >= 0
+                    ? 'text-green-700'
+                    : 'text-red-700'
+                }`}
+            >
+              {resumen.disponible === null
+                ? 'Sin información disponible'
+                : `${resumen.disponible >= 0 ? 'Disponible: ' : 'Exceso: '}${formatoMoneda(
+                  Math.abs(resumen.disponible)
+                )}`}
             </p>
           </article>
         </section>
+
 
         <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-bold text-gray-800">
             Ejecución presupuestaria
           </h2>
+
           <p className="mt-1 text-sm text-gray-500">
             Comparación entre el presupuesto y el costo de los centros activos.
           </p>
 
-          <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
-            {centrosIniciales
-              .filter((centro) => centro.estado === 'Activo')
-              .slice(0, 4)
-              .map((centro) => {
-                const porcentaje = porcentajeEjecucion(centro);
-                const excedido = porcentaje > 100;
+          {centrosIniciales.length > 0 ? (
+            <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
+              {centrosIniciales
+                .filter((centro) => centro.estado === 'Activo')
+                .slice(0, 4)
+                .map((centro) => {
+                  const porcentaje = porcentajeEjecucion(centro);
+                  const excedido = porcentaje > 100;
 
-                return (
-                  <div key={centro.id}>
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-gray-700">
-                        {centro.nombre}
-                      </span>
-                      <span className={`text-sm font-semibold ${
-                        excedido ? 'text-red-700' : 'text-[#1e3a8a]'
-                      }`}>
-                        {porcentaje.toLocaleString('es-CR', {
-                          maximumFractionDigits: 1,
-                        })}%
-                      </span>
-                    </div>
-
-                    <div
-                      className="h-3 overflow-hidden rounded-full bg-gray-100"
-                      role="progressbar"
-                      aria-label={`Ejecución presupuestaria de ${centro.nombre}`}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.min(100, porcentaje)}
-                    >
-                      <div
-                        className={`h-full rounded-full ${
-                          excedido ? 'bg-red-600' : 'bg-[#a3be4d]'
-                        }`}
-                        style={{ width: `${Math.min(100, porcentaje)}%` }}
-                      />
-                    </div>
-
-                    <p className="mt-1 text-xs text-gray-500">
-                      Costo: {formatoMoneda(centro.costo)} de{' '}
-                      {formatoMoneda(centro.presupuesto)}
-                      {excedido && (
-                        <span className="ml-1 font-semibold text-red-700">
-                          Presupuesto excedido
+                  return (
+                    <div key={centro.id}>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-gray-700">
+                          {centro.nombre}
                         </span>
-                      )}
-                    </p>
-                  </div>
-                );
-              })}
-          </div>
+
+                        <span
+                          className={`text-sm font-semibold ${excedido ? 'text-red-700' : 'text-[#1e3a8a]'
+                            }`}
+                        >
+                          {porcentaje.toLocaleString('es-CR', {
+                            maximumFractionDigits: 1,
+                          })}%
+                        </span>
+                      </div>
+
+                      <div
+                        className="h-3 overflow-hidden rounded-full bg-gray-100"
+                        role="progressbar"
+                        aria-label={`Ejecución presupuestaria de ${centro.nombre}`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={Math.min(100, porcentaje)}
+                      >
+                        <div
+                          className={`h-full rounded-full ${excedido ? 'bg-red-600' : 'bg-[#a3be4d]'
+                            }`}
+                          style={{ width: `${Math.min(100, porcentaje)}%` }}
+                        />
+                      </div>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        Costo: {formatoMoneda(centro.costo)} de{' '}
+                        {formatoMoneda(centro.presupuesto)}
+
+                        {excedido && (
+                          <span className="ml-1 font-semibold text-red-700">
+                            Presupuesto excedido
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  );
+                })}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-6 text-center">
+              <p className="text-sm font-medium text-gray-700">
+                No hay información presupuestaria disponible.
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                La ejecución se mostrará cuando existan registros de presupuesto y costos.
+              </p>
+            </div>
+          )}
         </section>
+
 
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-200 px-5 py-4">
@@ -407,9 +365,9 @@ export default function CentrosCostoView({ onNavegar }) {
               {centrosFiltrados.length === 0
                 ? 'No hay centros que coincidan con los filtros.'
                 : `Mostrando ${inicio + 1}–${Math.min(
-                    inicio + filasPorPagina,
-                    centrosFiltrados.length
-                  )} de ${centrosFiltrados.length} centros`}
+                  inicio + filasPorPagina,
+                  centrosFiltrados.length
+                )} de ${centrosFiltrados.length} centros`}
             </p>
 
             <label className="flex items-center gap-2 text-sm text-gray-600">
@@ -452,11 +410,10 @@ export default function CentrosCostoView({ onNavegar }) {
                     </div>
 
                     <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                        centro.estado === 'Activo'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${centro.estado === 'Activo'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-600'
+                        }`}
                     >
                       {centro.estado}
                     </span>
@@ -498,9 +455,8 @@ export default function CentrosCostoView({ onNavegar }) {
                     <div className="col-span-2">
                       <dt className="text-gray-500">Ejecución presupuestaria</dt>
                       <dd
-                        className={`font-semibold ${
-                          excedido ? 'text-red-700' : 'text-gray-700'
-                        }`}
+                        className={`font-semibold ${excedido ? 'text-red-700' : 'text-gray-700'
+                          }`}
                       >
                         {porcentaje.toLocaleString('es-CR', {
                           maximumFractionDigits: 1,
@@ -564,9 +520,8 @@ export default function CentrosCostoView({ onNavegar }) {
                         {formatoMoneda(centro.costo)}
                       </td>
                       <td
-                        className={`whitespace-nowrap px-4 py-4 text-right font-semibold ${
-                          excedido ? 'text-red-700' : 'text-gray-700'
-                        }`}
+                        className={`whitespace-nowrap px-4 py-4 text-right font-semibold ${excedido ? 'text-red-700' : 'text-gray-700'
+                          }`}
                       >
                         {porcentaje.toLocaleString('es-CR', {
                           maximumFractionDigits: 1,
@@ -574,11 +529,10 @@ export default function CentrosCostoView({ onNavegar }) {
                       </td>
                       <td className="px-4 py-4">
                         <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                            centro.estado === 'Activo'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${centro.estado === 'Activo'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-600'
+                            }`}
                         >
                           {centro.estado}
                         </span>
@@ -655,9 +609,7 @@ export default function CentrosCostoView({ onNavegar }) {
         </section>
 
         <p className="mt-5 text-xs text-gray-500">
-          Datos ficticios para el prototipo. La asignación de costos y el
-          presupuesto definitivo deberán validarse con las reglas contables
-          y los requisitos del proyecto.
+          La ejecución presupuestaria se mostrará cuando estén disponibles los registros contables correspondientes.
         </p>
       </main>
     </div>

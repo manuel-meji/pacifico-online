@@ -173,5 +173,8 @@ class AdaptadoresM6Test extends TestCase
 
         $this->assertTrue($adaptador->consultarRegistroContablePago(5));
         $this->assertFalse($adaptador->consultarRegistroContablePago(6));
+
+        // Conexión M6–M7: el aviso ya no lanza ERR-006; M7 consume los eventos.
+        $adaptador->enviarEventoFinanciero(5, 'PagoConfirmado');
     }
 }

@@ -5,6 +5,7 @@ namespace Tests\Feature\M5_Pedidos;
 use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
+use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Models\M5_Pedidos\Carrito;
@@ -504,5 +505,147 @@ class ControladoresM5Test extends TestCase
         $resResto = $this->getJson('/m5/carrito?id_cliente=1&zona=Resto%20del%20pa%C3%ADs');
         $resResto->assertOk();
         $this->assertEqualsWithDelta(2500.0, (float) $resResto->json('resumen.costo_envio'), 0.01);
+    }
+
+    public function test_listar_direcciones_completa_texto_completo_cuando_m1_no_lo_incluye(): void
+    {
+        $portalSinTextoCompleto = new class extends PortalStub
+        {
+            public function listarDireccionesCliente(int $idCliente): array
+            {
+                return [
+                    [
+                        'id_direccion_cliente' => 8,
+                        'id_cliente' => $idCliente,
+                        'alias_direccion' => 'UCR',
+                        'nombre_destinatario' => 'Manuel Mejicano',
+                        'telefono_destinatario' => '70280576',
+                        'provincia' => 'San José',
+                        'canton' => 'Desamparados',
+                        'distrito' => 'Desamparados',
+                        'otras_senas' => 'UCR',
+                        'es_principal' => true,
+                    ],
+                ];
+            }
+        };
+
+        $this->app->instance(PortalPublicoContract::class, $portalSinTextoCompleto);
+
+        $this->getJson('/m5/carrito/direcciones?id_cliente=1')
+            ->assertOk()
+            ->assertJsonPath('direcciones.0.id_direccion_cliente', 8)
+            ->assertJsonPath('direcciones.0.texto_completo', 'UCR — San José, Desamparados, Desamparados, UCR');
+    }
+
+    public function test_checkout_multi_item_asigna_clave_idempotencia_y_reserva_por_variacion(): void
+    {
+        $this->configurarMocks();
+
+        $this->postJson('/m5/carrito/items', ['id_cliente' => 1, 'id_variacion' => 101, 'cantidad' => 1])->assertCreated();
+        $this->postJson('/m5/carrito/items', ['id_cliente' => 1, 'id_variacion' => 102, 'cantidad' => 1])->assertCreated();
+
+        $claves = [];
+        $reservasPorVariacion = [
+            101 => '11111111-1111-4111-8111-111111111101',
+            102 => '22222222-2222-4222-8222-222222222102',
+        ];
+
+        $mockM4 = $this->createMock(InventarioModuleInterface::class);
+        $mockM4->method('consultarExistencias')->willReturn(10);
+        $mockM4->expects($this->exactly(2))
+            ->method('reservarExistencias')
+            ->willReturnCallback(function (int $idComercio, int $idVariacion, int $cantidad, ?int $idUbicacion, ?string $clave) use (&$claves, $reservasPorVariacion): array {
+                $claves[] = $clave;
+
+                return ['id_reserva' => $reservasPorVariacion[$idVariacion]];
+            });
+
+        $this->app->instance(InventarioModuleInterface::class, $mockM4);
+        $this->app->instance(InventarioServiceInterface::class, $mockM4);
+
+        $res = $this->postJson('/m5/pedidos', [
+            'id_cliente' => 1,
+            'id_direccion_cliente' => 1,
+        ]);
+
+        $res->assertCreated();
+        $this->assertCount(2, array_unique($claves));
+
+        $idPedido = (int) $res->json('id_pedido');
+        $lineas = PedidoLinea::whereHas('subpedido', fn ($q) => $q->where('id_pedido', $idPedido))->get()->keyBy('id_variacion');
+
+        $this->assertSame($reservasPorVariacion[101], $lineas[101]->id_reserva);
+        $this->assertSame($reservasPorVariacion[102], $lineas[102]->id_reserva);
+    }
+
+    public function test_checkout_libera_reservas_parciales_cuando_falla_una_variacion_posterior(): void
+    {
+        $this->configurarMocks();
+
+        $this->postJson('/m5/carrito/items', ['id_cliente' => 1, 'id_variacion' => 101, 'cantidad' => 1])->assertCreated();
+        $this->postJson('/m5/carrito/items', ['id_cliente' => 1, 'id_variacion' => 102, 'cantidad' => 1])->assertCreated();
+
+        $reservaItem1 = '33333333-3333-4333-8333-333333333101';
+
+        $mockM4 = $this->createMock(InventarioModuleInterface::class);
+        $mockM4->method('consultarExistencias')->willReturn(10);
+        $mockM4->expects($this->exactly(2))
+            ->method('reservarExistencias')
+            ->willReturnCallback(function (int $idComercio, int $idVariacion) use ($reservaItem1): array {
+                if ($idVariacion === 102) {
+                    throw new \RuntimeException('Existencia insuficiente en segundo comercio');
+                }
+
+                return ['id_reserva' => $reservaItem1];
+            });
+        $mockM4->expects($this->once())
+            ->method('liberarReserva')
+            ->with($reservaItem1, 'solicitud_m5')
+            ->willReturn(['id_reserva' => $reservaItem1, 'estado_reserva' => 'liberada']);
+
+        $this->app->instance(InventarioModuleInterface::class, $mockM4);
+        $this->app->instance(InventarioServiceInterface::class, $mockM4);
+
+        $this->postJson('/m5/pedidos', [
+            'id_cliente' => 1,
+            'id_direccion_cliente' => 1,
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M5-002');
+    }
+
+    public function test_listar_pedidos_comercio_incluye_nombre_de_producto_y_variacion_en_lineas(): void
+    {
+        $this->configurarMocks();
+
+        $mockM3 = $this->createMock(CatalogoServiceInterface::class);
+        $mockM3->method('obtenerVariacion')->willReturn([
+            'id_variacion' => 101,
+            'id_producto' => 10,
+            'id_comercio' => 1,
+            'sku' => 'SDM-LOG-K835-GRIS',
+            'precio' => 28000,
+            'tarifa_impuesto' => 13,
+            'disponible' => true,
+            'atributos' => [
+                ['tipo_atributo' => 'Color', 'valor' => 'Gris Oscuro'],
+            ],
+            'producto' => [
+                'id_producto' => 10,
+                'id_comercio' => 1,
+                'nombre' => 'Teclado mecánico Logitech K835',
+            ],
+        ]);
+        $this->app->instance(CatalogoServiceInterface::class, $mockM3);
+
+        $this->postJson('/m5/carrito/items', ['id_cliente' => 1, 'id_variacion' => 101, 'cantidad' => 1])->assertCreated();
+        $this->postJson('/m5/pedidos', ['id_cliente' => 1, 'id_direccion_cliente' => 1])->assertCreated();
+
+        $this->getJson('/m5/pedidos?id_comercio=1')
+            ->assertOk()
+            ->assertJsonPath('pedidos.0.subpedidos.0.lineas.0.nombre', 'Teclado mecánico Logitech K835 (Color: Gris Oscuro)')
+            ->assertJsonPath('pedidos.0.subpedidos.0.lineas.0.nombre_producto', 'Teclado mecánico Logitech K835')
+            ->assertJsonPath('pedidos.0.subpedidos.0.lineas.0.sku', 'SDM-LOG-K835-GRIS');
     }
 }

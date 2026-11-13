@@ -68,6 +68,36 @@ class GeneradorXmlComprobante
     }
 
     /**
+     * Lee el desglose de una factura generada por factura() (conexión M6–M7):
+     * TotalVenta → subtotal, TotalImpuesto → impuesto, TotalOtrosCargos → envio.
+     * Devuelve null si el XML no es una factura de M6 o le falta algún total.
+     *
+     * @return array{subtotal: float, impuesto: float, envio: float}|null
+     */
+    public function totalesFactura(string $xml): ?array
+    {
+        $documento = new DOMDocument;
+
+        if (trim($xml) === '' || ! @$documento->loadXML($xml, LIBXML_NONET)) {
+            return null;
+        }
+
+        $totales = [];
+
+        foreach (['subtotal' => 'TotalVenta', 'impuesto' => 'TotalImpuesto', 'envio' => 'TotalOtrosCargos'] as $campo => $etiqueta) {
+            $nodo = $documento->getElementsByTagName($etiqueta)->item(0);
+
+            if ($nodo === null || ! is_numeric($nodo->textContent)) {
+                return null;
+            }
+
+            $totales[$campo] = (float) $nodo->textContent;
+        }
+
+        return $totales;
+    }
+
+    /**
      * Nota de crédito (03) o de débito (02) que referencia a una factura.
      *
      * @param  array{clave: string, consecutivo: string, fecha: DateTimeInterface, emisor: array{nombre: string, cedula: string, condicion: string}, receptor: array{nombre: ?string, identificacion: ?string}, factura: array{clave: string, fecha: DateTimeInterface}, monto: float, motivo: string}  $datos

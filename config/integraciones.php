@@ -72,11 +72,16 @@ return [
     |--------------------------------------------------------------------------
     | Dependencias de M3 Catálogo
     |--------------------------------------------------------------------------
+    |
+    | M2 está en 'real' por defecto, igual que en M1, M4 y M5: el estado del
+    | comercio (RN-M3-07) sale de M2. Para trabajar sin M2, poner
+    | M3_M2_MODO=doble en el .env propio. Las pruebas usan el doble (phpunit.xml).
+    |
     */
 
     'm3' => [
         'm2' => [
-            'modo' => env('M3_M2_MODO', 'doble'),
+            'modo' => env('M3_M2_MODO', 'real'),
             'doble' => M3ComerciosStub::class,
         ],
     ],
@@ -100,7 +105,7 @@ return [
             'doble' => M4ComerciosStub::class,
         ],
         'm3' => [
-            'modo' => env('M4_M3_MODO', 'doble'),
+            'modo' => env('M4_M3_MODO', 'real'),
             'doble' => M4CatalogoStub::class,
         ],
         'nucleo' => [
@@ -215,11 +220,11 @@ return [
             'doble' => M5ComerciosStub::class,
         ],
         'm3' => [
-            'modo' => env('M5_M3_MODO', 'doble'),
+            'modo' => env('M5_M3_MODO', env('APP_ENV') === 'testing' ? 'doble' : 'real'),
             'doble' => M5CatalogoStub::class,
         ],
         'm4' => [
-            'modo' => env('M5_M4_MODO', 'doble'),
+            'modo' => env('M5_M4_MODO', env('APP_ENV') === 'testing' ? 'doble' : 'real'),
             'doble' => M5InventarioStub::class,
         ],
         'm6' => [

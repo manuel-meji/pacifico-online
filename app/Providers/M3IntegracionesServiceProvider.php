@@ -15,9 +15,10 @@ use InvalidArgumentException;
  *
  * Elige, para los servicios de M3 que dependen de M2, entre el doble
  * (app/Services/M3_Catalogo/Dobles) y el servicio real, según
- * config/integraciones.php (clave m3). Cambiar M3_M2_MODO=real en el .env
- * conecta M2 real sin tocar código. Es un enlace contextual: solo afecta a
- * las clases de M3 listadas en CONSUMIDORES_M3.
+ * config/integraciones.php (clave m3). El modo por defecto es 'real' (M2
+ * real); el doble se fuerza con M3_M2_MODO=doble en el .env, sin tocar
+ * código. Es un enlace contextual: solo afecta a las clases de M3 listadas
+ * en CONSUMIDORES_M3.
  *
  * También registra la API del contrato en /api/m3/v1
  * (routes/modules/m3_catalogo_api.php), igual que M2 y M4.
