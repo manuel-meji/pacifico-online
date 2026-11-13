@@ -17,10 +17,12 @@
 return [
 
     'usar_dobles' => (bool) env('M6_USAR_DOBLES', true),
-    // Sobrescribe M6_USAR_DOBLES por módulo. Si la variable no existe vale null y se usa la global.
-    'doble_por_modulo' => [
-        'm1' => env('M6_M1_DOBLE'),
-        'm2' => env('M6_M2_DOBLE'),
+   // Sobrescribe M6_USAR_DOBLES por módulo. Si la variable no existe vale null y se usa la global.
+       // M1 y M2 usan el módulo real por defecto (integración del PC4). En las pruebas,
+       // phpunit.xml fuerza M6_M1_DOBLE y M6_M2_DOBLE a (null) para que sigan usando los dobles.
+       'doble_por_modulo' => [
+           'm1' => env('M6_M1_DOBLE', false),
+           'm2' => env('M6_M2_DOBLE', false),
         'm5' => env('M6_M5_DOBLE'),
         'm7' => env('M6_M7_DOBLE'),
     ],
