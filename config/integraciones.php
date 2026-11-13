@@ -100,7 +100,7 @@ return [
             'doble' => M4ComerciosStub::class,
         ],
         'm3' => [
-            'modo' => env('M4_M3_MODO', 'doble'),
+            'modo' => env('M4_M3_MODO', 'real'),
             'doble' => M4CatalogoStub::class,
         ],
         'nucleo' => [
