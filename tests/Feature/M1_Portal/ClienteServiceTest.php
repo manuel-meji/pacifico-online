@@ -348,6 +348,7 @@ class ClienteServiceTest extends PruebaM1
             'correo_electronico' => 'ana@example.com',
             'telefono' => '8888-0000',
             'direccion_envio' => '200 m norte del parque, Liberia, Liberia, Guanacaste',
+            'identificacion_tributaria' => '5-0123-0456',
         ], $portal->obtenerCliente($idCliente));
 
         $direcciones = $portal->listarDireccionesCliente($idCliente);
