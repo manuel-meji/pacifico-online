@@ -21,6 +21,8 @@ final class AsientoContable
         public readonly string $tipoEvento,
         public readonly string $tipo,
         public readonly string $fecha,
+        public readonly ?int $pagoId = null,
+        public readonly ?int $asientoOriginalId = null,
     ) {}
 
     public function agregarDetalle(DetalleAsiento $detalle): void

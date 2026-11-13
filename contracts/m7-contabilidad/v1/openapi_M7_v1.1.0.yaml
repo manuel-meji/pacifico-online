@@ -4,7 +4,7 @@ info:
   version: 1.1.0
   description: >
     Especificación de las rutas HTTP y eventos observados en la implementación
-    de M7 en desarrollo d22f9c8. La versión v1.1.0 es únicamente una propuesta
+    de M7 en desarrollo, incluida la integración local con M6. La versión v1.1.0 es únicamente una propuesta
     en revisión, no un contrato aprobado ni publicado, y no reemplaza v1.0.0.
     Sus diferencias de rutas, respuestas y seguridad pueden ser incompatibles
     con ese contrato. Si el Comité confirma cambios incompatibles, la estrategia
@@ -47,11 +47,14 @@ x-dependencies:
     - Evento interno SubpedidoDespachado
     - ObtenerSubpedido(id_subpedido), pendiente de integración
   M6:
-    estado: Pendiente de integración
+    estado: Integración implementada en desarrollo; pendiente de despliegue y validación en PostgreSQL.
     operaciones:
-      - Evento PagoConfirmado
-      - ObtenerFacturaElectronica(id_factura) / listar facturas por id_pedido
-      - Evento ReembolsoProcesado para registrar la reversión contable definitiva
+      - Evento FacturaGenerada para registrar el cobro por subpedido.
+      - Evento ReembolsoProcesado para registrar la reversión contable definitiva.
+      - ConsultaEventosPagosInterface para recuperar facturas y reembolsos por período y comercio.
+    nota: >
+      PagoConfirmado no genera un asiento adicional; el cobro se registra desde
+      FacturaGenerada y la venta desde PedidoConfirmado de M5.
   Nucleo:
     - Autenticación mediante auth:sanctum en las rutas API protegidas
     - Contexto de comercio y verificación de roles
@@ -75,7 +78,19 @@ x-pending-decisions:
     estado: Pendiente de coordinación
     descripcion: >
       Los listeners registran las excepciones sin propagarlas al emisor; el
-      procesamiento observado no garantiza un reintento durable.
+      procesamiento no garantiza un reintento durable. La recuperación manual
+      requiere las tablas M7, la migración de registros financieros M6, las
+      cuentas activas y la venta previa del subpedido. Antes de aplicar la
+      migración en Supabase debe coordinarse con el responsable de la base.
+      Ejecutar php artisan m7:recuperar-eventos-m6 AAAA-MM-DD AAAA-MM-DD
+      --comercio=ID; el comando informa los errores y devuelve fallo si
+      alguna operación no pudo procesarse.
+  consulta_pago_multicomercio:
+    estado: Pendiente de coordinación
+    descripcion: >
+      La consulta actual de registro por pago indica si existe algún asiento
+      registrado con ese id_pago; no garantiza que estén contabilizados todos
+      los subpedidos de un pago que involucra varios comercios.
 
 x-eventos-consumidos:
   PedidoConfirmado:
@@ -95,6 +110,40 @@ x-eventos-consumidos:
       id_pedido: int64
       id_subpedido: int64
       id_comercio: int64
+  FacturaGenerada:
+    productor: M6
+    proposito: Registrar el cobro por subpedido después de verificar la venta previa.
+    payload_esperado:
+      id_evento: uuid
+      id_factura: int64
+      id_pago: int64
+      id_pedido: int64
+      id_subpedido: int64
+      id_comercio: int64
+      subtotal: decimal
+      impuesto: decimal
+      envio: decimal
+      monto: decimal
+      fecha: date-time
+    nota: >
+      M7 evita duplicados por evento y por pago y subpedido; rechaza datos
+      contradictorios y desgloses incompletos.
+  ReembolsoProcesado:
+    productor: M6
+    proposito: Registrar la reversión contable definitiva vinculada al cobro.
+    payload_esperado:
+      id_evento: uuid
+      id_pago: int64
+      id_pedido: int64
+      id_subpedido: int64
+      id_comercio: int64
+      id_reembolso: int64
+      monto: decimal
+      nota_credito_id: int64
+      fecha: date-time
+    nota: >
+      M7 evita duplicados por evento e id_reembolso y distribuye el monto entre
+      subtotal, impuesto y envío sin exceder sus saldos pendientes.
 
 x-eventos-pendientes:
   SubpedidoEntregado:
@@ -106,30 +155,6 @@ x-eventos-pendientes:
       id_subpedido: int64
       id_comercio: int64
       fecha: date-time
-  PagoConfirmado:
-    productor: M6
-    proposito: Registrar contablemente el pago confirmado.
-    payload_esperado:
-      id_evento: uuid
-      id_pago: int64
-      id_pedido: int64
-      monto: decimal
-      fecha: date-time
-    nota: M6 debe agregar id_evento, o el Comité declarar id_pago como clave idempotente.
-  ReembolsoProcesado:
-    productor: M6
-    proposito: Registrar una reversión contable definitiva después del reembolso y la nota de crédito.
-    payload_esperado:
-      id_evento: uuid
-      id_pedido: int64
-      id_subpedido: int64|null
-      id_comercio: int64|null
-      id_reembolso: int64
-      monto: decimal
-      nota_credito_id: int64|null
-      fecha: date-time
-    nota: La reversión definitiva se registra al recibir ReembolsoProcesado desde M6.
-
 x-operaciones-pendientes-v1:
   descripcion: >
     Operaciones publicadas en v1.0.0 sin ruta correspondiente registrada. Su
