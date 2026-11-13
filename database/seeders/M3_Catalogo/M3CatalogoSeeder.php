@@ -6,6 +6,7 @@ namespace Database\Seeders\M3_Catalogo;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 /**
@@ -23,6 +24,14 @@ use RuntimeException;
  *    ni `estado_producto` de un producto existente (lo gobierna el comercio).
  *  - No pisa el estado de un comercio que ya esté en estado_comercios_catalogo.
  *  - No toca las imágenes que haya puesto un comercio.
+ *
+ * Freno de seguridad: los ids 1 a 11 de variación y 1 a 10 de producto se reutilizaron con
+ * otros productos. Si en la base ya hay variaciones de esos ids que este seeder cambiaría
+ * (otro producto, comercio o SKU) y otros módulos las referencian (promociones y destacados
+ * de M1, existencias y movimientos de M4, pedidos, carritos y deseos de M5), el seeder se
+ * detiene antes de escribir y dice dónde están las referencias. Esas filas quedarían
+ * apuntando a un producto distinto. Para sembrar de todos modos, después de avisar a esos
+ * módulos, se pone la variable de entorno M3_SEMBRAR_FORZAR=1.
  *
  *     php artisan db:seed --class="Database\Seeders\M3_Catalogo\M3CatalogoSeeder"
  */
@@ -145,8 +154,32 @@ class M3CatalogoSeeder extends Seeder
 
     private const SKU_TEMPORAL = 'M3-SEMBRADO-TMP-';
 
+    /** Productos de los escenarios: sus ids se reutilizaron con otros productos. */
+    public const PRODUCTOS_DE_ESCENARIO = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+    /**
+     * Tablas de otros módulos que guardan ids de producto o variación de M3. Solo se leen
+     * (conteo) para el freno de seguridad; este seeder nunca escribe en ellas.
+     *
+     * @var list<array{0: string, 1: string, 2: string}> módulo, tabla y columna
+     */
+    private const REFERENCIAS_DE_OTROS_MODULOS = [
+        ['M1', 'promociones', 'id_producto'],
+        ['M1', 'promocion_variaciones', 'id_variacion'],
+        ['M1', 'productos_destacados', 'id_producto'],
+        ['M4', 'existencias', 'id_variacion'],
+        ['M4', 'existencias', 'id_producto'],
+        ['M4', 'movimientos_inventario', 'id_variacion'],
+        ['M4', 'movimientos_inventario', 'id_producto'],
+        ['M5', 'pedidos_lineas', 'id_variacion'],
+        ['M5', 'items_carrito', 'id_variacion'],
+        ['M5', 'pedidos_deseos', 'id_variacion'],
+    ];
+
     public function run(): void
     {
+        $this->frenarSiOtrosModulosUsanIdsQueCambian();
+
         DB::transaction(function (): void {
             $this->sembrarEstadoDeComercios();
             $this->sembrarCategorias();
@@ -161,6 +194,89 @@ class M3CatalogoSeeder extends Seeder
             $this->sembrarImagenes();
             $this->sincronizarSecuencias();
         });
+    }
+
+    /**
+     * Freno de seguridad (solo lectura, antes de la transacción).
+     *
+     * Busca las variaciones 1 a 11 que ya existen y que este seeder dejaría con otro producto,
+     * comercio o SKU. Si otros módulos referencian esas variaciones o sus productos, se detiene:
+     * esas filas pasarían a apuntar a un producto distinto. Con M3_SEMBRAR_FORZAR=1 continúa.
+     * Una base vacía, o una que ya tiene los datos de escenario, no activa el freno.
+     */
+    private function frenarSiOtrosModulosUsanIdsQueCambian(): void
+    {
+        $definidas = collect(self::VARIACIONES)->keyBy('id_variacion');
+        $variacionesQueCambian = [];
+        $productosQueCambian = [];
+
+        $existentes = DB::table('producto_variaciones')
+            ->whereIn('id_variacion', self::VARIACIONES_DE_ESCENARIO)
+            ->get(['id_variacion', 'id_producto', 'id_comercio', 'sku']);
+
+        foreach ($existentes as $fila) {
+            $definida = $definidas->get($fila->id_variacion);
+
+            if ((int) $fila->id_producto === $definida['id_producto']
+                && (int) $fila->id_comercio === $definida['id_comercio']
+                && $fila->sku === $definida['sku']) {
+                continue;
+            }
+
+            $variacionesQueCambian[] = (int) $fila->id_variacion;
+            // Cambia tanto el producto que la variación deja como el que pasa a ocupar.
+            $productosQueCambian[] = (int) $fila->id_producto;
+            $productosQueCambian[] = $definida['id_producto'];
+        }
+
+        if ($variacionesQueCambian === []) {
+            return;
+        }
+
+        $ids = [
+            'id_variacion' => $variacionesQueCambian,
+            'id_producto' => array_values(array_intersect(array_unique($productosQueCambian), self::PRODUCTOS_DE_ESCENARIO)),
+        ];
+
+        $hallazgos = [];
+
+        foreach (self::REFERENCIAS_DE_OTROS_MODULOS as [$modulo, $tabla, $columna]) {
+            if (! Schema::hasTable($tabla) || ! Schema::hasColumn($tabla, $columna)) {
+                continue;
+            }
+
+            $porId = DB::table($tabla)
+                ->selectRaw("{$columna} as id, count(*) as filas")
+                ->whereIn($columna, $ids[$columna])
+                ->groupBy($columna)
+                ->orderBy($columna)
+                ->pluck('filas', 'id');
+
+            if ($porId->isNotEmpty()) {
+                $hallazgos[$modulo][] = "{$tabla}.{$columna}: {$porId->sum()} filas (ids ".$porId->keys()->implode(', ').')';
+            }
+        }
+
+        if ($hallazgos === []) {
+            return;
+        }
+
+        $detalle = collect($hallazgos)
+            ->map(fn (array $lineas, string $modulo): string => "{$modulo}: ".implode('; ', $lineas))
+            ->implode(' | ');
+
+        if (in_array(env('M3_SEMBRAR_FORZAR'), [1, '1', true, 'true'], true)) {
+            $this->command?->warn("M3CatalogoSeeder: M3_SEMBRAR_FORZAR=1, se siembra aunque hay referencias a ids que cambian. {$detalle}");
+
+            return;
+        }
+
+        throw new RuntimeException(
+            'M3CatalogoSeeder: no se sembró nada. Este seeder cambia el significado de las variaciones '
+            .implode(', ', $variacionesQueCambian).' (pasan a ser otro producto, comercio o SKU) y otros módulos ya las '
+            ."referencian o referencian sus productos. {$detalle}. Avisa a esos módulos y, si se debe continuar, "
+            .'ejecuta de nuevo con la variable de entorno M3_SEMBRAR_FORZAR=1.'
+        );
     }
 
     /** Solo crea el estado de los comercios que falten: no pisa una suspensión que haya llegado de M2. */

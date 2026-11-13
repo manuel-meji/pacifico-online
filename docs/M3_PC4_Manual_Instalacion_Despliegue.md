@@ -91,6 +91,28 @@ Los productos 3, 4, 5, 6, 8, 301 y 401 quedan sin imagen: no hay en el repositor
 
 El seeder se puede ejecutar varias veces. No borra productos, variaciones ni categorías; conserva `created_at`; no cambia `disponible` de una variación existente ni `estado_producto` de un producto existente; no pisa el estado de un comercio ya registrado ni las imágenes que haya puesto un comercio. Se detiene con un mensaje si un SKU suyo ya lo usa otra variación del mismo comercio.
 
+#### Freno de seguridad del seeder
+
+Los ids de variación 1 a 11 y de producto 1 a 10 se reutilizaron con otros productos. Antes de escribir, el seeder compara las variaciones 1 a 11 que ya existen con las que va a dejar (producto, comercio y SKU). Si alguna cambia, cuenta las filas de otros módulos que referencian esas variaciones o sus productos:
+
+| Módulo | Tablas revisadas |
+|---|---|
+| M1 | `promociones.id_producto`, `promocion_variaciones.id_variacion`, `productos_destacados.id_producto` |
+| M4 | `existencias` y `movimientos_inventario` (`id_variacion` e `id_producto`) |
+| M5 | `pedidos_lineas`, `items_carrito` y `pedidos_deseos` (`id_variacion`) |
+
+Si encuentra referencias, lanza un error y no siembra nada. El mensaje indica las variaciones que cambian y, por módulo, la tabla, la columna, la cantidad de filas y los ids. Esas filas quedarían apuntando a un producto distinto del que tenían.
+
+El freno no se activa en una base vacía, en una base que ya tiene los datos de escenario, ni cuando las referencias son a ids que no cambian. Una tabla o columna que no exista se omite.
+
+Para sembrar de todos modos, después de avisar a los módulos afectados, se define la variable de entorno solo para ese comando:
+
+```powershell
+$env:M3_SEMBRAR_FORZAR = '1'
+php artisan db:seed --class="Database\Seeders\M3_Catalogo\M3CatalogoSeeder"
+Remove-Item Env:M3_SEMBRAR_FORZAR
+```
+
 Comando ejecutado en la base local aislada:
 
 ```powershell
