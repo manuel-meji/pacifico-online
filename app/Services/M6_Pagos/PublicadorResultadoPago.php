@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace App\Services\M6_Pagos;
 
 use App\Contracts\Nucleo\NucleoServiceInterface;
-use App\Events\M6_Pagos\PagoConfirmado;
 use App\Events\M6_Pagos\PagoRechazado;
 use App\Models\M6_Pagos\EstadoPago;
 use App\Models\M6_Pagos\Pago;
 use App\Services\M6_Pagos\Clients\ContabilidadClient;
 use App\Services\M6_Pagos\Clients\PedidoClient;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -38,10 +36,11 @@ class PublicadorResultadoPago
         $fecha = ($pago->fecha_confirmacion ?? now())->toIso8601String();
 
         if ($estado === EstadoPago::CONFIRMADO) {
-            event(new PagoConfirmado((string) Str::uuid(), $pago->id_pedido, $pago->id_pago, (float) $pago->monto, $fecha));
+            // Conexión M6–M7: el mismo armado que usa ConsultaEventosPagosService.
+            event(FabricaEventosM6::pagoConfirmado($pago));
             $this->intentar('M7', fn () => $this->contabilidad->enviarEventoFinanciero($pago->id_pago, 'PagoConfirmado'));
         } else {
-            event(new PagoRechazado((string) Str::uuid(), $pago->id_pedido, $pago->id_pago, $motivo, $fecha));
+            event(new PagoRechazado(IdentificadorEventoM6::para('PagoRechazado', $pago->id_pago), $pago->id_pedido, $pago->id_pago, $motivo, $fecha));
         }
 
         $this->intentar('M5', fn () => $this->pedidos->notificarResultadoPago($pago->id_pedido, $pago->id_pago, $estado, $motivo));
