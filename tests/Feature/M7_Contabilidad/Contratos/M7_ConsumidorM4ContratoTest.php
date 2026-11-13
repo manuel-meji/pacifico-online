@@ -16,6 +16,11 @@ use Tests\TestCase;
 /**
  * Contrato consumidor de M7 frente a M4 (costos de productos vendidos).
  * Solo usa la interfaz de M7 y el doble existente; no toca código ni datos de M4.
+ * 
+ * NO es una prueba de integración con M4 real: el adaptador M4CostosProductosVendidosGateway
+ * se prueba contra un mock de InventarioModuleInterface, así que verifica que M7 delega
+ * y espera la estructura del contrato (id_subpedido, id_comercio, variaciones, costo_total),
+ * no que M4 la entregue de esa forma en ejecución.
  */
 class M7_ConsumidorM4ContratoTest extends TestCase
 {

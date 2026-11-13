@@ -21,9 +21,10 @@ use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
- * Aceptación de M7: PedidoConfirmado + SubpedidoDespachado generan el asiento de
- * venta y el de costo de ventas, cuadrados, sin duplicarse, y consultables por
- * el libro diario. M4 se simula con un doble; M5 solo aporta las clases de evento.
+ * Aceptación de M7 (NO es una prueba end-to-end entre módulos): M4 se simula con un
+ * doble del gateway y los eventos de M5 se construyen en memoria con sus constructores
+ * reales, sin persistir pedidos ni subpedidos. Verifica la lógica de M7 sobre esos
+ * insumos. El recorrido con módulos reales (tarea 3 del diagnóstico) se valida aparte.
  */
 class DespachoAsientosAceptacionTest extends TestCase
 {
@@ -308,7 +309,13 @@ class DespachoAsientosAceptacionTest extends TestCase
         $this->assertDatabaseCount('eventos_procesados', 0);
     }
 
-    public function test_el_evento_fallido_por_falta_de_plan_se_recupera_al_cargar_el_plan(): void
+   /**
+     * Reprocesación MANUAL: tras el fallo no queda registro durable del evento
+     * (la transacción se revierte y el listener solo escribe en el log), así que
+     * aquí se vuelve a invocar el listener a mano con el mismo evento. Demuestra que
+     * el reintento es seguro (idempotente), no que exista un reintento automático.
+     */
+    public function test_reprocesar_manualmente_el_mismo_evento_tras_cargar_el_plan_genera_los_asientos(): void
     {
         $this->recorrerPedidoYDespacho();
         $this->assertDatabaseCount('asientos_contables', 0);
