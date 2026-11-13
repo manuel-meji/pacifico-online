@@ -69,7 +69,7 @@ final class AdaptadorM5 implements PedidoClient
     private function pedido(int $idPedido): array
     {
         try {
-            $pedido = $this->gestionM5()->obtenerPedido($idPedido);
+            return $this->gestionM5()->obtenerPedido($idPedido);
         } catch (ErrorNucleoException $e) {
             if ($e->codigo === 'ERR-004') {
                 throw ErrorContratoException::de(CodigoErrorM6::PedidoNoEncontrado);
@@ -77,14 +77,6 @@ final class AdaptadorM5 implements PedidoClient
 
             throw $e;
         }
-
-        // M5 devuelve un pedido de relleno (sin fecha de creación real ni historial) cuando
-        // el id no existe en la base; un pedido real siempre trae "historial_estados".
-        if (! array_key_exists('historial_estados', $pedido)) {
-            throw ErrorContratoException::de(CodigoErrorM6::PedidoNoEncontrado);
-        }
-
-        return $pedido;
     }
 
     private function gestionM5(): GestionPedidosServiceInterface
