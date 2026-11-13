@@ -32,6 +32,11 @@ class IdentidadDoble implements ServicioIdentidadInterface
 
     public ?ErrorNucleoException $errorActualizarCorreo = null;
 
+    public int $llamadasExisteCorreo = 0;
+
+    /** @var list<string> */
+    public array $correosExistentes = [];
+
     public function crearCuenta(array $datos, RolUsuario|string $rol, ?int $idComercio = null): Usuario
     {
         $this->llamadas++;
@@ -40,6 +45,10 @@ class IdentidadDoble implements ServicioIdentidadInterface
 
         if ($this->error !== null) {
             throw $this->error;
+        }
+
+        if (isset($datos['correo'])) {
+            $this->correosExistentes[] = mb_strtolower(trim((string) $datos['correo']));
         }
 
         $usuario = new Usuario;
@@ -57,5 +66,26 @@ class IdentidadDoble implements ServicioIdentidadInterface
         }
 
         $this->correosActualizados[] = ['id_usuario' => $idUsuario, 'correo' => $correo];
+        $this->correosExistentes[] = mb_strtolower(trim($correo));
+    }
+
+    public function existeCorreo(string $correo): bool
+    {
+        $this->llamadasExisteCorreo++;
+
+        $correoNormalizado = mb_strtolower(trim($correo));
+
+        if ($correoNormalizado === '' || ! filter_var($correoNormalizado, FILTER_VALIDATE_EMAIL)) {
+            return false;
+        }
+
+        $normalizados = array_map(fn (string $c): string => mb_strtolower(trim($c)), $this->correosExistentes);
+
+        if (in_array($correoNormalizado, $normalizados, true)) {
+            return true;
+        }
+
+        return isset($this->datos['correo'])
+            && mb_strtolower(trim((string) $this->datos['correo'])) === $correoNormalizado;
     }
 }

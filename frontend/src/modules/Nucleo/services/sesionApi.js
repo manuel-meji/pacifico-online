@@ -1,5 +1,5 @@
 // Cliente HTTP de la sesión del núcleo compartido (Nucleo).
-// Rutas: POST /login, POST /logout y GET /api/user. Viven en el grupo web de Laravel, así que los POST
+// Rutas: POST /login, POST /logout, POST /crear-contrasena y GET /api/user. Viven en el grupo web de Laravel, así que los POST
 // llevan el token CSRF de Sanctum (cookie XSRF-TOKEN → cabecera X-XSRF-TOKEN), igual que m1Api.js.
 // Los errores llegan en el formato del núcleo: { error: { codigo, mensaje, detalles } }.
 // Respuesta de las funciones: { ok: true, datos } o { ok: false, estado, error }.
@@ -66,7 +66,7 @@ async function llamar(ruta, opciones = {}, reintentado = false) {
 
   if (resp.ok) return { ok: true, datos: cuerpo };
 
-  // 429: /login admite 5 intentos por minuto.
+  // 429: /login admite 5 intentos por minuto y /crear-contrasena, 6.
   if (resp.status === 429) {
     return {
       ok: false,
@@ -89,6 +89,16 @@ export function iniciarSesion(correoOParams, contrasena) {
 // POST /logout. 204 → { ok: true, datos: null } · 401 si no había sesión.
 export function cerrarSesion() {
   return llamar('/logout', { method: 'POST' });
+}
+
+// POST /crear-contrasena (invitación del Encargado del comercio). No inicia sesión.
+// 200 → { ok: true, datos: { mensaje } } · 422 con error.detalles.token[0] (enlace inválido o vencido)
+// o error.detalles.contrasena[0] · 429 ERR-429 (6 intentos por minuto).
+export function crearContrasena({ token, correo, contrasena, contrasenaConfirmacion }) {
+  return llamar('/crear-contrasena', {
+    method: 'POST',
+    body: JSON.stringify({ token, correo, contrasena, contrasena_confirmation: contrasenaConfirmacion }),
+  });
 }
 
 // GET /api/user. 200 → { ok: true, datos: { user } } · 401 si no hay sesión.
