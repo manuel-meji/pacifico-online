@@ -21,10 +21,13 @@ class RegistroSolicitudTest extends TestCase
 {
     use PreparaM2;
 
-    private function servicio(): ComerciosService
+    private function servicio(bool $correoConCuenta = false): ComerciosService
     {
+        $identidad = $this->mock(ServicioIdentidadInterface::class);
+        $identidad->shouldReceive('existeCorreo')->andReturn($correoConCuenta);
+
         return new ComerciosService(
-            $this->mock(ServicioIdentidadInterface::class),
+            $identidad,
             $this->mock(NucleoServiceInterface::class),
         );
     }
@@ -98,6 +101,55 @@ class RegistroSolicitudTest extends TestCase
             'correo_encargado' => 'otra@example.com',
             'telefono_encargado' => null,
         ], []);
+    }
+
+    public function test_registrar_no_permite_un_correo_de_encargado_con_cuenta(): void
+    {
+        try {
+            $this->servicio(correoConCuenta: true)->registrarSolicitud([
+                'nombre_comercial' => 'Comercio Nuevo',
+                'cedula_juridica' => '3-101-654321',
+                'razon_social' => 'Comercio Nuevo S.A.',
+                'direccion_fiscal' => 'Liberia, Guanacaste',
+                'inscrito_como_contribuyente' => true,
+                'nombre_encargado' => 'Persona con Cuenta',
+                'correo_encargado' => 'con.cuenta@example.com',
+                'telefono_encargado' => null,
+            ], []);
+            $this->fail('Se esperaba ERR-005 por el correo del encargado.');
+        } catch (ErrorNucleoException $error) {
+            $this->assertSame('ERR-005', $error->getCodigo());
+            $this->assertSame(['correo_encargado'], array_keys($error->getDetalles()));
+        }
+
+        $this->assertSame(0, Comercio::query()->where('cedula_juridica', '3-101-654321')->count());
+        $this->assertSame(0, SolicitudComercio::query()->where('correo_encargado', 'con.cuenta@example.com')->count());
+    }
+
+    public function test_registrar_con_cedula_repetida_y_correo_con_cuenta_informa_ambos(): void
+    {
+        $this->crearComercio([
+            'cedula_juridica' => '3-101-123456',
+        ]);
+
+        try {
+            $this->servicio(correoConCuenta: true)->registrarSolicitud([
+                'nombre_comercial' => 'Otro Comercio',
+                'cedula_juridica' => '3-101-123456',
+                'razon_social' => 'Otro Comercio S.A.',
+                'direccion_fiscal' => 'Liberia, Guanacaste',
+                'inscrito_como_contribuyente' => true,
+                'nombre_encargado' => 'Persona con Cuenta',
+                'correo_encargado' => 'con.cuenta@example.com',
+                'telefono_encargado' => null,
+            ], []);
+            $this->fail('Se esperaba ERR-005 por la cédula y el correo.');
+        } catch (ErrorNucleoException $error) {
+            $this->assertSame('ERR-005', $error->getCodigo());
+            $this->assertEqualsCanonicalizing(['cedula_juridica', 'correo_encargado'], array_keys($error->getDetalles()));
+        }
+
+        $this->assertSame(0, SolicitudComercio::query()->where('correo_encargado', 'con.cuenta@example.com')->count());
     }
 
     public function test_corregir_rechazada_la_devuelve_a_pendiente_y_limpia_motivo(): void
