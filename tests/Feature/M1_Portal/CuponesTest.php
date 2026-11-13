@@ -502,7 +502,7 @@ class CuponesTest extends PruebaM1
     }
 
     // ---------------------------------------------------------------
-    // Cupones globales vigentes en la portada (1.6.0, SC-12)
+    // Cupones globales vigentes en la portada (1.6.0, SC-13)
     // ---------------------------------------------------------------
 
     public function test_la_portada_lista_solo_los_globales_que_se_pueden_usar_hoy(): void

@@ -158,7 +158,7 @@ Route::middleware(['auth:sanctum', EstablecerComercio::class, RequiereRol::class
             ->name('noticias.archivar');
     });
 
-// Cupones globales vigentes para la portada (contrato 1.6.0, SC-12). Pública.
+// Cupones globales vigentes para la portada (contrato 1.6.0, SC-13). Pública.
 Route::get('/cupones/vigentes', [CuponesController::class, 'vigentes'])->name('cupones.vigentes');
 
 // Validación de un cupón en el checkout de M5 (contrato 1.5.0, SC-11). Requiere

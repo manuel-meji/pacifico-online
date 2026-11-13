@@ -1,12 +1,14 @@
-# Solicitud de Cambio (SC-12 - Búsqueda de comercios y cupones globales en la portada, contrato M1 1.6.0)
+# Solicitud de Cambio (SC-13 - Búsqueda de comercios y cupones globales en la portada, contrato M1 1.6.0)
 
 ---
 
 ### 1. Identificación
-- **Código de Solicitud:** SC-12
+- **Código de Solicitud:** SC-13
 - **Fecha:** 2026.11.12
 - **Módulo Solicitante:** M1 Portal público y búsqueda
 - **Persona Solicitante:** Roberth (M1)
+
+> Se escribió primero como SC-12, pero ese número ya lo usa `SC-12-consulta-existencia-correo-nucleo.md`. Por eso se registra como SC-13.
 
 ---
 
@@ -65,5 +67,5 @@
 ### 5. Decisión del Comité de Arquitectura e Integración
 - **Resolución:** [Aprobada | Rechazada | Diferida]
 - **Justificación de la resolución:** [Explicación técnica]
-- **Número de Acta del Comité:** ACTA-COMITE-SC-12
+- **Número de Acta del Comité:** ACTA-COMITE-SC-13
 - **Fecha de Resolución:** [YYYY-MM-DD]

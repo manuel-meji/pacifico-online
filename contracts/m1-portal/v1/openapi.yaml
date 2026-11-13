@@ -339,7 +339,7 @@ paths:
         Desde 1.3.0: una pagina o por_pagina que no sea un entero dentro del
         rango responde 422 con ERR-005 y el detalle por campo.
 
-        Desde 1.6.0 (SC-12): con q busca por nombre comercial, sin distinguir
+        Desde 1.6.0 (SC-13): con q busca por nombre comercial, sin distinguir
         mayúsculas ni tildes. M2 no ofrece búsqueda por nombre, así que M1
         recorre su listado de habilitados y filtra; primero van los nombres que
         empiezan con el término y luego el resto, en orden alfabético. total es
@@ -1525,7 +1525,7 @@ paths:
       operationId: listarCuponesVigentes
       summary: Cupones globales vigentes para el portal
       description: |
-        Nuevo en 1.6.0 (SC-12). Pública. Los cupones globales de la plataforma
+        Nuevo en 1.6.0 (SC-13). Pública. Los cupones globales de la plataforma
         (sin comercio) que el cliente puede usar hoy: activos, dentro de su
         vigencia y con usos disponibles. Primero los que vencen antes, hasta 12.
         No incluye los cupones de los comercios ni los contadores de uso.
@@ -3501,7 +3501,7 @@ x-historial-versiones:
       - listarComercios (GET /comercios) acepta el parámetro opcional q para buscar comercios por nombre comercial, sin distinguir mayúsculas ni tildes. M1 filtra el listado de M2, que no busca por nombre.
       - Ruta pública nueva listarCuponesVigentes (GET /cupones/vigentes) con los cupones globales vigentes para la portada (esquemas ListadoCuponesVigentes y CuponPublico).
       - PortalPublicoContract y ComercialPortalContract no cambian.
-    solicitud_de_cambio: SC-12
+    solicitud_de_cambio: SC-13
     nota_de_compatibilidad: |
       Sin q, GET /comercios responde igual que en 1.5.0. La ruta y los esquemas
       de cupones son nuevos. Ninguna interfaz PHP cambia, así que los dobles de

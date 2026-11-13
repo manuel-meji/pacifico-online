@@ -11,7 +11,7 @@ use Tests\Doubles\M1\ComerciosNoDisponible;
 use Tests\Feature\M1_Portal\Concerns\ValidaEsquemaContrato;
 
 /**
- * Búsqueda de comercios por nombre (contrato 1.6.0, SC-12): parámetro q de
+ * Búsqueda de comercios por nombre (contrato 1.6.0, SC-13): parámetro q de
  * GET /comercios. M1 filtra el listado de habilitados de M2 (doble
  * ComerciosStub: Tienda La Ceiba, Café Nicoyano, Artesanías Guaitil y la
  * suspendida Ferretería El Pochote).

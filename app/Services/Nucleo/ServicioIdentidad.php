@@ -34,7 +34,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
 
         $campos = [
             'nombre' => isset($datos['nombre']) ? trim((string) $datos['nombre']) : null,
-            'correo' => isset($datos['correo']) ? mb_strtolower(trim((string) $datos['correo'])) : null,
+            'correo' => isset($datos['correo']) ? $this->normalizarCorreo((string) $datos['correo']) : null,
             'contrasena' => $datos['contrasena'] ?? null,
             'id_comercio' => $idComercio,
         ];
@@ -80,7 +80,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
         $usuario = Usuario::query()->find($idUsuario)
             ?? throw ErrorNucleoException::recursoNoEncontrado();
 
-        $nuevo = mb_strtolower(trim($correo));
+        $nuevo = $this->normalizarCorreo($correo);
 
         $validador = Validator::make(['correo' => $nuevo], [
             'correo' => [
@@ -104,6 +104,31 @@ class ServicioIdentidad implements ServicioIdentidadInterface
                 'correo' => ['El correo ya está registrado.'],
             ]);
         }
+    }
+
+    public function existeCorreo(string $correo): bool
+    {
+        $correoNormalizado = $this->normalizarCorreo($correo);
+
+        if ($correoNormalizado === '') {
+            return false;
+        }
+
+        $validador = Validator::make(
+            ['correo' => $correoNormalizado],
+            ['correo' => ['required', 'email']]
+        );
+
+        if ($validador->fails()) {
+            return false;
+        }
+
+        return Usuario::query()->where('correo', $correoNormalizado)->exists();
+    }
+
+    private function normalizarCorreo(string $correo): string
+    {
+        return mb_strtolower(trim($correo));
     }
 
     private function resolverRol(RolUsuario|string $rol): RolUsuario

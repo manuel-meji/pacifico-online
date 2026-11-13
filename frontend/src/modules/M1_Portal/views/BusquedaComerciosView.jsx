@@ -9,7 +9,7 @@ import useConsulta from '../services/useConsulta';
 
 const POR_PAGINA = 20;
 
-// Búsqueda de comercios por nombre: GET /api/m1/v1/comercios?q= (contrato M1 1.6.0, SC-12).
+// Búsqueda de comercios por nombre: GET /api/m1/v1/comercios?q= (contrato M1 1.6.0, SC-13).
 // `criterio` llega de la URL: { q, pagina }. El término necesita 2 caracteres, igual que la búsqueda de
 // productos; si no los tiene, se avisa sin llamar a la API.
 export default function BusquedaComerciosView({ criterio }) {

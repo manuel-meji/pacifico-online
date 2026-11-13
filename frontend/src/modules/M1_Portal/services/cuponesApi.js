@@ -4,7 +4,7 @@
 import { consulta, llamarM1 as llamar } from './m1Api';
 
 // ---------------------------------------------------------------------------
-// Portal público (contrato 1.6.0, SC-12).
+// Portal público (contrato 1.6.0, SC-13).
 // ---------------------------------------------------------------------------
 
 // GET /cupones/vigentes (listarCuponesVigentes). Pública: hasta 12 cupones globales que se pueden usar hoy.
