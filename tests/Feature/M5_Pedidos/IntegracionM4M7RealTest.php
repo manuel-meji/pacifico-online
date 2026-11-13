@@ -18,11 +18,14 @@ use App\Models\M5_Pedidos\Subpedido;
 use App\Services\M4_Inventario\Dependencias\NucleoReal;
 use App\Services\M4_Inventario\Dependencias\PedidosReal;
 use App\Services\M4_Inventario\InventarioService;
+use App\Services\M6_Pagos\Clients\ComercioClient;
+use App\Services\M6_Pagos\Clients\DatosFiscalesDTO;
 use App\Services\M7_Contabilidad\Gateways\M4CostosProductosVendidosGateway;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\Feature\M4_Inventario\EsquemaInventarioPrueba;
+use Tests\Feature\M6_Pagos\Concerns\BaseSinSentenciasPostgres;
 use Tests\TestCase;
 
 /**
@@ -491,5 +494,89 @@ class IntegracionM4M7RealTest extends TestCase
         $existenciaC2 = DB::table('existencias')->where('id_comercio', 2)->where('id_variacion', 202)->first();
         $this->assertSame(8, (int) $existenciaC2->cantidad_fisica);
         $this->assertSame(0, (int) $existenciaC2->cantidad_reservada);
+    }
+
+    public function test_cancelacion_pagada_multicomercio_revierte_las_ventas_y_libera_el_inventario(): void
+    {
+        if (DB::getDriverName() !== 'sqlite' || DB::connection()->getDatabaseName() !== ':memory:') {
+            throw new \LogicException('Esta prueba requiere SQLite en memoria.');
+        }
+
+        BaseSinSentenciasPostgres::durante(fn () => $this->artisan('migrate', [
+            '--path' => 'database/migrations/M6_Pagos',
+        ])->assertExitCode(0)->run());
+        $migracion = require base_path('database/migrations/M7_Contabilidad/2026_11_13_061033_crear_registros_financieros_m6.php');
+        $migracion->up();
+
+        config([
+            'integraciones.m5.m6.modo' => 'real',
+            'm6.doble_por_modulo.m5' => false,
+            'm6.doble_por_modulo.m7' => false,
+            'm6.doble_por_modulo.m1' => true,
+        ]);
+        $this->app->bind(ComercioClient::class, fn () => new class implements ComercioClient
+        {
+            public function obtenerDatosFiscales(int $idComercio): DatosFiscalesDTO
+            {
+                return new DatosFiscalesDTO($idComercio, "Comercio {$idComercio}", '3101123456', 'inscrito');
+            }
+        });
+
+        foreach ([1, 2] as $comercio) {
+            foreach ([['1.1.01', 'Caja y bancos', 'ACTIVO'], ['2.1.02', 'IVA por pagar', 'PASIVO'], ['4.1.02', 'Ingresos por envío', 'INGRESO']] as [$codigo, $nombre, $tipo]) {
+                DB::table('cuentas_contables')->insert([
+                    'id_comercio' => $comercio, 'codigo' => $codigo, 'nombre' => $nombre,
+                    'tipo' => $tipo, 'nivel' => 3, 'activa' => true, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+        }
+
+        foreach ([101, 202] as $variacion) {
+            $this->postJson("{$this->prefix}/carrito/items", [
+                'id_cliente' => 77, 'id_variacion' => $variacion, 'cantidad' => 1,
+            ])->assertCreated();
+        }
+        $checkout = $this->postJson("{$this->prefix}/pedidos", [
+            'id_cliente' => 77, 'id_direccion_cliente' => 1, 'metodoPago' => 'tarjeta',
+        ])->assertCreated();
+        $idPedido = (int) $checkout->json('id_pedido');
+        $pedido = PedidoMaestro::with('subpedidos.lineas')->findOrFail($idPedido);
+        $this->assertCount(2, $pedido->subpedidos);
+        $this->assertSame(2, DB::table('asientos_contables')->where('id_pedido', $idPedido)->where('tipo', 'VENTA')->count());
+
+        $pago = $this->postJson('/api/m6/v1/pagos', [
+            'id_pedido' => $idPedido, 'medio_pago' => 'tarjeta',
+            'monto_total' => (float) $pedido->monto_total, 'token_medio_pago' => 'tok_visa_ok',
+        ], ['Idempotency-Key' => 'prueba-cancelacion-multicomercio'])->assertCreated();
+        $idPago = (int) $pago->json('id');
+        $this->assertSame('pagado', PedidoMaestro::findOrFail($idPedido)->estado_pedido);
+        $this->assertSame(2, DB::table('facturas_electronicas')->where('id_pago', $idPago)->count());
+        $this->assertSame(2, DB::table('asientos_contables')->where('id_pago', $idPago)->where('tipo', 'COBRO')->count());
+
+        $this->postJson("{$this->prefix}/pedidos/{$idPedido}/cancelar", [
+            'motivo' => 'Cancelación antes del despacho',
+        ])->assertOk();
+
+        $this->assertSame('cancelado', PedidoMaestro::findOrFail($idPedido)->estado_pedido);
+        $this->assertSame(2, DB::table('reembolsos as reembolso')
+            ->join('estados_reembolso as estado', 'estado.id_estado_reembolso', '=', 'reembolso.id_estado_reembolso')
+            ->where('reembolso.id_pago', $idPago)->where('estado.codigo', 'procesado')
+            ->whereNotNull('reembolso.id_nota_credito')->count());
+        $this->assertSame(2, DB::table('asientos_contables')->where('id_pago', $idPago)->where('tipo', 'REEMBOLSO')->count());
+        foreach ($pedido->subpedidos as $subpedido) {
+            $this->assertSame('cancelado', Subpedido::findOrFail($subpedido->id_subpedido)->estado_subpedido);
+            $this->assertSame('liberada', app(InventarioModuleInterface::class)->obtenerReserva((string) $subpedido->lineas->first()->id_reserva)['estado_reserva']);
+            $asientos = DB::table('asientos_contables')->where('id_subpedido', $subpedido->id_subpedido)->get()->keyBy('tipo');
+            $this->assertSame('REGISTRADO', $asientos['VENTA']->estado);
+            $this->assertSame((int) $asientos['COBRO']->id_asiento, (int) $asientos['REEMBOLSO']->id_asiento_original);
+            foreach (['1.1.01', '1.1.02', '2.1.02', '4.1.01', '4.1.02'] as $codigo) {
+                $movimientos = DB::table('detalle_asientos as detalle')
+                    ->join('cuentas_contables as cuenta', 'cuenta.id_cuenta_contable', '=', 'detalle.id_cuenta_contable')
+                    ->whereIn('detalle.id_asiento', [$asientos['VENTA']->id_asiento, $asientos['COBRO']->id_asiento, $asientos['REEMBOLSO']->id_asiento])
+                    ->where('cuenta.codigo', $codigo)
+                    ->selectRaw('SUM(detalle.debe) AS debe, SUM(detalle.haber) AS haber')->first();
+                $this->assertEqualsWithDelta((float) $movimientos->debe, (float) $movimientos->haber, 0.001, "Saldo de {$codigo} para subpedido {$subpedido->id_subpedido}");
+            }
+        }
     }
 }
