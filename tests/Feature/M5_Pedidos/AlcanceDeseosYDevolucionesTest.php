@@ -96,6 +96,39 @@ class AlcanceDeseosYDevolucionesTest extends TestCase
         ]);
     }
 
+    public function test_no_se_puede_solicitar_devolucion_duplicada_sobre_el_mismo_subpedido(): void
+    {
+        $pedido = PedidoMaestro::create([
+            'id_cliente' => 5,
+            'id_direccion_cliente' => 1,
+            'monto_total' => 15000.00,
+            'fecha_creacion' => now(),
+            'estado_pedido' => 'entregado',
+            'medio_pago' => 'tarjeta',
+        ]);
+
+        $subpedido = Subpedido::create([
+            'id_pedido' => $pedido->id_pedido,
+            'id_comercio' => 10,
+            'subtotal' => 15000.00,
+            'total' => 15000.00,
+            'estado_subpedido' => 'entregado',
+        ]);
+
+        $this->postJson("/api/m5/v1/subpedidos/{$subpedido->id_subpedido}/devolucion", [
+            'motivo' => 'Talla incorrecta',
+        ])->assertStatus(200);
+
+        $resDuplicada = $this->postJson("/api/m5/v1/subpedidos/{$subpedido->id_subpedido}/devolucion", [
+            'motivo' => 'Segundo intento de devolución',
+        ]);
+
+        $resDuplicada->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M5-002');
+
+        $this->assertSame(1, $subpedido->cancelaciones()->count());
+    }
+
     public function test_no_se_puede_solicitar_devolucion_si_no_ha_sido_entregado(): void
     {
         $pedido = PedidoMaestro::create([

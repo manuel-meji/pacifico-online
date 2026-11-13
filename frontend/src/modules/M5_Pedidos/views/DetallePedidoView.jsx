@@ -88,8 +88,11 @@ function LineaEstados({ estado, omitidos = [] }) {
   );
 }
 
-function TarjetaSubpedido({ subpedido, numero, historial }) {
+function TarjetaSubpedido({ subpedido, numero, historial, onSolicitarDevolucion }) {
   const cancelado = normalizar(subpedido.estado_subpedido) === 'cancelado';
+  const devolucionSolicitada = (subpedido.cancelaciones ?? []).find((c) =>
+    String(c.motivo ?? '').startsWith('[DEVOLUCIÓN]')
+  );
   const lineas = subpedido.lineas ?? [];
   return (
     <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-4 sm:p-5 space-y-4">
@@ -148,15 +151,29 @@ function TarjetaSubpedido({ subpedido, numero, historial }) {
       </dl>
 
       {normalizar(subpedido.estado_subpedido) === 'entregado' && (
-        <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
-          <span className="text-xs text-gray-500">¿Problemas con el producto recibido?</span>
-          <button
-            type="button"
-            onClick={() => onSolicitarDevolucion?.(subpedido)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" /> Solicitar devolución
-          </button>
+        <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+          {devolucionSolicitada ? (
+            <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+              <RotateCcw className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="font-semibold">Devolución solicitada</p>
+                <p className="text-amber-800 break-words">
+                  {String(devolucionSolicitada.motivo ?? '').replace(/^\[DEVOLUCIÓN\]\s*/, '')}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <span className="text-xs text-gray-500">¿Problemas con el producto recibido?</span>
+              <button
+                type="button"
+                onClick={() => onSolicitarDevolucion?.(subpedido)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" /> Solicitar devolución
+              </button>
+            </>
+          )}
         </div>
       )}
     </section>
