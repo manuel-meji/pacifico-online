@@ -297,6 +297,8 @@ class ControladorCarrito extends Controller
                     'costo_envio' => 0.0,
                     'total' => 0.0,
                 ],
+                'hay_comercio_suspendido' => false,
+                'hay_producto_no_disponible' => false,
             ];
         }
 
@@ -326,6 +328,7 @@ class ControladorCarrito extends Controller
             'grupos_comercio' => array_values($grupos),
             'resumen' => $resumen,
             'hay_comercio_suspendido' => (bool) ($desglose['hay_comercio_suspendido'] ?? false),
+            'hay_producto_no_disponible' => (bool) ($desglose['hay_producto_no_disponible'] ?? false),
             'direcciones_cliente' => $this->obtenerDireccionesCliente((int) ($carrito->id_cliente ?? 1)),
         ];
 

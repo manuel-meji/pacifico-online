@@ -692,4 +692,57 @@ class ControladoresM5Test extends TestCase
         $this->assertSame('en_preparacion', $subActualizado->estado_subpedido);
         $this->assertNull($subActualizado->guia_seguimiento);
     }
+
+    public function test_checkout_rechaza_con_err004_si_m3_devuelve_null_para_la_variacion(): void
+    {
+        $this->configurarMocks();
+
+        $this->postJson('/m5/carrito/items', [
+            'id_cliente' => 1,
+            'id_variacion' => 101,
+            'cantidad' => 1,
+        ])->assertCreated();
+
+        $mockM3 = $this->createMock(CatalogoServiceInterface::class);
+        $mockM3->method('obtenerVariacion')->willReturn(null);
+        $this->app->instance(CatalogoServiceInterface::class, $mockM3);
+
+        $this->getJson('/m5/carrito?id_cliente=1')
+            ->assertOk()
+            ->assertJsonPath('hay_producto_no_disponible', true)
+            ->assertJsonPath('items.0.producto_no_disponible', true);
+
+        $this->postJson('/m5/pedidos', [
+            'id_cliente' => 1,
+            'id_direccion_cliente' => 1,
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('error.codigo', 'ERR-004');
+
+        $this->assertSame(0, PedidoMaestro::count());
+    }
+
+    public function test_checkout_rechaza_con_err006_si_m3_falla_al_consultar_la_variacion(): void
+    {
+        $this->configurarMocks();
+
+        $this->postJson('/m5/carrito/items', [
+            'id_cliente' => 1,
+            'id_variacion' => 101,
+            'cantidad' => 1,
+        ])->assertCreated();
+
+        $mockM3 = $this->createMock(CatalogoServiceInterface::class);
+        $mockM3->method('obtenerVariacion')->willThrowException(new \RuntimeException('M3 no responde'));
+        $this->app->instance(CatalogoServiceInterface::class, $mockM3);
+
+        $this->postJson('/m5/pedidos', [
+            'id_cliente' => 1,
+            'id_direccion_cliente' => 1,
+        ])
+            ->assertStatus(503)
+            ->assertJsonPath('error.codigo', 'ERR-006');
+
+        $this->assertSame(0, PedidoMaestro::count());
+    }
 }

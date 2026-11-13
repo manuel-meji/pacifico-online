@@ -14,6 +14,7 @@ use App\Events\M5_Pedidos\PedidoCreado;
 use App\Events\M5_Pedidos\SubpedidoCancelado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Events\M5_Pedidos\SubpedidoEntregado;
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Http\Controllers\Controller;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\PedidoMaestro;
@@ -58,6 +59,10 @@ class ControladorPedido extends Controller
 
     public function procesarCheckout(Request $request): JsonResponse
     {
+        if (! app()->runningUnitTests()) {
+            @set_time_limit(90);
+        }
+
         $datos = $request->all();
         $clienteId = $this->resolverIdCliente($request);
         $direccionClienteId = (int) ($request->input('id_direccion_cliente', 1));
@@ -94,14 +99,19 @@ class ControladorPedido extends Controller
             ? $portalService
             : $this->m1Portal;
 
-        $desglose = $this->pedidosService->calcularDesgloseCarrito(
-            $carrito,
-            null,
-            $this->m2Comercios,
-            $portalPrecios,
-            $request->input('zona') ?? $request->input('zona_entrega') ?? $direccionCliente,
-            $direccionClienteId
-        );
+        try {
+            $desglose = $this->pedidosService->calcularDesgloseCarrito(
+                $carrito,
+                null,
+                $this->m2Comercios,
+                $portalPrecios,
+                $request->input('zona') ?? $request->input('zona_entrega') ?? $direccionCliente,
+                $direccionClienteId,
+                exigirCatalogo: true
+            );
+        } catch (ErrorNucleoException $e) {
+            return $this->errorRespuesta($e->getCodigo(), $e->getMessage(), $e->detalles, $e->http);
+        }
         $itemsAgrupados = $desglose['grupos_comercio'];
         $comerciosInvolucrados = array_keys($itemsAgrupados);
 

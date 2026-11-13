@@ -41,7 +41,7 @@ class Carrito extends Model
     {
         $monto = $montoCalculado > 0.00 ? $montoCalculado : (float) $this->items()->sum('cantidad');
 
-        if (Schema::hasColumn('pedidos_carritos', 'monto_estimado')) {
+        if ($this->tieneMontoEstimado()) {
             $this->monto_estimado = $monto;
             $this->save();
         } else {
@@ -53,12 +53,28 @@ class Carrito extends Model
     {
         $this->items()->delete();
 
-        if (Schema::hasColumn('pedidos_carritos', 'monto_estimado')) {
+        if ($this->tieneMontoEstimado()) {
             $this->monto_estimado = 0.00;
             $this->save();
         } else {
             $this->setAttribute('monto_estimado', 0.00);
         }
+    }
+
+    private function tieneMontoEstimado(): bool
+    {
+        static $existe = null;
+
+        if (! app()->runningUnitTests() && $existe !== null) {
+            return $existe;
+        }
+
+        $resultado = Schema::hasColumn('pedidos_carritos', 'monto_estimado');
+        if (! app()->runningUnitTests()) {
+            $existe = $resultado;
+        }
+
+        return $resultado;
     }
 
     public function actualizarTotales(): void
