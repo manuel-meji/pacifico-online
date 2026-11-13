@@ -88,7 +88,7 @@ class M3CatalogoSeeder extends Seeder
                 ['id_producto' => 10, 'id_comercio' => 5, 'id_categoria' => 5, 'id_marca' => null, 'nombre' => 'Taza Cerámica Corporativa', 'descripcion' => 'Taza térmica de cerámica', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
                 ['id_producto' => 301, 'id_comercio' => 1, 'id_categoria' => 2, 'id_marca' => 1, 'nombre' => 'Monitor LED Full HD 24 pulgadas', 'descripcion' => 'Monitor LED Full HD para trabajo y entretenimiento', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
                 ['id_producto' => 401, 'id_comercio' => 2, 'id_categoria' => 2, 'id_marca' => null, 'nombre' => 'Laptop Lenovo IdeaPad', 'descripcion' => 'Computadora portátil para productividad y trabajo', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
-                ];
+            ];
 
             foreach ($productos as $prod) {
                 DB::table('productos')->insertOrIgnore([
@@ -123,7 +123,7 @@ class M3CatalogoSeeder extends Seeder
                 ['id_variacion' => 501, 'id_producto' => 301, 'id_comercio' => 1, 'sku' => 'SDM-MON-FHD-24', 'precio' => 9500.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
                 ['id_variacion' => 502, 'id_producto' => 301, 'id_comercio' => 1, 'sku' => 'SDM-MON-FHD-24-PRO', 'precio' => 10000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
                 ['id_variacion' => 601, 'id_producto' => 401, 'id_comercio' => 2, 'sku' => 'TE-LEN-IDP-01', 'precio' => 25000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
-                ];
+            ];
 
             foreach ($variaciones as $v) {
                 DB::table('producto_variaciones')->insertOrIgnore([
@@ -196,7 +196,7 @@ class M3CatalogoSeeder extends Seeder
                     ]
                 );
             }
-        });        
+        });
 
         // 8. Sincronizar las secuencias de PostgreSQL
         DB::statement("

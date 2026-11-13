@@ -96,4 +96,74 @@ class CalculoTotalesTest extends TestCase
         // RN-M5-01: total = subtotales (8.000) + IVA (1.040) + envíos (4.000).
         $this->assertEqualsWithDelta(13040.0, $desglose['resumen']['total'], 0.001);
     }
+
+    public function test_seleccion_tarifa_envio_gam_vs_resto_del_pais(): void
+    {
+        $catalogo = new CatalogoPreciosFijos([
+            10 => ['precio' => 5000.0, 'id_comercio' => 2],
+        ]);
+
+        $comercios = new class extends ComerciosEnvioPorComercio
+        {
+            public function obtenerPoliticasEnvio(int $idComercio): array
+            {
+                return [
+                    'id_comercio' => $idComercio,
+                    'politicas' => [],
+                    'tarifas' => [
+                        ['zona' => 'GAM', 'costo' => 2500.0, 'moneda' => 'CRC'],
+                        ['zona' => 'Resto del país', 'costo' => 3500.0, 'moneda' => 'CRC'],
+                    ],
+                ];
+            }
+        };
+
+        $servicio = new PedidosService;
+
+        // 1. Cuando se especifica GAM
+        $desgloseGam = $servicio->calcularDesgloseCarrito(
+            $this->carritoEnMemoria([[10, 1]]),
+            $catalogo,
+            $comercios,
+            null,
+            'GAM'
+        );
+        $this->assertEqualsWithDelta(2500.0, $desgloseGam['resumen']['costo_envio'], 0.001);
+
+        // 2. Cuando se especifica Resto del país
+        $desgloseResto = $servicio->calcularDesgloseCarrito(
+            $this->carritoEnMemoria([[10, 1]]),
+            $catalogo,
+            $comercios,
+            null,
+            'Resto del país'
+        );
+        $this->assertEqualsWithDelta(3500.0, $desgloseResto['resumen']['costo_envio'], 0.001);
+    }
+
+    public function test_determinar_zona_por_direccion_guanacaste_o_san_jose(): void
+    {
+        $servicio = new PedidosService;
+
+        $dirGuanacaste = [
+            'provincia' => 'Guanacaste',
+            'canton' => 'Nicoya',
+            'distrito' => 'Nicoya',
+        ];
+        $this->assertSame('Resto del país', $servicio->determinarZonaPorDireccion($dirGuanacaste));
+
+        $dirSanJose = [
+            'provincia' => 'San José',
+            'canton' => 'Montes de Oca',
+            'distrito' => 'San Pedro',
+        ];
+        $this->assertSame('GAM', $servicio->determinarZonaPorDireccion($dirSanJose));
+
+        $dirSanCarlos = [
+            'provincia' => 'Alajuela',
+            'canton' => 'San Carlos',
+            'distrito' => 'Quesada',
+        ];
+        $this->assertSame('Resto del país', $servicio->determinarZonaPorDireccion($dirSanCarlos));
+    }
 }

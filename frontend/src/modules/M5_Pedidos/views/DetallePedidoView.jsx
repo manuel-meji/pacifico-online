@@ -360,10 +360,10 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
   function abrirPago() {
     const url = pedido?.urlPasarelaPago ?? pedido?.url_pasarela_pago;
     setExito(null);
-    if (esPasarelaSimulada(url)) {
-      setPasarelaAbierta(true);
+    if (url && !esPasarelaSimulada(url)) {
+      window.location.href = url;
     } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.location.href = `/m6.html?pedido=${idPedido}&monto=${pedido?.monto_total ?? ''}`;
     }
   }
 

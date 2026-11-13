@@ -69,11 +69,12 @@ class PagosStub implements PagosServiceInterface
      *
      * @return array<string, mixed>
      */
-    public function solicitarReembolso(int $pedidoId, float $monto, string $motivo = 'Cancelación de pedido'): array
+    public function solicitarReembolso(int $pedidoId, float $monto, string $motivo = 'Cancelación de pedido', ?int $idSubpedido = null): array
     {
         return [
-            'id_reembolso' => 'REEMB-'.$pedidoId,
+            'id_reembolso' => 'REEMB-'.$pedidoId.($idSubpedido !== null ? "-SUB-{$idSubpedido}" : ''),
             'id_pedido' => $pedidoId,
+            'id_subpedido' => $idSubpedido,
             'monto_reembolsado' => $monto,
             'motivo' => $motivo,
             'estado' => 'reembolsado',

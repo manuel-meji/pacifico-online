@@ -74,13 +74,14 @@ class ControladorPedido extends Controller
             ? app(PortalServiceInterface::class)
             : ($this->m1Portal ?? (app()->bound(PortalServiceInterface::class) ? app(PortalServiceInterface::class) : null));
 
+        $direccionCliente = null;
         if ($portalService) {
             try {
                 if (method_exists($portalService, 'obtenerCliente')) {
                     $portalService->obtenerCliente($clienteId);
                 }
                 if ($direccionClienteId && method_exists($portalService, 'obtenerDireccionCliente')) {
-                    $portalService->obtenerDireccionCliente($clienteId, $direccionClienteId);
+                    $direccionCliente = $portalService->obtenerDireccionCliente($clienteId, $direccionClienteId);
                 }
             } catch (\Throwable) {
                 // Continuar flujo resiliente
@@ -88,7 +89,14 @@ class ControladorPedido extends Controller
         }
 
         // B1: Calcular desglose unificado del carrito con M3, M2 y precios vigentes de M1
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, null, $this->m2Comercios, $portalService);
+        $desglose = $this->pedidosService->calcularDesgloseCarrito(
+            $carrito,
+            null,
+            $this->m2Comercios,
+            $portalService,
+            $request->input('zona') ?? $request->input('zona_entrega') ?? $direccionCliente,
+            $direccionClienteId
+        );
         $itemsAgrupados = $desglose['grupos_comercio'];
         $comerciosInvolucrados = array_keys($itemsAgrupados);
 
@@ -168,11 +176,15 @@ class ControladorPedido extends Controller
         if ($this->m4Inventario) {
             try {
                 if ($this->m4Inventario instanceof InventarioModuleInterface) {
-                    foreach ($carrito->items as $it) {
-                        $resReserva = $this->m4Inventario->reservarExistencias(1, $it->id_variacion, $it->cantidad, null, $idempotencyKey);
-                        $idReserva = is_array($resReserva) ? ($resReserva['id_reserva'] ?? $resReserva['reserva_id'] ?? null) : $resReserva;
-                        if (! $idReserva) {
-                            return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
+                    foreach ($itemsAgrupados as $idComercio => $grupo) {
+                        foreach ($grupo['items'] as $it) {
+                            $idVar = (int) $it['id_variacion'];
+                            $cant = (int) $it['cantidad'];
+                            $resReserva = $this->m4Inventario->reservarExistencias((int) $idComercio, $idVar, $cant, null, $idempotencyKey);
+                            $idReserva = is_array($resReserva) ? ($resReserva['id_reserva'] ?? $resReserva['reserva_id'] ?? null) : $resReserva;
+                            if (! $idReserva) {
+                                return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
+                            }
                         }
                     }
                 } elseif (method_exists($this->m4Inventario, 'reservarExistencias')) {

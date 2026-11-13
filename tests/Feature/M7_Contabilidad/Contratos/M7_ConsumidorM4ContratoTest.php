@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\Feature\M7_Contabilidad\Contratos;
 
-use App\Contracts\M7_Contabilidad\CostosProductosVendidosGatewayInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Contracts\M7_Contabilidad\CostosProductosVendidosGatewayInterface;
 use App\Services\M7_Contabilidad\Gateways\M4CostosProductosVendidosGateway;
-use RuntimeException;
 use ReflectionClass;
 use ReflectionNamedType;
+use RuntimeException;
 use Tests\Doubles\M7\CostosProductosVendidosStub;
 use Tests\TestCase;
 
 /**
  * Contrato consumidor de M7 frente a M4 (costos de productos vendidos).
  * Solo usa la interfaz de M7 y el doble existente; no toca código ni datos de M4.
- * 
+ *
  * NO es una prueba de integración con M4 real: el adaptador M4CostosProductosVendidosGateway
  * se prueba contra un mock de InventarioModuleInterface, así que verifica que M7 delega
  * y espera la estructura del contrato (id_subpedido, id_comercio, variaciones, costo_total),
@@ -77,7 +77,7 @@ class M7_ConsumidorM4ContratoTest extends TestCase
         $this->assertSame(10, $respuesta['id_subpedido']);
     }
 
-        public function test_el_adaptador_real_cumple_la_interfaz_de_m7(): void
+    public function test_el_adaptador_real_cumple_la_interfaz_de_m7(): void
     {
         $adaptador = new M4CostosProductosVendidosGateway(
             $this->createMock(InventarioModuleInterface::class)

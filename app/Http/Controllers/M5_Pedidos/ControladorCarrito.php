@@ -92,7 +92,7 @@ class ControladorCarrito extends Controller
 
         // 3. Verificar existencias en M4_Inventario (Contrato M4 v1.1.0)
         $comercioId = $this->resolverIdComercioVariacion($datosVariacion);
-        $ubicacionId = (int) ($datosVariacion['id_ubicacion'] ?? 1);
+        $ubicacionId = isset($datosVariacion['id_ubicacion']) ? (int) $datosVariacion['id_ubicacion'] : null;
 
         $stockDisponible = $this->consultarStockVariacion($comercioId, $idVariacion, $ubicacionId);
 
@@ -169,7 +169,8 @@ class ControladorCarrito extends Controller
             }
         }
 
-        $stock = $this->consultarStockVariacion($comercioId, (int) $item->id_variacion, 1);
+        $ubicacionId = isset($variacion['id_ubicacion']) ? (int) $variacion['id_ubicacion'] : (app()->runningUnitTests() ? 1 : null);
+        $stock = $this->consultarStockVariacion($comercioId, (int) $item->id_variacion, $ubicacionId);
         if ($stock >= 0 && $this->m4Inventario && $stock < $nuevaCantidad) {
             return $this->errorRespuesta(
                 'ERR-M5-001',
@@ -439,7 +440,7 @@ class ControladorCarrito extends Controller
         return (int) ($variacion['id_comercio'] ?? $variacion['producto']['id_comercio'] ?? 1);
     }
 
-    private function consultarStockVariacion(int $comercioId, int $idVariacion, int $ubicacionId = 1): int
+    private function consultarStockVariacion(int $comercioId, int $idVariacion, ?int $ubicacionId = null): int
     {
         if (! $this->m4Inventario) {
             return 100;

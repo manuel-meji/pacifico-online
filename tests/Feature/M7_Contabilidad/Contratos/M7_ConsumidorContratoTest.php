@@ -65,7 +65,7 @@ class M7_ConsumidorContratoTest extends TestCase
         }
     }
 
-        public function test_pedido_confirmado_real_trae_la_estructura_interna_de_subpedidos(): void
+    public function test_pedido_confirmado_real_trae_la_estructura_interna_de_subpedidos(): void
     {
         $evento = $this->construirPedidoConfirmadoReal();
 
