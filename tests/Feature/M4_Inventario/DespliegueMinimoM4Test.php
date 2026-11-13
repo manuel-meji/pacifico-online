@@ -26,6 +26,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 use Tests\TestCase;
+use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
+use Mockery;
 
 /**
  * Despliegue mínimo de M4: cambio de doble a servicio real por configuración,
@@ -108,14 +110,49 @@ class DespliegueMinimoM4Test extends TestCase
     }
 
     public function test_con_m3_real_la_reserva_usa_el_servicio_de_catalogo(): void
-    {
-        config(['integraciones.m4.m3.modo' => 'real']);
+{
+    // Se simula la interfaz pública de M3 (no sus tablas):
+    // M4 en modo real debe consultarla.
+    $catalogo = Mockery::mock(CatalogoServiceInterface::class);
 
-        $reserva = $this->inventario()->reservarExistencias(1, 10, 1);
+    $catalogo->shouldReceive('obtenerVariacion')
+        ->with(10)
+        ->atLeast()
+        ->once()
+        ->andReturn([
+            'id_variacion' => 10,
+            'id_producto' => 300,
+            'id_comercio' => 1,
+            'sku' => 'VAR-10',
+        ]);
 
-        $this->assertSame('activa', $reserva['estado_reserva']);
-        $this->esperarError('ERR-M4-013', 404, fn () => $this->inventario()->reservarExistencias(1, 5000, 1));
-    }
+    $catalogo->shouldReceive('obtenerVariacion')
+        ->with(5000)
+        ->once()
+        ->andReturnNull();
+
+    $this->app->instance(
+        CatalogoServiceInterface::class,
+        $catalogo
+    );
+
+    config(['integraciones.m4.m3.modo' => 'real']);
+
+    $this->assertInstanceOf(
+        CatalogoReal::class,
+        app(CatalogoDependencia::class)
+    );
+
+    $reserva = $this->inventario()->reservarExistencias(1, 10, 1);
+
+    $this->assertSame('activa', $reserva['estado_reserva']);
+
+    $this->esperarError(
+        'ERR-M4-013',
+        404,
+        fn () => $this->inventario()->reservarExistencias(1, 5000, 1)
+    );
+}
 
     public function test_con_m2_real_m4_usa_el_estado_del_comercio(): void
     {
