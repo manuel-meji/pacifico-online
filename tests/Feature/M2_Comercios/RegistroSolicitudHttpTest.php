@@ -19,7 +19,7 @@ class RegistroSolicitudHttpTest extends TestCase
     {
         parent::setUp();
 
-        $this->mock(ServicioIdentidadInterface::class);
+        $this->mock(ServicioIdentidadInterface::class)->shouldReceive('existeCorreo')->andReturn(false);
         $this->mock(NucleoServiceInterface::class);
     }
 
@@ -70,7 +70,58 @@ class RegistroSolicitudHttpTest extends TestCase
 
         $respuesta
             ->assertStatus(422)
-            ->assertJsonPath('error.codigo', 'ERR-005');
+            ->assertJsonPath('error.codigo', 'ERR-005')
+            ->assertJsonPath('error.detalles.cedula_juridica.0', 'Ya existe un comercio con esta cédula jurídica.');
+    }
+
+    public function test_registrar_con_cedula_repetida_y_correo_con_cuenta_informa_ambos(): void
+    {
+        $this->crearComercio([
+            'cedula_juridica' => '3-101-123456',
+        ]);
+        $this->mock(ServicioIdentidadInterface::class)->shouldReceive('existeCorreo')
+            ->with('con.cuenta@example.com')->andReturn(true);
+
+        $respuesta = $this->postJson('/api/m2/v1/solicitudes', [
+            'nombre_comercial' => 'Comercio Repetido',
+            'cedula_juridica' => '3-101-123456',
+            'razon_social' => 'Comercio Repetido S.A.',
+            'direccion_fiscal' => 'Liberia, Guanacaste',
+            'inscrito_como_contribuyente' => true,
+            'nombre_encargado' => 'Persona con Cuenta',
+            'correo_encargado' => 'con.cuenta@example.com',
+        ]);
+
+        $respuesta
+            ->assertStatus(422)
+            ->assertJsonPath('error.codigo', 'ERR-005')
+            ->assertJsonPath('error.detalles.cedula_juridica.0', 'Ya existe un comercio con esta cédula jurídica.')
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Use otro correo para la persona encargada.');
+    }
+
+    public function test_registrar_con_correo_de_encargado_con_cuenta_responde_err_005(): void
+    {
+        $this->mock(ServicioIdentidadInterface::class)->shouldReceive('existeCorreo')
+            ->with('con.cuenta@example.com')->andReturn(true);
+
+        $respuesta = $this->postJson('/api/m2/v1/solicitudes', [
+            'nombre_comercial' => 'Comercio con Correo Usado',
+            'cedula_juridica' => '3-101-654321',
+            'razon_social' => 'Comercio con Correo Usado S.A.',
+            'direccion_fiscal' => 'Liberia, Guanacaste',
+            'inscrito_como_contribuyente' => true,
+            'nombre_encargado' => 'Persona con Cuenta',
+            'correo_encargado' => 'con.cuenta@example.com',
+        ]);
+
+        $respuesta
+            ->assertStatus(422)
+            ->assertJsonPath('error.codigo', 'ERR-005')
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Use otro correo para la persona encargada.');
+
+        $this->assertDatabaseMissing('comercios', [
+            'cedula_juridica' => '3-101-654321',
+        ]);
     }
 
     public function test_interesado_puede_corregir_solicitud_rechazada_sin_sesion(): void

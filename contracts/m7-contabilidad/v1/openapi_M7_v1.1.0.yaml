@@ -372,16 +372,16 @@ paths:
       summary: Consultar si existe un asiento registrado para un pago
       operationId: consultarRegistroContablePago
       description: |
-        Ruta web que no declara autenticación ni control de comercio. La consulta
-        no filtra por comercio: riesgo pendiente de revisión; no se recomienda
-        su exposición sin autorización. Identificadores no positivos o sin asiento
-        devuelven registrado=false. No demuestra que se genere el asiento del pago.
-      security: []
+        Ruta web protegida con sesión y rol (encargado_comercio o
+        encargado_plataforma). encargado_comercio consulta solo los asientos de
+        su comercio; encargado_plataforma consulta sin filtro de comercio.
+        Identificadores sin asiento devuelven registrado=false. No demuestra
+        que se genere el asiento del pago.
       parameters:
         - name: idPago
           in: path
           required: true
-          schema: { type: integer }
+          schema: { type: integer, minimum: 1 }
       responses:
         '200':
           description: Resultado de la búsqueda
@@ -395,7 +395,10 @@ paths:
                   registrado: { type: boolean }
                   asiento_id: { type: integer, nullable: true }
                   fecha_registro: { type: string, nullable: true }
-        '500':
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
           description: Error del servidor; su formato depende de si la solicitud espera JSON.
 
 components:

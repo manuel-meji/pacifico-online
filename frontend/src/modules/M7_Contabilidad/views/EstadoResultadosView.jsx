@@ -2,55 +2,16 @@
 import { useMemo, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
 
-// Datos ficticios para el prototipo. No provienen de la base de datos.
-const partidasIniciales = [
-  {
-    id: 1,
-    codigo: '4.0.0',
-    nombre: 'Ingresos por ventas',
-    categoria: 'Ingresos',
-    monto: 2450000,
-  },
-  {
-    id: 2,
-    codigo: '4.1.0',
-    nombre: 'Devoluciones y descuentos',
-    categoria: 'Ingresos',
-    monto: 0,
-  },
-  {
-    id: 3,
-    codigo: '5.0.0',
-    nombre: 'Costo de ventas',
-    categoria: 'Costos',
-    monto: 1420000,
-  },
-  {
-    id: 4,
-    codigo: '6.1.0',
-    nombre: 'Gastos administrativos',
-    categoria: 'Gastos operativos',
-    monto: 350000,
-  },
-  {
-    id: 5,
-    codigo: '6.2.0',
-    nombre: 'Gastos de comercialización',
-    categoria: 'Gastos operativos',
-    monto: 180000,
-  },
-  {
-    id: 6,
-    codigo: '6.3.0',
-    nombre: 'Gastos de servicios',
-    categoria: 'Gastos operativos',
-    monto: 95000,
-  },
-];
+// Las partidas se incorporarán cuando esté disponible la consulta real del reporte.
+const partidasIniciales = [];
 
 const categorias = ['Ingresos', 'Costos', 'Gastos operativos'];
 
 function formatoMoneda(monto) {
+  if (monto === null || monto === undefined || monto === '') {
+    return '—';
+  }
+
   return new Intl.NumberFormat('es-CR', {
     style: 'currency',
     currency: 'CRC',
@@ -78,21 +39,31 @@ export default function EstadoResultadosView({ onNavegar }) {
     });
   }, [busqueda, categoriaSeleccionada]);
 
-  // Los totales se calculan con todas las partidas, no con las filas filtradas.
-  const ingresos = partidasIniciales
-    .filter((partida) => partida.categoria === 'Ingresos')
-    .reduce((total, partida) => total + partida.monto, 0);
+  const hayDatos = partidasIniciales.length > 0;
 
-  const costos = partidasIniciales
-    .filter((partida) => partida.categoria === 'Costos')
-    .reduce((total, partida) => total + partida.monto, 0);
+  const ingresos = hayDatos
+    ? partidasIniciales
+      .filter((partida) => partida.categoria === 'Ingresos')
+      .reduce((total, partida) => total + partida.monto, 0)
+    : null;
 
-  const gastosOperativos = partidasIniciales
-    .filter((partida) => partida.categoria === 'Gastos operativos')
-    .reduce((total, partida) => total + partida.monto, 0);
+  const costos = hayDatos
+    ? partidasIniciales
+      .filter((partida) => partida.categoria === 'Costos')
+      .reduce((total, partida) => total + partida.monto, 0)
+    : null;
 
-  const utilidadBruta = ingresos - costos;
-  const utilidadOperativa = utilidadBruta - gastosOperativos;
+  const gastosOperativos = hayDatos
+    ? partidasIniciales
+      .filter((partida) => partida.categoria === 'Gastos operativos')
+      .reduce((total, partida) => total + partida.monto, 0)
+    : null;
+
+  const utilidadBruta = hayDatos ? ingresos - costos : null;
+
+  const utilidadOperativa = hayDatos
+    ? utilidadBruta - gastosOperativos
+    : null;
 
   function limpiarFiltros() {
     setBusqueda('');
@@ -156,9 +127,12 @@ export default function EstadoResultadosView({ onNavegar }) {
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Utilidad operativa</p>
-            <p className={`mt-2 text-2xl font-bold ${
-              utilidadOperativa >= 0 ? 'text-green-700' : 'text-red-700'
-            }`}>
+            <p className={`mt-2 text-2xl font-bold ${!hayDatos
+              ? 'text-gray-500'
+              : utilidadOperativa >= 0
+                ? 'text-green-700'
+                : 'text-red-700'
+              }`}>
               {formatoMoneda(utilidadOperativa)}
             </p>
           </article>
@@ -198,17 +172,16 @@ export default function EstadoResultadosView({ onNavegar }) {
               </span>
             </div>
 
-            <div className={`flex flex-col justify-between gap-1 rounded-lg px-4 py-4 sm:flex-row ${
-              utilidadOperativa >= 0 ? 'bg-green-50' : 'bg-red-50'
-            }`}>
+            <div className="flex flex-col justify-between gap-1 rounded-lg bg-gray-50 px-4 py-4 sm:flex-row">
               <span className="font-bold text-gray-900">
-                {utilidadOperativa >= 0
-                  ? 'Utilidad operativa del período'
-                  : 'Pérdida operativa del período'}
+                {hayDatos
+                  ? utilidadOperativa >= 0
+                    ? 'Utilidad operativa del período'
+                    : 'Pérdida operativa del período'
+                  : 'Resultado operativo del período'}
               </span>
-              <span className={`text-lg font-bold ${
-                utilidadOperativa >= 0 ? 'text-green-800' : 'text-red-800'
-              }`}>
+
+              <span className="text-lg font-bold text-gray-700">
                 {formatoMoneda(utilidadOperativa)}
               </span>
             </div>
@@ -388,13 +361,14 @@ export default function EstadoResultadosView({ onNavegar }) {
           </div>
 
           <div className="border-t border-gray-200 px-5 py-4 text-sm text-gray-500">
-            Utilidad operativa demostrativa: {formatoMoneda(utilidadOperativa)}.
+            {hayDatos
+              ? `Utilidad operativa: ${formatoMoneda(utilidadOperativa)}.`
+              : 'No hay información disponible para calcular el resultado operativo.'}
           </div>
         </section>
 
         <p className="mt-5 text-xs text-gray-500">
-          Datos ficticios para el prototipo. Este reporte no incluye todavía
-          impuestos, ingresos financieros ni otros resultados no operativos.
+          El reporte mostrará los ingresos, costos y gastos cuando estén disponibles los datos contables correspondientes.
         </p>
       </main>
     </div>

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Boxes, Check, ChevronDown, ChevronUp, ClipboardList, Clock, CreditCard, History,
-  LoaderCircle, MapPin, Package, PackageCheck, RefreshCw, RotateCcw, Store, Truck, X,
+  Boxes, Calendar, Check, ChevronDown, ChevronUp, ClipboardList, Clock, CreditCard, History,
+  LoaderCircle, MapPin, Package, PackageCheck, RefreshCw, RotateCcw, Search, Store, Truck, X,
 } from 'lucide-react';
-import { Alerta, Boton, Encabezado, ModalConCampo } from '../components/componentes';
+import { Alerta, Boton, ModalConCampo } from '../components/componentes';
 import {
   cancelarSubpedido, confirmarPago, despacharSubpedido, entregarSubpedido, listarPedidos, prepararSubpedido,
 } from '../services/m5Api';
@@ -348,6 +348,51 @@ function TarjetaSubpedido({
   );
 }
 
+function normalizarTexto(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function fechaLocalISO(fechaValor) {
+  if (!fechaValor) return null;
+  const d = new Date(fechaValor);
+  if (Number.isNaN(d.getTime())) return null;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function textoBuscableSubpedido(sub) {
+  const guia = sub.guia_seguimiento || sub.guia_transporte || '';
+  const lineasTexto = (sub.lineas || []).map((l) => [
+    l.nombre,
+    l.nombre_producto,
+    l.nombre_variacion,
+    l.variacion,
+    l.sku,
+    l.id_variacion,
+  ].filter(Boolean).join(' ')).join(' ');
+
+  return normalizarTexto([
+    sub.id_subpedido,
+    `#${sub.id_subpedido}`,
+    `subpedido ${sub.id_subpedido}`,
+    sub.id_pedido,
+    `#${sub.id_pedido}`,
+    `pedido ${sub.id_pedido}`,
+    sub.nombre_comercio,
+    sub.direccion_envio,
+    guia,
+    sub.estado_subpedido,
+    sub.motivo_cancelacion,
+    formatearFecha(sub.fecha_pedido),
+    lineasTexto,
+  ].filter(Boolean).join(' '));
+}
+
 // Vista de producción para la Gestión de Pedidos del Comercio (integrada con el portal de M2_Comercios).
 export default function PanelComercioView({ onVolver }) {
   const [usuario, setUsuario] = useState(undefined);
@@ -357,6 +402,10 @@ export default function PanelComercioView({ onVolver }) {
   const [aviso, setAviso] = useState(null);
   const [comercioFiltro, setComercioFiltro] = useState('todos');
   const [estadoFiltro, setEstadoFiltro] = useState('todos');
+  const [busqueda, setBusqueda] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [orden, setOrden] = useState('recientes');
   const [enCurso, setEnCurso] = useState(null);
   const [modalDespacho, setModalDespacho] = useState(null);
   const [modalCancelacion, setModalCancelacion] = useState(null);
@@ -436,15 +485,62 @@ export default function PanelComercioView({ onVolver }) {
   );
 
   const visibles = useMemo(() => {
-    if (estadoFiltro === 'todos') return subpedidosPorComercio;
-    return subpedidosPorComercio.filter((s) => {
-      const est = String(s.estado_subpedido || 'pendiente').toLowerCase();
-      if (estadoFiltro === 'pendiente_pago') {
-        return est === 'pendiente' || est === 'confirmado' || est === 'pendiente_pago';
+    const terminos = normalizarTexto(busqueda).trim().split(/\s+/).filter(Boolean);
+
+    const filtrados = subpedidosPorComercio.filter((s) => {
+      if (estadoFiltro !== 'todos') {
+        const est = String(s.estado_subpedido || 'pendiente').toLowerCase();
+        if (estadoFiltro === 'pendiente_pago') {
+          if (est !== 'pendiente' && est !== 'confirmado' && est !== 'pendiente_pago') return false;
+        } else if (est !== estadoFiltro) {
+          return false;
+        }
       }
-      return est === estadoFiltro;
+
+      if (fechaDesde || fechaHasta) {
+        const fechaSub = fechaLocalISO(s.fecha_pedido);
+        if (!fechaSub) return false;
+        if (fechaDesde && fechaSub < fechaDesde) return false;
+        if (fechaHasta && fechaSub > fechaHasta) return false;
+      }
+
+      if (terminos.length > 0) {
+        const texto = textoBuscableSubpedido(s);
+        if (!terminos.every((t) => texto.includes(t))) return false;
+      }
+
+      return true;
     });
-  }, [subpedidosPorComercio, estadoFiltro]);
+
+    const montoDe = (s) => Number(s.total ?? Number(s.subtotal || 0) + Number(s.impuesto || 0) + Number(s.costo_envio || 0));
+    const fechaDe = (s) => (s.fecha_pedido ? new Date(s.fecha_pedido).getTime() : 0);
+
+    return [...filtrados].sort((a, b) => {
+      if (orden === 'antiguos') return fechaDe(a) - fechaDe(b);
+      if (orden === 'mayor_monto') return montoDe(b) - montoDe(a);
+      if (orden === 'menor_monto') return montoDe(a) - montoDe(b);
+      return fechaDe(b) - fechaDe(a);
+    });
+  }, [subpedidosPorComercio, estadoFiltro, fechaDesde, fechaHasta, busqueda, orden]);
+
+  const tieneComercioFijo = Boolean(usuario?.id_comercio);
+  const hayFiltrosActivos = Boolean(
+    estadoFiltro !== 'todos'
+    || busqueda.trim()
+    || fechaDesde
+    || fechaHasta
+    || orden !== 'recientes'
+    || (!tieneComercioFijo && comercioFiltro !== 'todos')
+  );
+
+  function limpiarFiltros() {
+    setEstadoFiltro('todos');
+    setBusqueda('');
+    setFechaDesde('');
+    setFechaHasta('');
+    setOrden('recientes');
+    if (!tieneComercioFijo) setComercioFiltro('todos');
+  }
 
   // Resumen de métricas operativas del comercio
   const resumenEstados = useMemo(() => {
@@ -519,19 +615,11 @@ export default function PanelComercioView({ onVolver }) {
     if (ok) setModalCancelacion(null);
   }
 
-  const tieneComercioFijo = Boolean(usuario?.id_comercio);
   const nombreComercioSesion = comercios.find((c) => c.id === String(usuario?.id_comercio))?.nombre
     || (usuario?.id_comercio ? `Comercio #${usuario.id_comercio}` : null);
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Encabezado
-        titulo="Gestión de Pedidos del Comercio"
-        paso={`${visibles.length} ${visibles.length === 1 ? 'subpedido' : 'subpedidos'}`}
-        onVolver={onVolver}
-        etiquetaVolver="Volver al carrito"
-      />
-
       {/* Barra de integración directa con el Portal de Comercio M2 e Inventario M4 */}
       <div className="bg-brandDarkBlue text-white border-b border-blue-900">
         <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -602,48 +690,135 @@ export default function PanelComercioView({ onVolver }) {
           </div>
         </section>
 
-        {/* Controles de filtrado por estado y comercio */}
-        <div className="bg-white rounded-xl border border-gray-200 p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
-          <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Filtrar por estado">
-            {FILTROS_ESTADO.map((f) => {
-              const activo = estadoFiltro === f.clave;
-              return (
+        {/* Controles de búsqueda, fechas, estado y comercio */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3.5 space-y-3 shadow-2xs">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 items-center">
+            <div className="lg:col-span-5 relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por #subpedido, #pedido, producto, SKU, dirección, guía..."
+                aria-label="Buscar subpedidos"
+                className="w-full min-h-9 border border-gray-200 rounded-lg py-1.5 pl-9 pr-8 text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:border-brandBlue focus:outline-none"
+              />
+              {busqueda && (
                 <button
-                  key={f.clave}
                   type="button"
-                  role="tab"
-                  aria-selected={activo}
-                  onClick={() => setEstadoFiltro(f.clave)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    activo
-                      ? 'bg-brandDarkBlue text-white shadow-2xs'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  onClick={() => setBusqueda('')}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
                 >
-                  {f.etiqueta}
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
-              );
-            })}
-          </div>
+              )}
+            </div>
 
-          {!tieneComercioFijo && comercios.length > 1 && (
-            <div className="flex items-center gap-2">
-              <label htmlFor="filtro-comercio" className="text-xs font-semibold text-gray-600">
-                Comercio:
-              </label>
+            <div className="lg:col-span-5 flex flex-wrap sm:flex-nowrap items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" aria-hidden="true" />
+                <label htmlFor="filtro-fecha-desde" className="text-[11px] font-semibold text-gray-500 shrink-0">
+                  Desde:
+                </label>
+                <input
+                  id="filtro-fecha-desde"
+                  type="date"
+                  value={fechaDesde}
+                  max={fechaHasta || undefined}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className="w-full min-h-9 border border-gray-200 rounded-lg py-1 px-2 text-xs font-medium text-gray-800 bg-white focus:border-brandBlue focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                <label htmlFor="filtro-fecha-hasta" className="text-[11px] font-semibold text-gray-500 shrink-0">
+                  Hasta:
+                </label>
+                <input
+                  id="filtro-fecha-hasta"
+                  type="date"
+                  value={fechaHasta}
+                  min={fechaDesde || undefined}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className="w-full min-h-9 border border-gray-200 rounded-lg py-1 px-2 text-xs font-medium text-gray-800 bg-white focus:border-brandBlue focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="lg:col-span-2">
               <select
-                id="filtro-comercio"
-                value={comercioFiltro}
-                onChange={(e) => setComercioFiltro(e.target.value)}
-                className="min-h-9 border border-gray-200 rounded-lg py-1.5 px-3 text-xs font-semibold text-gray-800 bg-white focus:border-brandBlue focus:outline-none"
+                aria-label="Ordenar subpedidos"
+                value={orden}
+                onChange={(e) => setOrden(e.target.value)}
+                className="w-full min-h-9 border border-gray-200 rounded-lg py-1.5 px-2.5 text-xs font-semibold text-gray-800 bg-white focus:border-brandBlue focus:outline-none"
               >
-                <option value="todos">Todos los comercios ({subpedidos.length})</option>
-                {comercios.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nombre}</option>
-                ))}
+                <option value="recientes">Más recientes</option>
+                <option value="antiguos">Más antiguos</option>
+                <option value="mayor_monto">Mayor monto</option>
+                <option value="menor_monto">Menor monto</option>
               </select>
             </div>
-          )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-gray-100">
+            <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Filtrar por estado">
+              {FILTROS_ESTADO.map((f) => {
+                const activo = estadoFiltro === f.clave;
+                return (
+                  <button
+                    key={f.clave}
+                    type="button"
+                    role="tab"
+                    aria-selected={activo}
+                    onClick={() => setEstadoFiltro(f.clave)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      activo
+                        ? 'bg-brandDarkBlue text-white shadow-2xs'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {f.etiqueta}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              {!tieneComercioFijo && comercios.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label htmlFor="filtro-comercio" className="text-xs font-semibold text-gray-600">
+                    Comercio:
+                  </label>
+                  <select
+                    id="filtro-comercio"
+                    value={comercioFiltro}
+                    onChange={(e) => setComercioFiltro(e.target.value)}
+                    className="min-h-9 border border-gray-200 rounded-lg py-1.5 px-3 text-xs font-semibold text-gray-800 bg-white focus:border-brandBlue focus:outline-none"
+                  >
+                    <option value="todos">Todos los comercios ({subpedidos.length})</option>
+                    {comercios.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <span className="text-xs font-semibold text-gray-500">
+                {visibles.length} de {subpedidosPorComercio.length}
+              </span>
+
+              {hayFiltrosActivos && (
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-brandBlue hover:text-brandDarkBlue px-2 py-1 rounded-md hover:bg-blue-50 transition cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {aviso && <Alerta tipo={aviso.tipo} titulo={aviso.titulo}>{aviso.texto}</Alerta>}
@@ -668,18 +843,18 @@ export default function PanelComercioView({ onVolver }) {
           <div className="bg-white rounded-xl shadow-xs border border-gray-200 p-8 sm:p-10 text-center space-y-3">
             <ClipboardList className="w-12 h-12 mx-auto stroke-1 text-gray-400" aria-hidden="true" />
             <h2 className="text-base sm:text-lg font-bold text-gray-800">
-              {estadoFiltro === 'todos'
+              {!hayFiltrosActivos
                 ? 'Aún no hay subpedidos registrados para este comercio'
-                : 'No hay subpedidos en el estado seleccionado'}
+                : 'No hay subpedidos que coincidan con los filtros'}
             </h2>
             <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto">
-              {estadoFiltro === 'todos'
+              {!hayFiltrosActivos
                 ? 'Cuando los clientes confirmen sus compras en el portal, sus subpedidos aparecerán aquí para prepararlos, empacarlos y despacharlos.'
-                : 'Seleccione «Todos» en la barra de filtros para ver los demás subpedidos del comercio.'}
+                : 'Pruebe ajustando el texto de búsqueda, el rango de fechas o el estado seleccionado.'}
             </p>
-            {estadoFiltro !== 'todos' && (
-              <Boton variante="primario" onClick={() => setEstadoFiltro('todos')}>
-                Ver todos los subpedidos
+            {hayFiltrosActivos && (
+              <Boton variante="primario" onClick={limpiarFiltros}>
+                Limpiar filtros
               </Boton>
             )}
           </div>

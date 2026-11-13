@@ -109,7 +109,6 @@ class SolicitudesController extends Controller
                 'required',
                 'string',
                 'regex:/^[0-9]-[0-9]{3}-[0-9]{6}$/',
-                'unique:comercios,cedula_juridica',
             ],
             'razon_social' => ['required', 'string'],
             'direccion_fiscal' => ['required', 'string'],

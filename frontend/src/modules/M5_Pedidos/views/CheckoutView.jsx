@@ -25,6 +25,17 @@ async function cargarDirecciones(carrito) {
   }
 }
 
+function etiquetaDireccion(d) {
+  if (d?.texto_completo) return d.texto_completo;
+  const alias = d?.alias_direccion?.trim();
+  const ubicacion = [d?.provincia, d?.canton, d?.distrito, d?.otras_senas]
+    .map((p) => (typeof p === 'string' ? p.trim() : ''))
+    .filter(Boolean)
+    .join(', ');
+  if (alias && ubicacion) return `${alias} — ${ubicacion}`;
+  return ubicacion || alias || `Dirección #${d?.id_direccion_cliente ?? ''}`;
+}
+
 const Titulo = ({ icono: Icono, children }) => (
   <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 mb-3">
     <Icono className="w-4 h-4 text-brandBlue" aria-hidden="true" />{children}
@@ -42,7 +53,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const [intentoCarga, setIntentoCarga] = useState(0);
 
   const [direcciones, setDirecciones] = useState([]);
-  const [f, setF] = useState({ idDireccion: '', cupon: '', tarjetaRegalo: '', nota: '' });
+  const [f, setF] = useState({ idDireccion: '', cupon: '', nota: '' });
   const [errores, setErrores] = useState({});
   const [cuponAplicado, setCuponAplicado] = useState(null);
   const [validandoCupon, setValidandoCupon] = useState(false);
@@ -169,7 +180,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
       const respuesta = await crearPedido({
         id_direccion_cliente: Number(f.idDireccion),
         cupon_descuento: cuponAplicado?.codigo || f.cupon.trim() || null,
-        tarjeta_regalo: f.tarjetaRegalo.trim() || null,
+        tarjeta_regalo: null,
         nota: f.nota.trim() || null,
       });
       // La respuesta 201 no trae direccion_envio_texto; se completa con la dirección elegida.
@@ -177,7 +188,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
       onPedidoCreado(
         {
           ...respuesta,
-          direccion_envio_texto: respuesta.direccion_envio_texto ?? elegida?.texto_completo ?? null,
+          direccion_envio_texto: respuesta.direccion_envio_texto ?? (elegida ? etiquetaDireccion(elegida) : null),
         },
         carrito?.grupos_comercio ?? [],
       );
@@ -228,6 +239,10 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const resumen = carrito?.resumen ?? {};
   const descuento = cuponAplicado?.monto_descuento ?? 0;
   const total = Math.max(0, Number(resumen.total ?? 0) - descuento);
+  const tieneDescuentoPromo = Number(resumen.descuento) > 0;
+  const subtotalOriginal = Number(resumen.subtotal_original ?? resumen.subtotal_base) > 0
+    ? Number(resumen.subtotal_original ?? resumen.subtotal_base)
+    : (Number(resumen.subtotal ?? 0) + (tieneDescuentoPromo ? Number(resumen.descuento) : 0));
   const hayBloqueo = carrito?.hay_comercio_suspendido ?? grupos.some((g) => g.comercio_suspendido);
   const sinDirecciones = direcciones.length === 0;
 
@@ -298,7 +313,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                     {sinDirecciones && <option value="">Sin direcciones registradas</option>}
                     {direcciones.map((d) => (
                       <option key={d.id_direccion_cliente} value={String(d.id_direccion_cliente)}>
-                        {d.texto_completo ?? `Dirección #${d.id_direccion_cliente}`}
+                        {etiquetaDireccion(d)}
                       </option>
                     ))}
                   </select>
@@ -362,28 +377,16 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                   {cuponAplicado.mensaje} (-{colones(cuponAplicado.monto_descuento)})
                 </Alerta>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Campo id="tarjetaRegalo" etiqueta="Tarjeta de regalo" error={errores.tarjetaRegalo}>
-                  <input
-                    id="tarjetaRegalo"
-                    value={f.tarjetaRegalo}
-                    onChange={set('tarjetaRegalo')}
-                    maxLength={50}
-                    placeholder="Código de tarjeta"
-                    className={clasesInput(errores.tarjetaRegalo)}
-                  />
-                </Campo>
-                <Campo id="nota" etiqueta="Nota para el pedido">
-                  <textarea
-                    id="nota"
-                    rows={2}
-                    value={f.nota}
-                    onChange={set('nota')}
-                    placeholder="Instrucciones especiales de entrega"
-                    className={clasesInput(false)}
-                  />
-                </Campo>
-              </div>
+              <Campo id="nota" etiqueta="Nota para el pedido">
+                <textarea
+                  id="nota"
+                  rows={2}
+                  value={f.nota}
+                  onChange={set('nota')}
+                  placeholder="Instrucciones especiales de entrega"
+                  className={clasesInput(false)}
+                />
+              </Campo>
             </section>
 
             <div className="space-y-4">
@@ -406,9 +409,21 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
 
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between text-gray-600">
-                  <dt>Subtotal productos</dt>
-                  <dd className="font-semibold text-gray-900">{colones(resumen.subtotal ?? 0)}</dd>
+                  <dt>{tieneDescuentoPromo ? 'Subtotal productos original' : 'Subtotal productos'}</dt>
+                  <dd className={`font-semibold ${tieneDescuentoPromo ? 'line-through text-gray-500' : 'text-gray-900'}`}>{colones(subtotalOriginal)}</dd>
                 </div>
+                {tieneDescuentoPromo && (
+                  <div className="flex justify-between text-red-700 font-semibold">
+                    <dt>Descuento promocional</dt>
+                    <dd>−{colones(resumen.descuento)}</dd>
+                  </div>
+                )}
+                {tieneDescuentoPromo && (
+                  <div className="flex justify-between text-gray-700 font-medium">
+                    <dt>Subtotal con descuento</dt>
+                    <dd className="font-bold text-gray-900">{colones(resumen.subtotal ?? 0)}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between text-gray-600">
                   <dt>IVA (13 %)</dt>
                   <dd className="font-semibold text-gray-900">{colones(resumen.impuesto ?? 0)}</dd>
@@ -423,8 +438,8 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                   </dd>
                 </div>
                 {descuento > 0 && (
-                  <div className="flex justify-between text-brandGreen">
-                    <dt>Descuento ({cuponAplicado.codigo})</dt>
+                  <div className="flex justify-between text-brandGreen font-medium">
+                    <dt>Cupón ({cuponAplicado.codigo})</dt>
                     <dd className="font-semibold">-{colones(descuento)}</dd>
                   </div>
                 )}

@@ -78,11 +78,17 @@ class ComerciosDemoSeeder extends Seeder
         $comercio->contactos()->updateOrCreate($id + ['tipo' => 'telefono'], ['valor' => sprintf('2666-%04d', $n)]);
         $comercio->contactos()->updateOrCreate($id + ['tipo' => 'correo'], ['valor' => "contacto{$n}@demo.pacificos.test"]);
 
+        $tarifasPorZona = match ($d['cedula']) {
+            '3-101-100004' => ['GAM' => 3500, 'Resto del país' => 2500],
+            '3-101-100005' => ['GAM' => 2500, 'Resto del país' => 1500],
+            default => ['GAM' => 2500, 'Resto del país' => 3500],
+        };
+
         $comercio->politicas()->updateOrCreate($id + ['tipo' => 'envio'], [
             'contenido' => 'Envío a todo el país; el costo depende de la zona.',
             'configuracion_envio' => [
-                ['zona' => 'GAM', 'costo' => 2500, 'moneda' => 'CRC'],
-                ['zona' => 'Resto del país', 'costo' => 3500, 'moneda' => 'CRC'],
+                ['zona' => 'GAM', 'costo' => $tarifasPorZona['GAM'], 'moneda' => 'CRC'],
+                ['zona' => 'Resto del país', 'costo' => $tarifasPorZona['Resto del país'], 'moneda' => 'CRC'],
             ],
         ]);
 

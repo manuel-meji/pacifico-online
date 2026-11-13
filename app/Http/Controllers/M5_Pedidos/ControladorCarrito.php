@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Models\M1_Portal\DireccionCliente;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
+use App\Services\M4_Inventario\InventarioService;
 use App\Services\M5_Pedidos\PedidosService;
 use App\Services\Nucleo\ContextoCliente;
 use Illuminate\Http\JsonResponse;
@@ -67,7 +68,8 @@ class ControladorCarrito extends Controller
             $carrito->recalcularTotales($totalGeneral);
         }
 
-        return response()->json($this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], null, $desglose), 200);
+        return response()->json($this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], null, $desglose), 200)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function agregarAlCarrito(Request $request, ?int $variacionId = null, ?int $cant = null): JsonResponse
@@ -141,7 +143,7 @@ class ControladorCarrito extends Controller
         return response()->json(
             $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Carrito actualizado', $desglose),
             201
-        );
+        )->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function actualizarCantidad(Request $request, int $itemId): JsonResponse
@@ -173,15 +175,16 @@ class ControladorCarrito extends Controller
 
         // Verificar disponibilidad en M4
         $comercioId = 1;
+        $ubicacionId = null;
         if ($this->m3Catalogo) {
             try {
                 $variacion = $this->m3Catalogo->obtenerVariacion((int) $item->id_variacion);
                 $comercioId = $this->resolverIdComercioVariacion($variacion);
+                $ubicacionId = isset($variacion['id_ubicacion']) ? (int) $variacion['id_ubicacion'] : null;
             } catch (\Throwable) {
             }
         }
 
-        $ubicacionId = isset($variacion['id_ubicacion']) ? (int) $variacion['id_ubicacion'] : (app()->runningUnitTests() ? 1 : null);
         $stock = $this->consultarStockVariacion($comercioId, (int) $item->id_variacion, $ubicacionId);
         if ($stock >= 0 && $this->m4Inventario && $stock < $nuevaCantidad) {
             return $this->errorRespuesta(
@@ -203,7 +206,7 @@ class ControladorCarrito extends Controller
         return response()->json(
             $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Cantidad actualizada correctamente', $desglose),
             200
-        );
+        )->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function eliminarItem(Request|int $requestOrId, ?int $itemId = null, ?int $id_item_carrito = null): JsonResponse
@@ -239,7 +242,7 @@ class ControladorCarrito extends Controller
         return response()->json(
             $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Ítem eliminado correctamente', $desglose),
             200
-        );
+        )->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function vaciarCarrito(Request $request): JsonResponse
@@ -253,7 +256,7 @@ class ControladorCarrito extends Controller
 
         return response()->json([
             'mensaje' => 'Carrito vaciado exitosamente',
-        ], 200);
+        ], 200)->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function calcularCostosPedidos(float $subtotales, float $impuestos, float $costoEnvio = 0.0): float
@@ -339,7 +342,12 @@ class ControladorCarrito extends Controller
             try {
                 $dirs = $this->m1Portal->listarDireccionesCliente($clienteId);
                 if (! empty($dirs)) {
-                    return $dirs;
+                    return array_values(array_map(function (array|object $d): array {
+                        $item = (array) $d;
+                        $item['texto_completo'] = $this->formatearTextoDireccion($item);
+
+                        return $item;
+                    }, $dirs));
                 }
             } catch (\Throwable) {
                 // Si el proveedor M1 no responde o falla, continuar con consulta directa o respaldo
@@ -353,7 +361,7 @@ class ControladorCarrito extends Controller
                 if ($dirsDb->isNotEmpty()) {
                     $lista = [];
                     foreach ($dirsDb as $d) {
-                        $lista[] = [
+                        $item = [
                             'id_direccion_cliente' => (int) $d->id_direccion_cliente,
                             'id_cliente' => (int) $d->id_cliente,
                             'alias_direccion' => (string) $d->alias_direccion,
@@ -364,8 +372,9 @@ class ControladorCarrito extends Controller
                             'distrito' => (string) $d->distrito,
                             'otras_senas' => (string) $d->otras_senas,
                             'es_principal' => (bool) $d->es_principal,
-                            'texto_completo' => "{$d->alias_direccion} — {$d->provincia}, {$d->canton}, {$d->distrito}, {$d->otras_senas}",
                         ];
+                        $item['texto_completo'] = $this->formatearTextoDireccion($item);
+                        $lista[] = $item;
                     }
                     usort($lista, fn ($a, $b) => ($b['es_principal'] <=> $a['es_principal']));
 
@@ -404,6 +413,40 @@ class ControladorCarrito extends Controller
                 'texto_completo' => 'Trabajo / Oficina — San José, Montes de Oca, San Pedro, Del hospital 100 m sur, Oficinas Pacíficos #3',
             ],
         ];
+    }
+
+    /**
+     * Construye el texto legible de una dirección cuando el proveedor externo no lo incluye.
+     *
+     * @param  array<string, mixed>  $direccion
+     */
+    private function formatearTextoDireccion(array $direccion): string
+    {
+        if (! empty($direccion['texto_completo'])) {
+            return (string) $direccion['texto_completo'];
+        }
+
+        $alias = trim((string) ($direccion['alias_direccion'] ?? ''));
+        $ubicacion = implode(', ', array_filter([
+            trim((string) ($direccion['provincia'] ?? '')),
+            trim((string) ($direccion['canton'] ?? '')),
+            trim((string) ($direccion['distrito'] ?? '')),
+            trim((string) ($direccion['otras_senas'] ?? '')),
+        ], fn (string $parte): bool => $parte !== ''));
+
+        if ($alias !== '' && $ubicacion !== '') {
+            return "{$alias} — {$ubicacion}";
+        }
+
+        if ($ubicacion !== '') {
+            return $ubicacion;
+        }
+
+        if ($alias !== '') {
+            return $alias;
+        }
+
+        return 'Dirección #'.($direccion['id_direccion_cliente'] ?? '');
     }
 
     public function listarDirecciones(Request $request): JsonResponse
@@ -459,9 +502,14 @@ class ControladorCarrito extends Controller
         }
 
         if (method_exists($this->m4Inventario, 'consultarStockDisponible')) {
-            $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
+            try {
+                $ubicacionConsulta = $ubicacionId ?? ($this->m4Inventario instanceof InventarioService ? null : 1);
+                $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionConsulta);
 
-            return is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
+                return is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
+            } catch (\Throwable) {
+                return 0;
+            }
         }
 
         if (method_exists($this->m4Inventario, 'consultarExistencias')) {

@@ -37,6 +37,7 @@ class AceptacionAprobarComercioTest extends TestCase
         Event::fake([ComercioAprobado::class]);
         $cuentasCreadas = [];
         $this->mock(ServicioIdentidadInterface::class, function (MockInterface $mock) use (&$cuentasCreadas): void {
+            $mock->shouldReceive('existeCorreo')->andReturn(false);
             $mock->shouldReceive('crearCuenta')->once()
                 ->andReturnUsing(function (array $datos, RolUsuario $rol, int $idComercio) use (&$cuentasCreadas) {
                     $cuentasCreadas[] = compact('datos', 'rol', 'idComercio');
@@ -113,7 +114,9 @@ class AceptacionAprobarComercioTest extends TestCase
     public function test_un_cliente_no_puede_aprobar_una_solicitud(): void
     {
         Event::fake([ComercioAprobado::class]);
-        $this->mock(ServicioIdentidadInterface::class)->shouldNotReceive('crearCuenta');
+        $identidad = $this->mock(ServicioIdentidadInterface::class);
+        $identidad->shouldReceive('existeCorreo')->andReturn(false);
+        $identidad->shouldNotReceive('crearCuenta');
         $this->mock(NucleoServiceInterface::class)->shouldNotReceive('registrarAuditoria');
 
         $registro = $this->postJson('/api/m2/v1/solicitudes', self::SOLICITUD)->assertOk();
@@ -134,7 +137,9 @@ class AceptacionAprobarComercioTest extends TestCase
     public function test_una_solicitud_ya_aprobada_no_se_aprueba_dos_veces(): void
     {
         Event::fake([ComercioAprobado::class]);
-        $this->mock(ServicioIdentidadInterface::class)->shouldReceive('crearCuenta')->once()
+        $identidad = $this->mock(ServicioIdentidadInterface::class);
+        $identidad->shouldReceive('existeCorreo')->andReturn(false);
+        $identidad->shouldReceive('crearCuenta')->once()
             ->andReturnUsing(fn (array $datos, RolUsuario $rol, int $idComercio) => $this->usuario('encargado_comercio', $idComercio));
         $this->mock(NucleoServiceInterface::class)->shouldReceive('registrarAuditoria')->once();
 

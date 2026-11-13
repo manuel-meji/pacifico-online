@@ -978,13 +978,17 @@ class ComerciosService implements ComerciosServiceInterface
     public function registrarSolicitud(array $datos, array $documentos): SolicitudComercio
     {
         return DB::transaction(function () use ($datos, $documentos): SolicitudComercio {
+            // Cédula y correo se validan juntos, antes de crear nada, para que el formulario muestre ambos errores.
+            $errores = [];
             if (Comercio::query()
                 ->where('cedula_juridica', $datos['cedula_juridica'])
                 ->exists()) {
-                $this->exigirValidos([
-                    'cedula_juridica' => ['Ya existe un comercio con esta cédula jurídica.'],
-                ]);
+                $errores['cedula_juridica'] = ['Ya existe un comercio con esta cédula jurídica.'];
             }
+            if ($this->identidad->existeCorreo($datos['correo_encargado'])) {
+                $errores['correo_encargado'] = ['Ya existe una cuenta con este correo. Use otro correo para la persona encargada.'];
+            }
+            $this->exigirValidos($errores);
 
             $comercio = Comercio::create([
                 'nombre_comercial' => $datos['nombre_comercial'],
