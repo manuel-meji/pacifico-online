@@ -169,16 +169,16 @@ class M3CatalogoSeeder extends Seeder
 
             // 7. Imágenes de Producto
             $imagenes = [
-                ['id_producto' => 1, 'id_variacion' => 1, 'imagen_url' => 'https://example.com/mouse-negro.jpg', 'formato' => 'jpg', 'tamano_bytes' => 150000, 'orden' => 1],
-                ['id_producto' => 2, 'id_variacion' => 2, 'imagen_url' => 'https://example.com/teclado-k835.jpg', 'formato' => 'jpg', 'tamano_bytes' => 220000, 'orden' => 1],
-                ['id_producto' => 3, 'id_variacion' => 3, 'imagen_url' => 'https://example.com/audifonos-blancos.jpg', 'formato' => 'jpg', 'tamano_bytes' => 180000, 'orden' => 1],
-                ['id_producto' => 4, 'id_variacion' => 4, 'imagen_url' => 'https://example.com/webcam-1080p.jpg', 'formato' => 'jpg', 'tamano_bytes' => 210000, 'orden' => 1],
-                ['id_producto' => 5, 'id_variacion' => 5, 'imagen_url' => 'https://example.com/lente-azul.jpg', 'formato' => 'jpg', 'tamano_bytes' => 195000, 'orden' => 1],
-                ['id_producto' => 6, 'id_variacion' => 6, 'imagen_url' => 'https://example.com/tenis-running-40.jpg', 'formato' => 'jpg', 'tamano_bytes' => 310000, 'orden' => 1],
-                ['id_producto' => 7, 'id_variacion' => 8, 'imagen_url' => 'https://example.com/camisa-dryfit-s.jpg', 'formato' => 'jpg', 'tamano_bytes' => 140000, 'orden' => 1],
-                ['id_producto' => 8, 'id_variacion' => 9, 'imagen_url' => 'https://example.com/cafe-grano-500g.jpg', 'formato' => 'jpg', 'tamano_bytes' => 250000, 'orden' => 1],
-                ['id_producto' => 9, 'id_variacion' => 10, 'imagen_url' => 'https://example.com/cafe-molido-340g.jpg', 'formato' => 'jpg', 'tamano_bytes' => 230000, 'orden' => 1],
-                ['id_producto' => 10, 'id_variacion' => 11, 'imagen_url' => 'https://example.com/taza-blanca.jpg', 'formato' => 'jpg', 'tamano_bytes' => 120000, 'orden' => 1],
+                ['id_producto' => 1, 'id_variacion' => 1, 'imagen_url' => 'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 150000, 'orden' => 1],
+                ['id_producto' => 2, 'id_variacion' => 2, 'imagen_url' => 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 220000, 'orden' => 1],
+                ['id_producto' => 3, 'id_variacion' => 3, 'imagen_url' => 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 180000, 'orden' => 1],
+                ['id_producto' => 4, 'id_variacion' => 4, 'imagen_url' => 'https://images.unsplash.com/photo-1588702547919-26089e690ecc?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 210000, 'orden' => 1],
+                ['id_producto' => 5, 'id_variacion' => 5, 'imagen_url' => 'https://images.unsplash.com/photo-1617005082133-548c4dd27f35?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 195000, 'orden' => 1],
+                ['id_producto' => 6, 'id_variacion' => 6, 'imagen_url' => 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 310000, 'orden' => 1],
+                ['id_producto' => 7, 'id_variacion' => 8, 'imagen_url' => 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 140000, 'orden' => 1],
+                ['id_producto' => 8, 'id_variacion' => 9, 'imagen_url' => 'https://images.unsplash.com/photo-1587734195503-904fca47e0e9?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 250000, 'orden' => 1],
+                ['id_producto' => 9, 'id_variacion' => 10, 'imagen_url' => 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 230000, 'orden' => 1],
+                ['id_producto' => 10, 'id_variacion' => 11, 'imagen_url' => 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?fm=jpg&w=600', 'formato' => 'jpg', 'tamano_bytes' => 120000, 'orden' => 1],
             ];
 
             foreach ($imagenes as $img) {

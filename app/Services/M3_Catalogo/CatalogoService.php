@@ -64,7 +64,11 @@ class CatalogoService implements CatalogoConsultasInterface, CatalogoServiceInte
     public function obtenerVariacion(int $variacionId): ?array
     {
         $variacion = ProductoVariacion::query()
-            ->with(['atributos', 'producto'])
+            ->with([
+                'atributos',
+                'imagenes' => fn ($q) => $q->orderBy('orden'),
+                'producto.imagenes' => fn ($q) => $q->orderBy('orden'),
+            ])
             ->where('id_variacion', $variacionId)
             ->first();
 
@@ -72,7 +76,10 @@ class CatalogoService implements CatalogoConsultasInterface, CatalogoServiceInte
             return null;
         }
 
-        return $this->variacion($variacion) + [
+        $imagenPropia = $variacion->imagenes->first();
+        $imagenProducto = $variacion->producto->imagenes->first();
+
+        return $this->variacion($variacion, true, $imagenPropia?->imagen_url ?? $imagenProducto?->imagen_url) + [
             'producto' => $this->productoBase($variacion->producto),
         ];
     }
@@ -297,7 +304,7 @@ class CatalogoService implements CatalogoConsultasInterface, CatalogoServiceInte
     }
 
     /** @return array<string, mixed> ProductoVariacion del contrato */
-    private function variacion(ProductoVariacion $v): array
+    private function variacion(ProductoVariacion $v, bool $incluirImagen = false, ?string $imagenUrl = null): array
     {
         $fila = [
             'id_variacion' => (int) $v->id_variacion,
@@ -318,6 +325,10 @@ class CatalogoService implements CatalogoConsultasInterface, CatalogoServiceInte
             ->map(fn ($a): array => ['tipo_atributo' => $a->tipo_atributo, 'valor' => $a->valor])
             ->values()
             ->all();
+
+        if ($incluirImagen) {
+            $fila['imagen_url'] = $imagenUrl;
+        }
 
         return $fila;
     }

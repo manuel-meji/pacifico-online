@@ -763,7 +763,13 @@ components:
       allOf:
         - $ref: '#/components/schemas/ProductoVariacion'
         - type: object
+          required: [imagen_url]
           properties:
+            imagen_url:
+              type: string
+              format: uri
+              nullable: true
+              description: Imagen propia de la variación o primera imagen del producto; null si no existe.
             producto:
               $ref: '#/components/schemas/Producto'
 

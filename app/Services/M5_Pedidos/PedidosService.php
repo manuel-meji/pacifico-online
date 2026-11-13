@@ -1094,7 +1094,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             ];
 
             if (config('integraciones.m5.m6.modo') === 'real') {
-                $respuesta['urlPasarelaPago'] = url("/m6.html?pedido={$pedido->id_pedido}&monto=".number_format((float) $pedido->monto_total, 2, '.', ''));
+                $respuesta['urlPasarelaPago'] = "/m6.html?pedido={$pedido->id_pedido}&monto=".number_format((float) $pedido->monto_total, 2, '.', ''); // justin M6 modificó
             }
 
             return $respuesta;

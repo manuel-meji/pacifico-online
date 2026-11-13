@@ -241,7 +241,7 @@ class ControladorPedido extends Controller
         // 7. Procesar pago con M6_Pagos (Contrato M6 v1.0.0 / v1.1.1)
         $urlPasarelaPago = 'https://pago.pacificos.com/checkout/'.$idPedido;
         if ($this->m6Pagos instanceof PagosService) {
-            $urlPasarelaPago = url("/m6.html?pedido={$idPedido}&monto=".number_format($montoTotal, 2, '.', ''));
+            $urlPasarelaPago = "/m6.html?pedido={$idPedido}&monto=".number_format($montoTotal, 2, '.', ''); // lo cambió JustinM6, autorizó Manuel Mejicano
         } elseif ($this->m6Pagos) {
             try {
                 if (method_exists($this->m6Pagos, 'ProcesarPagoPedido')) {
