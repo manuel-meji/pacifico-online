@@ -114,6 +114,43 @@ class CuponesService
     // Comercio y administración
     // ---------------------------------------------------------------
 
+    /** Cuántos cupones globales vigentes muestra el portal como máximo. */
+    public const MAXIMO_GLOBALES_PUBLICOS = 12;
+
+    /**
+     * Cupones globales vigentes para el portal público (contrato 1.6.0, GET /cupones/vigentes).
+     * Solo los de la plataforma (sin comercio), activos, dentro de su vigencia y con usos
+     * disponibles; primero los que vencen antes. No expone los contadores de uso.
+     *
+     * @return list<array{codigo: string, descripcion: ?string, tipo_descuento: string, valor: float, monto_minimo_compra: ?float, fecha_fin: string, limite_usos_por_cliente: ?int}>
+     */
+    public function listarGlobalesVigentes(): array
+    {
+        $ahora = Carbon::now();
+
+        return $this->comoSistema(fn (): array => Cupon::query()
+            ->whereNull('id_comercio')
+            ->where('activo', true)
+            ->where('fecha_inicio', '<=', $ahora)
+            ->where('fecha_fin', '>=', $ahora)
+            ->orderBy('fecha_fin')
+            ->orderBy('id_cupon')
+            ->get()
+            ->reject(fn (Cupon $cupon): bool => $cupon->agotado())
+            ->take(self::MAXIMO_GLOBALES_PUBLICOS)
+            ->map(fn (Cupon $cupon): array => [
+                'codigo' => $cupon->codigo,
+                'descripcion' => $cupon->descripcion,
+                'tipo_descuento' => $cupon->tipo_descuento,
+                'valor' => (float) $cupon->valor,
+                'monto_minimo_compra' => $cupon->monto_minimo_compra === null ? null : (float) $cupon->monto_minimo_compra,
+                'fecha_fin' => $cupon->fecha_fin->toIso8601String(),
+                'limite_usos_por_cliente' => $cupon->limite_usos_por_cliente,
+            ])
+            ->values()
+            ->all());
+    }
+
     /**
      * Desactiva un cupón del ámbito actual (el comercio, los suyos; la
      * administración, cualquiera). Deja de aceptarse en el checkout y no se

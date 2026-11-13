@@ -1,11 +1,13 @@
 import PaginaPortal, { usePortal } from '../components/PaginaPortal';
 import CarruselComercios from '../components/CarruselComercios';
+import CuponesPortada from '../components/CuponesPortada';
 import TarjetaNoticia from '../components/TarjetaNoticia';
 import TarjetaProducto from '../components/TarjetaProducto';
 import { CargandoTarjetas, ErrorVista, Vacio } from '../components/EstadosVista';
 import Icono from '../components/IconoComercio';
 import Imagen from '../components/Imagen';
 import { fechaCorta } from '../services/formato';
+import { listarCuponesVigentes } from '../services/cuponesApi';
 import { listarComercios, listarDestacados, listarNoticias, listarPromociones } from '../services/m1Api';
 import useConsulta from '../services/useConsulta';
 
@@ -31,6 +33,8 @@ export default function InicioView() {
   const promociones = useConsulta(() => listarPromociones(), []);
   // Últimas noticias publicadas (contrato 1.4.0). Si falla o no hay, la sección no se muestra.
   const noticias = useConsulta(() => listarNoticias(1, NOTICIAS_EN_PORTADA), []);
+  // Cupones globales vigentes (contrato 1.6.0). Si falla o no hay, la sección no se muestra.
+  const cupones = useConsulta(() => listarCuponesVigentes(), []);
 
   return (
     <PaginaPortal>
@@ -66,6 +70,8 @@ export default function InicioView() {
         <CarruselComercios comercios={comercios.datos.comercios} titulo="Explorá nuestros comercios" descripcion="Conocé los comercios que forman parte de Pacíficos Online."
           onVerComercio={(id) => ir('comercio', { id })} />
       )}
+
+      {cupones.estado === 'listo' && cupones.datos.cupones.length > 0 && <CuponesPortada cupones={cupones.datos.cupones} />}
 
       {promociones.estado === 'listo' && promociones.datos.length > 0 && (
         <section className="mt-10" aria-labelledby="titulo-promociones">
