@@ -40,13 +40,21 @@ class ComerciosStub extends ComerciosDobleBase
      */
     public function obtenerPoliticasEnvio(int $idComercio): array
     {
+        $costoGam = $this->costoEnvio > 0 ? $this->costoEnvio : 1500.00;
+        $costoResto = $this->costoEnvio > 0 ? ($this->costoEnvio + 1000.0) : 2500.00;
+
         return [
             'id_comercio' => $idComercio,
             'politicas' => [],
             'tarifas' => [
                 [
                     'zona' => 'GAM',
-                    'costo' => $this->costoEnvio > 0 ? $this->costoEnvio : 1500.00,
+                    'costo' => $costoGam,
+                    'moneda' => 'CRC',
+                ],
+                [
+                    'zona' => 'Resto del país',
+                    'costo' => $costoResto,
                     'moneda' => 'CRC',
                 ],
             ],

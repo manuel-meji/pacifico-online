@@ -16,6 +16,7 @@ use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Events\M5_Pedidos\PedidoPagado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Exceptions\Nucleo\ErrorNucleoException;
+use App\Models\M1_Portal\DireccionCliente;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
@@ -395,6 +396,16 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 }
             } catch (\Throwable) {
                 // Continuar a valor por defecto
+            }
+        }
+
+        if ($direccionId > 0 && class_exists(DireccionCliente::class)) {
+            try {
+                $dirDb = DireccionCliente::find($direccionId);
+                if ($dirDb) {
+                    return $this->determinarZonaPorDireccion($dirDb->toArray());
+                }
+            } catch (\Throwable) {
             }
         }
 
@@ -1083,7 +1094,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             ];
 
             if (config('integraciones.m5.m6.modo') === 'real') {
-                $respuesta['urlPasarelaPago'] = url("/m6.html?pedido={$pedido->id_pedido}&monto=".number_format((float) $pedido->monto_total, 2, '.', ''));
+                $respuesta['urlPasarelaPago'] = "/m6.html?pedido={$pedido->id_pedido}&monto=".number_format((float) $pedido->monto_total, 2, '.', ''); // justin M6 modificó
             }
 
             return $respuesta;

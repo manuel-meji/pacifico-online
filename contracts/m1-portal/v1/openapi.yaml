@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: M1 Portal público y búsqueda — Contrato del módulo
-  version: 1.6.0
+  version: 1.7.0
   description: |
     Contrato formal del módulo M1 Portal público y búsqueda de Pacíficos Online
     (IF6100, II Ciclo 2026, subgrupo SG1).
@@ -529,6 +529,9 @@ paths:
         por la interfaz PHP con PortalPublicoContract::obtenerCliente(), sin
         sesión de usuario, incluso desde procesos en segundo plano. Esa operación
         no cambia en 1.1.0.
+
+        Desde 1.7.0 (SC-14) la respuesta incluye identificacion_tributaria, la
+        cédula del cliente. Por esta ruta solo la ve la propia persona.
       x-consumidores: [Frontend del portal]
       x-operacion-interfaz-php: PortalPublicoContract::obtenerCliente
       x-reglas: [RN-M1-15, RN-M1-16]
@@ -2308,6 +2311,18 @@ components:
                 señas, distrito, cantón, provincia), o es una cadena vacía si
                 el cliente no tiene direcciones. Desde 1.2.0 solo es de salida;
                 para cambiarla, usar las operaciones de Direcciones.
+            identificacion_tributaria:
+              type: string
+              maxLength: 20
+              readOnly: true
+              example: 5-0123-0456
+              description: |
+                Nuevo en 1.7.0 (SC-14). Cédula del cliente (clientes.cedula), la
+                misma que se pidió al registrarse. M6 la usa como
+                identificación del comprador en la factura. Es un dato
+                personal: por las rutas web solo la recibe la propia persona
+                (RN-M1-16), y las respuestas llevan Cache-Control no-store. Solo
+                es de salida; la cédula no se cambia con actualizarCliente.
 
     ClienteId:
       type: object
@@ -3241,6 +3256,7 @@ x-interfaz-php:
     - firma: "obtenerCliente(int $idCliente): array"
       desde: 1.0.0
       cambios_en_1_1_0: Ninguno.
+      cambios_en_1_7_0: Agrega identificacion_tributaria (cédula del cliente) para la factura de M6.
       consumidores: [M5, M6]
       retorna: Arreglo con la misma estructura que el esquema Cliente.
       excepciones:
@@ -3507,3 +3523,14 @@ x-historial-versiones:
       de cupones son nuevos. Ninguna interfaz PHP cambia, así que los dobles de
       otros módulos que las implementan (por ejemplo, el PortalStub de M5)
       siguen funcionando. Por eso se publica como versión menor.
+  - version: 1.7.0
+    cambios:
+      - El esquema Cliente agrega el campo identificacion_tributaria, la cédula del cliente (clientes.cedula), a pedido de M6 para emitir la factura con la identificación del comprador.
+      - PortalPublicoContract::obtenerCliente lo devuelve; también las rutas web obtenerCliente (GET /clientes/{id_cliente}) y obtenerClienteSesion (GET /clientes/sesion), que solo responden a la propia persona (RN-M1-16).
+      - El doble tests/Doubles/M1/PortalPublicoFake.php también lo devuelve.
+    solicitud_de_cambio: SC-14
+    nota_de_compatibilidad: |
+      Es un campo nuevo de salida; ningún campo existente cambia ni se quita, y
+      la firma de obtenerCliente es la misma. M5 lee los campos que ya usaba,
+      y el doble PortalStub de M5 no necesita cambios. Por eso se publica como
+      versión menor.

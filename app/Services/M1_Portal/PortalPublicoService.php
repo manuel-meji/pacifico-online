@@ -371,7 +371,9 @@ class PortalPublicoService implements PortalPublicoContract
     // ---------------------------------------------------------------
 
     /**
-     * Esquema Cliente.
+     * Esquema Cliente. Desde 1.7.0 (SC-14) incluye identificacion_tributaria,
+     * que es la cédula del cliente (clientes.cedula), para que M6 la ponga en
+     * la factura del comprador.
      *
      * @return array<string, mixed>
      */
@@ -384,6 +386,7 @@ class PortalPublicoService implements PortalPublicoContract
             'correo_electronico' => $cliente->correoElectronico,
             'telefono' => $cliente->telefono,
             'direccion_envio' => $cliente->direccionEnvio,
+            'identificacion_tributaria' => $cliente->cedula,
         ];
     }
 
