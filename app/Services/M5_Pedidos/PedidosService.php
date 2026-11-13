@@ -104,7 +104,10 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             ->values()
             ->all();
 
-        $preciosVigentesM1 = $this->consultarPreciosVigentesM1($portal, $idsVariacion);
+        $portalPrecios = ($portal && method_exists($portal, 'obtenerPreciosVigentes'))
+            ? $portal
+            : $this->resolverPortalM1();
+        $preciosVigentesM1 = $this->consultarPreciosVigentesM1($portalPrecios, $idsVariacion);
 
         foreach ($carrito->items as $item) {
             $idVariacionItem = (int) $item->id_variacion;
@@ -263,13 +266,21 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         }
 
         $resumenSubtotal = 0.0;
+        $resumenSubtotalBase = 0.0;
         $resumenImpuesto = 0.0;
         $resumenEnvio = 0.0;
+        $resumenDescuento = 0.0;
 
         foreach ($grupos as $grupo) {
             $resumenSubtotal = round($resumenSubtotal + $grupo['subtotal'], 2);
             $resumenImpuesto = round($resumenImpuesto + $grupo['impuesto'], 2);
             $resumenEnvio = round($resumenEnvio + $grupo['costo_envio'], 2);
+        }
+
+        foreach ($itemsEnriquecidos as $itemData) {
+            $resumenDescuento = round($resumenDescuento + (float) ($itemData['descuento'] ?? 0.0), 2);
+            $precioBaseItem = (float) ($itemData['precio_base'] ?? $itemData['precio_unitario'] ?? 0.0);
+            $resumenSubtotalBase = round($resumenSubtotalBase + ($precioBaseItem * (int) ($itemData['cantidad'] ?? 1)), 2);
         }
 
         $resumenTotal = round($resumenSubtotal + $resumenImpuesto + $resumenEnvio, 2);
@@ -278,9 +289,12 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             'items' => $itemsEnriquecidos,
             'grupos_comercio' => $grupos,
             'resumen' => [
+                'subtotal_base' => $resumenSubtotalBase,
+                'subtotal_original' => $resumenSubtotalBase,
                 'subtotal' => $resumenSubtotal,
                 'impuesto' => $resumenImpuesto,
                 'costo_envio' => $resumenEnvio,
+                'descuento' => $resumenDescuento,
                 'total' => $resumenTotal,
             ],
             'hay_comercio_suspendido' => $hayComercioSuspendido,

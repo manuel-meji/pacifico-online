@@ -239,6 +239,10 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const resumen = carrito?.resumen ?? {};
   const descuento = cuponAplicado?.monto_descuento ?? 0;
   const total = Math.max(0, Number(resumen.total ?? 0) - descuento);
+  const tieneDescuentoPromo = Number(resumen.descuento) > 0;
+  const subtotalOriginal = Number(resumen.subtotal_original ?? resumen.subtotal_base) > 0
+    ? Number(resumen.subtotal_original ?? resumen.subtotal_base)
+    : (Number(resumen.subtotal ?? 0) + (tieneDescuentoPromo ? Number(resumen.descuento) : 0));
   const hayBloqueo = carrito?.hay_comercio_suspendido ?? grupos.some((g) => g.comercio_suspendido);
   const sinDirecciones = direcciones.length === 0;
 
@@ -405,9 +409,21 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
 
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between text-gray-600">
-                  <dt>Subtotal productos</dt>
-                  <dd className="font-semibold text-gray-900">{colones(resumen.subtotal ?? 0)}</dd>
+                  <dt>{tieneDescuentoPromo ? 'Subtotal productos original' : 'Subtotal productos'}</dt>
+                  <dd className={`font-semibold ${tieneDescuentoPromo ? 'line-through text-gray-500' : 'text-gray-900'}`}>{colones(subtotalOriginal)}</dd>
                 </div>
+                {tieneDescuentoPromo && (
+                  <div className="flex justify-between text-red-700 font-semibold">
+                    <dt>Descuento promocional</dt>
+                    <dd>−{colones(resumen.descuento)}</dd>
+                  </div>
+                )}
+                {tieneDescuentoPromo && (
+                  <div className="flex justify-between text-gray-700 font-medium">
+                    <dt>Subtotal con descuento</dt>
+                    <dd className="font-bold text-gray-900">{colones(resumen.subtotal ?? 0)}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between text-gray-600">
                   <dt>IVA (13 %)</dt>
                   <dd className="font-semibold text-gray-900">{colones(resumen.impuesto ?? 0)}</dd>
@@ -422,8 +438,8 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                   </dd>
                 </div>
                 {descuento > 0 && (
-                  <div className="flex justify-between text-brandGreen">
-                    <dt>Descuento ({cuponAplicado.codigo})</dt>
+                  <div className="flex justify-between text-brandGreen font-medium">
+                    <dt>Cupón ({cuponAplicado.codigo})</dt>
                     <dd className="font-semibold">-{colones(descuento)}</dd>
                   </div>
                 )}

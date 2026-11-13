@@ -272,8 +272,22 @@ export function FilaItem({ item, deshabilitado, pendientes, onCantidad, onQuitar
   const quitando = pendientes?.has(`quitar-${item.id_item_carrito}`) ?? false;
   const conStock = item.stock != null;
   const enMaximo = conStock && item.cantidad >= item.stock;
-  const subtotal = item.subtotal ?? item.precio_unitario * item.cantidad;
+
+  const precioBase = Number(item.precio_base) > 0
+    ? Number(item.precio_base)
+    : (Number(item.precio_unitario) + (Number(item.descuento_unitario) || 0));
+  const precioUnitario = Number(item.precio_unitario) || 0;
+  const descuentoUnitario = Number(item.descuento_unitario) > 0
+    ? Number(item.descuento_unitario)
+    : Math.max(0, precioBase - precioUnitario);
+  const tieneDescuento = descuentoUnitario > 0;
+  const subtotalOriginal = precioBase * item.cantidad;
+  const descuentoTotal = tieneDescuento
+    ? (Number(item.descuento) > 0 ? Number(item.descuento) : descuentoUnitario * item.cantidad)
+    : 0;
+  const subtotal = item.subtotal ?? precioUnitario * item.cantidad;
   const detalle = item.variacion ?? (item.sku ? `SKU: ${item.sku}` : null);
+
   return (
     <li className={`py-3.5 border-b border-gray-100 last:border-0 ${deshabilitado ? 'opacity-50' : ''}`}>
       <div className="flex items-start sm:items-center gap-3">
@@ -281,14 +295,47 @@ export function FilaItem({ item, deshabilitado, pendientes, onCantidad, onQuitar
         <div className="min-w-0 flex-1">
           <p className="text-sm sm:text-base font-bold text-gray-900 break-words">{item.nombre}</p>
           {detalle && <p className="text-xs text-gray-500 font-normal break-words">{detalle}</p>}
-          <p className="text-xs text-gray-600 font-medium mt-0.5">{colones(item.precio_unitario)} c/u · Cantidad: {item.cantidad}</p>
+          {tieneDescuento ? (
+            <div className="mt-1 space-y-0.5 text-xs">
+              <p className="text-gray-600">
+                <span>Precio original: </span>
+                <span className="line-through text-gray-500 font-medium">{colones(precioBase)}</span>
+                <span className="text-gray-500"> c/u</span>
+              </p>
+              <p className="text-red-700 font-semibold flex flex-wrap items-center gap-1">
+                <span>Descuento realizado:</span>
+                <span className="inline-flex items-center rounded-sm bg-red-50 px-1.5 py-0.5 text-[11px] font-bold text-red-700 border border-red-200">
+                  -{colones(descuentoUnitario)} c/u
+                </span>
+                {item.cantidad > 1 && (
+                  <span className="text-[11px] text-gray-500 font-normal">(-{colones(descuentoTotal)} total)</span>
+                )}
+              </p>
+              <p className="text-gray-800 font-medium">
+                Nuevo precio: <span className="font-bold text-brandDarkBlue">{colones(precioUnitario)}</span> c/u · Cantidad: {item.cantidad}
+              </p>
+              <p className="text-gray-900 font-semibold pt-0.5">
+                Nuevo total: <span className="font-bold text-brandDarkBlue">{colones(subtotal)}</span>
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-600 font-medium mt-0.5">{colones(item.precio_unitario)} c/u · Cantidad: {item.cantidad}</p>
+          )}
           {conStock && !deshabilitado && !enMaximo && (
             <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium mt-1">
               <Check className="w-3 h-3" aria-hidden="true" /> En Stock ({item.stock} disp.)
             </span>
           )}
         </div>
-        <p className="shrink-0 text-sm sm:text-base font-extrabold text-brandDarkBlue">{colones(subtotal)}</p>
+        <div className="shrink-0 text-right">
+          {tieneDescuento && (
+            <p className="text-xs text-gray-400 line-through">{colones(subtotalOriginal)}</p>
+          )}
+          <p className="text-sm sm:text-base font-extrabold text-brandDarkBlue">{colones(subtotal)}</p>
+          {tieneDescuento && (
+            <span className="text-[10px] font-semibold text-green-700 block">Nuevo total</span>
+          )}
+        </div>
       </div>
       <div className="mt-2.5 flex items-center justify-between sm:justify-end gap-3">
         <SelectorCantidad nombre={item.nombre} valor={item.cantidad} deshabilitado={deshabilitado || !onCantidad || cambiando || quitando}
@@ -310,19 +357,51 @@ export function FilaItem({ item, deshabilitado, pendientes, onCantidad, onQuitar
 
 // ---------- Linea compacta de ítem (resumen del checkout) ----------
 export function FilaResumen({ item }) {
+  const precioBase = Number(item.precio_base) > 0
+    ? Number(item.precio_base)
+    : (Number(item.precio_unitario) + (Number(item.descuento_unitario) || 0));
+  const precioUnitario = Number(item.precio_unitario) || 0;
+  const descuentoUnitario = Number(item.descuento_unitario) > 0
+    ? Number(item.descuento_unitario)
+    : Math.max(0, precioBase - precioUnitario);
+  const tieneDescuento = descuentoUnitario > 0;
+  const subtotalOriginal = precioBase * item.cantidad;
+  const subtotal = item.subtotal ?? precioUnitario * item.cantidad;
+
   return (
     <li className="flex items-center justify-between gap-2 text-xs sm:text-sm">
       <div className="flex items-center gap-2 min-w-0">
         <span className="min-w-5 h-5 px-1 bg-gray-100 rounded flex items-center justify-center font-bold text-gray-700 text-xs">{item.cantidad}x</span>
-        <span className="text-gray-800 font-medium break-words">{item.nombre}</span>
+        <div className="min-w-0">
+          <span className="text-gray-800 font-medium break-words">{item.nombre}</span>
+          {tieneDescuento && (
+            <p className="text-[11px] text-gray-500">
+              <span className="line-through">{colones(precioBase)}</span>
+              <span className="text-red-700 font-semibold ml-1.5">(-{colones(descuentoUnitario)})</span>
+              <span className="text-gray-700 font-medium ml-1.5">{colones(precioUnitario)} c/u</span>
+            </p>
+          )}
+        </div>
       </div>
-      <span className="shrink-0 font-bold text-gray-900">{colones(item.subtotal ?? item.precio_unitario * item.cantidad)}</span>
+      <div className="shrink-0 text-right">
+        {tieneDescuento && (
+          <span className="block text-[11px] text-gray-400 line-through">{colones(subtotalOriginal)}</span>
+        )}
+        <span className="font-bold text-gray-900">{colones(subtotal)}</span>
+      </div>
     </li>
   );
 }
 
 // ---------- Tarjeta de subpedido (un comercio) ----------
 export function TarjetaComercio({ grupo, numero, editable, suspendido, pendientes, onCantidad, onQuitar }) {
+  const descuentoGrupo = (grupo.items || []).reduce((s, i) => s + (Number(i.descuento) || 0), 0);
+  const subtotalBaseGrupo = (grupo.items || []).reduce((s, i) => {
+    const base = Number(i.precio_base) > 0 ? Number(i.precio_base) : (Number(i.precio_unitario) + (Number(i.descuento_unitario) || 0));
+    return s + base * (Number(i.cantidad) || 1);
+  }, 0);
+  const totalSubpedido = Number(grupo.total) > 0 ? Number(grupo.total) : (Number(grupo.subtotal || 0) + Number(grupo.impuesto || 0) + Number(grupo.costo_envio || 0));
+
   return (
     <section className="bg-white rounded-xl shadow-xs border border-gray-200 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-100">
@@ -343,12 +422,28 @@ export function TarjetaComercio({ grupo, numero, editable, suspendido, pendiente
         <ul className="py-3 space-y-3">{grupo.items.map((i) => <FilaResumen key={i.id_item_carrito} item={i} />)}</ul>
       )}
       <dl className="pt-3 border-t border-gray-100 space-y-2">
+        {descuentoGrupo > 0 && (
+          <div className="flex justify-between text-xs sm:text-sm text-gray-500">
+            <dt>Subtotal original:</dt>
+            <dd className="line-through">{colones(subtotalBaseGrupo)}</dd>
+          </div>
+        )}
+        {descuentoGrupo > 0 && (
+          <div className="flex justify-between text-xs sm:text-sm text-red-700 font-semibold">
+            <dt>Descuento aplicado:</dt>
+            <dd>-{colones(descuentoGrupo)}</dd>
+          </div>
+        )}
         <div className="flex justify-between text-sm sm:text-base">
-          <dt className="font-bold text-gray-800">Subtotal Subpedido:</dt>
+          <dt className="font-bold text-gray-800">{descuentoGrupo > 0 ? 'Subtotal con descuento:' : 'Subtotal Subpedido:'}</dt>
           <dd className="font-extrabold text-brandDarkBlue text-base sm:text-lg">{colones(grupo.subtotal)}</dd>
         </div>
         <div className="flex justify-between text-xs sm:text-sm text-gray-500"><dt>Impuestos:</dt><dd className="font-medium">{colones(grupo.impuesto)}</dd></div>
         <div className="flex justify-between text-xs sm:text-sm text-gray-500"><dt>Costo de Envío:</dt><dd className="font-medium">{colones(grupo.costo_envio)}</dd></div>
+        <div className="flex justify-between text-sm sm:text-base font-bold text-gray-900 pt-1.5 border-t border-dashed border-gray-200">
+          <dt>Total Subpedido:</dt>
+          <dd className="font-extrabold text-brandDarkBlue">{colones(totalSubpedido)}</dd>
+        </div>
       </dl>
     </section>
   );

@@ -68,7 +68,8 @@ class ControladorCarrito extends Controller
             $carrito->recalcularTotales($totalGeneral);
         }
 
-        return response()->json($this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], null, $desglose), 200);
+        return response()->json($this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], null, $desglose), 200)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function agregarAlCarrito(Request $request, ?int $variacionId = null, ?int $cant = null): JsonResponse
@@ -142,7 +143,7 @@ class ControladorCarrito extends Controller
         return response()->json(
             $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Carrito actualizado', $desglose),
             201
-        );
+        )->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function actualizarCantidad(Request $request, int $itemId): JsonResponse
@@ -205,7 +206,7 @@ class ControladorCarrito extends Controller
         return response()->json(
             $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Cantidad actualizada correctamente', $desglose),
             200
-        );
+        )->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function eliminarItem(Request|int $requestOrId, ?int $itemId = null, ?int $id_item_carrito = null): JsonResponse
@@ -241,7 +242,7 @@ class ControladorCarrito extends Controller
         return response()->json(
             $this->formatearRespuestaCarrito($carrito, $desglose['grupos_comercio'], 'Ítem eliminado correctamente', $desglose),
             200
-        );
+        )->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function vaciarCarrito(Request $request): JsonResponse
@@ -255,7 +256,7 @@ class ControladorCarrito extends Controller
 
         return response()->json([
             'mensaje' => 'Carrito vaciado exitosamente',
-        ], 200);
+        ], 200)->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function calcularCostosPedidos(float $subtotales, float $impuestos, float $costoEnvio = 0.0): float
