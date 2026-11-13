@@ -162,6 +162,23 @@ class M3_ApiCatalogoTest extends TestCase
         $this->assertCount(1, Storage::disk('public')->allFiles());
     }
 
+    public function test_otro_comercio_no_puede_agregar_imagen_a_producto_ajeno(): void
+    {
+        // El comercio original crea su producto.
+        $this->comoEncargado(self::COMERCIO);
+
+        $idProducto = $this->productoEnBorrador();
+
+        // Un segundo comercio intenta agregarle una imagen.
+        $this->comoEncargado(self::OTRO_COMERCIO);
+
+        $this->postJson(self::BASE."/productos/{$idProducto}/imagenes", [
+            'imagen_url' => 'https://example.com/imagen-ajena.jpg',
+        ])
+            ->assertNotFound()
+            ->assertJsonPath('error.codigo', 'ERR-004');
+    }
+
     // ---------------------------------------------------------------- reglas
 
     public function test_rechaza_un_id_comercio_diferente_al_de_la_sesion(): void
