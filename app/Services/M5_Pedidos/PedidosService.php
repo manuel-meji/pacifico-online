@@ -55,7 +55,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
      *     items: list<array<string, mixed>>,
      *     grupos_comercio: array<int, array<string, mixed>>,
      *     resumen: array{subtotal: float, impuesto: float, costo_envio: float, total: float},
-     *     hay_comercio_suspendido: bool
+     *     hay_comercio_suspendido: bool,
+     *     hay_producto_no_disponible: bool
      * }
      */
     public function calcularDesgloseCarrito(
@@ -65,6 +66,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         ?object $portalOverride = null,
         string|array|null $zonaEntrega = null,
         ?int $idDireccionCliente = null,
+        bool $exigirCatalogo = false,
     ): array {
         $catalogo = $catalogoOverride ?? $this->catalogoService ?? (app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null);
         $comercios = $comerciosOverride ?? $this->comerciosService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
@@ -109,16 +111,46 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             ? $portal
             : $this->resolverPortalM1();
         $preciosVigentesM1 = $this->consultarPreciosVigentesM1($portalPrecios, $idsVariacion);
+        $hayProductoNoDisponible = false;
 
         foreach ($carrito->items as $item) {
             $idVariacionItem = (int) $item->id_variacion;
             $variacion = null;
+            $errorCatalogo = null;
             if ($catalogo) {
                 try {
                     $variacion = $catalogo->obtenerVariacion($idVariacionItem);
-                } catch (\Throwable) {
+                } catch (\Throwable $e) {
                     $variacion = null;
+                    $errorCatalogo = $e;
                 }
+            }
+
+            $variacionNoDisponible = ! is_array($variacion) || empty($variacion);
+
+            if ($exigirCatalogo) {
+                if (! $catalogo || $errorCatalogo !== null) {
+                    throw ErrorNucleoException::proveedorNoResponde(
+                        'M3_Catalogo',
+                        $errorCatalogo?->getMessage() ?? 'CatalogoServiceInterface no disponible en checkout',
+                        'No fue posible validar la disponibilidad y precios del producto en este momento.'
+                    );
+                }
+
+                if ($variacionNoDisponible) {
+                    throw ErrorNucleoException::paraModulo(
+                        'M5_Pedidos',
+                        'ERR-004',
+                        422,
+                        'Uno o más productos del carrito ya no están disponibles o pertenecen a un comercio inactivo.',
+                        ['id_variacion' => $idVariacionItem]
+                    );
+                }
+            }
+
+            $productoNoDisponible = $catalogo !== null && $variacionNoDisponible;
+            if ($productoNoDisponible) {
+                $hayProductoNoDisponible = true;
             }
 
             $comercioId = (int) ($variacion['id_comercio'] ?? $variacion['producto']['id_comercio'] ?? 1);
@@ -167,10 +199,12 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                             }
                         }
 
+                        $resumenObtenido = false;
                         if (method_exists($comercios, 'obtenerResumenComerciosLote')) {
                             $lote = $comercios->obtenerResumenComerciosLote([$comercioId]);
                             $comercioData = $lote['comercios'][0] ?? null;
                             if ($comercioData) {
+                                $resumenObtenido = true;
                                 $nombreComercio = (string) ($comercioData['nombre_comercial'] ?? $nombreComercio);
                                 if (isset($comercioData['estado']) && strtolower((string) $comercioData['estado']) !== 'activo') {
                                     $suspendido = true;
@@ -180,7 +214,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                             }
                         }
 
-                        if (method_exists($comercios, 'obtenerMicrositio')) {
+                        if ((! $resumenObtenido || $costoEnvioComercio <= 0.0) && method_exists($comercios, 'obtenerMicrositio')) {
                             $infoComercio = $comercios->obtenerMicrositio($comercioId);
                             $nombreComercio = (string) ($infoComercio['nombre_comercial'] ?? $infoComercio['nombre'] ?? $nombreComercio);
                             if ($costoEnvioComercio <= 0.0) {
@@ -249,6 +283,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 'id_comercio' => $comercioId,
                 'nombre_comercio' => $metaComercio['nombre_comercio'],
                 'comercio_suspendido' => $metaComercio['comercio_suspendido'],
+                'producto_no_disponible' => $productoNoDisponible,
+                'aviso' => $productoNoDisponible ? 'Producto no disponible actualmente. Retírelo del carrito para continuar.' : null,
                 'subtotal' => $subtotalLinea,
                 'impuesto' => $impuestoLinea,
                 'iva' => $impuestoLinea,
@@ -299,6 +335,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 'total' => $resumenTotal,
             ],
             'hay_comercio_suspendido' => $hayComercioSuspendido,
+            'hay_producto_no_disponible' => $hayProductoNoDisponible,
         ];
     }
 
@@ -950,7 +987,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             $resumen = $datosCheckout['resumen'] ?? null;
 
             if ($grupos === null && $carrito instanceof Carrito && $carrito->items->isNotEmpty()) {
-                $desglose = $this->calcularDesgloseCarrito($carrito);
+                $desglose = $this->calcularDesgloseCarrito($carrito, exigirCatalogo: true);
                 $grupos = $desglose['grupos_comercio'];
                 $resumen = $desglose['resumen'];
             }
@@ -1524,8 +1561,19 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
 
     private function hasTable(string $table): bool
     {
+        static $cache = [];
+
+        if (! app()->runningUnitTests() && array_key_exists($table, $cache)) {
+            return $cache[$table];
+        }
+
         try {
-            return Schema::hasTable($table);
+            $existe = Schema::hasTable($table);
+            if (! app()->runningUnitTests()) {
+                $cache[$table] = $existe;
+            }
+
+            return $existe;
         } catch (\Throwable) {
             return false;
         }

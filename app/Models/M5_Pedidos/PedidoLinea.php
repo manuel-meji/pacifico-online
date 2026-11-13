@@ -63,17 +63,33 @@ class PedidoLinea extends Model
             'id_reserva' => $idReserva,
         ];
 
-        if (Schema::hasColumn('pedidos_lineas', 'descuento')) {
+        if ($this->tieneColumna('descuento')) {
             $datos['descuento'] = round(max(0.0, $descuento), 2);
         }
 
-        if (Schema::hasColumn('pedidos_lineas', 'id_promocion')) {
+        if ($this->tieneColumna('id_promocion')) {
             $datos['id_promocion'] = $idPromocion;
         }
 
         $linea = self::create($datos);
 
         return (int) $linea->id_linea;
+    }
+
+    private function tieneColumna(string $columna): bool
+    {
+        static $cache = [];
+
+        if (! app()->runningUnitTests() && array_key_exists($columna, $cache)) {
+            return $cache[$columna];
+        }
+
+        $existe = Schema::hasColumn('pedidos_lineas', $columna);
+        if (! app()->runningUnitTests()) {
+            $cache[$columna] = $existe;
+        }
+
+        return $existe;
     }
 
     public function subpedido(): BelongsTo
