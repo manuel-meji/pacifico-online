@@ -202,7 +202,7 @@ const ALERTAS = {
   error: { caja: 'bg-red-50 border-red-200 text-red-900', Icono: CircleX, icono: 'text-red-600', titulo: 'text-red-800', texto: 'text-red-700' },
 };
 export function Alerta({ tipo = 'error', titulo, children }) {
-  const a = ALERTAS[tipo];
+  const a = ALERTAS[tipo] ?? ALERTAS.error;
   return (
     <div role="alert" className={`border rounded-xl p-4 flex items-start gap-3 ${a.caja}`}>
       <a.Icono className={`w-5 h-5 shrink-0 mt-0.5 ${a.icono}`} aria-hidden="true" />

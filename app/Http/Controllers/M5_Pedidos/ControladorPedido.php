@@ -175,37 +175,25 @@ class ControladorPedido extends Controller
         $reservasPorVariacion = [];
         $reservasCreadas = [];
 
-        $comercioPorVariacion = [];
-        foreach ($desglose['items'] ?? [] as $itemDesglose) {
-            $comercioPorVariacion[(int) ($itemDesglose['id_variacion'] ?? 0)] = (int) ($itemDesglose['id_comercio'] ?? 1);
-        }
-
         if ($this->m4Inventario) {
             try {
                 if ($this->m4Inventario instanceof InventarioModuleInterface) {
-                    foreach ($carrito->items as $it) {
-                        $idVar = (int) $it->id_variacion;
-                        $idComercioItem = $comercioPorVariacion[$idVar] ?? 1;
-                        $claveItem = count($carrito->items) > 1
-                            ? "{$idempotencyKey}-{$idVar}"
-                            : $idempotencyKey;
+                    foreach ($itemsAgrupados as $idComercio => $grupo) {
+                        foreach ($grupo['items'] as $it) {
+                            $idVar = (int) $it['id_variacion'];
+                            $cant = (int) $it['cantidad'];
+                            $claveItem = "{$idempotencyKey}-{$idComercio}-{$idVar}";
+                            $resReserva = $this->m4Inventario->reservarExistencias((int) $idComercio, $idVar, $cant, null, $claveItem);
+                            $idReservaItem = is_array($resReserva) ? ($resReserva['id_reserva'] ?? $resReserva['reserva_id'] ?? null) : $resReserva;
+                            if (! $idReservaItem) {
+                                $this->liberarReservasParciales($reservasCreadas);
 
-                        $resReserva = $this->m4Inventario->reservarExistencias(
-                            $idComercioItem,
-                            $idVar,
-                            (int) $it->cantidad,
-                            null,
-                            $claveItem
-                        );
-                        $idReservaItem = is_array($resReserva) ? ($resReserva['id_reserva'] ?? $resReserva['reserva_id'] ?? null) : $resReserva;
-                        if (! $idReservaItem) {
-                            $this->revertirReservasFallidas($reservasCreadas);
-
-                            return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
+                                return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
+                            }
+                            $idReserva = (string) $idReservaItem;
+                            $reservasPorVariacion[$idVar] = $idReserva;
+                            $reservasCreadas[] = $idReserva;
                         }
-                        $idReserva = (string) $idReservaItem;
-                        $reservasPorVariacion[$idVar] = $idReserva;
-                        $reservasCreadas[] = $idReserva;
                     }
                 } elseif (method_exists($this->m4Inventario, 'reservarExistencias')) {
                     $ref = new \ReflectionMethod($this->m4Inventario, 'reservarExistencias');
@@ -252,8 +240,12 @@ class ControladorPedido extends Controller
                     }
                     $idReserva = $idReserva ?? $idempotencyKey;
                 }
-            } catch (\Throwable) {
-                $this->revertirReservasFallidas($reservasCreadas);
+            } catch (\Throwable $e) {
+                $this->liberarReservasParciales($reservasCreadas);
+                Log::warning('M5: fallo al reservar existencias en M4 durante el checkout.', [
+                    'id_cliente' => $clienteId,
+                    'exception' => $e->getMessage(),
+                ]);
 
                 return $this->errorRespuesta('ERR-M5-002', 'Fallo de existencias / reserva rechazada', null, 409);
             }
@@ -285,12 +277,13 @@ class ControladorPedido extends Controller
                 'cupon_descuento' => $request->input('cupon_descuento'),
                 'tarjeta_regalo' => $request->input('tarjeta_regalo'),
                 'id_reserva' => $idReserva,
+                'reservas_por_variacion' => $reservasPorVariacion,
                 'carrito' => $carrito,
                 'grupos_comercio' => $itemsAgrupados,
                 'resumen' => $desglose['resumen'],
             ]);
         } catch (ValidationException $e) {
-            $this->revertirReservasFallidas($reservasCreadas);
+            $this->liberarReservasParciales($reservasCreadas);
             $mensaje = $e->validator->errors()->first('cupon_descuento') ?: 'El cupón ingresado no es válido.';
 
             return $this->errorRespuesta('ERR-M5-CUPON', $mensaje, $e->errors(), 422);
@@ -692,8 +685,13 @@ class ControladorPedido extends Controller
 
         $pedidos = $query->orderByDesc('fecha_creacion')->get();
         $nombresComercios = $this->resolverNombresComercios($pedidos);
+        $idsVariacion = $pedidos
+            ->flatMap(fn (PedidoMaestro $p) => $p->subpedidos->flatMap(fn (Subpedido $s) => $s->lineas->pluck('id_variacion')))
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        $infoVariaciones = $this->pedidosService->resolverInfoVariaciones($idsVariacion);
 
-        $pedidosTransformados = $pedidos->map(function (PedidoMaestro $p) use ($nombresComercios) {
+        $pedidosTransformados = $pedidos->map(function (PedidoMaestro $p) use ($nombresComercios, $infoVariaciones) {
             $arr = $p->toArray();
             $arr['direccion_envio_texto'] = $this->resolverTextoDireccion((int) $p->id_cliente, (int) $p->id_direccion_cliente);
 
@@ -702,6 +700,15 @@ class ControladorPedido extends Controller
                     $idCom = (int) ($sub['id_comercio'] ?? 0);
                     if ($idCom > 0 && empty($sub['nombre_comercio'])) {
                         $sub['nombre_comercio'] = $nombresComercios[$idCom] ?? "Comercio #{$idCom}";
+                    }
+                    if (! empty($sub['lineas']) && is_array($sub['lineas'])) {
+                        foreach ($sub['lineas'] as &$linea) {
+                            $idVar = (int) ($linea['id_variacion'] ?? 0);
+                            if (isset($infoVariaciones[$idVar])) {
+                                $linea = array_merge($linea, $infoVariaciones[$idVar]);
+                            }
+                        }
+                        unset($linea);
                     }
                 }
                 unset($sub);
@@ -797,6 +804,29 @@ class ControladorPedido extends Controller
         }
 
         return "Dirección #{$idDireccion}";
+    }
+
+    /**
+     * Libera reservas ya creadas cuando un ítem posterior o la confirmación del checkout falla.
+     *
+     * @param  list<string>  $reservasCreadas
+     */
+    private function liberarReservasParciales(array $reservasCreadas): void
+    {
+        if (! $this->m4Inventario instanceof InventarioModuleInterface) {
+            return;
+        }
+
+        foreach ($reservasCreadas as $idReserva) {
+            try {
+                $this->m4Inventario->liberarReserva($idReserva, 'solicitud_m5');
+            } catch (\Throwable $e) {
+                Log::warning('M5: no se pudo liberar la reserva parcial en M4 tras fallo en checkout.', [
+                    'id_reserva' => $idReserva,
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     public function calcularCostos(float $subtotal, float $impuestos, float $envio): float

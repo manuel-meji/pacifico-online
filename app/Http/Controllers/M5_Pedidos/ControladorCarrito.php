@@ -341,7 +341,12 @@ class ControladorCarrito extends Controller
             try {
                 $dirs = $this->m1Portal->listarDireccionesCliente($clienteId);
                 if (! empty($dirs)) {
-                    return $dirs;
+                    return array_values(array_map(function (array|object $d): array {
+                        $item = (array) $d;
+                        $item['texto_completo'] = $this->formatearTextoDireccion($item);
+
+                        return $item;
+                    }, $dirs));
                 }
             } catch (\Throwable) {
                 // Si el proveedor M1 no responde o falla, continuar con consulta directa o respaldo
@@ -355,7 +360,7 @@ class ControladorCarrito extends Controller
                 if ($dirsDb->isNotEmpty()) {
                     $lista = [];
                     foreach ($dirsDb as $d) {
-                        $lista[] = [
+                        $item = [
                             'id_direccion_cliente' => (int) $d->id_direccion_cliente,
                             'id_cliente' => (int) $d->id_cliente,
                             'alias_direccion' => (string) $d->alias_direccion,
@@ -366,8 +371,9 @@ class ControladorCarrito extends Controller
                             'distrito' => (string) $d->distrito,
                             'otras_senas' => (string) $d->otras_senas,
                             'es_principal' => (bool) $d->es_principal,
-                            'texto_completo' => "{$d->alias_direccion} — {$d->provincia}, {$d->canton}, {$d->distrito}, {$d->otras_senas}",
                         ];
+                        $item['texto_completo'] = $this->formatearTextoDireccion($item);
+                        $lista[] = $item;
                     }
                     usort($lista, fn ($a, $b) => ($b['es_principal'] <=> $a['es_principal']));
 
@@ -406,6 +412,40 @@ class ControladorCarrito extends Controller
                 'texto_completo' => 'Trabajo / Oficina — San José, Montes de Oca, San Pedro, Del hospital 100 m sur, Oficinas Pacíficos #3',
             ],
         ];
+    }
+
+    /**
+     * Construye el texto legible de una dirección cuando el proveedor externo no lo incluye.
+     *
+     * @param  array<string, mixed>  $direccion
+     */
+    private function formatearTextoDireccion(array $direccion): string
+    {
+        if (! empty($direccion['texto_completo'])) {
+            return (string) $direccion['texto_completo'];
+        }
+
+        $alias = trim((string) ($direccion['alias_direccion'] ?? ''));
+        $ubicacion = implode(', ', array_filter([
+            trim((string) ($direccion['provincia'] ?? '')),
+            trim((string) ($direccion['canton'] ?? '')),
+            trim((string) ($direccion['distrito'] ?? '')),
+            trim((string) ($direccion['otras_senas'] ?? '')),
+        ], fn (string $parte): bool => $parte !== ''));
+
+        if ($alias !== '' && $ubicacion !== '') {
+            return "{$alias} — {$ubicacion}";
+        }
+
+        if ($ubicacion !== '') {
+            return $ubicacion;
+        }
+
+        if ($alias !== '') {
+            return $alias;
+        }
+
+        return 'Dirección #'.($direccion['id_direccion_cliente'] ?? '');
     }
 
     public function listarDirecciones(Request $request): JsonResponse
