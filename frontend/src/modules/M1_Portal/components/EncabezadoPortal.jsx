@@ -14,7 +14,8 @@ export const textoInsignia = (cantidad) => (cantidad > TOPE_CARRITO ? `+${TOPE_C
 // `cantidadCarrito` son las líneas del carrito de M5 (productos o variaciones distintas). La insignia se muestra
 // siempre: 0 sin sesión, sin dato o con el carrito vacío, y de 31 en adelante +30.
 // `tipoInicial` ('productos' o 'comercios') elige qué busca el buscador; onBuscar(termino, tipo).
-// `onGestion` solo llega para los encargados (comercio o plataforma): muestra el acceso al panel de gestión.
+// `onGestion` solo llega para los encargados (comercio o plataforma): muestra el acceso a su panel (/m2.html),
+// desde donde se llega también al panel de gestión del portal.
 // `mostrarVender` agrega en la franja superior el enlace a la solicitud de incorporación de comercios (M2).
 export default function EncabezadoPortal({ categorias = [], terminoInicial = '', tipoInicial = 'productos', conSesion = false, cantidadCarrito = null, mostrarVender = false, onInicio, onBuscar, onCategoria, onMiCuenta, onGestion = null }) {
   const [termino, setTermino] = useState(terminoInicial);
@@ -74,10 +75,10 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
 
           <nav className="ml-auto flex shrink-0 items-center gap-5 text-sm font-medium text-gray-700 sm:ml-0" aria-label="Cuenta y carrito">
             {onGestion && (
-              <button type="button" onClick={onGestion} aria-label="Panel de gestión"
+              <button type="button" onClick={onGestion} aria-label="Mi panel"
                 className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue">
                 <Icono nombre="panel" className="h-5 w-5" />
-                <span className="hidden sm:inline">Gestión</span>
+                <span className="hidden sm:inline">Mi panel</span>
               </button>
             )}
             <button type="button" onClick={onMiCuenta} aria-label={conSesion ? 'Mi cuenta' : 'Ingresar'}
