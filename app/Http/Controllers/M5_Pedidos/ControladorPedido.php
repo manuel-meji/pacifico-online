@@ -25,6 +25,7 @@ use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -295,14 +296,27 @@ class ControladorPedido extends Controller
 
         $idPedido = (int) $pedidoData['id_pedido'];
         $montoTotal = (float) $pedidoData['monto_total'];
-        $pedidoMaestro = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->find($idPedido);
+        $pedidoMaestro = PedidoMaestro::withoutGlobalScope('cliente')
+            ->with([
+                'subpedidos' => fn ($q) => $q->withoutGlobalScope('comercio')->with('lineas'),
+                'estados',
+                'cancelaciones',
+            ])
+            ->find($idPedido);
+
+        if (! $pedidoMaestro || $pedidoMaestro->subpedidos->isEmpty()) {
+            $this->liberarReservasParciales($reservasCreadas);
+            Log::error('M5: el pedido maestro creado en checkout no contiene subpedidos válidos para confirmar.', [
+                'id_pedido' => $idPedido,
+            ]);
+
+            return $this->errorRespuesta('ERR-M5-002', 'No fue posible confirmar el pedido con sus subpedidos.', null, 409);
+        }
 
         // 6. Publicar eventos canónicos (D3: PedidoConfirmado se emite al confirmar el checkout)
-        if ($pedidoMaestro) { // este trozo de código lo agregó JustinM6 con concentimiento de Marcos Ortega
-            $pedidoMaestro->actualizarEstado('confirmado', 'Checkout confirmado'); // <-- línea nueva
-            event(new PedidoConfirmado($pedidoMaestro));
-            event(new PedidoCreado($pedidoMaestro));
-        }
+        $pedidoMaestro->actualizarEstado('confirmado', 'Checkout confirmado');
+        event(new PedidoConfirmado($pedidoMaestro));
+        event(new PedidoCreado($pedidoMaestro));
 
         // 7. Procesar pago con M6_Pagos (Contrato M6 v1.0.0 / v1.1.1)
         $urlPasarelaPago = 'https://pago.pacificos.com/checkout/'.$idPedido;
@@ -479,13 +493,39 @@ class ControladorPedido extends Controller
         }
 
         try {
-            $subpedido->despachar($guiaTransporte ?: null);
+            $subpedidoActualizado = DB::transaction(function () use ($subpedido, $guiaTransporte): Subpedido {
+                $subpedido->despachar($guiaTransporte ?: null);
+
+                $recargado = Subpedido::withoutGlobalScope('comercio')
+                    ->with(['lineas', 'estados'])
+                    ->find($subpedido->id_subpedido);
+
+                if (! $recargado) {
+                    throw new DomainException("Subpedido #{$subpedido->id_subpedido} no disponible tras el despacho.");
+                }
+
+                $this->confirmarSalidaSubpedido($recargado);
+
+                return $recargado;
+            });
         } catch (DomainException $e) {
             return $this->errorRespuesta('ERR-M5-002', $e->getMessage(), null, 409);
+        } catch (\Throwable $e) {
+            Log::error('M5: error al confirmar salida de inventario en M4 durante despacho de subpedido.', [
+                'id_subpedido' => $subpedido->id_subpedido,
+                'id_pedido' => $subpedido->id_pedido,
+                'id_comercio' => $subpedido->id_comercio,
+                'exception' => $e->getMessage(),
+            ]);
+
+            return $this->errorRespuesta(
+                'ERR-M5-002',
+                'No se pudo confirmar la salida de inventario en M4; el subpedido permanece sin despachar.',
+                null,
+                409
+            );
         }
 
-        $subpedidoActualizado = $subpedido->fresh(['lineas', 'estados']);
-        $this->confirmarSalidaSubpedido($subpedidoActualizado);
         event(new SubpedidoDespachado($subpedidoActualizado, $guiaTransporte ?: null));
         $respuesta = array_merge($subpedidoActualizado->toArray(), [
             'mensaje' => 'Subpedido despachado correctamente',
@@ -893,12 +933,11 @@ class ControladorPedido extends Controller
     /**
      * Confirma la salida física en M4 de las reservas asociadas a un subpedido antes de emitir SubpedidoDespachado.
      */
-    private function confirmarSalidaSubpedido(?Subpedido $subpedido): void
+    /**
+     * Confirma la salida física en M4 de las reservas asociadas a un subpedido antes de emitir SubpedidoDespachado.
+     */
+    private function confirmarSalidaSubpedido(Subpedido $subpedido): void
     {
-        if (! $subpedido) {
-            return;
-        }
-
         if ($this->m4Inventario && method_exists($this->m4Inventario, 'confirmarSalidaPorReserva')) {
             $subpedido->loadMissing('lineas');
             $idPedido = (int) $subpedido->id_pedido;
@@ -906,14 +945,11 @@ class ControladorPedido extends Controller
 
             foreach ($subpedido->lineas as $linea) {
                 if (! empty($linea->id_reserva)) {
-                    try {
-                        $this->m4Inventario->confirmarSalidaPorReserva(
-                            (string) $linea->id_reserva,
-                            $idPedido,
-                            $idSubpedido,
-                        );
-                    } catch (\Throwable) {
-                    }
+                    $this->m4Inventario->confirmarSalidaPorReserva(
+                        (string) $linea->id_reserva,
+                        $idPedido,
+                        $idSubpedido,
+                    );
                 }
             }
 

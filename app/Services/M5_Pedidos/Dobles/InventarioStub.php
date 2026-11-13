@@ -18,9 +18,18 @@ class InventarioStub extends InventarioDobleBase
 
     private ?bool $forzarSinStock = null;
 
+    private bool $forzarFalloSalida = false;
+
     public function setSinStock(bool $sinStock = true): self
     {
         $this->forzarSinStock = $sinStock;
+
+        return $this;
+    }
+
+    public function setFallarSalida(bool $fallar = true): self
+    {
+        $this->forzarFalloSalida = $fallar;
 
         return $this;
     }
@@ -199,6 +208,26 @@ class InventarioStub extends InventarioDobleBase
             'id_subpedido' => $idSubpedido,
             'estado' => 'confirmada',
             'fecha_confirmacion' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Confirmar salida física de inventario tras despacho del subpedido (B7).
+     *
+     * @return array<string, mixed>
+     */
+    public function confirmarSalidaPorReserva(string $idReserva, int $idPedido, int $idSubpedido): array
+    {
+        if ($this->forzarFalloSalida) {
+            throw ErrorProveedorException::sinStock('Fallo simulado al confirmar salida física de inventario.');
+        }
+
+        return [
+            'id_reserva' => $idReserva,
+            'id_pedido' => $idPedido,
+            'id_subpedido' => $idSubpedido,
+            'estado_reserva' => 'consumida',
+            'fecha_salida' => now()->toIso8601String(),
         ];
     }
 }

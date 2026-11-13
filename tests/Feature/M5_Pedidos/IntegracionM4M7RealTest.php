@@ -492,4 +492,59 @@ class IntegracionM4M7RealTest extends TestCase
         $this->assertSame(8, (int) $existenciaC2->cantidad_fisica);
         $this->assertSame(0, (int) $existenciaC2->cantidad_reservada);
     }
+
+    /**
+     * Flujo 3:
+     * - Si M4 rechaza la salida física de inventario al despachar (p. ej. reserva liberada),
+     *   M5 revierte la transición del subpedido, responde 409, no emite SubpedidoDespachado
+     *   y M7 no genera asiento COSTO_VENTA.
+     */
+    public function test_flujo_3_fallo_de_salida_en_m4_real_revierte_despacho_y_evita_costo_venta_en_m7(): void
+    {
+        $this->postJson("{$this->prefix}/carrito/items", [
+            'id_cliente' => 89,
+            'id_variacion' => 202,
+            'cantidad' => 2,
+        ])->assertStatus(201);
+
+        $resCheckout = $this->postJson("{$this->prefix}/pedidos", [
+            'id_cliente' => 89,
+            'id_direccion_cliente' => 1,
+            'metodoPago' => 'tarjeta',
+        ]);
+        $resCheckout->assertStatus(201);
+
+        $idPedido = (int) $resCheckout->json('id_pedido');
+        $subpedido = Subpedido::where('id_pedido', $idPedido)->firstOrFail();
+        $linea = PedidoLinea::where('id_subpedido', $subpedido->id_subpedido)->firstOrFail();
+
+        $this->postJson("{$this->prefix}/pedidos/{$idPedido}/pago-confirmado", [
+            'referencia_pago' => 'REF-INT-FALLO-01',
+        ])->assertOk();
+
+        $this->postJson("{$this->prefix}/subpedidos/{$subpedido->id_subpedido}/preparar")->assertOk();
+
+        // Provocar inconsistencia controlada en M4 liberando la reserva antes del despacho
+        app(InventarioModuleInterface::class)->liberarReserva((string) $linea->id_reserva, 'solicitud_m5');
+
+        $resDespacho = $this->postJson("{$this->prefix}/subpedidos/{$subpedido->id_subpedido}/despachar", [
+            'guia_seguimiento' => 'GUIA-NO-DEBE-GUARDARSE',
+        ]);
+
+        $resDespacho->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M5-002');
+
+        $subActualizado = $subpedido->fresh();
+        $this->assertSame('en_preparacion', $subActualizado->estado_subpedido);
+        $this->assertNull($subActualizado->guia_seguimiento);
+
+        $this->assertSame(0, DB::table('movimientos_inventario')->where('tipo', 'salida')->count());
+        $this->assertSame(
+            0,
+            DB::table('asientos_contables')
+                ->where('id_subpedido', $subpedido->id_subpedido)
+                ->where('tipo', 'COSTO_VENTA')
+                ->count()
+        );
+    }
 }
