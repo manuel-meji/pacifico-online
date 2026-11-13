@@ -22,7 +22,8 @@ final class AsientoService
         private readonly CuentaContableRepository $cuentas,
         private readonly ValidadorPartidaDoble $validador,
         private readonly ContextoComercio $contexto,
-    ) {}
+    ) {
+    }
 
     public function crearAsientoVenta(VentaDTO $datos, bool $verificarExistente = false): AsientoContable
     {
@@ -39,7 +40,7 @@ final class AsientoService
     {
         try {
             $this->validador->validar(array_map(
-                fn (DetalleAsiento $detalle): array => ['debe' => $detalle->debe, 'haber' => $detalle->haber],
+                fn(DetalleAsiento $detalle): array => ['debe' => $detalle->debe, 'haber' => $detalle->haber],
                 $detalles,
             ));
 
@@ -51,10 +52,10 @@ final class AsientoService
 
     private function crear(string $eventoId, string $fecha, int $pedidoId, int $subpedidoId, int $comercioId, string $importe, string $tipoEvento, string $tipo, string $debe, string $haber, bool $verificarExistente): AsientoContable
     {
-        if (! Str::isUuid($eventoId) || $pedidoId <= 0 || $subpedidoId <= 0 || $comercioId <= 0 || trim($fecha) === '') {
+        if (!Str::isUuid($eventoId) || $pedidoId <= 0 || $subpedidoId <= 0 || $comercioId <= 0 || trim($fecha) === '') {
             throw new InvalidArgumentException('El evento, fecha y los identificadores deben ser válidos.');
         }
-        if (! $this->contexto->esModoSistema() && $this->contexto->idActual() !== $comercioId) {
+        if (!$this->contexto->esModoSistema() && $this->contexto->idActual() !== $comercioId) {
             throw new LogicException('El comercio no corresponde al contexto actual.');
         }
 
@@ -65,8 +66,16 @@ final class AsientoService
         return DB::transaction(function () use ($eventoId, $fechaNormalizada, $pedidoId, $subpedidoId, $comercioId, $importe, $tipoEvento, $tipo, $debe, $haber, $verificarExistente): AsientoContable {
             $cuentas = $this->cuentas->bloquearCuentas($comercioId, $debe, $haber);
             $existente = $this->asientos->buscarPorSubpedido($comercioId, $subpedidoId, $tipo);
+
             if ($existente !== null) {
-                if ($existente->pedidoId !== $pedidoId || ! $existente->estaBalanceado() || $this->validador->aCentimos($existente->totalDebe()) !== $this->validador->aCentimos($importe) || ($verificarExistente && $existente->eventoId === $eventoId && $existente->fecha !== $fechaNormalizada)) {
+                if (
+                    $existente->tipoEvento !== $tipoEvento
+                    || $existente->pedidoId !== $pedidoId
+                    || !$existente->estaBalanceado()
+                    || $this->validador->aCentimos($existente->totalDebe())
+                    !== $this->validador->aCentimos($importe)
+                    || $existente->fecha !== $fechaNormalizada
+                ) {
                     throw new LogicException('El asiento existente no coincide con los datos recibidos.');
                 }
 

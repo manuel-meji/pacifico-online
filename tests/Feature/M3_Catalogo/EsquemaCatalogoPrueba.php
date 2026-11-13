@@ -99,6 +99,8 @@ trait EsquemaCatalogoPrueba
             $tabla->string('codigo_barras', 14)->nullable();
             $tabla->string('codigo_fabricante', 100)->nullable();
             $tabla->boolean('disponible')->default(true);
+            $tabla->timestampTz('fecha_ultimo_evento')->nullable();
+            $tabla->uuid('id_ultimo_evento')->nullable();
             $tabla->timestamps();
             $tabla->unique(['id_comercio', 'sku']);
         });

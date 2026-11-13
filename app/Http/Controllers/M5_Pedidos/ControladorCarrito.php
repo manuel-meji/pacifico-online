@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Models\M1_Portal\DireccionCliente;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
+use App\Services\M4_Inventario\InventarioService;
 use App\Services\M5_Pedidos\PedidosService;
 use App\Services\Nucleo\ContextoCliente;
 use Illuminate\Http\JsonResponse;
@@ -173,15 +174,16 @@ class ControladorCarrito extends Controller
 
         // Verificar disponibilidad en M4
         $comercioId = 1;
+        $ubicacionId = null;
         if ($this->m3Catalogo) {
             try {
                 $variacion = $this->m3Catalogo->obtenerVariacion((int) $item->id_variacion);
                 $comercioId = $this->resolverIdComercioVariacion($variacion);
+                $ubicacionId = isset($variacion['id_ubicacion']) ? (int) $variacion['id_ubicacion'] : null;
             } catch (\Throwable) {
             }
         }
 
-        $ubicacionId = isset($variacion['id_ubicacion']) ? (int) $variacion['id_ubicacion'] : (app()->runningUnitTests() ? 1 : null);
         $stock = $this->consultarStockVariacion($comercioId, (int) $item->id_variacion, $ubicacionId);
         if ($stock >= 0 && $this->m4Inventario && $stock < $nuevaCantidad) {
             return $this->errorRespuesta(
@@ -499,9 +501,14 @@ class ControladorCarrito extends Controller
         }
 
         if (method_exists($this->m4Inventario, 'consultarStockDisponible')) {
-            $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
+            try {
+                $ubicacionConsulta = $ubicacionId ?? ($this->m4Inventario instanceof InventarioService ? null : 1);
+                $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionConsulta);
 
-            return is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
+                return is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
+            } catch (\Throwable) {
+                return 0;
+            }
         }
 
         if (method_exists($this->m4Inventario, 'consultarExistencias')) {

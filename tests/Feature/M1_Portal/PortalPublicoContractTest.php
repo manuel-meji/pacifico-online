@@ -119,10 +119,38 @@ class PortalPublicoContractTest extends PruebaM1
         $cliente = (new PortalPublicoFake)->obtenerCliente(PortalPublicoFake::CLIENTE_CON_DIRECCIONES);
 
         $this->assertSame(
-            ['id_cliente', 'nombre', 'apellidos', 'correo_electronico', 'telefono', 'direccion_envio'],
+            ['id_cliente', 'nombre', 'apellidos', 'correo_electronico', 'telefono', 'direccion_envio', 'identificacion_tributaria'],
             array_keys($cliente),
         );
         $this->assertSame('200 m norte del parque, Liberia, Liberia, Guanacaste', $cliente['direccion_envio']);
+    }
+
+    public function test_m6_recibe_la_cedula_como_identificacion_tributaria(): void
+    {
+        $fake = new PortalPublicoFake;
+
+        // El cliente 77 lleva la misma cédula que el FakeClienteClient de M6.
+        $this->assertSame('116540892', $fake->obtenerCliente(PortalPublicoFake::CLIENTE_SIN_DIRECCIONES)['identificacion_tributaria']);
+
+        $idCliente = $fake->registrarCliente([
+            'nombre' => 'Marta',
+            'apellidos' => 'Solano Ruiz',
+            'correo_electronico' => 'marta@example.com',
+            'telefono' => '8888-0009',
+            'cedula' => ' 2-0456-0789 ',
+            'contrasena' => 'secreta123',
+            'direccion' => [
+                'alias_direccion' => 'Casa',
+                'nombre_destinatario' => 'Marta Solano',
+                'telefono_destinatario' => '8888-0009',
+                'provincia' => 'Guanacaste',
+                'canton' => 'Liberia',
+                'distrito' => 'Liberia',
+                'otras_senas' => 'Frente a la escuela',
+            ],
+        ]);
+
+        $this->assertSame('2-0456-0789', $fake->obtenerCliente($idCliente)['identificacion_tributaria']);
     }
 
     public function test_un_cliente_inexistente_lanza_err_004(): void
@@ -179,6 +207,7 @@ class PortalPublicoContractTest extends PruebaM1
             $this->assertSame('ERR-004', $excepcion->codigo());
         }
     }
+
     public function test_el_nucleo_obtiene_el_cliente_de_una_cuenta_y_err_004_si_no_tiene(): void
     {
         $fake = new PortalPublicoFake;
@@ -307,4 +336,3 @@ class PortalPublicoContractTest extends PruebaM1
         return ($tipo->allowsNull() && $tipo->getName() !== 'mixed' ? '?' : '').$tipo->getName();
     }
 }
-

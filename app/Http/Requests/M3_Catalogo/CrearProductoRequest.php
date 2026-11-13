@@ -8,7 +8,8 @@ use Illuminate\Validation\Rule;
 
 /**
  * POST /productos (crearProducto).
- * No lee id_comercio: el comercio sale de la sesión, no del cuerpo (RN-12).
+ * Acepta id_comercio opcional para verificarlo, pero el comercio
+ * siempre se determina desde la sesión autenticada (RN-12).
  */
 class CrearProductoRequest extends SolicitudCatalogo
 {
@@ -16,6 +17,7 @@ class CrearProductoRequest extends SolicitudCatalogo
     public function rules(): array
     {
         return [
+            'id_comercio' => ['sometimes', 'required', 'integer', 'min:1'],
             'id_categoria' => ['required', 'integer', 'exists:categorias,id_categoria'],
             'id_marca' => ['nullable', 'integer', 'exists:marcas,id_marca'],
             'nombre' => ['required', 'string', 'max:150'],
