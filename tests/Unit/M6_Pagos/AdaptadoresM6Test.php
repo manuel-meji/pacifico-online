@@ -48,11 +48,15 @@ class AdaptadoresM6Test extends TestCase
         $this->assertSame((new FakeClienteClient)->obtenerCliente(77)->nombre, $real->nombre);
     }
 
-    public function test_m1_la_identificacion_tributaria_aun_no_viaja_en_el_contrato(): void
-    {
-        $this->assertSame('', (new AdaptadorM1(new PortalPublicoFake))->obtenerCliente(77)->identificacionTributaria);
-    }
+    /** Integración M6–M1 (contrato M1 1.7.0, SC-14): la cédula del cliente llega como identificación tributaria. */
+       public function test_m1_la_identificacion_tributaria_viaja_desde_el_contrato(): void
+       {
+           $real = (new AdaptadorM1(new PortalPublicoFake))->obtenerCliente(77);
 
+           $this->assertSame('116540892', $real->identificacionTributaria);
+           $this->assertSame((new FakeClienteClient)->obtenerCliente(77)->identificacionTributaria, $real->identificacionTributaria);
+       }
+       
     public function test_m1_cliente_inexistente(): void
     {
         $adaptador = new AdaptadorM1(new PortalPublicoFake);
