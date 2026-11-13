@@ -53,6 +53,7 @@ class AceptacionPerfilClienteTest extends PruebaM1
                 'correo_electronico' => 'ana@example.com',
                 'telefono' => '8888-0000',
                 'direccion_envio' => '200 m norte del parque, Liberia, Liberia, Guanacaste',
+                'identificacion_tributaria' => '5-0123-0456',
             ]);
     }
 
@@ -80,7 +81,8 @@ class AceptacionPerfilClienteTest extends PruebaM1
         $this->comoAna()->getJson("/api/m1/v1/clientes/{$this->ana}")
             ->assertOk()
             ->assertJsonPath('id_cliente', $this->ana)
-            ->assertJsonPath('correo_electronico', 'ana@example.com');
+            ->assertJsonPath('correo_electronico', 'ana@example.com')
+            ->assertJsonPath('identificacion_tributaria', '5-0123-0456');
     }
 
     public function test_no_puede_ver_los_datos_de_otro_cliente(): void
@@ -88,7 +90,8 @@ class AceptacionPerfilClienteTest extends PruebaM1
         $this->comoAna()->getJson("/api/m1/v1/clientes/{$this->luis}")
             ->assertNotFound()
             ->assertJsonPath('error.codigo', 'ERR-003')
-            ->assertJsonMissing(['correo_electronico' => 'luis@example.com']);
+            ->assertJsonMissing(['correo_electronico' => 'luis@example.com'])
+            ->assertJsonMissing(['identificacion_tributaria' => '1-1111-1111']);
     }
 
     public function test_un_cliente_inexistente_responde_igual_que_uno_ajeno(): void
