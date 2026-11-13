@@ -11,18 +11,16 @@ export const textoInsignia = (cantidad) => (cantidad > TOPE_CARRITO ? `+${TOPE_C
 // Encabezado del portal: franja superior, logotipo, buscador, cuenta, carrito y menú de categorías.
 // `categorias` es la respuesta de GET /categorias (CategoriaPortal: id_categoria, nombre, icono_url, subcategorias).
 // La validación del término (RN-M1-08) la hace la vista de búsqueda, para mostrar el aviso junto a los resultados.
-// `cantidadCarrito` son las líneas del carrito de M5 (productos o variaciones distintas); con null o 0 no se
-// muestra la insignia, y de 31 en adelante muestra +30.
+// `cantidadCarrito` son las líneas del carrito de M5 (productos o variaciones distintas). La insignia se muestra
+// siempre: 0 sin sesión, sin dato o con el carrito vacío, y de 31 en adelante +30.
 // `tipoInicial` ('productos' o 'comercios') elige qué busca el buscador; onBuscar(termino, tipo).
 // `onGestion` solo llega para los encargados (comercio o plataforma): muestra el acceso al panel de gestión.
 // `mostrarVender` agrega en la franja superior el enlace a la solicitud de incorporación de comercios (M2).
 export default function EncabezadoPortal({ categorias = [], terminoInicial = '', tipoInicial = 'productos', conSesion = false, cantidadCarrito = null, mostrarVender = false, onInicio, onBuscar, onCategoria, onMiCuenta, onGestion = null }) {
   const [termino, setTermino] = useState(terminoInicial);
   const [tipo, setTipo] = useState(tipoInicial);
-  const conProductos = Number.isInteger(cantidadCarrito) && cantidadCarrito > 0;
-  const etiquetaCarrito = conProductos
-    ? `Carrito, ${cantidadCarrito > TOPE_CARRITO ? `más de ${TOPE_CARRITO}` : cantidadCarrito} ${cantidadCarrito === 1 ? 'producto' : 'productos'}`
-    : 'Carrito';
+  const cantidad = Number.isInteger(cantidadCarrito) && cantidadCarrito > 0 ? cantidadCarrito : 0;
+  const etiquetaCarrito = `Carrito, ${cantidad > TOPE_CARRITO ? `más de ${TOPE_CARRITO}` : cantidad} ${cantidad === 1 ? 'producto' : 'productos'}`;
 
   useEffect(() => { setTermino(terminoInicial); }, [terminoInicial]);
   useEffect(() => { setTipo(tipoInicial); }, [tipoInicial]);
@@ -89,13 +87,12 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
             </button>
             {/* El carrito es de M5 (carrito.html). */}
             <a href="/carrito.html" className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue" aria-label={etiquetaCarrito}>
-              <span className={`relative ${conProductos ? 'mr-2.5' : ''}`}>
+              <span className="relative mr-2.5">
                 <Icono nombre="carrito" className="h-6 w-6" />
-                {conProductos && (
-                  <span aria-hidden="true" className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-brandDarkBlue px-1 text-[11px] font-bold leading-none text-white">
-                    {textoInsignia(cantidadCarrito)}
-                  </span>
-                )}
+                <span aria-hidden="true" data-testid="insignia-carrito"
+                  className={`absolute -right-2.5 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold leading-none text-white ring-2 ring-white ${cantidad > 0 ? 'bg-brandDarkBlue' : 'bg-gray-400'}`}>
+                  {textoInsignia(cantidad)}
+                </span>
               </span>
               <span className="hidden sm:inline">Carrito</span>
             </a>
