@@ -11,6 +11,7 @@ use App\Contracts\M5_Pedidos\PedidosServiceInterface;
 // Contratos (Interfaces)
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 // Contratos (Interfaces)
+use App\Contracts\M7_Contabilidad\ContabilidadComercioServiceInterface;
 use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
 use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Contracts\Nucleo\ServicioIdentidadInterface;
@@ -61,6 +62,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(PedidosServiceInterface::class, PedidosService::class);
         $this->app->bind(PagosServiceInterface::class, PagosService::class);
         $this->app->bind(ContabilidadServiceInterface::class, ContabilidadService::class);
+        $this->app->bind(ContabilidadComercioServiceInterface::class, ContabilidadService::class);
         $this->app->bind(NucleoServiceInterface::class, NucleoService::class);
         $this->app->bind(ServicioIdentidadInterface::class, ServicioIdentidad::class);
 

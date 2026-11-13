@@ -508,4 +508,23 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('registrado', false)
             ->assertJsonPath('asiento_id', null);
     }
+
+    public function test_plataforma_consulta_el_registro_de_un_pago_de_cualquier_comercio(): void
+    {
+        $idCuenta = $this->crearCuenta(2, '1.1.01', 'Caja comercio 2');
+        $idAsiento = $this->crearAsiento(2, 'PAGO', $idCuenta, 100, 0);
+        DB::table('asientos_contables')->where('id_asiento', $idAsiento)->update(['id_pago' => 557]);
+
+        $plataforma = UsuarioFactory::new()->create([
+            'rol' => 'encargado_plataforma',
+            'id_comercio' => null,
+            'activo' => true,
+        ]);
+
+        $this->actingAs($plataforma, 'web')->getJson('/m7/pagos/557/registro-contable')
+            ->assertOk()
+            ->assertJsonPath('id_pago', 557)
+            ->assertJsonPath('registrado', true)
+            ->assertJsonPath('asiento_id', $idAsiento);
+    }
 }

@@ -2,11 +2,11 @@
 
 namespace App\Services\M7_Contabilidad;
 
-use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
+use App\Contracts\M7_Contabilidad\ContabilidadComercioServiceInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class ContabilidadService implements ContabilidadServiceInterface
+class ContabilidadService implements ContabilidadComercioServiceInterface
 {
     public function registrarAsientoDespacho(int $pedidoId, float $totalVenta, float $costoVentas): bool
     {
