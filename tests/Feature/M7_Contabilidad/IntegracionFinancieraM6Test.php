@@ -8,7 +8,9 @@ use App\Contracts\M6_Pagos\ConsultaEventosPagosInterface;
 use App\Contracts\M7_Contabilidad\ContabilidadServiceInterface;
 use App\Events\M6_Pagos\FacturaGenerada;
 use App\Events\M6_Pagos\ReembolsoProcesado;
+use App\Services\M6_Pagos\Adaptadores\AdaptadorM7;
 use App\Services\M7_Contabilidad\RecuperarEventosM6Service;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -185,6 +187,85 @@ class IntegracionFinancieraM6Test extends TestCase
         $this->assertDatabaseCount('asientos_contables', 3);
     }
 
+    public function test_listener_recupera_el_cobro_faltante_antes_de_procesar_el_reembolso(): void
+    {
+        $this->crearVenta(30000);
+        $this->app->instance(ConsultaEventosPagosInterface::class, new ConsultaEventosPagosFake(facturas: [$this->factura()->payload()]));
+
+        event($this->reembolso(21, 5000));
+
+        $this->assertDatabaseCount('registros_financieros_m6', 2);
+        $this->assertDatabaseHas('asientos_contables', ['id_pago' => 7, 'id_subpedido' => 1001, 'tipo' => 'COBRO']);
+        $this->assertDatabaseHas('asientos_contables', ['id_pago' => 7, 'id_subpedido' => 1001, 'tipo' => 'REEMBOLSO']);
+    }
+
+    public function test_reembolso_sin_factura_disponible_se_registra_como_error_y_puede_recuperarse(): void
+    {
+        $this->crearVenta(30000);
+        $consulta = new ConsultaEventosPagosFake;
+        $this->app->instance(ConsultaEventosPagosInterface::class, $consulta);
+        Log::spy();
+
+        event($this->reembolso(21, 5000));
+
+        $this->assertDatabaseMissing('eventos_procesados', ['evento_id' => '22222222-2222-4222-8222-222222222222']);
+        Log::shouldHaveReceived('error')->once();
+
+        $consulta->facturas = [$this->factura()->payload()];
+        event($this->reembolso(21, 5000));
+
+        $this->assertDatabaseCount('registros_financieros_m6', 2);
+    }
+
+    public function test_comando_recupera_todos_los_comercios_del_dia_anterior(): void
+    {
+        $this->travelTo('2026-11-12 12:00:00');
+        $this->crearVenta(30000);
+        foreach (['1.1.01', '1.1.02', '2.1.02', '4.1.01', '4.1.02'] as $codigo) {
+            DB::table('cuentas_contables')->insert(['id_comercio' => 12, 'codigo' => $codigo, 'activa' => true]);
+        }
+        $this->crearVenta(24440, 12, 1002);
+        $otra = new FacturaGenerada('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 32, 8942, 1002, 12, 24440, '<factura/>', '2026-11-11T12:00:00Z', 7, 24440, 0, 0);
+        $this->app->instance(ConsultaEventosPagosInterface::class, new ConsultaEventosPagosFake(facturas: [$this->factura()->payload(), $otra->payload()]));
+
+        $this->artisan('m7:recuperar-eventos-m6')->assertExitCode(0);
+
+        $this->assertDatabaseCount('registros_financieros_m6', 2);
+        $this->assertSame([1001, 1002], app(ContabilidadServiceInterface::class)->consultarRegistroContablePago(7)['subpedidos_registrados']);
+    }
+
+    public function test_recuperacion_esta_programada_diariamente_sin_solapamiento(): void
+    {
+        $eventos = collect(app(Schedule::class)->events())->filter(fn ($evento): bool => str_contains((string) $evento->command, 'm7:recuperar-eventos-m6'));
+
+        $this->assertCount(1, $eventos);
+        $this->assertSame('0 0 * * *', $eventos->first()->expression);
+        $this->assertTrue($eventos->first()->withoutOverlapping);
+    }
+
+    public function test_comando_con_comercio_solo_recupera_facturas_de_ese_comercio(): void
+    {
+        $this->crearVenta(30000);
+        $otra = new FacturaGenerada('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 32, 8942, 1002, 12, 24440, '<factura/>', '2026-11-11T12:00:00Z', 7, 24440, 0, 0);
+        $this->app->instance(ConsultaEventosPagosInterface::class, new ConsultaEventosPagosFake(facturas: [$this->factura()->payload(), $otra->payload()]));
+
+        $this->artisan('m7:recuperar-eventos-m6', ['desde' => '2026-11-11', 'hasta' => '2026-11-11', '--comercio' => '11'])->assertExitCode(0);
+
+        $this->assertDatabaseCount('registros_financieros_m6', 1);
+        $this->assertDatabaseHas('registros_financieros_m6', ['id_comercio' => 11, 'id_subpedido' => 1001]);
+    }
+
+    public function test_comando_informa_y_registra_los_eventos_que_no_pudo_procesar(): void
+    {
+        $this->app->instance(ConsultaEventosPagosInterface::class, new ConsultaEventosPagosFake(facturas: [$this->factura()->payload()]));
+        Log::spy();
+
+        $this->artisan('m7:recuperar-eventos-m6', ['desde' => '2026-11-11', 'hasta' => '2026-11-11'])->assertExitCode(1);
+
+        $this->assertDatabaseCount('registros_financieros_m6', 0);
+        Log::shouldHaveReceived('error')->once()->withArgs(fn (string $mensaje): bool => str_contains($mensaje, 'recuperación'));
+    }
+
     public function test_recuperacion_informa_fallos_y_no_marca_un_evento_como_procesado(): void
     {
         $factura = $this->factura();
@@ -212,6 +293,7 @@ class IntegracionFinancieraM6Test extends TestCase
         $this->assertDatabaseHas('asientos_contables', ['id_pago' => 7, 'id_comercio' => 11, 'id_subpedido' => 1001, 'tipo' => 'COBRO']);
         $this->assertDatabaseHas('asientos_contables', ['id_pago' => 7, 'id_comercio' => 12, 'id_subpedido' => 1002, 'tipo' => 'COBRO']);
         $this->assertDatabaseCount('registros_financieros_m6', 2);
+        $this->assertSame([1001, 1002], app(AdaptadorM7::class)->subpedidosConCobro(7));
     }
 
     private function crearVenta(float $subtotal, int $comercio = 11, int $subpedido = 1001): void

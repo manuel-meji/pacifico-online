@@ -78,19 +78,26 @@ x-pending-decisions:
     estado: Pendiente de coordinación
     descripcion: >
       Los listeners registran las excepciones sin propagarlas al emisor; el
-      procesamiento no garantiza un reintento durable. La recuperación manual
+      procesamiento no garantiza un reintento durable. La recuperación diaria
+      procesa el día anterior para todos los comercios; requiere que Laravel
+      Scheduler esté ejecutándose, usa la zona horaria configurada en la
+      aplicación y registra los errores. Si una ejecución
+      falla o no se ejecuta, los períodos afectados requieren recuperación
+      manual; el día siguiente no los reintenta automáticamente. La recuperación
       requiere las tablas M7, la migración de registros financieros M6, las
       cuentas activas y la venta previa del subpedido. Antes de aplicar la
       migración en Supabase debe coordinarse con el responsable de la base.
       Ejecutar php artisan m7:recuperar-eventos-m6 AAAA-MM-DD AAAA-MM-DD
-      --comercio=ID; el comando informa los errores y devuelve fallo si
-      alguna operación no pudo procesarse.
+      para todos los comercios, opcionalmente con --comercio=ID. Sin fechas
+      procesa el día anterior. El comando informa los errores y devuelve fallo
+      si alguna operación no pudo procesarse.
   consulta_pago_multicomercio:
     estado: Pendiente de coordinación
     descripcion: >
-      La consulta actual de registro por pago indica si existe algún asiento
-      registrado con ese id_pago; no garantiza que estén contabilizados todos
-      los subpedidos de un pago que involucra varios comercios.
+      La consulta conserva registrado para cualquier asiento del pago y añade
+      subpedidos_registrados con los cobros registrados. M6 compara la lista con
+      las facturas emitidas; eso no demuestra que se hayan emitido todas las
+      facturas esperadas para el pedido.
 
 x-eventos-consumidos:
   PedidoConfirmado:
@@ -400,7 +407,8 @@ paths:
         Ruta web que no declara autenticación ni control de comercio. La consulta
         no filtra por comercio: riesgo pendiente de revisión; no se recomienda
         su exposición sin autorización. Identificadores no positivos o sin asiento
-        devuelven registrado=false. No demuestra que se genere el asiento del pago.
+        devuelven registrado=false. La lista subpedidos_registrados solo contiene
+        subpedidos con asiento COBRO registrado para el pago.
       security: []
       parameters:
         - name: idPago
@@ -420,6 +428,9 @@ paths:
                   registrado: { type: boolean }
                   asiento_id: { type: integer, nullable: true }
                   fecha_registro: { type: string, nullable: true }
+                  subpedidos_registrados:
+                    type: array
+                    items: { type: integer, format: int64 }
         '500':
           description: Error del servidor; su formato depende de si la solicitud espera JSON.
 
@@ -749,6 +760,9 @@ components:
         registrado: { type: boolean }
         asiento_id: { type: integer, format: int64, nullable: true }
         fecha_registro: { type: string, format: date-time, nullable: true }
+        subpedidos_registrados:
+          type: array
+          items: { type: integer, format: int64 }
     ResumenFinanciero:
       type: object
       required: [id_comercio, fecha_inicio, fecha_fin, ingresos, costos, gastos, utilidad]

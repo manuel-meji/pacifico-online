@@ -25,9 +25,9 @@ final class RecuperarEventosM6Service
     /**
      * @return array{facturas:int, reembolsos:int, errores:list<string>}
      */
-    public function recuperar(string $desde, string $hasta, int $comercioId): array
+    public function recuperar(string $desde, string $hasta, ?int $comercioId = null): array
     {
-        if ($comercioId <= 0 || ! $this->fechaValida($desde) || ! $this->fechaValida($hasta) || $desde > $hasta) {
+        if (($comercioId !== null && $comercioId <= 0) || ! $this->fechaValida($desde) || ! $this->fechaValida($hasta) || $desde > $hasta) {
             throw new InvalidArgumentException('Indique un comercio válido y un período válido en formato AAAA-MM-DD.');
         }
 
@@ -49,18 +49,7 @@ final class RecuperarEventosM6Service
             foreach ($reembolsos as $datos) {
                 try {
                     $reembolso = $this->reembolso($datos, $comercioId);
-                    $referencia = "factura:{$reembolso->idPago}:{$reembolso->idSubpedido}";
-                    if (! DB::table('registros_financieros_m6')->where('referencia', $referencia)->exists()) {
-                        $historicas = $this->consulta->listarFacturasGeneradas('1900-01-01', Carbon::parse($reembolso->fecha)->toDateString(), $comercioId);
-                        $coincidentes = array_values(array_filter($historicas, fn (array $factura): bool => ($factura['id_pago'] ?? null) === $reembolso->idPago
-                            && ($factura['id_subpedido'] ?? null) === $reembolso->idSubpedido
-                            && ($factura['id_comercio'] ?? null) === $comercioId));
-                        if (count($coincidentes) !== 1) {
-                            throw new LogicException('No se encontró una factura única para el reembolso.');
-                        }
-                        $this->integracion->procesarFactura($this->factura($coincidentes[0], $comercioId));
-                    }
-                    $this->integracion->procesarReembolso($reembolso);
+                    $this->procesarReembolso($reembolso);
                     $resultado['reembolsos']++;
                 } catch (Throwable $error) {
                     $resultado['errores'][] = 'Reembolso '.($datos['id_reembolso'] ?? 'desconocido').': '.$error->getMessage();
@@ -71,6 +60,26 @@ final class RecuperarEventosM6Service
         });
     }
 
+    public function procesarReembolso(ReembolsoProcesado $reembolso): void
+    {
+        if ($reembolso->idPago === null || $reembolso->idPago <= 0 || $reembolso->idSubpedido <= 0 || $reembolso->idComercio <= 0 || trim($reembolso->fecha) === '') {
+            throw new InvalidArgumentException('El reembolso no contiene los datos necesarios para buscar la factura.');
+        }
+
+        $referencia = "factura:{$reembolso->idPago}:{$reembolso->idSubpedido}";
+        if (! DB::table('registros_financieros_m6')->where('referencia', $referencia)->exists()) {
+            $historicas = $this->consulta->listarFacturasGeneradas('1900-01-01', Carbon::parse($reembolso->fecha)->toDateString(), $reembolso->idComercio);
+            $coincidentes = array_values(array_filter($historicas, fn (array $factura): bool => ($factura['id_pago'] ?? null) === $reembolso->idPago
+                && ($factura['id_subpedido'] ?? null) === $reembolso->idSubpedido
+                && ($factura['id_comercio'] ?? null) === $reembolso->idComercio));
+            if (count($coincidentes) !== 1) {
+                throw new LogicException('No se encontró una factura única para el reembolso.');
+            }
+            $this->integracion->procesarFactura($this->factura($coincidentes[0], $reembolso->idComercio));
+        }
+        $this->integracion->procesarReembolso($reembolso);
+    }
+
     private function fechaValida(string $fecha): bool
     {
         $fechaParseada = \DateTimeImmutable::createFromFormat('!Y-m-d', $fecha);
@@ -78,7 +87,7 @@ final class RecuperarEventosM6Service
         return $fechaParseada !== false && $fechaParseada->format('Y-m-d') === $fecha;
     }
 
-    private function factura(array $datos, int $comercioId): FacturaGenerada
+    private function factura(array $datos, ?int $comercioId): FacturaGenerada
     {
         $this->exigirCampos($datos, ['id_evento', 'id_factura', 'id_pedido', 'id_subpedido', 'id_comercio', 'monto', 'xml', 'fecha', 'id_pago', 'subtotal', 'impuesto', 'envio'], $comercioId);
 
@@ -89,7 +98,7 @@ final class RecuperarEventosM6Service
         );
     }
 
-    private function reembolso(array $datos, int $comercioId): ReembolsoProcesado
+    private function reembolso(array $datos, ?int $comercioId): ReembolsoProcesado
     {
         $this->exigirCampos($datos, ['id_evento', 'id_pedido', 'id_subpedido', 'id_comercio', 'id_reembolso', 'monto', 'nota_credito_id', 'fecha', 'id_pago'], $comercioId);
 
@@ -100,14 +109,17 @@ final class RecuperarEventosM6Service
     }
 
     /** @param list<string> $campos */
-    private function exigirCampos(array $datos, array $campos, int $comercioId): void
+    private function exigirCampos(array $datos, array $campos, ?int $comercioId): void
     {
         foreach ($campos as $campo) {
             if (! array_key_exists($campo, $datos)) {
                 throw new InvalidArgumentException("Falta el campo {$campo} en el evento de M6.");
             }
         }
-        if ($datos['id_comercio'] !== $comercioId) {
+        if (! is_int($datos['id_comercio']) || $datos['id_comercio'] <= 0) {
+            throw new InvalidArgumentException('El evento de M6 no contiene un comercio válido.');
+        }
+        if ($comercioId !== null && $datos['id_comercio'] !== $comercioId) {
             throw new LogicException('El evento de M6 pertenece a otro comercio.');
         }
     }

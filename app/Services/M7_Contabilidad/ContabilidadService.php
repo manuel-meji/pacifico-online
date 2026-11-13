@@ -31,6 +31,7 @@ class ContabilidadService implements ContabilidadServiceInterface
                 'registrado' => false,
                 'asiento_id' => null,
                 'fecha_registro' => null,
+                'subpedidos_registrados' => [],
             ];
         }
 
@@ -41,6 +42,17 @@ class ContabilidadService implements ContabilidadServiceInterface
             ->orderByDesc('id_asiento')
             ->first();
 
+        $subpedidos = DB::table('asientos_contables')
+            ->where('id_pago', $idPago)
+            ->where('tipo', 'COBRO')
+            ->where('estado', 'REGISTRADO')
+            ->whereNotNull('id_subpedido')
+            ->distinct()
+            ->orderBy('id_subpedido')
+            ->pluck('id_subpedido')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
         return [
             'id_pago' => $idPago,
             'registrado' => $asiento !== null,
@@ -48,6 +60,7 @@ class ContabilidadService implements ContabilidadServiceInterface
                 ? (int) $asiento->id_asiento
                 : null,
             'fecha_registro' => $asiento?->fecha,
+            'subpedidos_registrados' => $subpedidos,
         ];
     }
 }

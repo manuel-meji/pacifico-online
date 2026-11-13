@@ -16,6 +16,7 @@ use App\Listeners\M7_Contabilidad\ProcesarReembolsoProcesadoListener;
 use App\Listeners\M7_Contabilidad\ProcesarSubpedidoDespachadoListener;
 use App\Services\M7_Contabilidad\Gateways\M2ComerciosGateway;
 use App\Services\M7_Contabilidad\Gateways\M4CostosProductosVendidosGateway;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -52,5 +53,9 @@ final class M7ContabilidadServiceProvider extends ServiceProvider
 
         Event::listen(FacturaGenerada::class, ProcesarFacturaGeneradaListener::class);
         Event::listen(ReembolsoProcesado::class, ProcesarReembolsoProcesadoListener::class);
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $programa): void {
+            $programa->command('m7:recuperar-eventos-m6')->daily()->withoutOverlapping();
+        });
     }
 }

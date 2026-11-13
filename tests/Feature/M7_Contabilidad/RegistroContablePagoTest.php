@@ -31,6 +31,7 @@ class RegistroContablePagoTest extends TestCase
             $tabla->id('id_asiento');
             $tabla->unsignedBigInteger('id_comercio');
             $tabla->unsignedBigInteger('id_pago')->nullable();
+            $tabla->unsignedBigInteger('id_subpedido')->nullable();
             $tabla->uuid('evento_id');
             $tabla->string('tipo_evento');
             $tabla->string('tipo');
@@ -72,5 +73,30 @@ class RegistroContablePagoTest extends TestCase
         $this->assertSame(999, $resultado['id_pago']);
         $this->assertNull($resultado['asiento_id']);
         $this->assertNull($resultado['fecha_registro']);
+        $this->assertSame([], $resultado['subpedidos_registrados']);
+    }
+
+    public function test_solo_incluye_subpedidos_con_cobro_registrado_del_pago(): void
+    {
+        foreach ([
+            [50, 1002, 'COBRO', 'REGISTRADO'],
+            [50, 1001, 'COBRO', 'REGISTRADO'],
+            [50, 1001, 'COBRO', 'REGISTRADO'],
+            [50, 1003, 'COBRO', 'ANULADO'],
+            [50, 1004, 'REEMBOLSO', 'REGISTRADO'],
+            [51, 1005, 'COBRO', 'REGISTRADO'],
+        ] as [$pago, $subpedido, $tipo, $estado]) {
+            DB::table('asientos_contables')->insert([
+                'id_comercio' => 1, 'id_pago' => $pago, 'id_subpedido' => $subpedido,
+                'evento_id' => (string) Str::uuid(), 'tipo_evento' => 'PRUEBA', 'tipo' => $tipo,
+                'fecha' => '2026-11-10 12:00:00', 'estado' => $estado, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $resultado = app(ContabilidadServiceInterface::class)->consultarRegistroContablePago(50);
+
+        $this->assertTrue($resultado['registrado']);
+        $this->assertSame([1001, 1002], $resultado['subpedidos_registrados']);
+        $this->assertSame([], app(ContabilidadServiceInterface::class)->consultarRegistroContablePago(0)['subpedidos_registrados']);
     }
 }

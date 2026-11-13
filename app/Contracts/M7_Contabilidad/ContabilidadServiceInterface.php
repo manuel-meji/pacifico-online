@@ -21,7 +21,8 @@ interface ContabilidadServiceInterface
      *     id_pago:int,
      *     registrado:bool,
      *     asiento_id:?int,
-     *     fecha_registro:?string
+     *     fecha_registro:?string,
+     *     subpedidos_registrados?:list<int>
      * }
      */
     public function consultarRegistroContablePago(int $idPago): array;
