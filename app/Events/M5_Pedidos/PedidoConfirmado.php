@@ -41,7 +41,7 @@ class PedidoConfirmado
             $pedido->loadMissing('subpedidos.lineas');
             $this->id_pedido = (int) $pedido->id_pedido;
             $this->id_cliente = (int) $pedido->id_cliente;
-            $this->monto_total = (float) $pedido->monto_total;
+            $this->monto_total = round((float) $pedido->monto_total, 2);
 
             $primerSub = $pedido->subpedidos->first();
             $this->id_comercio = $primerSub ? (int) $primerSub->id_comercio : 1;
@@ -55,9 +55,9 @@ class PedidoConfirmado
                 return [
                     'id_subpedido' => (int) $sub->id_subpedido,
                     'id_comercio' => (int) $sub->id_comercio,
-                    'subtotal' => (float) $sub->subtotal,
-                    'costo_envio' => (float) ($sub->costo_envio ?? 0.0),
-                    'impuesto' => (float) ($sub->impuesto ?? 0.0),
+                    'subtotal' => round((float) $sub->subtotal, 2),
+                    'costo_envio' => round((float) ($sub->costo_envio ?? 0.0), 2),
+                    'impuesto' => round((float) ($sub->impuesto ?? 0.0), 2),
                     'reservas' => $subReservas,
                 ];
             })->values()->all();
@@ -68,11 +68,16 @@ class PedidoConfirmado
             }
         } else {
             $this->id_pedido = (int) $pedido;
-            $this->monto_total = (float) ($montoTotal ?? 0.0);
-            $modelo = PedidoMaestro::with('subpedidos.lineas')->find($this->id_pedido);
+            $this->monto_total = round((float) ($montoTotal ?? 0.0), 2);
+            $modelo = PedidoMaestro::withoutGlobalScope('cliente')
+                ->with(['subpedidos' => fn ($q) => $q->withoutGlobalScope('comercio')->with('lineas')])
+                ->find($this->id_pedido);
 
             if ($modelo) {
                 $this->id_cliente = (int) $modelo->id_cliente;
+                if ($montoTotal === null) {
+                    $this->monto_total = round((float) $modelo->monto_total, 2);
+                }
                 $primerSub = $modelo->subpedidos->first();
                 $this->id_comercio = $primerSub ? (int) $primerSub->id_comercio : 1;
                 $this->id_subpedido = $primerSub ? (int) $primerSub->id_subpedido : 1;
@@ -85,9 +90,9 @@ class PedidoConfirmado
                     return [
                         'id_subpedido' => (int) $sub->id_subpedido,
                         'id_comercio' => (int) $sub->id_comercio,
-                        'subtotal' => (float) $sub->subtotal,
-                        'costo_envio' => (float) ($sub->costo_envio ?? 0.0),
-                        'impuesto' => (float) ($sub->impuesto ?? 0.0),
+                        'subtotal' => round((float) $sub->subtotal, 2),
+                        'costo_envio' => round((float) ($sub->costo_envio ?? 0.0), 2),
+                        'impuesto' => round((float) ($sub->impuesto ?? 0.0), 2),
                         'reservas' => $subReservas,
                     ];
                 })->values()->all();

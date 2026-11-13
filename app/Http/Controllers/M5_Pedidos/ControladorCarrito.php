@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Models\M1_Portal\DireccionCliente;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
+use App\Services\M4_Inventario\InventarioService;
 use App\Services\M5_Pedidos\PedidosService;
 use App\Services\Nucleo\ContextoCliente;
 use Illuminate\Http\JsonResponse;
@@ -92,7 +93,7 @@ class ControladorCarrito extends Controller
 
         // 3. Verificar existencias en M4_Inventario (Contrato M4 v1.1.0)
         $comercioId = $this->resolverIdComercioVariacion($datosVariacion);
-        $ubicacionId = (int) ($datosVariacion['id_ubicacion'] ?? 1);
+        $ubicacionId = isset($datosVariacion['id_ubicacion']) ? (int) $datosVariacion['id_ubicacion'] : null;
 
         $stockDisponible = $this->consultarStockVariacion($comercioId, $idVariacion, $ubicacionId);
 
@@ -161,15 +162,17 @@ class ControladorCarrito extends Controller
 
         // Verificar disponibilidad en M4
         $comercioId = 1;
+        $ubicacionId = null;
         if ($this->m3Catalogo) {
             try {
                 $variacion = $this->m3Catalogo->obtenerVariacion((int) $item->id_variacion);
                 $comercioId = $this->resolverIdComercioVariacion($variacion);
+                $ubicacionId = isset($variacion['id_ubicacion']) ? (int) $variacion['id_ubicacion'] : null;
             } catch (\Throwable) {
             }
         }
 
-        $stock = $this->consultarStockVariacion($comercioId, (int) $item->id_variacion, 1);
+        $stock = $this->consultarStockVariacion($comercioId, (int) $item->id_variacion, $ubicacionId);
         if ($stock >= 0 && $this->m4Inventario && $stock < $nuevaCantidad) {
             return $this->errorRespuesta(
                 'ERR-M5-001',
@@ -439,16 +442,21 @@ class ControladorCarrito extends Controller
         return (int) ($variacion['id_comercio'] ?? $variacion['producto']['id_comercio'] ?? 1);
     }
 
-    private function consultarStockVariacion(int $comercioId, int $idVariacion, int $ubicacionId = 1): int
+    private function consultarStockVariacion(int $comercioId, int $idVariacion, ?int $ubicacionId = null): int
     {
         if (! $this->m4Inventario) {
             return 100;
         }
 
         if (method_exists($this->m4Inventario, 'consultarStockDisponible')) {
-            $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionId);
+            try {
+                $ubicacionConsulta = $ubicacionId ?? ($this->m4Inventario instanceof InventarioService ? null : 1);
+                $resStock = $this->m4Inventario->consultarStockDisponible($comercioId, $idVariacion, $ubicacionConsulta);
 
-            return is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
+                return is_array($resStock) ? (int) ($resStock['cantidad_disponible'] ?? 0) : (int) $resStock;
+            } catch (\Throwable) {
+                return 0;
+            }
         }
 
         if (method_exists($this->m4Inventario, 'consultarExistencias')) {
