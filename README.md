@@ -228,9 +228,68 @@ Ejecuta los siguientes comandos en orden dentro de tu terminal:
 
 ---
 
+## 7. Correos de prueba (invitaciones)
+
+Al aprobar un comercio, el Núcleo envía al Encargado del comercio un correo con el botón **"Definir contraseña"**. Ese correo **sale en cola** (`QUEUE_CONNECTION=database`, tabla `trabajos_cola`), por lo que no se envía ni se registra hasta que el trabajo se procesa.
+
+### 7.1 Procesar el envío
+
+Elige una de las dos opciones en tu `.env` propio:
+
+- **`QUEUE_CONNECTION=sync` (recomendada para probar):** el correo se envía en el momento, sin worker. Solo aplica a las invitaciones generadas después del cambio; las que ya estaban en cola siguen pendientes. Con `sync` también se ejecutan en el momento los demás trabajos que genere tu máquina, como los eventos entre módulos; si alguno falla, la acción que lo generó muestra el error.
+- **`php artisan queue:work`:** procesa los trabajos pendientes de la cola. Si cambias el `.env`, reinicia el worker para que tome los valores nuevos.
+
+> **Advertencia: la cola está en la base de datos compartida.**  
+> El worker no distingue módulos ni máquinas: procesa también los trabajos encolados por los otros subgrupos y los envía con el `.env` de la máquina donde corre (su `MAIL_MAILER`, sus credenciales y su `FRONTEND_URL`). Una invitación generada por otra persona puede terminar en tu log o en tu bandeja de Mailtrap, y no en la suya. Coordina con el grupo antes de correr `queue:work`.
+
+### 7.2 Por defecto: el correo queda en el log
+
+Con `MAIL_MAILER=log` (valor de `.env.example`) no se envía nada: el correo completo se escribe en `storage/logs/laravel.log`. Para obtener el enlace de "Definir contraseña" de la última invitación:
+
+```powershell
+# Windows PowerShell
+Select-String -Path storage\logs\laravel.log -Pattern "^Definir contrase[^ ]+: http" | Select-Object -Last 1 | ForEach-Object { $_.Line }
+```
+
+```bash
+# Git Bash / Linux / macOS
+grep -E "^Definir contrase[^ ]+: http" storage/logs/laravel.log | tail -n 1
+```
+
+El resultado es una sola línea, lista para copiar en el navegador:
+
+```text
+Definir contraseña: http://localhost:5173/app.html?pantalla=crear-contrasena&token=...&correo=encargado%40ejemplo.com
+```
+
+El correo se registra en dos versiones, texto y HTML, y el enlace aparece cuatro veces. El comando toma la línea de la versión de texto. Si buscas a mano, no copies el enlace de la versión HTML: ahí los `&` están escritos como `&amp;` y el enlace no funciona al pegarlo.
+
+### 7.3 Recibirlo en una bandeja de prueba (Mailtrap)
+
+1. Crea una cuenta gratuita en [Mailtrap](https://mailtrap.io) y abre una bandeja en **Sandboxes**.
+2. En la pestaña **Integration** de esa bandeja, elige **SMTP** y copia sus datos en tu `.env` propio. El host y el puerto de abajo son un ejemplo; usa los que muestre tu bandeja:
+
+   ```dotenv
+   MAIL_MAILER=smtp
+   MAIL_HOST=sandbox.smtp.mailtrap.io
+   MAIL_PORT=2525
+   MAIL_USERNAME=<usuario-de-la-bandeja>
+   MAIL_PASSWORD=<contraseña-de-la-bandeja>
+   ```
+
+3. Ejecuta `php artisan config:clear` y genera una invitación nueva. El correo llega a la bandeja de Mailtrap, no al destinatario real.
+
+El equipo puede usar una sola bandeja compartida: quien la crea pasa las credenciales por privado al resto.
+
+> **No subas credenciales al repositorio.** Van únicamente en tu `.env`, que está fuera del control de versiones. `.env.example` debe conservar `MAIL_MAILER=log` y los valores de ejemplo.
+
+### 7.4 A dónde apunta el enlace
+
+El enlace del correo se arma con `FRONTEND_URL` (por defecto `http://localhost:5173`): `<FRONTEND_URL>/app.html?pantalla=crear-contrasena&token=...&correo=...`. Si el portal corre en otra dirección o puerto, ajusta `FRONTEND_URL` en tu `.env` antes de generar la invitación; el valor que cuenta es el de la máquina que procesa el envío.
+
 ---
 
-## 7. Ejecución de Pruebas Automatizadas
+## 8. Ejecución de Pruebas Automatizadas
 
 Para validar las pruebas unitarias y de integración de los módulos:
 
@@ -247,7 +306,7 @@ php artisan test --filter=Contracts
 
 ---
 
-## 8. Calendario de Hitos y Puntos de Control
+## 9. Calendario de Hitos y Puntos de Control
 
 - **PC1 (Semana 04 - 03 SET):** Visión de la plataforma y ficha del módulo (Fase de Inicio).
 - **PC2 (Semana 06 - 17 SET):** Requerimientos del módulo y modelo canónico (Fase de Elaboración 1).
