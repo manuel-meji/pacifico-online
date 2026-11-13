@@ -33,11 +33,29 @@ class DespachoAsientosAceptacionTest extends TestCase
 
     private const EVENTO_DESPACHO = '33333333-3333-4333-8333-bbbbbbbbbbbb';
 
+    private const MIGRACIONES = [
+        'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php',
+        'database/migrations/Nucleo/2026_09_30_000002_crear_tabla_bitacora_auditoria.php',
+        'database/migrations/Nucleo/2026_09_30_000003_crear_tablas_sesiones_y_restablecimientos.php',
+        'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
+        'database/migrations/Nucleo/2026_11_02_191532_agregar_inmutabilidad_a_bitacora_auditoria.php',
+    ];
+
+    protected function migrateUsing(): array
+    {
+        return [
+            '--path' => self::MIGRACIONES,
+            '--seed' => false,
+        ];
+    }
+
     protected function migrateFreshUsing(): array
     {
         return [
-            '--path' => database_path('migrations/Nucleo'),
-            '--realpath' => true,
+            '--path' => self::MIGRACIONES,
+            '--drop-views' => false,
+            '--drop-types' => false,
+            '--seed' => false,
         ];
     }
 
@@ -104,22 +122,23 @@ class DespachoAsientosAceptacionTest extends TestCase
         // Doble de M4: costo conocido de 40.50 para el comercio 1.
         $this->app->instance(
             CostosProductosVendidosGatewayInterface::class,
-            new class implements CostosProductosVendidosGatewayInterface
+            new class implements CostosProductosVendidosGatewayInterface {
+            public function obtenerCostosProductosVendidos(int $subpedidoId): array
             {
-                public function obtenerCostosProductosVendidos(int $subpedidoId): array
-                {
-                    return [
-                        'id_subpedido' => $subpedidoId,
-                        'id_comercio' => 1,
-                        'variaciones' => [[
+                return [
+                    'id_subpedido' => $subpedidoId,
+                    'id_comercio' => 1,
+                    'variaciones' => [
+                        [
                             'id_variacion' => 100,
                             'cantidad' => 2,
                             'costo_unitario' => 20.25,
                             'costo_total' => 40.50,
-                        ]],
-                        'costo_total' => 40.50,
-                    ];
-                }
+                        ]
+                    ],
+                    'costo_total' => 40.50,
+                ];
+            }
             }
         );
     }
@@ -147,7 +166,7 @@ class DespachoAsientosAceptacionTest extends TestCase
         }
     }
 
-      private function subpedidoM5(): Subpedido
+        private function subpedidoM5(): Subpedido
     {
         $subpedido = (new Subpedido)->forceFill([
             'id_subpedido' => 11,
