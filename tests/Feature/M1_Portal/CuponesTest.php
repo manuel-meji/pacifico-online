@@ -502,6 +502,39 @@ class CuponesTest extends PruebaM1
     }
 
     // ---------------------------------------------------------------
+    // Cupones globales vigentes en la portada (1.6.0, SC-13)
+    // ---------------------------------------------------------------
+
+    public function test_la_portada_lista_solo_los_globales_que_se_pueden_usar_hoy(): void
+    {
+        $this->crearGlobal(['codigo' => 'VENCEPRONTO', 'fecha_fin' => '2026-11-15T23:59:59Z', 'monto_minimo_compra' => 10000])->assertCreated();
+        $this->crearGlobal(['codigo' => 'PACIFICO10'])->assertCreated();
+        $this->crearGlobal(['codigo' => 'DICIEMBRE', 'fecha_inicio' => '2026-12-01T00:00:00Z', 'fecha_fin' => '2026-12-31T23:59:59Z'])->assertCreated();
+        $agotado = $this->crearGlobal(['codigo' => 'AGOTADO', 'limite_usos_total' => 1])->assertCreated()->json('id_cupon');
+        $desactivado = $this->crearGlobal(['codigo' => 'APAGADO'])->assertCreated()->json('id_cupon');
+        $this->crearDeLaCeiba(['codigo' => 'CEIBA10'])->assertCreated();
+
+        $this->cupon($agotado)->forceFill(['usos_actuales' => 1])->save();
+        $this->comoAdministracion()->postJson(route('api.m1.v1.administracion.cupones.desactivar', $desactivado))->assertOk();
+
+        $this->app['auth']->forgetGuards();
+        $respuesta = $this->getJson(route('api.m1.v1.cupones.vigentes'))->assertOk();
+
+        $this->assertCumpleEsquema('ListadoCuponesVigentes', $respuesta->json());
+        $this->assertSame(['VENCEPRONTO', 'PACIFICO10'], array_column($respuesta->json('cupones'), 'codigo'));
+        $respuesta->assertJsonPath('cupones.0.monto_minimo_compra', 10000)
+            ->assertJsonMissingPath('cupones.0.id_cupon')
+            ->assertJsonMissingPath('cupones.0.usos_actuales');
+    }
+
+    public function test_sin_cupones_globales_la_portada_recibe_la_lista_vacia(): void
+    {
+        $this->getJson(route('api.m1.v1.cupones.vigentes'))
+            ->assertOk()
+            ->assertExactJson(['cupones' => []]);
+    }
+
+    // ---------------------------------------------------------------
     // Ayudantes
     // ---------------------------------------------------------------
 

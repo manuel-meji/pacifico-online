@@ -194,10 +194,10 @@ export function obtenerNoticia(slug) {
   return llamar(`/noticias/${encodeURIComponent(slug)}`);
 }
 
-// GET /comercios (listarComercios). pagina >= 1, por_pagina de 1 a 50.
-// 200 → ListadoComercios · 422 ERR-005 · 503 ERR-006.
-export function listarComercios(pagina = 1, porPagina = 20) {
-  return llamar(`/comercios${consulta({ pagina, por_pagina: porPagina })}`);
+// GET /comercios (listarComercios). pagina >= 1, por_pagina de 1 a 50. Desde 1.6.0, con q (2 a 100
+// caracteres) busca por nombre comercial. 200 → ListadoComercios · 422 ERR-005 · 503 ERR-006.
+export function listarComercios(pagina = 1, porPagina = 20, q = null) {
+  return llamar(`/comercios${consulta({ q, pagina, por_pagina: porPagina })}`);
 }
 
 // GET /comercios/{id_comercio}/micrositio (obtenerMicrositio, CU-009).

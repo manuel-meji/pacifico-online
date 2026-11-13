@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { usePortal } from './PaginaPortal';
 
 export function MigasDePan({ actual }) {
@@ -45,6 +46,9 @@ const trazos = {
   dinero: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></>,
   calendario: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
   texto: <><path d="M4 6h16M4 12h16M4 18h10" /></>,
+  // Eye y EyeOff de Lucide.
+  ojo: <><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" /></>,
+  ojoTachado: <><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></>,
 };
 
 export function Icono({ nombre }) {
@@ -55,9 +59,12 @@ export function Icono({ nombre }) {
   );
 }
 
-// Campo con ícono a la izquierda y el mensaje de error debajo.
-export function CampoConIcono({ id, etiqueta, icono, error, multilinea, clase = '', ...props }) {
-  const clases = `w-full min-h-[44px] rounded-lg border bg-white py-2 pl-10 pr-3 text-base font-medium text-gray-800 focus:border-brandBlue focus:outline-none focus:ring-2 focus:ring-brandBlue/30 disabled:cursor-not-allowed disabled:bg-gray-100 ${error ? 'border-red-600' : 'border-gray-200 hover:border-gray-300'}`;
+// Campo con ícono a la izquierda y el mensaje de error debajo. Con type="password" agrega a la derecha el botón del ojo para mostrar u
+// ocultar lo escrito (ícono de Lucide, design.md).
+export function CampoConIcono({ id, etiqueta, icono, error, multilinea, clase = '', type, ...props }) {
+  const [visible, setVisible] = useState(false);
+  const esContrasena = type === 'password';
+  const clases = `w-full min-h-[44px] rounded-lg border bg-white py-2 pl-10 ${esContrasena ? 'pr-12' : 'pr-3'} text-base font-medium text-gray-800 focus:border-brandBlue focus:outline-none focus:ring-2 focus:ring-brandBlue/30 disabled:cursor-not-allowed disabled:bg-gray-100 ${error ? 'border-red-600' : 'border-gray-200 hover:border-gray-300'}`;
   const accesibilidad = { id, 'aria-invalid': !!error, 'aria-describedby': error ? `${id}-error` : undefined };
   return (
     <div className={clase}>
@@ -66,7 +73,14 @@ export function CampoConIcono({ id, etiqueta, icono, error, multilinea, clase = 
         <span className="pointer-events-none absolute left-3 top-3 text-brandGreen"><Icono nombre={icono} /></span>
         {multilinea
           ? <textarea rows={3} {...accesibilidad} {...props} className={clases} />
-          : <input {...accesibilidad} {...props} className={clases} />}
+          : <input {...accesibilidad} {...props} type={esContrasena && visible ? 'text' : type} className={clases} />}
+        {esContrasena && (
+          <button type="button" onClick={() => setVisible(!visible)} aria-pressed={visible} aria-controls={id}
+            aria-label={visible ? `Ocultar ${etiqueta.toLowerCase()}` : `Mostrar ${etiqueta.toLowerCase()}`}
+            className="absolute right-0 top-0 grid h-11 w-11 place-items-center rounded-lg text-gray-500 transition hover:text-brandBlue focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brandBlue">
+            <Icono nombre={visible ? 'ojoTachado' : 'ojo'} />
+          </button>
+        )}
       </div>
       {error && <p id={`${id}-error`} className="mt-1 text-xs text-red-600 break-words">{error}</p>}
     </div>

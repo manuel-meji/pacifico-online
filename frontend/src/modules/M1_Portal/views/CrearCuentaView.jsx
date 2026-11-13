@@ -52,17 +52,18 @@ function cuerpoRegistro(f) {
 }
 
 // Errores del servidor → errores por campo. ERR-M1-001 (409) es el correo repetido (RN-M1-14); ERR-005 (422)
-// trae `detalles` por campo, y los de la dirección vienen como `direccion.<campo>`.
+// trae `detalles` por campo, y los de la dirección vienen como `direccion.<campo>`. Al cliente se le muestra
+// solo el mensaje, sin el código de error.
 function erroresDelServidor(error) {
   if (error.codigo === 'ERR-M1-001') {
-    return { correo_electronico: `${error.mensaje} (${error.codigo})` };
+    return { correo_electronico: error.mensaje };
   }
   const errores = {};
   for (const [campo, mensaje] of Object.entries(error.detalles || {})) {
     const id = campo.replace(/^direccion\./, '');
     if (campos.some((c) => c.id === id)) errores[id] = Array.isArray(mensaje) ? mensaje[0] : mensaje;
   }
-  return Object.keys(errores).length ? errores : { general: `${error.mensaje} (${error.codigo})` };
+  return Object.keys(errores).length ? errores : { general: error.mensaje };
 }
 
 // Crear cuenta. onRegistrar(datos) llama a POST /api/m1/v1/clientes (registrarCliente) y devuelve { ok } o { ok:false, error }.
