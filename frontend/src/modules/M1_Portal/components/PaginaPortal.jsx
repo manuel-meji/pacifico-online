@@ -3,13 +3,14 @@ import EncabezadoPortal from './EncabezadoPortal';
 
 // Lo que M1App comparte con las vistas del portal: navegación, menú de categorías y persona con sesión.
 //   ir(pantalla, parametros) → cambia de pantalla y deja los parámetros en la URL
-//   cantidadCarrito → unidades del carrito de M5, o null si no hay sesión de cliente o M5 no respondió
+//   cantidadCarrito → líneas del carrito de M5, o null si no hay sesión de cliente o M5 no respondió
 export const PortalContext = createContext({ ir: () => {}, categorias: [], usuario: null, cargandoUsuario: false, cantidadCarrito: null });
 
 export const usePortal = () => useContext(PortalContext);
 
 // Marco común de inicio, búsqueda, ficha de producto y micrositio: encabezado, contenido y pie.
-export default function PaginaPortal({ terminoBusqueda = '', children }) {
+// `tipoBusqueda` deja el selector del buscador en 'productos' o 'comercios'.
+export default function PaginaPortal({ terminoBusqueda = '', tipoBusqueda = 'productos', children }) {
   const { ir, categorias, usuario, cantidadCarrito } = usePortal();
 
   return (
@@ -17,10 +18,11 @@ export default function PaginaPortal({ terminoBusqueda = '', children }) {
       <EncabezadoPortal
         categorias={categorias}
         terminoInicial={terminoBusqueda}
+        tipoInicial={tipoBusqueda}
         conSesion={!!usuario}
         cantidadCarrito={cantidadCarrito}
         onInicio={() => ir('inicio')}
-        onBuscar={(q) => ir('busqueda', { q })}
+        onBuscar={(q, tipo) => ir(tipo === 'comercios' ? 'comercios' : 'busqueda', { q })}
         onCategoria={(idCategoria) => ir('busqueda', { id_categoria: idCategoria })}
         onMiCuenta={() => ir(usuario ? 'perfil' : 'ingresar')}
         onGestion={['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol) ? () => ir('gestion') : null}

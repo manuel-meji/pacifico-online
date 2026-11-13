@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: M1 Portal público y búsqueda — Contrato del módulo
-  version: 1.5.0
+  version: 1.6.0
   description: |
     Contrato formal del módulo M1 Portal público y búsqueda de Pacíficos Online
     (IF6100, II Ciclo 2026, subgrupo SG1).
@@ -338,10 +338,26 @@ paths:
 
         Desde 1.3.0: una pagina o por_pagina que no sea un entero dentro del
         rango responde 422 con ERR-005 y el detalle por campo.
+
+        Desde 1.6.0 (SC-12): con q busca por nombre comercial, sin distinguir
+        mayúsculas ni tildes. M2 no ofrece búsqueda por nombre, así que M1
+        recorre su listado de habilitados y filtra; primero van los nombres que
+        empiezan con el término y luego el resto, en orden alfabético. total es
+        la cantidad de coincidencias. Un q de menos de 2 o más de 100
+        caracteres responde 422 con ERR-005. Sin q, igual que antes.
       x-consumidores: [Frontend del portal]
       x-dependencias: [M2.ListarComerciosHabilitados 1.1.0]
       security: []
       parameters:
+        - name: q
+          in: query
+          required: false
+          description: Nuevo en 1.6.0. Texto que debe contener el nombre comercial.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+          example: pacif
         - name: pagina
           in: query
           required: false
@@ -365,7 +381,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ListadoComercios'
         '422':
-          $ref: '#/components/responses/PaginacionInvalida'
+          description: |
+            ERR-005. Paginación fuera de rango (desde 1.3.0) o q con menos de 2
+            o más de 100 caracteres (desde 1.6.0), con el detalle por campo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '503':
           $ref: '#/components/responses/DependenciaNoDisponible'
 
@@ -1496,6 +1518,26 @@ paths:
           $ref: '#/components/responses/RecursoNoEncontrado'
         '409':
           $ref: '#/components/responses/ConflictoNoticia'
+
+  /cupones/vigentes:
+    get:
+      tags: [Cupones]
+      operationId: listarCuponesVigentes
+      summary: Cupones globales vigentes para el portal
+      description: |
+        Nuevo en 1.6.0 (SC-12). Pública. Los cupones globales de la plataforma
+        (sin comercio) que el cliente puede usar hoy: activos, dentro de su
+        vigencia y con usos disponibles. Primero los que vencen antes, hasta 12.
+        No incluye los cupones de los comercios ni los contadores de uso.
+      x-consumidores: [Frontend del portal]
+      security: []
+      responses:
+        '200':
+          description: Cupones globales vigentes; la lista puede venir vacía.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListadoCuponesVigentes'
 
   /cupones/validar:
     post:
@@ -2917,6 +2959,48 @@ components:
               subtotal:
                 type: number
                 minimum: 0
+    ListadoCuponesVigentes:
+      type: object
+      description: Nuevo en 1.6.0. Respuesta de listarCuponesVigentes.
+      required: [cupones]
+      properties:
+        cupones:
+          type: array
+          maxItems: 12
+          items:
+            $ref: '#/components/schemas/CuponPublico'
+    CuponPublico:
+      type: object
+      description: |
+        Nuevo en 1.6.0. Datos de un cupón global que el portal muestra al
+        público. Sin identificadores internos ni contadores de uso.
+      required: [codigo, descripcion, tipo_descuento, valor, monto_minimo_compra, fecha_fin, limite_usos_por_cliente]
+      properties:
+        codigo:
+          type: string
+          example: PACIFICO10
+        descripcion:
+          type: string
+          nullable: true
+          example: 10 % de descuento en toda la plataforma
+        tipo_descuento:
+          type: string
+          enum: [porcentaje, monto_fijo]
+        valor:
+          type: number
+          description: Porcentaje (1 a 100) o monto en colones, según tipo_descuento.
+          example: 10
+        monto_minimo_compra:
+          type: number
+          nullable: true
+          example: 10000
+        fecha_fin:
+          type: string
+          format: date-time
+        limite_usos_por_cliente:
+          type: integer
+          nullable: true
+          example: 1
     ResultadoCupon:
       type: object
       description: |
@@ -3412,3 +3496,14 @@ x-historial-versiones:
       ComercialPortalContract, que fuera de M1 solo implementa el doble
       tests/Doubles/M1/ComercialPortalFake.php, ya actualizado. Por eso se
       publica como versión menor.
+  - version: 1.6.0
+    cambios:
+      - listarComercios (GET /comercios) acepta el parámetro opcional q para buscar comercios por nombre comercial, sin distinguir mayúsculas ni tildes. M1 filtra el listado de M2, que no busca por nombre.
+      - Ruta pública nueva listarCuponesVigentes (GET /cupones/vigentes) con los cupones globales vigentes para la portada (esquemas ListadoCuponesVigentes y CuponPublico).
+      - PortalPublicoContract y ComercialPortalContract no cambian.
+    solicitud_de_cambio: SC-12
+    nota_de_compatibilidad: |
+      Sin q, GET /comercios responde igual que en 1.5.0. La ruta y los esquemas
+      de cupones son nuevos. Ninguna interfaz PHP cambia, así que los dobles de
+      otros módulos que las implementan (por ejemplo, el PortalStub de M5)
+      siguen funcionando. Por eso se publica como versión menor.

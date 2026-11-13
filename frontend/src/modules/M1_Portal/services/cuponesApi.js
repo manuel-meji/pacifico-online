@@ -4,6 +4,16 @@
 import { consulta, llamarM1 as llamar } from './m1Api';
 
 // ---------------------------------------------------------------------------
+// Portal público (contrato 1.6.0, SC-12).
+// ---------------------------------------------------------------------------
+
+// GET /cupones/vigentes (listarCuponesVigentes). Pública: hasta 12 cupones globales que se pueden usar hoy.
+// 200 → { cupones: CuponPublico[] }.
+export function listarCuponesVigentes() {
+  return llamar('/cupones/vigentes');
+}
+
+// ---------------------------------------------------------------------------
 // Comercio (rol encargado_comercio). El comercio sale de la sesión.
 // ---------------------------------------------------------------------------
 
