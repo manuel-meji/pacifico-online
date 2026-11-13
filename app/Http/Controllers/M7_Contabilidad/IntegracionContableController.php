@@ -20,7 +20,7 @@ final class IntegracionContableController extends Controller
     {
         $usuario = $request->user();
 
-        //La plataforma consulta sin filtro; cualquier otro rol queda limitado a su comercio.
+        // La plataforma consulta sin filtro; cualquier otro rol queda limitado a su comercio.
         if ($usuario->rol === RolUsuario::EncargadoPlataforma) {
             return response()->json($this->contabilidad->consultarRegistroContablePago($idPago));
         }

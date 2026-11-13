@@ -15,13 +15,19 @@ interface ContabilidadServiceInterface
     ): bool;
 
     /**
-     * Consulta si un pago ya tiene registro contable en M7.
+     * Consulta el cobro global de PagoConfirmado en el libro de plataforma.
+     * Los subpedidos informan distribuciones de FacturaGenerada, no otros cobros.
      *
      * @return array{
      *     id_pago:int,
      *     registrado:bool,
      *     asiento_id:?int,
-     *     fecha_registro:?string
+     *     fecha_registro:?string,
+     *     subpedidos_registrados?:list<int>,
+     *     libro?:string,
+     *     estado_cuadre?:string,
+     *     monto_cobro_centimos?:int,
+     *     monto_facturado_centimos?:?int
      * }
      */
     public function consultarRegistroContablePago(int $idPago): array;

@@ -23,7 +23,7 @@ class ContabilidadService implements ContabilidadComercioServiceInterface
         return true;
     }
 
-        public function consultarRegistroContablePago(int $idPago): array
+    public function consultarRegistroContablePago(int $idPago): array
     {
         return $this->buscarRegistroPago($idPago, null);
     }
@@ -42,24 +42,50 @@ class ContabilidadService implements ContabilidadComercioServiceInterface
                 'registrado' => false,
                 'asiento_id' => null,
                 'fecha_registro' => null,
+                'subpedidos_registrados' => [],
             ];
         }
 
+        $pago = DB::table('pagos_contables_m6 as pagos')
+            ->join('asientos_plataforma_m7 as asientos', 'asientos.id_asiento', '=', 'pagos.id_asiento_plataforma')
+            ->where('pagos.id_pago', $idPago)->where('asientos.estado', 'REGISTRADO')
+            ->select('pagos.*')->first();
         $asiento = DB::table('asientos_contables')
             ->where('id_pago', $idPago)
             ->where('estado', 'REGISTRADO')
+            ->where('tipo', 'DISTRIBUCION')
             ->when($idComercio !== null, fn ($consulta) => $consulta->where('id_comercio', $idComercio))
             ->orderByDesc('fecha')
             ->orderByDesc('id_asiento')
             ->first();
 
-        return [
+        $subpedidos = DB::table('asientos_contables')
+            ->where('id_pago', $idPago)
+            ->when($idComercio !== null, fn ($consulta) => $consulta->where('id_comercio', $idComercio))
+            ->where('tipo', 'DISTRIBUCION')
+            ->where('estado', 'REGISTRADO')
+            ->whereNotNull('id_subpedido')
+            ->distinct()
+            ->orderBy('id_subpedido')
+            ->pluck('id_subpedido')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        $resultado = [
             'id_pago' => $idPago,
-            'registrado' => $asiento !== null,
-            'asiento_id' => $asiento !== null
-                ? (int) $asiento->id_asiento
-                : null,
-            'fecha_registro' => $asiento?->fecha,
+            'registrado' => $pago !== null && ($idComercio === null || $asiento !== null),
+            'asiento_id' => $pago === null ? null : ($idComercio === null ? (int) $pago->id_asiento_plataforma : ($asiento !== null ? (int) $asiento->id_asiento : null)),
+            'fecha_registro' => $pago === null ? null : ($idComercio === null ? $pago->fecha : $asiento?->fecha),
+            'subpedidos_registrados' => $subpedidos,
+            'libro' => $idComercio === null ? 'PLATAFORMA' : 'COMERCIO',
         ];
+        if ($idComercio === null && $pago !== null) {
+            $cuadre = DB::table('cuadres_pagos_m6')->where('id_pago', $idPago)->first();
+            $resultado['estado_cuadre'] = $cuadre?->estado ?? 'PENDIENTE_EVALUACION';
+            $resultado['monto_cobro_centimos'] = (int) $pago->monto_centimos;
+            $resultado['monto_facturado_centimos'] = $cuadre?->facturado_centimos !== null ? (int) $cuadre->facturado_centimos : null;
+        }
+
+        return $resultado;
     }
 }

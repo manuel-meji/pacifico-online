@@ -39,15 +39,22 @@ final class AsientoRepository
             throw new LogicException('No se puede guardar un asiento sin partida doble.');
         }
 
-        $id = DB::table('asientos_contables')->insertGetId([
+        $datos = [
             'id_comercio' => $asiento->comercioId, 'id_pedido' => $asiento->pedidoId,
             'id_subpedido' => $asiento->subpedidoId, 'evento_id' => $asiento->eventoId,
             'tipo_evento' => $asiento->tipoEvento, 'tipo' => $asiento->tipo,
             'fecha' => $asiento->fecha, 'estado' => 'REGISTRADO',
             'created_at' => now(), 'updated_at' => now(),
-        ], 'id_asiento');
+        ];
+        if ($asiento->pagoId !== null) {
+            $datos['id_pago'] = $asiento->pagoId;
+        }
+        if ($asiento->asientoOriginalId !== null) {
+            $datos['id_asiento_original'] = $asiento->asientoOriginalId;
+        }
+        $id = DB::table('asientos_contables')->insertGetId($datos, 'id_asiento');
 
-        $guardado = new AsientoContable((int) $id, $asiento->comercioId, $asiento->pedidoId, $asiento->subpedidoId, $asiento->eventoId, $asiento->tipoEvento, $asiento->tipo, $asiento->fecha);
+        $guardado = new AsientoContable((int) $id, $asiento->comercioId, $asiento->pedidoId, $asiento->subpedidoId, $asiento->eventoId, $asiento->tipoEvento, $asiento->tipo, $asiento->fecha, $asiento->pagoId, $asiento->asientoOriginalId);
         foreach ($asiento->detalles() as $indice => $detalle) {
             DB::table('detalle_asientos')->insert([
                 'id_asiento' => $id, 'id_cuenta_contable' => $detalle->cuentaId,

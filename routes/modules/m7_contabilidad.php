@@ -1,9 +1,9 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\M7_Contabilidad\IntegracionContableController;
 use App\Http\Middleware\EstablecerComercio;
 use App\Http\Middleware\RequiereRol;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,13 +17,13 @@ use App\Http\Middleware\RequiereRol;
 Route::middleware([
     'auth:sanctum',
     EstablecerComercio::class,
-    RequiereRol::class . ':encargado_comercio,encargado_plataforma',
+    RequiereRol::class.':encargado_comercio,encargado_plataforma',
 ])->group(function (): void {
     Route::get(
         'pagos/{idPago}/registro-contable',
         [IntegracionContableController::class, 'consultarRegistroContablePago']
     )->whereNumber('idPago')
-     ->name('pagos.registro-contable');
+        ->name('pagos.registro-contable');
 });
 
 Route::get('/', function () {
