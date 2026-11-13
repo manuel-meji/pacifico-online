@@ -9,19 +9,22 @@ use App\Events\M5_Pedidos\PedidoConfirmado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Listeners\M7_Contabilidad\ProcesarPedidoConfirmadoListener;
 use App\Listeners\M7_Contabilidad\ProcesarSubpedidoDespachadoListener;
+use App\Models\M5_Pedidos\PedidoMaestro;
+use App\Models\M5_Pedidos\Subpedido;
 use App\Models\Nucleo\Usuario;
 use Database\Factories\UsuarioFactory;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use ReflectionClass;
 use Tests\TestCase;
 
 /**
- * Aceptación de M7: PedidoConfirmado + SubpedidoDespachado generan el asiento de
- * venta y el de costo de ventas, cuadrados, sin duplicarse, y consultables por
- * el libro diario. M4 se simula con un doble; M5 solo aporta las clases de evento.
+ * Aceptación de M7 (NO es una prueba end-to-end entre módulos): M4 se simula con un
+ * doble del gateway y los eventos de M5 se construyen en memoria con sus constructores
+ * reales, sin persistir pedidos ni subpedidos. Verifica la lógica de M7 sobre esos
+ * insumos. El recorrido con módulos reales (tarea 3 del diagnóstico) se valida aparte.
  */
 class DespachoAsientosAceptacionTest extends TestCase
 {
@@ -120,23 +123,24 @@ class DespachoAsientosAceptacionTest extends TestCase
         // Doble de M4: costo conocido de 40.50 para el comercio 1.
         $this->app->instance(
             CostosProductosVendidosGatewayInterface::class,
-            new class implements CostosProductosVendidosGatewayInterface {
-            public function obtenerCostosProductosVendidos(int $subpedidoId): array
+            new class implements CostosProductosVendidosGatewayInterface
             {
-                return [
-                    'id_subpedido' => $subpedidoId,
-                    'id_comercio' => 1,
-                    'variaciones' => [
-                        [
-                            'id_variacion' => 100,
-                            'cantidad' => 2,
-                            'costo_unitario' => 20.25,
-                            'costo_total' => 40.50,
-                        ]
-                    ],
-                    'costo_total' => 40.50,
-                ];
-            }
+                public function obtenerCostosProductosVendidos(int $subpedidoId): array
+                {
+                    return [
+                        'id_subpedido' => $subpedidoId,
+                        'id_comercio' => 1,
+                        'variaciones' => [
+                            [
+                                'id_variacion' => 100,
+                                'cantidad' => 2,
+                                'costo_unitario' => 20.25,
+                                'costo_total' => 40.50,
+                            ],
+                        ],
+                        'costo_total' => 40.50,
+                    ];
+                }
             }
         );
     }
@@ -164,51 +168,42 @@ class DespachoAsientosAceptacionTest extends TestCase
         }
     }
 
+    private function subpedidoM5(): Subpedido
+    {
+        $subpedido = (new Subpedido)->forceFill([
+            'id_subpedido' => 11,
+            'id_pedido' => 10,
+            'id_comercio' => 1,
+            'subtotal' => 100.25,
+            'costo_envio' => 0,
+        ]);
+        $subpedido->setRelation('lineas', collect());
+
+        return $subpedido;
+    }
+
     private function eventoPedidoConfirmado(): PedidoConfirmado
     {
-        /** @var PedidoConfirmado $evento */
-        $evento = (new ReflectionClass(PedidoConfirmado::class))->newInstanceWithoutConstructor();
+        $pedido = (new PedidoMaestro)->forceFill([
+            'id_pedido' => 10,
+            'id_cliente' => 20,
+            'monto_total' => 100.25,
+        ]);
+        $pedido->setRelation('subpedidos', collect([$this->subpedidoM5()]));
 
+        $evento = new PedidoConfirmado($pedido);
+        // El constructor genera un UUID aleatorio; se fija para poder verificarlo.
         $evento->id_evento = self::EVENTO_PEDIDO;
         $evento->fecha_evento = '2026-11-10T12:00:00Z';
-        $evento->id_pedido = 10;
-        $evento->id_cliente = 20;
-        $evento->id_comercio = 1;
-        $evento->id_subpedido = 11;
-        $evento->monto_total = 100.25;
-        $evento->reservas = [];
-        $evento->subpedidos = [
-            [
-                'id_subpedido' => 11,
-                'id_comercio' => 1,
-                'subtotal' => 100.25,
-                'costo_envio' => 0.0,
-                'impuesto' => 0.0,
-                'reservas' => [],
-            ]
-        ];
 
         return $evento;
     }
 
     private function eventoSubpedidoDespachado(): SubpedidoDespachado
     {
-        /** @var SubpedidoDespachado $evento */
-        $evento = (new ReflectionClass(SubpedidoDespachado::class))->newInstanceWithoutConstructor();
-
+        $evento = new SubpedidoDespachado($this->subpedidoM5());
         $evento->id_evento = self::EVENTO_DESPACHO;
         $evento->fecha_evento = '2026-11-10T12:00:00Z';
-        $evento->fecha = '2026-11-10T12:00:00Z';
-        $evento->fecha_despacho = '2026-11-10T12:00:00Z';
-        $evento->evento = 'SubpedidoDespachado';
-        $evento->id_subpedido = 11;
-        $evento->id_pedido = 10;
-        $evento->id_comercio = 1;
-        $evento->subtotal = 100.25;
-        $evento->costo_envio = 0.0;
-        $evento->estado_subpedido = 'despachado';
-        $evento->guia_transporte = null;
-        $evento->reservas = [];
 
         return $evento;
     }
@@ -299,9 +294,47 @@ class DespachoAsientosAceptacionTest extends TestCase
 
     public function test_sin_plan_de_cuentas_no_se_generan_asientos_ni_se_rompe_el_despacho(): void
     {
-        // Escenario del reinicio de Supabase del 10/11: sin cuentas cargadas.
+        // Escenario del reinicio de Supabase: sin cuentas cargadas.
+        Log::spy();
+
+        // Si el listener lanzara la excepción, el despacho de M5 se rompería.
         $this->recorrerPedidoYDespacho();
 
         $this->assertDatabaseCount('asientos_contables', 0);
+        $this->assertDatabaseCount('detalle_asientos', 0);
+
+        // El fallo queda registrado en el log en lugar de perderse.
+        Log::shouldHaveReceived('error')->atLeast()->once();
+
+        // La transacción se revierte: el evento no queda registrado y puede reintentarse.
+        $this->assertDatabaseCount('eventos_procesados', 0);
+    }
+
+    /**
+     * Reprocesación MANUAL: tras el fallo no queda registro durable del evento
+     * (la transacción se revierte y el listener solo escribe en el log), así que
+     * aquí se vuelve a invocar el listener a mano con el mismo evento. Demuestra que
+     * el reintento es seguro (idempotente), no que exista un reintento automático.
+     */
+    public function test_reprocesar_manualmente_el_mismo_evento_tras_cargar_el_plan_genera_los_asientos(): void
+    {
+        $this->recorrerPedidoYDespacho();
+        $this->assertDatabaseCount('asientos_contables', 0);
+        $this->assertDatabaseCount('eventos_procesados', 0);
+
+        // Se carga el plan (como la tarea 1) y se reintenta el mismo evento.
+        $this->crearPlanDeCuentas(1);
+        $this->recorrerPedidoYDespacho();
+
+        $this->assertDatabaseCount('asientos_contables', 2);
+        $this->assertDatabaseHas('eventos_procesados', [
+            'evento_id' => self::EVENTO_DESPACHO,
+            'estado' => 'PROCESADO',
+        ]);
+
+        $this->assertDatabaseHas('eventos_procesados', [
+            'evento_id' => self::EVENTO_PEDIDO,
+            'estado' => 'PROCESADO',
+        ]);
     }
 }

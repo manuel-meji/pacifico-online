@@ -8,6 +8,7 @@ use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Contracts\Nucleo\ServicioIdentidadInterface;
 use App\Enums\Nucleo\RolUsuario;
 use App\Events\M2_Comercios\ComercioAprobado;
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\M2_Comercios\Comercio;
 use App\Models\M2_Comercios\SolicitudComercio;
 use App\Services\M2_Comercios\ComerciosService;
@@ -161,6 +162,25 @@ class AprobacionSolicitudTest extends TestCase
         }
         $this->assertSame(SolicitudComercio::PENDIENTE, $solicitud->fresh()->estado);
         $this->assertSame(Comercio::PENDIENTE, $solicitud->comercio->estado);
+        Event::assertNotDispatched(ComercioAprobado::class);
+    }
+
+    public function test_correo_del_encargado_con_cuenta_existente_impide_aprobar_con_mensaje_claro(): void
+    {
+        $solicitud = $this->crearSolicitud();
+        // El correo del encargado ya tiene cuenta: el núcleo rechaza crearCuenta con este error
+        // (regla unique de ServicioIdentidad). La base de M2 no tiene la tabla usuarios.
+        $this->mock(ServicioIdentidadInterface::class)->shouldReceive('crearCuenta')->once()
+            ->andThrow(ErrorNucleoException::validacionFallida(['correo' => ['The correo has already been taken.']]));
+        $this->mock(NucleoServiceInterface::class)->shouldNotReceive('registrarAuditoria');
+        Event::fake([ComercioAprobado::class]);
+
+        $this->actingAs($this->usuario('encargado_plataforma'), 'sanctum')->postJson($this->ruta($solicitud))
+            ->assertUnprocessable()->assertJsonPath('error.codigo', 'ERR-005')
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con el correo del encargado, por lo que no se puede crear la cuenta del comercio.');
+
+        $this->assertSame(SolicitudComercio::PENDIENTE, $solicitud->fresh()->estado);
+        $this->assertSame(Comercio::PENDIENTE, $solicitud->comercio->fresh()->estado);
         Event::assertNotDispatched(ComercioAprobado::class);
     }
 

@@ -86,6 +86,8 @@ class M3CatalogoSeeder extends Seeder
                 ['id_producto' => 8, 'id_comercio' => 5, 'id_categoria' => 6, 'id_marca' => null, 'nombre' => 'Café Gourmet en Grano 500g', 'descripcion' => 'Café artesanal de altura', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
                 ['id_producto' => 9, 'id_comercio' => 5, 'id_categoria' => 6, 'id_marca' => null, 'nombre' => 'Café Gourmet Molido 340g', 'descripcion' => 'Café molido tueste medio', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
                 ['id_producto' => 10, 'id_comercio' => 5, 'id_categoria' => 5, 'id_marca' => null, 'nombre' => 'Taza Cerámica Corporativa', 'descripcion' => 'Taza térmica de cerámica', 'video_url' => null, 'destacado' => false, 'estado_producto' => 'publicado'],
+                ['id_producto' => 301, 'id_comercio' => 1, 'id_categoria' => 2, 'id_marca' => 1, 'nombre' => 'Monitor LED Full HD 24 pulgadas', 'descripcion' => 'Monitor LED Full HD para trabajo y entretenimiento', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
+                ['id_producto' => 401, 'id_comercio' => 2, 'id_categoria' => 2, 'id_marca' => null, 'nombre' => 'Laptop Lenovo IdeaPad', 'descripcion' => 'Computadora portátil para productividad y trabajo', 'video_url' => null, 'destacado' => true, 'estado_producto' => 'publicado'],
             ];
 
             foreach ($productos as $prod) {
@@ -118,6 +120,9 @@ class M3CatalogoSeeder extends Seeder
                 ['id_variacion' => 9, 'id_producto' => 8, 'id_comercio' => 5, 'sku' => 'CV-GRA-500G-MED', 'precio' => 6500.00, 'tarifa_impuesto' => 1.00, 'disponible' => true],
                 ['id_variacion' => 10, 'id_producto' => 9, 'id_comercio' => 5, 'sku' => 'CV-MOL-340G-MED', 'precio' => 4200.00, 'tarifa_impuesto' => 1.00, 'disponible' => true],
                 ['id_variacion' => 11, 'id_producto' => 10, 'id_comercio' => 5, 'sku' => 'CV-TAZ-CER-BLA', 'precio' => 3333.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 501, 'id_producto' => 301, 'id_comercio' => 1, 'sku' => 'SDM-MON-FHD-24', 'precio' => 9500.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 502, 'id_producto' => 301, 'id_comercio' => 1, 'sku' => 'SDM-MON-FHD-24-PRO', 'precio' => 10000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
+                ['id_variacion' => 601, 'id_producto' => 401, 'id_comercio' => 2, 'sku' => 'TE-LEN-IDP-01', 'precio' => 25000.00, 'tarifa_impuesto' => 13.00, 'disponible' => true],
             ];
 
             foreach ($variaciones as $v) {
@@ -192,5 +197,20 @@ class M3CatalogoSeeder extends Seeder
                 );
             }
         });
+
+        // 8. Sincronizar las secuencias de PostgreSQL
+        DB::statement("
+            SELECT setval(
+                pg_get_serial_sequence('productos', 'id_producto'),
+                (SELECT MAX(id_producto) FROM productos)
+            )
+        ");
+
+        DB::statement("
+            SELECT setval(
+                pg_get_serial_sequence('producto_variaciones', 'id_variacion'),
+                (SELECT MAX(id_variacion) FROM producto_variaciones)
+            )
+        ");
     }
 }

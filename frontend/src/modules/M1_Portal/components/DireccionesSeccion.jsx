@@ -11,7 +11,7 @@ function erroresDelServidor(error) {
   for (const [campo, mensaje] of Object.entries(error.detalles || {})) {
     errores[campo] = Array.isArray(mensaje) ? mensaje[0] : mensaje;
   }
-  return Object.keys(errores).length ? errores : { general: `${error.mensaje} (${error.codigo})` };
+  return Object.keys(errores).length ? errores : { general: error.mensaje };
 }
 
 const enTexto = (d) => `${d.otras_senas}, ${d.distrito}, ${d.canton}, ${d.provincia}`;
@@ -134,8 +134,8 @@ export default function DireccionesSeccion({ idCliente }) {
       <h2 id="titulo-direcciones" className="text-base font-bold text-gray-800">Direcciones de envío</h2>
 
       {carga.estado === 'cargando' && <p role="status" className="text-sm text-gray-600">Cargando direcciones…</p>}
-      {carga.estado === 'error' && <Aviso>{`${carga.error.mensaje} (${carga.error.codigo})`}</Aviso>}
-      {carga.error && carga.estado === 'listo' && <Aviso>{`${carga.error.mensaje} (${carga.error.codigo})`}</Aviso>}
+      {carga.estado === 'error' && <Aviso>{carga.error.mensaje}</Aviso>}
+      {carga.error && carga.estado === 'listo' && <Aviso>{carga.error.mensaje}</Aviso>}
       {aviso && <Aviso tipo="exito">{aviso}</Aviso>}
 
       {carga.estado === 'listo' && (

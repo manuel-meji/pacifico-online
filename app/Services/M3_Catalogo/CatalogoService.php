@@ -118,10 +118,10 @@ class CatalogoService implements CatalogoConsultasInterface, CatalogoServiceInte
             $consulta->where('destacado', $f['destacado']);
         }
         if ($f['q'] !== null) {
-            $patron = '%'.addcslashes(mb_strtolower($f['q']), '%_\\').'%';
+            $patron = '%'.strtr(mb_strtolower($f['q']), ['!' => '!!', '%' => '!%', '_' => '!_']).'%';
             $consulta->where(function (Builder $q) use ($patron): void {
-                $q->whereRaw("LOWER(nombre) LIKE ? ESCAPE '\\'", [$patron])
-                    ->orWhereRaw("LOWER(COALESCE(descripcion, '')) LIKE ? ESCAPE '\\'", [$patron]);
+                $q->whereRaw("LOWER(nombre) LIKE ? ESCAPE '!'", [$patron])
+                    ->orWhereRaw("LOWER(COALESCE(descripcion, '')) LIKE ? ESCAPE '!'", [$patron]);
             });
         }
         if ($f['precio_minimo'] !== null || $f['precio_maximo'] !== null) {

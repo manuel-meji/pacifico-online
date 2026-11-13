@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
  * Cupones de descuento (contrato M1 1.5.0, SC-11). Capa delgada: llama a
  * CuponesService, que valida los datos.
  *
+ * - Portal (público, 1.6.0): lista los cupones globales vigentes.
  * - Checkout (cliente con sesión): valida un cupón y responde cuánto
  *   descuenta. El cliente sale de la sesión (EstablecerCliente).
  * - Comercio (encargado_comercio): crea, lista y desactiva los suyos. El
@@ -28,6 +29,15 @@ class CuponesController extends Controller
         private CuponesService $cupones,
         private AccesoCliente $acceso,
     ) {}
+
+    /**
+     * GET /api/m1/v1/cupones/vigentes (listarCuponesVigentes, 1.6.0). Pública:
+     * cupones globales que el cliente puede usar hoy.
+     */
+    public function vigentes(): JsonResponse
+    {
+        return response()->json(['cupones' => $this->cupones->listarGlobalesVigentes()]);
+    }
 
     /**
      * POST /api/m1/v1/cupones/validar (validarCupon). 200 ResultadoCupon,
