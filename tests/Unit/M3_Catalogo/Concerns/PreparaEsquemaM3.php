@@ -39,7 +39,7 @@ trait PreparaEsquemaM3
             CONSTRAINT ck_productos_estado CHECK (estado_producto IN ('borrador', 'publicado', 'desactivado'))
         )");
 
-        DB::statement("CREATE TABLE producto_variaciones (
+        DB::statement('CREATE TABLE producto_variaciones (
             id_variacion INTEGER PRIMARY KEY AUTOINCREMENT,
             id_producto INTEGER NOT NULL,
             id_comercio INTEGER NOT NULL,
@@ -49,6 +49,8 @@ trait PreparaEsquemaM3
             codigo_barras VARCHAR(14) NULL,
             codigo_fabricante VARCHAR(100) NULL,
             disponible BOOLEAN NOT NULL DEFAULT 1,
+            fecha_ultimo_evento DATETIME NULL,
+            id_ultimo_evento VARCHAR(36) NULL,
             created_at DATETIME NULL,
             updated_at DATETIME NULL,
             CONSTRAINT fk_variaciones_producto_comercio FOREIGN KEY (id_producto, id_comercio)
@@ -56,7 +58,7 @@ trait PreparaEsquemaM3
             CONSTRAINT uq_variaciones_comercio_sku UNIQUE (id_comercio, sku),
             CONSTRAINT ck_variaciones_precio CHECK (precio >= 0),
             CONSTRAINT ck_variaciones_tarifa CHECK (tarifa_impuesto >= 0 AND tarifa_impuesto <= 100)
-        )");
+        )');
     }
 
     /** Ejecuta sin el filtro de aislamiento del nucleo, para preparar o revisar datos de varios comercios. */
