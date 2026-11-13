@@ -38,6 +38,8 @@ class SubpedidoDespachado
 
     public float $subtotal;
 
+    public float $impuesto = 0.0;
+
     public float $costo_envio;
 
     public string $estado_subpedido;
@@ -61,8 +63,9 @@ class SubpedidoDespachado
             $this->id_subpedido = (int) $subpedido->id_subpedido;
             $this->id_pedido = (int) $subpedido->id_pedido;
             $this->id_comercio = (int) $subpedido->id_comercio;
-            $this->subtotal = (float) $subpedido->subtotal;
-            $this->costo_envio = (float) ($subpedido->costo_envio ?? 0.0);
+            $this->subtotal = round((float) $subpedido->subtotal, 2);
+            $this->impuesto = round((float) ($subpedido->impuesto ?? 0.0), 2);
+            $this->costo_envio = round((float) ($subpedido->costo_envio ?? 0.0), 2);
             $this->guia_transporte = $guia ?? $subpedido->guia_seguimiento;
 
             $reservas = $subpedido->lineas->pluck('id_reserva')->filter()->values()->all();
@@ -72,7 +75,7 @@ class SubpedidoDespachado
             $modelo = null;
             try {
                 if (Schema::hasTable('pedidos_subpedidos')) {
-                    $modelo = Subpedido::with('lineas')->find($this->id_subpedido);
+                    $modelo = Subpedido::withoutGlobalScope('comercio')->with('lineas')->find($this->id_subpedido);
                 }
             } catch (\Throwable) {
                 $modelo = null;
@@ -81,8 +84,9 @@ class SubpedidoDespachado
             if ($modelo) {
                 $this->id_pedido = (int) $modelo->id_pedido;
                 $this->id_comercio = (int) $modelo->id_comercio;
-                $this->subtotal = (float) $modelo->subtotal;
-                $this->costo_envio = (float) ($modelo->costo_envio ?? 0.0);
+                $this->subtotal = round((float) $modelo->subtotal, 2);
+                $this->impuesto = round((float) ($modelo->impuesto ?? 0.0), 2);
+                $this->costo_envio = round((float) ($modelo->costo_envio ?? 0.0), 2);
                 $this->guia_transporte = $guia ?? $modelo->guia_seguimiento;
 
                 $reservas = $modelo->lineas->pluck('id_reserva')->filter()->values()->all();
@@ -91,6 +95,7 @@ class SubpedidoDespachado
                 $this->id_pedido = 1;
                 $this->id_comercio = 1;
                 $this->subtotal = 0.0;
+                $this->impuesto = 0.0;
                 $this->costo_envio = 0.0;
                 $this->guia_transporte = $guia;
                 $this->reservas = [(string) Str::uuid()];
