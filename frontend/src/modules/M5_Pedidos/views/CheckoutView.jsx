@@ -328,7 +328,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                 </div>
               </Campo>
               {cuponAplicado && (
-                <Alerta tipo="ok" titulo={`Cupón ${cuponAplicado.codigo} aplicado`}>
+                <Alerta tipo="exito" titulo={`Cupón ${cuponAplicado.codigo} aplicado`}>
                   {cuponAplicado.mensaje} (-{colones(cuponAplicado.monto_descuento)})
                 </Alerta>
               )}
