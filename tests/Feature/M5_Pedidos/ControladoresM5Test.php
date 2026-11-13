@@ -8,6 +8,7 @@ use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Contracts\M4_Inventario\InventarioServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
+use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
@@ -20,6 +21,7 @@ use App\Services\M5_Pedidos\Dobles\InventarioStub;
 use App\Services\M5_Pedidos\Dobles\PagosStub;
 use App\Services\M5_Pedidos\Dobles\PortalStub;
 use Database\Seeders\M5PedidosSeeder;
+use Illuminate\Support\Facades\Event;
 use Tests\Doubles\M1\PortalPublicoFake;
 use Tests\TestCase;
 
@@ -647,5 +649,47 @@ class ControladoresM5Test extends TestCase
             ->assertJsonPath('pedidos.0.subpedidos.0.lineas.0.nombre', 'Teclado mecánico Logitech K835 (Color: Gris Oscuro)')
             ->assertJsonPath('pedidos.0.subpedidos.0.lineas.0.nombre_producto', 'Teclado mecánico Logitech K835')
             ->assertJsonPath('pedidos.0.subpedidos.0.lineas.0.sku', 'SDM-LOG-K835-GRIS');
+    }
+
+    public function test_despachar_subpedido_revierte_estado_y_no_emite_evento_si_m4_falla(): void
+    {
+        $this->configurarMocks();
+        $inventarioStub = (new InventarioStub)->setFallarSalida(true);
+        $this->app->instance(InventarioServiceInterface::class, $inventarioStub);
+
+        $this->postJson('/m5/carrito/items', [
+            'id_cliente' => 1,
+            'id_variacion' => 101,
+            'cantidad' => 2,
+        ])->assertCreated();
+
+        $resCheckout = $this->postJson('/m5/pedidos', [
+            'id_cliente' => 1,
+            'id_direccion_cliente' => 1,
+            'metodoPago' => 'tarjeta',
+        ])->assertCreated();
+
+        $idPedido = (int) $resCheckout->json('id_pedido');
+        $this->postJson("/m5/pedidos/{$idPedido}/pago-confirmado", [
+            'referencia_pago' => 'REF-FALLO-M4',
+        ])->assertOk();
+
+        $subpedido = Subpedido::where('id_pedido', $idPedido)->firstOrFail();
+        $this->postJson("/m5/subpedidos/{$subpedido->id_subpedido}/preparar")->assertOk();
+
+        Event::fake([SubpedidoDespachado::class]);
+
+        $response = $this->postJson("/m5/subpedidos/{$subpedido->id_subpedido}/despachar", [
+            'guia_seguimiento' => 'GUIA-ROLLBACK-01',
+        ]);
+
+        $response->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M5-002');
+
+        Event::assertNotDispatched(SubpedidoDespachado::class);
+
+        $subActualizado = $subpedido->fresh();
+        $this->assertSame('en_preparacion', $subActualizado->estado_subpedido);
+        $this->assertNull($subActualizado->guia_seguimiento);
     }
 }

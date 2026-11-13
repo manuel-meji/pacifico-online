@@ -305,4 +305,74 @@ class M5_EventosTest extends TestCase
                 && count($evento->reservas) > 0;
         });
     }
+
+    public function test_pedido_confirmado_rechaza_registro_inexistente_y_no_fabrica_uuids_ficticios(): void
+    {
+        try {
+            new PedidoConfirmado(999999);
+            $this->fail('Se esperaba InvalidArgumentException para un pedido inexistente.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('999999', $e->getMessage());
+        }
+
+        $pedidoSinSubpedidos = (new PedidoMaestro)->forceFill([
+            'id_pedido' => 880,
+            'id_cliente' => 7,
+            'monto_total' => 5000.00,
+        ]);
+        $pedidoSinSubpedidos->setRelation('subpedidos', collect());
+
+        try {
+            new PedidoConfirmado($pedidoSinSubpedidos);
+            $this->fail('Se esperaba InvalidArgumentException para un pedido sin subpedidos.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('880', $e->getMessage());
+        }
+
+        $pedidoId = (new PedidoMaestro)->crearPedidoMaestro(12000.00, 9);
+        $sub = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 3, 'subtotal' => 12000.00, 'costo_envio' => 0.00, 'impuesto' => 1560.00],
+        ], $pedidoId)[0];
+        (new PedidoLinea)->crearLinea($sub->id_subpedido, 101, 1, 12000.00, 13.00);
+
+        $eventoSinReserva = new PedidoConfirmado($pedidoId);
+        $this->assertSame([], $eventoSinReserva->reservas);
+        $this->assertSame([], $eventoSinReserva->subpedidos[0]['reservas']);
+    }
+
+    public function test_subpedido_despachado_rechaza_registro_inexistente_y_no_fabrica_uuids_ficticios(): void
+    {
+        try {
+            new SubpedidoDespachado(999999);
+            $this->fail('Se esperaba InvalidArgumentException para un subpedido inexistente.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('999999', $e->getMessage());
+        }
+
+        $subInvalido = (new Subpedido)->forceFill([
+            'id_subpedido' => 44,
+            'id_pedido' => 12,
+            'id_comercio' => 0,
+            'subtotal' => 1000.00,
+        ]);
+        $subInvalido->setRelation('lineas', collect());
+
+        try {
+            new SubpedidoDespachado($subInvalido);
+            $this->fail('Se esperaba InvalidArgumentException para id_comercio inválido.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('identificadores reales', $e->getMessage());
+        }
+
+        $pedidoId = (new PedidoMaestro)->crearPedidoMaestro(15000.00, 9);
+        $sub = (new Subpedido)->crearSubpedidos([
+            ['id_comercio' => 4, 'subtotal' => 15000.00, 'costo_envio' => 0.00, 'impuesto' => 1950.00],
+        ], $pedidoId)[0];
+        (new PedidoLinea)->crearLinea($sub->id_subpedido, 101, 1, 15000.00, 13.00);
+
+        $eventoSinReserva = new SubpedidoDespachado($sub->id_subpedido, 'GUIA-REAL-01');
+        $this->assertSame([], $eventoSinReserva->reservas);
+        $this->assertSame($pedidoId, $eventoSinReserva->id_pedido);
+        $this->assertSame(4, $eventoSinReserva->id_comercio);
+    }
 }

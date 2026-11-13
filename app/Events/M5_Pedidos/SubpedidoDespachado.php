@@ -8,8 +8,8 @@ use App\Models\M5_Pedidos\Subpedido;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 /**
  * Evento canónico emitido cuando un comercio despacha un subpedido.
@@ -59,47 +59,45 @@ class SubpedidoDespachado
         $this->estado_subpedido = 'despachado';
 
         if ($subpedido instanceof Subpedido) {
-            $subpedido->loadMissing('lineas');
-            $this->id_subpedido = (int) $subpedido->id_subpedido;
-            $this->id_pedido = (int) $subpedido->id_pedido;
-            $this->id_comercio = (int) $subpedido->id_comercio;
-            $this->subtotal = round((float) $subpedido->subtotal, 2);
-            $this->impuesto = round((float) ($subpedido->impuesto ?? 0.0), 2);
-            $this->costo_envio = round((float) ($subpedido->costo_envio ?? 0.0), 2);
-            $this->guia_transporte = $guia ?? $subpedido->guia_seguimiento;
+            $this->hidratarDesdeModelo($subpedido, $guia);
 
-            $reservas = $subpedido->lineas->pluck('id_reserva')->filter()->values()->all();
-            $this->reservas = ! empty($reservas) ? $reservas : [(string) Str::uuid()];
-        } else {
-            $this->id_subpedido = (int) $subpedido;
-            $modelo = null;
-            try {
-                if (Schema::hasTable('pedidos_subpedidos')) {
-                    $modelo = Subpedido::withoutGlobalScope('comercio')->with('lineas')->find($this->id_subpedido);
-                }
-            } catch (\Throwable) {
-                $modelo = null;
-            }
-
-            if ($modelo) {
-                $this->id_pedido = (int) $modelo->id_pedido;
-                $this->id_comercio = (int) $modelo->id_comercio;
-                $this->subtotal = round((float) $modelo->subtotal, 2);
-                $this->impuesto = round((float) ($modelo->impuesto ?? 0.0), 2);
-                $this->costo_envio = round((float) ($modelo->costo_envio ?? 0.0), 2);
-                $this->guia_transporte = $guia ?? $modelo->guia_seguimiento;
-
-                $reservas = $modelo->lineas->pluck('id_reserva')->filter()->values()->all();
-                $this->reservas = ! empty($reservas) ? $reservas : [(string) Str::uuid()];
-            } else {
-                $this->id_pedido = 1;
-                $this->id_comercio = 1;
-                $this->subtotal = 0.0;
-                $this->impuesto = 0.0;
-                $this->costo_envio = 0.0;
-                $this->guia_transporte = $guia;
-                $this->reservas = [(string) Str::uuid()];
-            }
+            return;
         }
+
+        $idSubpedido = (int) $subpedido;
+        if ($idSubpedido <= 0) {
+            throw new InvalidArgumentException('No se puede construir SubpedidoDespachado sin un id_subpedido válido.');
+        }
+
+        $modelo = Subpedido::withoutGlobalScope('comercio')->with('lineas')->find($idSubpedido);
+        if (! $modelo) {
+            throw new InvalidArgumentException("No existe un subpedido real con id_subpedido={$idSubpedido} para construir SubpedidoDespachado.");
+        }
+
+        $this->hidratarDesdeModelo($modelo, $guia);
+    }
+
+    private function hidratarDesdeModelo(Subpedido $subpedido, ?string $guia = null): void
+    {
+        if (! $subpedido->relationLoaded('lineas')) {
+            $subpedido->loadMissing('lineas');
+        }
+
+        $idSubpedido = (int) $subpedido->id_subpedido;
+        $idPedido = (int) $subpedido->id_pedido;
+        $idComercio = (int) $subpedido->id_comercio;
+
+        if ($idSubpedido <= 0 || $idPedido <= 0 || $idComercio <= 0) {
+            throw new InvalidArgumentException('No se puede construir SubpedidoDespachado sin identificadores reales de subpedido, pedido y comercio.');
+        }
+
+        $this->id_subpedido = $idSubpedido;
+        $this->id_pedido = $idPedido;
+        $this->id_comercio = $idComercio;
+        $this->subtotal = round((float) $subpedido->subtotal, 2);
+        $this->impuesto = round((float) ($subpedido->impuesto ?? 0.0), 2);
+        $this->costo_envio = round((float) ($subpedido->costo_envio ?? 0.0), 2);
+        $this->guia_transporte = $guia ?? $subpedido->guia_seguimiento;
+        $this->reservas = $subpedido->lineas->pluck('id_reserva')->filter()->values()->all();
     }
 }

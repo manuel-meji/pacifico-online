@@ -22,6 +22,7 @@ use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -782,29 +783,37 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
 
     public function despacharSubpedido(int $subpedidoId, ?string $guiaTransporte = null): array
     {
-        $pedidoId = 101;
-        $subtotal = 15000.00;
-        $subpedido = null;
-
-        if ($this->hasTable('pedidos_subpedidos')) {
-            $subpedido = Subpedido::with('lineas')->find($subpedidoId);
-            if ($subpedido) {
-                $subpedido->despachar($guiaTransporte);
-                $pedidoId = (int) $subpedido->id_pedido;
-                $subtotal = (float) $subpedido->subtotal;
-                $this->confirmarSalidaLineas($subpedido);
-            }
+        if (! $this->hasTable('pedidos_subpedidos')) {
+            throw new DomainException('La tabla pedidos_subpedidos no está disponible para despachar un subpedido real.');
         }
+
+        $subpedidoActualizado = DB::transaction(function () use ($subpedidoId, $guiaTransporte): Subpedido {
+            $subpedido = Subpedido::withoutGlobalScope('comercio')->with('lineas')->find($subpedidoId);
+            if (! $subpedido) {
+                throw new DomainException("Subpedido #{$subpedidoId} no encontrado.");
+            }
+
+            $subpedido->despachar($guiaTransporte);
+
+            $recargado = Subpedido::withoutGlobalScope('comercio')->with('lineas')->find($subpedido->id_subpedido);
+            if (! $recargado) {
+                throw new DomainException("Subpedido #{$subpedidoId} no disponible tras el despacho.");
+            }
+
+            $this->confirmarSalidaLineas($recargado);
+
+            return $recargado;
+        });
 
         // Paso 9 del recorrido transversal: M5 emite SubpedidoDespachado;
         // M2 consume este evento de forma asíncrona para registrar la comisión.
-        event(new SubpedidoDespachado($subpedido ?? $subpedidoId, $guiaTransporte));
+        event(new SubpedidoDespachado($subpedidoActualizado, $guiaTransporte));
 
         return [
-            'id_subpedido' => $subpedidoId,
-            'id_pedido' => $pedidoId,
+            'id_subpedido' => (int) $subpedidoActualizado->id_subpedido,
+            'id_pedido' => (int) $subpedidoActualizado->id_pedido,
             'estado_subpedido' => 'despachado',
-            'guia_transporte' => $guiaTransporte,
+            'guia_transporte' => $subpedidoActualizado->guia_seguimiento ?? $guiaTransporte,
             'evento' => 'SubpedidoDespachado',
             'consumidores_notificados' => ['M1', 'M2', 'M4', 'M7'],
         ];
@@ -1274,14 +1283,11 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
 
         foreach ($subpedido->lineas as $linea) {
             if (! empty($linea->id_reserva)) {
-                try {
-                    $inventario->confirmarSalidaPorReserva(
-                        (string) $linea->id_reserva,
-                        $idPedido,
-                        $idSubpedido,
-                    );
-                } catch (\Throwable) {
-                }
+                $inventario->confirmarSalidaPorReserva(
+                    (string) $linea->id_reserva,
+                    $idPedido,
+                    $idSubpedido,
+                );
             }
         }
     }
