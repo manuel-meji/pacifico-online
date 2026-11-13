@@ -87,6 +87,10 @@ export default function CarritoPage({
   const suspendidos = grupos.filter((g) => g.comercio_suspendido);
   const hayBloqueo = carrito.hay_comercio_suspendido ?? suspendidos.length > 0;
   const total = resumen.total ?? 0;
+  const tieneDescuentoPromo = Number(resumen.descuento) > 0;
+  const subtotalOriginal = Number(resumen.subtotal_original ?? resumen.subtotal_base) > 0
+    ? Number(resumen.subtotal_original ?? resumen.subtotal_base)
+    : (Number(resumen.subtotal ?? 0) + (tieneDescuentoPromo ? Number(resumen.descuento) : 0));
 
   async function confirmarVaciar() {
     await onVaciar();
@@ -141,9 +145,21 @@ export default function CarritoPage({
 
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between text-gray-600">
-                  <dt>Subtotal ({unidades} {unidades === 1 ? 'artículo' : 'artículos'})</dt>
-                  <dd className="font-semibold text-gray-900">{colones(resumen.subtotal ?? 0)}</dd>
+                  <dt>{tieneDescuentoPromo ? `Subtotal original (${unidades} ${unidades === 1 ? 'artículo' : 'artículos'})` : `Subtotal (${unidades} ${unidades === 1 ? 'artículo' : 'artículos'})`}</dt>
+                  <dd className={`font-semibold ${tieneDescuentoPromo ? 'line-through text-gray-500' : 'text-gray-900'}`}>{colones(subtotalOriginal)}</dd>
                 </div>
+                {tieneDescuentoPromo && (
+                  <div className="flex justify-between text-red-700 font-semibold">
+                    <dt>Descuento promocional</dt>
+                    <dd>−{colones(resumen.descuento)}</dd>
+                  </div>
+                )}
+                {tieneDescuentoPromo && (
+                  <div className="flex justify-between text-gray-700 font-medium">
+                    <dt>Subtotal con descuento</dt>
+                    <dd className="font-bold text-gray-900">{colones(resumen.subtotal ?? 0)}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between text-gray-600">
                   <dt>IVA (13 %)</dt>
                   <dd className="font-semibold text-gray-900">{colones(resumen.impuesto ?? 0)}</dd>

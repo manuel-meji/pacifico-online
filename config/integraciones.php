@@ -207,7 +207,7 @@ return [
 
     'm5' => [
         'm1' => [
-            'modo' => env('M5_M1_MODO', 'doble'),
+            'modo' => env('M5_M1_MODO', env('APP_ENV') === 'testing' ? 'doble' : 'real'),
             'doble' => M5PortalStub::class,
         ],
         'm2' => [

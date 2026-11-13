@@ -89,11 +89,15 @@ class ControladorPedido extends Controller
         }
 
         // B1: Calcular desglose unificado del carrito con M3, M2 y precios vigentes de M1
+        $portalPrecios = ($portalService && method_exists($portalService, 'obtenerPreciosVigentes'))
+            ? $portalService
+            : $this->m1Portal;
+
         $desglose = $this->pedidosService->calcularDesgloseCarrito(
             $carrito,
             null,
             $this->m2Comercios,
-            $portalService,
+            $portalPrecios,
             $request->input('zona') ?? $request->input('zona_entrega') ?? $direccionCliente,
             $direccionClienteId
         );
