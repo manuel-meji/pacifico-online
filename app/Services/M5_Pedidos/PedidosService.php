@@ -14,12 +14,14 @@ use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Events\M5_Pedidos\PedidoPagado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class PedidosService implements CarritoServiceInterface, GestionPedidosServiceInterface, PedidosServiceInterface, SubpedidosServiceInterface
@@ -56,11 +58,19 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         ?Carrito $carrito = null,
         ?CatalogoServiceInterface $catalogoOverride = null,
         ?ComerciosServiceInterface $comerciosOverride = null,
-        ?object $portalOverride = null
+        ?object $portalOverride = null,
+        string|array|null $zonaEntrega = null,
+        ?int $idDireccionCliente = null,
     ): array {
         $catalogo = $catalogoOverride ?? $this->catalogoService ?? (app()->bound(CatalogoServiceInterface::class) ? app(CatalogoServiceInterface::class) : null);
         $comercios = $comerciosOverride ?? $this->comerciosService ?? (app()->bound(ComerciosServiceInterface::class) ? app(ComerciosServiceInterface::class) : null);
         $portal = $portalOverride ?? $this->resolverPortalM1();
+        $zona = $this->resolverZonaEntrega(
+            $zonaEntrega,
+            $idDireccionCliente,
+            $carrito?->id_cliente,
+            $portal
+        );
 
         if (! $carrito) {
             return [
@@ -142,8 +152,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                         if (method_exists($comercios, 'obtenerPoliticasEnvio')) {
                             try {
                                 $politicas = $comercios->obtenerPoliticasEnvio($comercioId);
-                                if (! empty($politicas['tarifas'][0]['costo'])) {
-                                    $costoEnvioComercio = (float) $politicas['tarifas'][0]['costo'];
+                                if (! empty($politicas['tarifas']) && is_array($politicas['tarifas'])) {
+                                    $costoEnvioComercio = $this->seleccionarTarifaPorZona($politicas['tarifas'], $zona);
                                 }
                             } catch (\Throwable) {
                                 // Continuar
@@ -332,6 +342,147 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         }
 
         return $primeraUrl;
+    }
+
+    /**
+     * Resuelve la zona de entrega ('GAM' o 'Resto del país') a partir de la zona explícita,
+     * los parámetros del request o consultando la dirección del cliente con M1.
+     */
+    public function resolverZonaEntrega(
+        string|array|null $zonaEntrega = null,
+        ?int $idDireccionCliente = null,
+        ?int $idCliente = null,
+        ?object $portal = null
+    ): string {
+        if (is_array($zonaEntrega)) {
+            return $this->determinarZonaPorDireccion($zonaEntrega);
+        }
+
+        if (! empty($zonaEntrega)) {
+            return $this->normalizarZona((string) $zonaEntrega);
+        }
+
+        if (request()->has('zona') && ! empty(request()->input('zona'))) {
+            return $this->normalizarZona((string) request()->input('zona'));
+        }
+
+        if (request()->has('zona_entrega') && ! empty(request()->input('zona_entrega'))) {
+            return $this->normalizarZona((string) request()->input('zona_entrega'));
+        }
+
+        $direccionId = $idDireccionCliente ?? (int) request()->input('id_direccion_cliente', 0);
+        $clienteId = $idCliente ?? (int) request()->input('id_cliente', 0);
+
+        if ($clienteId > 0 && $portal) {
+            try {
+                if ($direccionId > 0 && method_exists($portal, 'obtenerDireccionCliente')) {
+                    $dir = $portal->obtenerDireccionCliente($clienteId, $direccionId);
+                    if (! empty($dir)) {
+                        return $this->determinarZonaPorDireccion($dir);
+                    }
+                }
+
+                if (method_exists($portal, 'listarDireccionesCliente')) {
+                    $dirs = $portal->listarDireccionesCliente($clienteId);
+                    if (! empty($dirs)) {
+                        $dirPrincipal = collect($dirs)->firstWhere('es_principal', true) ?? ($dirs[0] ?? null);
+                        if (! empty($dirPrincipal)) {
+                            return $this->determinarZonaPorDireccion($dirPrincipal);
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+                // Continuar a valor por defecto
+            }
+        }
+
+        return 'GAM';
+    }
+
+    /**
+     * Determina si una dirección pertenece a la GAM o al Resto del país según provincia y cantón.
+     *
+     * @param  array<string, mixed>  $direccion
+     */
+    public function determinarZonaPorDireccion(array $direccion): string
+    {
+        if (! empty($direccion['zona'])) {
+            return $this->normalizarZona((string) $direccion['zona']);
+        }
+
+        $provincia = mb_strtolower(trim((string) ($direccion['provincia'] ?? '')));
+        $canton = mb_strtolower(trim((string) ($direccion['canton'] ?? '')));
+
+        // Provincias totalmente fuera de la Gran Área Metropolitana
+        if (in_array($provincia, ['guanacaste', 'puntarenas', 'limon', 'limón'], true)) {
+            return 'Resto del país';
+        }
+
+        // Cantones rurales o periféricos fuera de la GAM
+        $cantonesFueraGam = [
+            'san carlos', 'upala', 'los chiles', 'guatuso', 'san ramon', 'san ramón',
+            'perez zeledon', 'pérez zeledón', 'dota', 'tarrazu', 'tarrazú', 'leon cortes', 'león cortés', 'turrubares',
+            'sarapiqui', 'sarapiquí',
+            'turrialba', 'jimenez', 'jiménez',
+        ];
+
+        if (in_array($canton, $cantonesFueraGam, true)) {
+            return 'Resto del país';
+        }
+
+        if (in_array($provincia, ['san jose', 'san josé', 'heredia', 'cartago', 'alajuela'], true)) {
+            return 'GAM';
+        }
+
+        return 'GAM';
+    }
+
+    /**
+     * Normaliza el texto de una zona a las etiquetas canónicas de M2 ('GAM' o 'Resto del país').
+     */
+    public function normalizarZona(string $zona): string
+    {
+        $z = mb_strtolower(trim($zona));
+        if (str_contains($z, 'gam')) {
+            return 'GAM';
+        }
+        if (str_contains($z, 'resto') || str_contains($z, 'rural') || str_contains($z, 'fuera') || str_contains($z, 'pais') || str_contains($z, 'país')) {
+            return 'Resto del país';
+        }
+
+        return $zona;
+    }
+
+    /**
+     * Selecciona la tarifa de envío de M2 que mejor coincide con la zona de entrega solicitada.
+     * Si no hay coincidencia, recurre a la primera tarifa configurada.
+     *
+     * @param  list<array<string, mixed>>  $tarifas
+     */
+    public function seleccionarTarifaPorZona(array $tarifas, string $zona = 'GAM'): float
+    {
+        if (empty($tarifas)) {
+            return 0.0;
+        }
+
+        $zonaNorm = mb_strtolower(trim($zona));
+
+        // 1. Coincidencia exacta o semántica
+        foreach ($tarifas as $t) {
+            $zonaTarifa = mb_strtolower(trim((string) ($t['zona'] ?? '')));
+            if ($zonaTarifa === $zonaNorm) {
+                return (float) ($t['costo'] ?? 0.0);
+            }
+            if ($zonaNorm === 'gam' && str_contains($zonaTarifa, 'gam')) {
+                return (float) ($t['costo'] ?? 0.0);
+            }
+            if ($zonaNorm !== 'gam' && (str_contains($zonaTarifa, 'resto') || str_contains($zonaTarifa, 'país') || str_contains($zonaTarifa, 'pais'))) {
+                return (float) ($t['costo'] ?? 0.0);
+            }
+        }
+
+        // 2. Fallback a la primera tarifa disponible
+        return (float) ($tarifas[0]['costo'] ?? 0.0);
     }
 
     /**
@@ -676,7 +827,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 // Solicitar reembolso en M6 si ya estaba pagado (RN-M5-10)
                 if ($estabaPagado) {
                     $montoReembolso = (float) ($subpedido->total ?? ($subpedido->subtotal + $subpedido->impuesto + $subpedido->costo_envio));
-                    $this->solicitarReembolsoM6((int) $subpedido->id_pedido, $montoReembolso, $motivo);
+                    $this->solicitarReembolsoM6((int) $subpedido->id_pedido, $montoReembolso, $motivo, (int) $subpedido->id_subpedido);
                 }
 
                 // Si todos los subpedidos están cancelados, cancelar el maestro
@@ -929,23 +1080,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             }
         }
 
-        return [
-            'id_pedido' => $idPedido,
-            'id_cliente' => 101,
-            'monto_total' => 25000.00,
-            'estado_pedido' => 'confirmado',
-            'estado' => 'CONFIRMADO',
-            'fecha_creacion' => now()->toIso8601String(),
-            'subpedidos' => [
-                [
-                    'id_subpedido' => 801,
-                    'id_comercio' => 2,
-                    'subtotal' => 22000.00,
-                    'impuestos' => 3000.00,
-                    'costo_envio' => 0.00,
-                ],
-            ],
-        ];
+        throw ErrorNucleoException::recursoNoEncontrado("Pedido {$idPedido} no encontrado");
     }
 
     public function cancelarPedidoTotal(int $idPedido, array $datosCancelacion = []): array
@@ -1068,7 +1203,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
     /**
      * Solicita el reembolso del monto a M6 cuando se cancela un pedido/subpedido ya pagado.
      */
-    public function solicitarReembolsoM6(int $idPedido, float $monto, string $motivo): void
+    public function solicitarReembolsoM6(int $idPedido, float $monto, string $motivo, ?int $idSubpedido = null): void
     {
         $pagos = $this->pagosService ?? (app()->bound(PagosServiceInterface::class) ? app(PagosServiceInterface::class) : null);
         if (! $pagos) {
@@ -1077,11 +1212,16 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
 
         try {
             if (method_exists($pagos, 'solicitarReembolso')) {
-                $pagos->solicitarReembolso($idPedido, $monto, $motivo);
+                $pagos->solicitarReembolso($idPedido, $monto, $motivo, $idSubpedido);
             } elseif (method_exists($pagos, 'reembolsarPago')) {
                 $pagos->reembolsarPago($idPedido, $monto, $motivo);
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::warning("[M5_Pedidos] Error al solicitar reembolso a M6 para pedido {$idPedido}: {$e->getMessage()}", [
+                'exception' => $e,
+                'id_pedido' => $idPedido,
+                'id_subpedido' => $idSubpedido,
+            ]);
         }
     }
 
