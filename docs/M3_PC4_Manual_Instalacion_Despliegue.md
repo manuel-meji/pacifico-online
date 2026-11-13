@@ -83,6 +83,30 @@ Comando ejecutado en la base local aislada:
 php artisan db:seed --class=Database\Seeders\M3_Catalogo\M3CatalogoSeeder
 ```
 
+### Orden de sembrado
+
+Los seeders se ejecutan en este orden, siempre en una base propia aislada:
+
+1. `ComerciosDemoSeeder` (M2): crea los cinco comercios de demostración.
+2. `M3CatalogoSeeder` (M3): crea el catálogo.
+
+```powershell
+php artisan db:seed --class="Database\Seeders\M2_Comercios\ComerciosDemoSeeder"
+php artisan db:seed --class="Database\Seeders\M3_Catalogo\M3CatalogoSeeder"
+```
+
+El orden importa porque `M3CatalogoSeeder` escribe `estado_comercios_catalogo` con los ids de comercio 1 a 5 a mano, sin consultar a M2. Esa tabla no tiene llave foránea hacia `comercios`, así que el seeder de M3 no falla si los comercios no existen: deja productos de comercios que M2 no conoce. `ComerciosDemoSeeder` no fija los ids; los comercios reciben 1 a 5 solo si la tabla `comercios` está vacía al sembrar. Antes de ejecutar el seeder de M3 hay que confirmar que los cinco comercios quedaron con esos ids.
+
+## Integración con M2
+
+`M3_M2_MODO` vale `real` por defecto (`config/integraciones.php`, clave `m3.m2`), igual que en M1, M4 y M5. En modo real, al crear o publicar un producto M3 pregunta a M2 por el estado del comercio de la sesión (`obtenerComercioActivo`):
+
+- Comercio activo: la operación continúa.
+- Comercio no activo (suspendido, pendiente o rechazado): responde `ERR-M3-004` (RN-M3-07).
+- Comercio que M2 no conoce: se propaga el `ERR-004` de M2.
+
+Para trabajar sin M2 se pone `M3_M2_MODO=doble` en el `.env` propio; el doble solo conoce los comercios 1, 34, 35 y 36 como activos y el 37 como suspendido. Las pruebas usan siempre el doble: `phpunit.xml` fija `M3_M2_MODO=doble`.
+
 ## Colas y listeners
 
 En el entorno publicado la cola predeterminada es `database`. El proceso se inicia con:
