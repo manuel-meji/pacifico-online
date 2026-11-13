@@ -57,7 +57,7 @@ export default function M6App() {
       </nav>
 
       {pantalla === 'pago' && (
-        <FormularioPago key={intento} pedido={PEDIDO_ACTUAL} />
+        <FormularioPago key={intento} pedido={PEDIDO_ACTUAL} onResultado={verResultado} />
       )}
 
       {pantalla === 'resultado' && pago && (
