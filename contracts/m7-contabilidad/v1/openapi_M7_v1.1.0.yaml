@@ -4,7 +4,7 @@ info:
   version: 1.1.0
   description: >
     Especificación de las rutas HTTP y eventos observados en la implementación
-    de M7 en desarrollo d22f9c8. La versión v1.1.0 es únicamente una propuesta
+    de M7 en desarrollo, incluida la integración local con M6. La versión v1.1.0 es únicamente una propuesta
     en revisión, no un contrato aprobado ni publicado, y no reemplaza v1.0.0.
     Sus diferencias de rutas, respuestas y seguridad pueden ser incompatibles
     con ese contrato. Si el Comité confirma cambios incompatibles, la estrategia
@@ -47,17 +47,52 @@ x-dependencies:
     - Evento interno SubpedidoDespachado
     - ObtenerSubpedido(id_subpedido), pendiente de integración
   M6:
-    estado: Pendiente de integración
+    estado: Integración implementada en desarrollo; pendiente de despliegue y validación en PostgreSQL.
     operaciones:
-      - Evento PagoConfirmado
-      - ObtenerFacturaElectronica(id_factura) / listar facturas por id_pedido
-      - Evento ReembolsoProcesado para registrar la reversión contable definitiva
+      - Evento PagoConfirmado para registrar un cobro global por pago.
+      - Evento FacturaGenerada para distribuir el importe por comercio y subpedido.
+      - Evento ReembolsoProcesado para registrar la reversión contable definitiva.
+      - ConsultaEventosPagosInterface para recuperar pagos, facturas y reembolsos por período y comercio.
+    nota: >
+      PagoConfirmado no consulta facturas ni registra por subpedido.
+      FacturaGenerada no genera otro ingreso a bancos ni duplica ventas.
+      La venta se conserva desde PedidoConfirmado de M5.
   Nucleo:
     - Autenticación mediante auth:sanctum en las rutas API protegidas
     - Contexto de comercio y verificación de roles
     - Manejo estándar de errores JSON
 
 x-pending-decisions:
+  separacion_efectos_m6:
+    estado: Implementación local según acuerdo comunicado; publicación contractual conjunta pendiente
+    bloquea_publicacion_definitiva: true
+    descripcion: >
+      M6 definió un cobro global por PagoConfirmado, un desglose por comercio y
+      subpedido por FacturaGenerada sin duplicar el cobro, y una reversión por
+      ReembolsoProcesado. M7 separa el libro de plataforma del libro de cada
+      comercio. Las cuentas P-BANCOS, P-PENDIENTE y P-COMERCIOS pertenecen
+      exclusivamente a plataforma; 1.1.04 es Fondos por cobrar a plataforma en
+      el plan del comercio (1.1.03 conserva Inventarios).
+      Cada factura y reembolso genera los movimientos de ambos libros en una
+      sola transacción. No se asigna un comercio ficticio al cobro global.
+      Estos cambios no publican ni reemplazan unilateralmente el contrato de M6.
+  liquidacion_comercio:
+    estado: Fuera del alcance de esta entrega por decisión de M7
+    descripcion: >
+      Esta entrega excluye la ejecución, el registro y la consulta de liquidaciones
+      a comercios. El flujo soportado mantiene los fondos de los comercios en
+      plataforma y reduce la obligación pendiente al registrar un reembolso
+      confirmado por M6. No existe estado_liquidacion ni se requiere una
+      confirmación adicional para procesar ese evento. No se soportan pagos
+      externos a comercios ni reembolsos posteriores a dichas transferencias.
+      Su incorporación requiere un acuerdo contractual posterior. La exclusión
+      debe comunicarse al Comité y no modifica las responsabilidades de M6.
+  documentos_ajuste:
+    estado: Excepción manual según confirmación de M6
+    descripcion: >
+      FacturaGenerada es inmutable. Notas de crédito ajenas a un reembolso y
+      notas de débito no tienen evento definido en el contrato vigente de M6:
+      requieren coordinación manual, no un asiento automático inferido.
   compatibilidad:
     estado: Pendiente de revisión del Comité
     bloquea_publicacion_definitiva: true
@@ -72,10 +107,49 @@ x-pending-decisions:
       La implementación actual procesa PedidoConfirmado para registrar la venta
       por subtotal. La decisión contractual definitiva requiere ratificación.
   recuperacion_eventos:
+    estado: Implementada con bandeja persistente; operación del Scheduler pendiente de despliegue
+    descripcion: >
+      Los eventos recibidos se guardan en bandeja_eventos_m6 antes de intentar
+      su contabilización. Un fallo conserva payload, intentos y último error;
+      no se marca PROCESADO hasta confirmar la transacción contable. Los UUID
+      contradictorios se rechazan y registran sin sobrescribir el original.
+      Al llegar otro evento del pago se reintentan sus pendientes; cada hora se
+      reintenta la bandeja completa con --solo-pendientes, sin filtro de antigüedad.
+      Cada día se consultan los tres tipos de eventos del día anterior en M6.
+      Requiere Scheduler operativo. Eventos que nunca se recibieron y cuyo
+      período de consulta diaria se perdió necesitan recuperación manual del
+      período; la bandeja no inventa eventos que nunca conoció.
+      Antes de aplicar migraciones en Supabase debe coordinarse con el responsable.
+      Ejecutar php artisan m7:recuperar-eventos-m6 AAAA-MM-DD AAAA-MM-DD
+      para todos los comercios, opcionalmente con --comercio=ID. Sin fechas
+      procesa el día anterior. El comando informa los errores y devuelve fallo
+      si alguna operación no pudo procesarse.
+      Crear cuentas activas del plan del comercio, incluida 1.1.04.
+      Aplicar las migraciones M7 desde su carpeta con --path, incluyendo
+      crear_libro_plataforma_m7 y preparar_separacion_eventos_m6; no están
+      ejecutadas automáticamente por esta implementación.
+  cuadre_pago:
+    estado: Implementado conforme a la respuesta de M6
+    descripcion: >
+      cuadres_pagos_m6 compara el cobro original contra las facturas originales
+      recibidas, sin descontar reembolsos. PENDIENTE_FACTURAS indica saldo;
+      COMPLETO_POR_IMPORTES indica igualdad, no certifica cantidad de subpedidos;
+      DIFERENCIA indica exceso y no se distribuye automáticamente el excedente.
+      Datos inválidos o contradictorios producen REQUIERE_REVISION y totales
+      desconocidos, no ceros ficticios. El cuadre por importes no certifica que
+      todos los asientos de distribución ya estén procesados.
+      A las 24 horas desde la fecha UTC del pago sin cuadre se persiste fecha_alerta
+      y se registra una advertencia; la alerta no impide reintentos posteriores.
+  consulta_pago_multicomercio:
     estado: Pendiente de coordinación
     descripcion: >
-      Los listeners registran las excepciones sin propagarlas al emisor; el
-      procesamiento observado no garantiza un reintento durable.
+      La consulta interna sin comercio usa registrado para el cobro global,
+      aunque no haya facturas. Mantiene los campos actuales y añade libro,
+      estado_cuadre e importes en céntimos. subpedidos_registrados contiene
+      distribuciones registradas, no cobros por subpedido. M6 confirma que hoy
+      solo requiere registrado; la adopción de campos adicionales corresponde a
+      un PR de M6. La versión anterior del PR incluía conciliación multicomercio
+      de M6; esa contribución debe separarse por sus responsables antes del merge.
 
 x-eventos-consumidos:
   PedidoConfirmado:
@@ -95,6 +169,57 @@ x-eventos-consumidos:
       id_pedido: int64
       id_subpedido: int64
       id_comercio: int64
+  PagoConfirmado:
+    productor: M6
+    proposito: Registrar un único cobro del pedido completo en el libro de plataforma.
+    payload_esperado:
+      id_evento: uuid
+      id_pago: int64
+      id_pedido: int64
+      monto: decimal
+      fecha: date-time
+    nota: >
+      Idempotencia independiente por UUID e id_pago. No consulta facturas y no
+      espera datos fiscales. Debe P-BANCOS y haber P-PENDIENTE.
+  FacturaGenerada:
+    productor: M6
+    proposito: Distribuir el importe por subpedido después de verificar pago y venta previa.
+    payload_esperado:
+      id_evento: uuid
+      id_factura: int64
+      id_pago: int64
+      id_pedido: int64
+      id_subpedido: int64
+      id_comercio: int64
+      subtotal: decimal
+      impuesto: decimal
+      envio: decimal
+      monto: decimal
+      fecha: date-time
+    nota: >
+      M7 evita duplicados por evento e id_factura, y rechaza otra factura para
+      el mismo pago y subpedido. Debe P-PENDIENTE y haber P-COMERCIOS en plataforma;
+      debe 1.1.04 y haber cuentas por cobrar, IVA y envío en el comercio.
+      Rechaza datos contradictorios y desgloses incompletos.
+  ReembolsoProcesado:
+    productor: M6
+    proposito: Registrar la reversión contable definitiva vinculada al cobro.
+    payload_esperado:
+      id_evento: uuid
+      id_pago: int64
+      id_pedido: int64
+      id_subpedido: int64
+      id_comercio: int64
+      id_reembolso: int64
+      monto: decimal
+      nota_credito_id: int64
+      fecha: date-time
+    nota: >
+      M7 evita duplicados por evento e id_reembolso y distribuye el monto entre
+      subtotal, impuesto y envío sin exceder sus saldos pendientes. En el alcance
+      de esta entrega, debe P-COMERCIOS y haber P-BANCOS en plataforma,
+      y revierte ventas, IVA y envío contra 1.1.04 en el comercio.
+      El payload vigente usa nota_credito_id, no id_nota_credito.
 
 x-eventos-pendientes:
   SubpedidoEntregado:
@@ -106,30 +231,6 @@ x-eventos-pendientes:
       id_subpedido: int64
       id_comercio: int64
       fecha: date-time
-  PagoConfirmado:
-    productor: M6
-    proposito: Registrar contablemente el pago confirmado.
-    payload_esperado:
-      id_evento: uuid
-      id_pago: int64
-      id_pedido: int64
-      monto: decimal
-      fecha: date-time
-    nota: M6 debe agregar id_evento, o el Comité declarar id_pago como clave idempotente.
-  ReembolsoProcesado:
-    productor: M6
-    proposito: Registrar una reversión contable definitiva después del reembolso y la nota de crédito.
-    payload_esperado:
-      id_evento: uuid
-      id_pedido: int64
-      id_subpedido: int64|null
-      id_comercio: int64|null
-      id_reembolso: int64
-      monto: decimal
-      nota_credito_id: int64|null
-      fecha: date-time
-    nota: La reversión definitiva se registra al recibir ReembolsoProcesado desde M6.
-
 x-operaciones-pendientes-v1:
   descripcion: >
     Operaciones publicadas en v1.0.0 sin ruta correspondiente registrada. Su
@@ -374,9 +475,13 @@ paths:
       description: |
         Ruta web protegida con sesión y rol (encargado_comercio o
         encargado_plataforma). encargado_comercio consulta solo los asientos de
-        su comercio; encargado_plataforma consulta sin filtro de comercio.
-        Identificadores sin asiento devuelven registrado=false. No demuestra
-        que se genere el asiento del pago.
+        su comercio; encargado_plataforma consulta sin filtro de comercio. La
+        lista subpedidos_registrados solo incluye distribuciones registradas y se limita
+        al comercio autenticado, salvo para encargado_plataforma.
+        En plataforma registrado indica cobro global; en comercio requiere además
+        distribución propia. libro identifica el ámbito de asiento_id.
+        Los importes globales y el estado de cuadre no se exponen al comercio.
+        Identificadores sin asiento devuelven registrado=false.
       parameters:
         - name: idPago
           in: path
@@ -389,17 +494,25 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [id_pago, registrado, asiento_id, fecha_registro]
+                required: [id_pago, registrado, asiento_id, fecha_registro, subpedidos_registrados]
                 properties:
                   id_pago: { type: integer }
                   registrado: { type: boolean }
                   asiento_id: { type: integer, nullable: true }
                   fecha_registro: { type: string, nullable: true }
+                  subpedidos_registrados:
+                    type: array
+                    items: { type: integer, format: int64 }
+                  libro: { type: string, enum: [PLATAFORMA, COMERCIO] }
+                  estado_cuadre:
+                    type: string
+                    enum: [PENDIENTE_EVALUACION, PENDIENTE_FACTURAS, COMPLETO_POR_IMPORTES, DIFERENCIA, REQUIERE_REVISION]
+                  monto_cobro_centimos: { type: integer, format: int64 }
+                  monto_facturado_centimos: { type: integer, format: int64, nullable: true }
         '401': { $ref: '#/components/responses/NoAutenticado' }
         '403': { $ref: '#/components/responses/SinPermisos' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
         '500': { $ref: '#/components/responses/ErrorInterno' }
-          description: Error del servidor; su formato depende de si la solicitud espera JSON.
 
 components:
   securitySchemes:
@@ -727,6 +840,15 @@ components:
         registrado: { type: boolean }
         asiento_id: { type: integer, format: int64, nullable: true }
         fecha_registro: { type: string, format: date-time, nullable: true }
+        subpedidos_registrados:
+          type: array
+          items: { type: integer, format: int64 }
+        libro: { type: string, enum: [PLATAFORMA, COMERCIO] }
+        estado_cuadre:
+          type: string
+          enum: [PENDIENTE_EVALUACION, PENDIENTE_FACTURAS, COMPLETO_POR_IMPORTES, DIFERENCIA, REQUIERE_REVISION]
+        monto_cobro_centimos: { type: integer, format: int64 }
+        monto_facturado_centimos: { type: integer, format: int64, nullable: true }
     ResumenFinanciero:
       type: object
       required: [id_comercio, fecha_inicio, fecha_fin, ingresos, costos, gastos, utilidad]

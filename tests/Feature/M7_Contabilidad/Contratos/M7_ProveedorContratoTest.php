@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\M7_Contabilidad\PreparaIntegracionM6;
 use Tests\TestCase;
 
 /**
@@ -21,6 +22,7 @@ use Tests\TestCase;
 class M7_ProveedorContratoTest extends TestCase
 {
     use LazilyRefreshDatabase;
+    use PreparaIntegracionM6;
 
     private const ERROR = ['error' => ['codigo', 'mensaje', 'detalles']];
 
@@ -102,6 +104,7 @@ class M7_ProveedorContratoTest extends TestCase
             $table->string('descripcion', 255)->nullable();
             $table->timestamps();
         });
+        $this->prepararIntegracionM6();
     }
 
     // ---- Datos de prueba -------------------------------------------------
@@ -202,7 +205,7 @@ class M7_ProveedorContratoTest extends TestCase
                             'nivel',
                             'id_cuenta_padre',
                             'activa',
-                        ]
+                        ],
                     ],
                 ],
             ]);
@@ -297,7 +300,7 @@ class M7_ProveedorContratoTest extends TestCase
                             'totalDebe',
                             'totalHaber',
                             'lineas' => ['*' => ['codigo', 'cuenta', 'debe', 'haber', 'descripcion']],
-                        ]
+                        ],
                     ],
                     'totalDebe',
                     'totalHaber',
@@ -351,7 +354,7 @@ class M7_ProveedorContratoTest extends TestCase
                             'debe',
                             'haber',
                             'saldo',
-                        ]
+                        ],
                     ],
                 ],
             ]);
@@ -463,7 +466,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-002');
     }
 
-    // Rutas web 
+    // Rutas web
 
     public function test_estado_del_modulo(): void
     {
@@ -487,8 +490,9 @@ class M7_ProveedorContratoTest extends TestCase
     public function test_registro_contable_de_pago_propio_devuelve_registrado_true(): void
     {
         $idCuenta = $this->crearCuenta(1, '1.1.01', 'Caja');
-        $idAsiento = $this->crearAsiento(1, 'PAGO', $idCuenta, 100, 0);
+        $idAsiento = $this->crearAsiento(1, 'DISTRIBUCION', $idCuenta, 100, 0);
         DB::table('asientos_contables')->where('id_asiento', $idAsiento)->update(['id_pago' => 555]);
+        $this->registrarCobroGlobal(555);
 
         $this->actingAs($this->encargado(1), 'web')->getJson('/m7/pagos/555/registro-contable')
             ->assertOk()
@@ -500,8 +504,9 @@ class M7_ProveedorContratoTest extends TestCase
     public function test_registro_contable_de_pago_ajeno_no_se_expone(): void
     {
         $idCuenta = $this->crearCuenta(2, '1.1.01', 'Caja comercio 2');
-        $idAsiento = $this->crearAsiento(2, 'PAGO', $idCuenta, 100, 0);
+        $idAsiento = $this->crearAsiento(2, 'DISTRIBUCION', $idCuenta, 100, 0);
         DB::table('asientos_contables')->where('id_asiento', $idAsiento)->update(['id_pago' => 556]);
+        $this->registrarCobroGlobal(556);
 
         $this->actingAs($this->encargado(1), 'web')->getJson('/m7/pagos/556/registro-contable')
             ->assertOk()
@@ -512,8 +517,10 @@ class M7_ProveedorContratoTest extends TestCase
     public function test_plataforma_consulta_el_registro_de_un_pago_de_cualquier_comercio(): void
     {
         $idCuenta = $this->crearCuenta(2, '1.1.01', 'Caja comercio 2');
-        $idAsiento = $this->crearAsiento(2, 'PAGO', $idCuenta, 100, 0);
+        $idAsiento = $this->crearAsiento(2, 'DISTRIBUCION', $idCuenta, 100, 0);
         DB::table('asientos_contables')->where('id_asiento', $idAsiento)->update(['id_pago' => 557]);
+        $this->registrarCobroGlobal(557);
+        $idCobro = (int) DB::table('pagos_contables_m6')->where('id_pago', 557)->value('id_asiento_plataforma');
 
         $plataforma = UsuarioFactory::new()->create([
             'rol' => 'encargado_plataforma',
@@ -525,6 +532,32 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertOk()
             ->assertJsonPath('id_pago', 557)
             ->assertJsonPath('registrado', true)
-            ->assertJsonPath('asiento_id', $idAsiento);
+            ->assertJsonPath('asiento_id', $idCobro);
+    }
+
+    public function test_comercio_solo_recibe_subpedidos_contabilizados_de_su_comercio(): void
+    {
+        $this->registrarCobroGlobal(558);
+        foreach ([[1, 1001], [2, 2001]] as [$idComercio, $idSubpedido]) {
+            DB::table('asientos_contables')->insert([
+                'id_comercio' => $idComercio,
+                'id_pago' => 558,
+                'id_subpedido' => $idSubpedido,
+                'evento_id' => (string) Str::uuid(),
+                'tipo_evento' => 'FacturaGenerada',
+                'tipo' => 'DISTRIBUCION',
+                'fecha' => '2026-11-08 12:00:00',
+                'estado' => 'REGISTRADO',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($this->encargado(1), 'web')->getJson('/m7/pagos/558/registro-contable')
+            ->assertOk()
+            ->assertJsonPath('subpedidos_registrados', [1001])
+            ->assertJsonMissingPath('monto_cobro_centimos')
+            ->assertJsonMissingPath('monto_facturado_centimos')
+            ->assertJsonMissingPath('estado_cuadre');
     }
 }

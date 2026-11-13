@@ -37,6 +37,7 @@ class M7_PlanCuentasSeeder extends Seeder
         ['1.1.01', 'Caja y bancos', 'ACTIVO', '1.1'],
         ['1.1.02', 'Cuentas por cobrar', 'ACTIVO', '1.1'],
         ['1.1.03', 'Inventarios', 'ACTIVO', '1.1'],
+        ['1.1.04', 'Fondos por cobrar a plataforma', 'ACTIVO', '1.1'],
 
         ['2', 'Pasivo', 'PASIVO', null],
         ['2.1', 'Pasivo corriente', 'PASIVO', '2'],
@@ -131,8 +132,7 @@ class M7_PlanCuentasSeeder extends Seeder
                             $porCodigo = [];
 
                             foreach (
-                                self::PLAN_BASE
-                                as [$codigo, $nombre, $tipo, $codigoPadre]
+                                self::PLAN_BASE as [$codigo, $nombre, $tipo, $codigoPadre]
                             ) {
                                 $padre = $codigoPadre !== null
                                     ? $porCodigo[$codigoPadre]
@@ -150,8 +150,7 @@ class M7_PlanCuentasSeeder extends Seeder
                                             'nivel' => $padre
                                                 ? $padre->nivel + 1
                                                 : 1,
-                                            'id_cuenta_padre' =>
-                                                $padre?->getKey(),
+                                            'id_cuenta_padre' => $padre?->getKey(),
                                             'activa' => true,
                                         ]
                                     );

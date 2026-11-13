@@ -8,10 +8,17 @@ use App\Contracts\M7_Contabilidad\ComerciosM7GatewayInterface;
 use App\Contracts\M7_Contabilidad\CostosProductosVendidosGatewayInterface;
 use App\Events\M5_Pedidos\PedidoConfirmado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Events\M6_Pagos\FacturaGenerada;
+use App\Events\M6_Pagos\PagoConfirmado;
+use App\Events\M6_Pagos\ReembolsoProcesado;
+use App\Listeners\M7_Contabilidad\ProcesarFacturaGeneradaListener;
+use App\Listeners\M7_Contabilidad\ProcesarPagoConfirmadoListener;
 use App\Listeners\M7_Contabilidad\ProcesarPedidoConfirmadoListener;
+use App\Listeners\M7_Contabilidad\ProcesarReembolsoProcesadoListener;
 use App\Listeners\M7_Contabilidad\ProcesarSubpedidoDespachadoListener;
 use App\Services\M7_Contabilidad\Gateways\M2ComerciosGateway;
 use App\Services\M7_Contabilidad\Gateways\M4CostosProductosVendidosGateway;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -45,5 +52,14 @@ final class M7ContabilidadServiceProvider extends ServiceProvider
             SubpedidoDespachado::class,
             ProcesarSubpedidoDespachadoListener::class
         );
+
+        Event::listen(FacturaGenerada::class, ProcesarFacturaGeneradaListener::class);
+        Event::listen(PagoConfirmado::class, ProcesarPagoConfirmadoListener::class);
+        Event::listen(ReembolsoProcesado::class, ProcesarReembolsoProcesadoListener::class);
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $programa): void {
+            $programa->command('m7:recuperar-eventos-m6')->daily()->withoutOverlapping();
+            $programa->command('m7:recuperar-eventos-m6 --solo-pendientes')->hourly()->withoutOverlapping();
+        });
     }
 }
