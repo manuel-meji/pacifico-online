@@ -350,6 +350,8 @@ class M3_ApiCatalogoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-005')
             ->assertJsonStructure([
                 'error' => [
+                    'codigo',
+                    'mensaje',
                     'detalles' => ['disponible'],
                 ],
             ]);
@@ -381,6 +383,8 @@ class M3_ApiCatalogoTest extends TestCase
                 ->assertJsonPath('error.codigo', 'ERR-005')
                 ->assertJsonStructure([
                     'error' => [
+                        'codigo',
+                        'mensaje',
                         'detalles' => ['disponible'],
                     ],
                 ]);
@@ -426,6 +430,28 @@ class M3_ApiCatalogoTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('id_producto_relacionado', $idHermano);
         $this->postJson(self::BASE."/productos/{$idProducto}/relacionados", ['id_producto_relacionado' => $idProducto])
+            ->assertStatus(422)
+            ->assertJsonPath('error.codigo', 'ERR-M3-002');
+    }
+
+    public function test_no_se_pueden_relacionar_productos_de_comercios_diferentes(): void
+    {
+        // 1. El encargado del comercio 1 crea su producto.
+        $this->comoEncargado(self::COMERCIO);
+        $idProductoA = $this->productoEnBorrador();
+
+        // 2. El encargado del comercio 34 crea su producto.
+        $this->comoEncargado(self::OTRO_COMERCIO);
+        $idProductoB = $this->productoEnBorrador();
+
+        // 3. Regresamos al encargado del comercio 1.
+        $this->comoEncargado(self::COMERCIO);
+
+        // 4. Intenta relacionar su producto con el producto del comercio 34.
+        $this->postJson(
+            self::BASE."/productos/{$idProductoA}/relacionados",
+            ['id_producto_relacionado' => $idProductoB]
+        )
             ->assertStatus(422)
             ->assertJsonPath('error.codigo', 'ERR-M3-002');
     }
