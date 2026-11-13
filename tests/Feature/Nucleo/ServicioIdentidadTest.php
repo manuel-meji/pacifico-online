@@ -228,4 +228,63 @@ class ServicioIdentidadTest extends TestCase
 
         $this->assertSame(0, Usuario::count());
     }
+
+    public function test_existe_correo_retorna_true_si_el_correo_ya_tiene_cuenta(): void
+    {
+        $this->servicio()->crearCuenta($this->datos(['correo' => 'ana@example.com']), RolUsuario::Cliente);
+
+        $this->assertTrue($this->servicio()->existeCorreo('ana@example.com'));
+    }
+
+    public function test_existe_correo_retorna_false_si_el_correo_no_existe(): void
+    {
+        $this->assertFalse($this->servicio()->existeCorreo('nadie@example.com'));
+    }
+
+    public function test_existe_correo_normaliza_mayusculas_y_espacios(): void
+    {
+        $this->servicio()->crearCuenta($this->datos(['correo' => 'ana@example.com']), RolUsuario::Cliente);
+
+        $this->assertTrue($this->servicio()->existeCorreo('   ANA@EXAMPLE.COM   '));
+    }
+
+    public function test_existe_correo_detecta_cuentas_inactivas(): void
+    {
+        Usuario::create([
+            'nombre' => 'Usuario Inactivo',
+            'correo' => 'inactivo@example.com',
+            'contrasena' => 'secreta123',
+            'rol' => RolUsuario::Cliente,
+            'activo' => false,
+        ]);
+
+        $this->assertTrue($this->servicio()->existeCorreo('inactivo@example.com'));
+    }
+
+    public function test_existe_correo_funciona_con_los_tres_roles(): void
+    {
+        Notification::fake();
+        $this->omitirSiHayLlaveForaneaDeComercio();
+
+        $this->servicio()->crearCuenta($this->datos(['correo' => 'cliente@example.com']), RolUsuario::Cliente);
+        $this->servicio()->crearCuenta($this->datos(['correo' => 'plataforma@example.com']), RolUsuario::EncargadoPlataforma);
+        $this->servicio()->crearCuenta(
+            $this->datos(['correo' => 'comercio@example.com', 'contrasena' => null]),
+            RolUsuario::EncargadoComercio,
+            idComercio: 5
+        );
+
+        $this->assertTrue($this->servicio()->existeCorreo('cliente@example.com'));
+        $this->assertTrue($this->servicio()->existeCorreo('plataforma@example.com'));
+        $this->assertTrue($this->servicio()->existeCorreo('comercio@example.com'));
+    }
+
+    public function test_existe_correo_retorna_false_sin_excepcion_para_correo_vacio_o_invalido(): void
+    {
+        $this->assertFalse($this->servicio()->existeCorreo(''));
+        $this->assertFalse($this->servicio()->existeCorreo('    '));
+        $this->assertFalse($this->servicio()->existeCorreo('no-es-un-correo'));
+        $this->assertFalse($this->servicio()->existeCorreo('@invalido.com'));
+        $this->assertFalse($this->servicio()->existeCorreo('sin-arroba'));
+    }
 }

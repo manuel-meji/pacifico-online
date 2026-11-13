@@ -7,7 +7,7 @@ import PanelComercio from './views/PanelComercio';
 import PanelPlataforma from './views/PanelPlataforma';
 
 const VISTAS = [
-  { clave: 'solicitud', nombre: 'Solicitud de incorporación', corto: 'Solicitud', icono: FileText, Vista: SolicitudIncorporacion, rol: null },
+  { clave: 'solicitud', nombre: 'Solicitud de incorporación', corto: 'Solicitud', icono: FileText, Vista: SolicitudIncorporacion, rol: null, ocultarPara: ['encargado_comercio'] },
   { clave: 'comercio', nombre: 'Mi comercio', corto: 'Mi comercio', icono: Store, Vista: PanelComercio, rol: 'encargado_comercio' },
   { clave: 'plataforma', nombre: 'Panel de la plataforma', corto: 'Plataforma', icono: ShieldCheck, Vista: PanelPlataforma, rol: 'encargado_plataforma' },
 ];
@@ -48,8 +48,11 @@ export default function M2App() {
 
   const contexto = useMemo(() => ({ usuario: usuario ?? null, mensajeDeError }), [usuario, mensajeDeError]);
 
-  const visibles = VISTAS.filter((v) => v.rol === null || v.rol === usuario?.rol);
-  // Sin sesión (o sin vista propia del rol) se ve la solicitud de incorporación, la única pública.
+  const visibles = VISTAS.filter(
+    (v) => (v.rol === null || v.rol === usuario?.rol) && !v.ocultarPara?.includes(usuario?.rol),
+  );
+  // La solicitud de incorporación es pública (sin sesión, clientes y encargado de plataforma), pero no se
+  // muestra al encargado de comercio porque su cuenta está ligada a un solo comercio.
   const actual = visibles.find((v) => v.clave === vista) ?? visibles[0];
 
   let contenido;

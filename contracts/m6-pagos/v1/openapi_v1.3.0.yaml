@@ -1,0 +1,886 @@
+openapi: 3.0.3
+info:
+  title: Contrato de Integración - m6-pagos
+  description: >
+    Especificación OpenAPI v1 para el módulo M6 (Pagos y facturación electrónica)
+    de Pacíficos Online. Cubre el procesamiento de pagos con tarjeta, SINPE y
+    PayPal; la confirmación e idempotencia del cobro; la emisión de facturas
+    electrónicas, notas de crédito y débito; la gestión de reembolsos; y la
+    conciliación de pagos del periodo.
+
+    Este módulo también consume operaciones y eventos publicados por otros
+    módulos (M5, M2, M7). Esas dependencias no se documentan como rutas propias
+    de este archivo — se listan en la sección "Dependencias externas" al final
+    de este documento, y su contrato formal corresponde al módulo proveedor.
+
+    Los errores usan el formato estándar del Núcleo Compartido:
+    {"error": {"codigo", "mensaje", "detalles"}}. "codigo" es el código
+    ERR-M6-nnn y "detalles.motivo" el nombre del error de negocio
+    (por ejemplo MONTO_INCONSISTENTE). Ver components/schemas/ErrorResponse.
+
+    Cambios en v1.3.0 (solicitud de cambio de SG6):
+    1. servers.url pasa a /api/m6/v1, que es la ruta real del módulo.
+    2. POST /pedidos/{id_pedido}/reembolsos responde una lista cuando el
+       reembolso total de un pedido multicomercio crea un reembolso por
+       subpedido (decisión de SG6: un reembolso y una nota de crédito por subpedido).
+    3. POST /pagos documenta el campo opcional token_medio_pago.
+    4. Las respuestas de error usan el formato estándar del Núcleo.
+    5. info.version se alinea con la versión publicada del contrato.
+  version: 1.3.0
+servers:
+  - url: /api/m6/v1
+    description: Servidor local / integración
+
+tags:
+  - name: Pagos
+    description: Procesamiento y confirmación de cobros (RF-001, RF-002)
+  - name: Reembolsos
+    description: Gestión de reembolsos por cancelación o devolución (RF-007)
+  - name: Facturación
+    description: Facturas electrónicas, notas de crédito y de débito (RF-004, RF-005, RF-006)
+  - name: Conciliación
+    description: Conciliación de pagos del periodo (RF-003)
+  - name: Consulta
+    description: Historial de pagos y facturas (RF-008)
+  - name: Sistema
+    description: Verificación de estado del módulo
+
+paths:
+  /health:
+    get:
+      tags: [Sistema]
+      summary: Verificación de estado del módulo
+      responses:
+        '200':
+          description: Módulo operando correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  module:
+                    type: string
+                    example: m6-pagos
+
+  /pagos:
+    post:
+      tags: [Pagos]
+      operationId: ProcesarPagoPedido
+      summary: Procesar el pago de un pedido confirmado
+      description: >
+        Inicia el cobro del monto total de un pedido, previamente confirmado
+        por M5, mediante el medio de pago seleccionado por el comprador.
+      x-rf: RF-001
+      x-cu: CU-001
+      x-rn: [RN-001]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Clave de idempotencia generada por el consumidor para esta solicitud de cobro.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_pedido, medio_pago, monto_total]
+              properties:
+                id_pedido:
+                  type: integer
+                  format: int64
+                medio_pago:
+                  type: string
+                  enum: [tarjeta, sinpe, paypal]
+                monto_total:
+                  type: number
+                  format: decimal
+                  description: Debe coincidir exactamente con el monto informado por M5 (RN-001).
+                token_medio_pago:
+                  type: string
+                  maxLength: 100
+                  nullable: true
+                  description: >
+                    Token del medio de pago entregado por la pasarela (simulador).
+                    M6 nunca recibe ni guarda número de tarjeta ni CVV
+                    (requisito de seguridad del PC2).
+      responses:
+        '201':
+          description: Intento de pago registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pago'
+        '400':
+          description: El monto solicitado no coincide con el informado por M5
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-003
+                  mensaje: El monto recibido no coincide con el monto calculado del pedido.
+                  detalles:
+                    motivo: MONTO_INCONSISTENTE
+        '404':
+          description: El pedido no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-002
+                  mensaje: No se encontró el pedido indicado.
+                  detalles:
+                    motivo: PEDIDO_NO_ENCONTRADO
+        '422':
+          description: El medio de pago no está disponible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-004
+                  mensaje: El medio de pago solicitado no está habilitado.
+                  detalles:
+                    motivo: MEDIO_PAGO_NO_DISPONIBLE
+
+  /pagos/{id_pago}:
+    get:
+      tags: [Pagos]
+      operationId: ConsultarEstadoPago
+      summary: Consultar el estado actual de un intento de pago 
+      parameters:
+        - $ref: '#/components/parameters/IdPago'
+      responses:
+        '200':
+          description: Estado del pago 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pago'
+        '404':
+          description: No existe un pago con ese identificador 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-008
+                  mensaje: No se encontró el pago indicado.
+                  detalles:
+                    motivo: PAGO_NO_ENCONTRADO
+
+  /pagos/{id_pago}/confirmaciones:
+    post:
+      tags: [Pagos]
+      operationId: ConfirmarPagoRecibido
+      summary: Registrar la confirmación de cobro enviada por el proveedor de pago externo
+      description: >
+        Recibe la notificación que la pasarela, SINPE o PayPal envían cuando
+        resuelven una transacción. Es idempotente (RN-002): una notificación
+        repetida con la misma referencia no genera un nuevo estado ni repite
+        la publicación del evento correspondiente (`PagoConfirmado` o `PagoRechazado`) .
+      x-rf: RF-002
+      x-cu: CU-002
+      x-rn: [RN-002]
+      x-evento-publicado:
+        - nombre: PagoConfirmado
+          consumidores: [M5, M7]
+          payload: '#/components/schemas/PagoConfirmadoEvent'
+          condicion: Se publica solo si el estado recibido es "aprobado" y el intento estaba en "pendiente".
+          idempotencia: >
+            El campo id_evento del payload es la clave de idempotencia que M7
+            debe usar para descartar procesamientos duplicados de este evento .
+        - nombre: PagoRechazado
+          consumidores: [M5, M7]
+          payload: '#/components/schemas/PagoRechazadoEvent'
+          condicion: Se publica solo si el estado recibido es "rechazado" y el intento estaba en "pendiente".
+      parameters:
+        - $ref: '#/components/parameters/IdPago'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [referencia_proveedor, estado]
+              properties:
+                referencia_proveedor:
+                  type: string
+                estado:
+                  type: string
+                  enum: [aprobado, rechazado]
+      responses:
+        '200':
+          description: Confirmación registrada 
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    format: int64
+                  estado:
+                    type: string
+                    enum: [confirmado, rechazado]
+                  fecha:
+                    type: string
+                    format: date-time
+        '404':
+          description: No existe un intento de pago pendiente con ese identificador 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-009
+                  mensaje: No existe un intento de pago con ese identificador.
+                  detalles:
+                    motivo: TRANSACCION_NO_ENCONTRADA
+        '401':
+          description: La notificación no superó la verificación de autenticidad 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-010
+                  mensaje: La notificación recibida no pudo autenticarse.
+                  detalles:
+                    motivo: NOTIFICACION_NO_AUTENTICA
+
+  /pedidos/{id_pedido}/reembolsos:
+    post:
+      tags: [Reembolsos]
+      operationId: GestionarReembolso
+      summary: Solicitar el reembolso total o parcial de un pedido pagado
+      description: >
+        Invocada por M5 ante una cancelación o devolución autorizada. Genera
+        la nota de crédito correspondiente y publica el evento
+        `ReembolsoProcesado` .
+      x-rf: RF-007
+      x-cu: CU-007
+      x-rn: [RN-006]
+      x-evento-publicado:
+        nombre: ReembolsoProcesado
+        consumidores: [M5, M7]
+        payload: '#/components/schemas/ReembolsoProcesadoEvent'
+        condicion: >
+          Se publica únicamente después de que M6 ejecutó el reembolso y
+          emitió la nota de crédito correspondiente.
+        nota_para_m7: >
+          Este es el único evento a partir del cual M7 debe generar la
+          reversión contable definitiva. Una cancelación que M5 notifique
+          por su cuenta (sin pasar por GestionarReembolso) no debe disparar
+          un asiento de reversión independiente, para evitar que la misma
+          operación se revierta dos veces 
+      parameters:
+        - name: id_pedido
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monto, motivo]
+              properties:
+                id_subpedido:
+                  type: integer
+                  format: int64
+                  description: Identificador del subpedido/comercio cuando el reembolso es parcial .
+                monto:
+                  type: number
+                  format: decimal
+                motivo:
+                  type: string
+      responses:
+        '201':
+          description: >
+            Reembolso registrado. Con id_subpedido (reembolso parcial) se
+            devuelve un objeto Reembolso. Sin id_subpedido (reembolso total)
+            se crea un reembolso por cada subpedido con saldo, cada uno con su
+            nota de crédito; si el pedido tiene más de un subpedido se devuelve
+            una lista de Reembolso.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Reembolso'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Reembolso'
+        '409':
+          description: No existe un pago confirmado sobre el cual reembolsar 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-014
+                  mensaje: No existe un pago confirmado asociado a este pedido.
+                  detalles:
+                    motivo: PAGO_NO_CONFIRMADO
+        '422':
+          description: El monto solicitado excede el monto disponible para reembolso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-015
+                  mensaje: El monto solicitado supera el monto pagado menos lo ya reembolsado.
+                  detalles:
+                    motivo: REEMBOLSO_EXCEDE_MONTO
+
+  /facturas:
+    get:
+      tags: [Facturación]
+      operationId: ListarFacturasPorPedido
+      summary: Listar las facturas electrónicas generadas para un pedido
+      description: >
+        Un pedido multicomercio genera una factura por cada subpedido/comercio
+        (decisión 3.1 del Comité), por lo que esta consulta puede devolver más
+        de un documento[cite: 4].
+      parameters:
+        - name: id_pedido
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Facturas asociadas al pedido
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Factura'
+
+  /facturas/{id_factura}:
+    get:
+      tags: [Facturación]
+      operationId: ObtenerFacturaElectronica
+      summary: Obtener el documento de una factura electrónica
+      x-rf: RF-004
+      x-cu: CU-004
+      x-rn: [RN-003]
+      parameters:
+        - $ref: '#/components/parameters/IdFactura'
+      responses:
+        '200':
+          description: Documento de factura
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Factura'
+        '404':
+          description: No existe una factura con ese identificador
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-016
+                  mensaje: No se encontró la factura indicada.
+                  detalles:
+                    motivo: FACTURA_NO_ENCONTRADA
+
+  /facturas/{id_factura}/notas-credito:
+    post:
+      tags: [Facturación]
+      operationId: GenerarNotaCredito
+      summary: Generar una nota de crédito sobre una factura existente
+      x-rf: RF-005
+      x-cu: CU-005
+      x-rn: [RN-004]
+      parameters:
+        - $ref: '#/components/parameters/IdFactura'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monto, motivo]
+              properties:
+                monto:
+                  type: number
+                  format: decimal
+                  description: No puede superar el monto total de la factura original (RN-004).
+                motivo:
+                  type: string
+      responses:
+        '201':
+          description: Nota de crédito generada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotaCreditoDebito'
+        '404':
+          description: No existe la factura de referencia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-016
+                  mensaje: No se encontró la factura indicada.
+                  detalles:
+                    motivo: FACTURA_NO_ENCONTRADA
+        '422':
+          description: El monto de la nota supera el monto de la factura original
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-017
+                  mensaje: El monto de la nota de crédito no puede superar el de la factura original.
+                  detalles:
+                    motivo: NOTA_EXCEDE_MONTO_FACTURA
+
+  /facturas/{id_factura}/notas-debito:
+    post:
+      tags: [Facturación]
+      operationId: GenerarNotaDebito
+      summary: Generar una nota de débito sobre una factura existente
+      x-rf: RF-006
+      x-cu: CU-006
+      x-rn: [RN-005]
+      parameters:
+        - $ref: '#/components/parameters/IdFactura'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monto, motivo]
+              properties:
+                monto:
+                  type: number
+                  format: decimal
+                motivo:
+                  type: string
+      responses:
+        '201':
+          description: Nota de débito generada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotaCreditoDebito'
+        '404':
+          description: No existe la factura de referencia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-016
+                  mensaje: No se encontró la factura indicada.
+                  detalles:
+                    motivo: FACTURA_NO_ENCONTRADA
+        '409':
+          description: La factura de referencia no está aceptada por Hacienda
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-018
+                  mensaje: Solo se puede emitir una nota de débito sobre una factura aceptada por Hacienda.
+                  detalles:
+                    motivo: FACTURA_NO_ACEPTADA
+
+  /conciliaciones:
+    post:
+      tags: [Conciliación]
+      operationId: ConciliarPagosPeriodo
+      summary: Conciliar los pagos registrados contra los reportes de las pasarelas
+      description: >
+        Compara los pagos confirmados localmente contra los movimientos
+        reportados por las pasarelas y la confirmación del asiento entregada
+        por M7. Si M7 no responde, la conciliación se marca como "parcial"
+        (ver CU-003, flujo alternativo).
+      x-rf: RF-003
+      x-cu: CU-003
+      x-rn: [RN-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fecha_inicio, fecha_fin]
+              properties:
+                fecha_inicio:
+                  type: string
+                  format: date
+                fecha_fin:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Resultado de la conciliación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteConciliacion'
+        '422':
+          description: El rango de fechas no es válido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-019
+                  mensaje: El rango de fechas solicitado no es válido.
+                  detalles:
+                    motivo: PERIODO_INVALIDO
+
+  /historial:
+    get:
+      tags: [Consulta]
+      operationId: ConsultarHistorialPagosFacturas
+      summary: Consultar el historial de pagos y facturas
+      description: >
+        El resultado respeta el aislamiento por comercio (RN-008): un comercio
+        solo puede consultar su propio historial.
+      x-rf: RF-008
+      x-cu: CU-008
+      x-rn: [RN-008]
+      parameters:
+        - name: id_comercio
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: id_cliente
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Historial encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pagos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Pago'
+                  facturas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Factura'
+        '404':
+          description: No se encontraron resultados para los filtros indicados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  codigo: ERR-M6-020
+                  mensaje: No se encontraron pagos ni facturas para los filtros indicados.
+                  detalles:
+                    motivo: SIN_RESULTADOS
+
+components:
+  parameters:
+    IdPago:
+      name: id_pago
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    IdFactura:
+      name: id_factura
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    Pago:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        medio_pago:
+          type: string
+          enum: [tarjeta, sinpe, paypal]
+        monto_total:
+          type: number
+          format: decimal
+        estado:
+          type: string
+          enum: [pendiente, aprobado, rechazado, confirmado]
+        fecha_creacion:
+          type: string
+          format: date-time
+        fecha_confirmacion:
+          type: string
+          format: date-time
+          nullable: true
+
+    Reembolso:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+          nullable: true
+        monto:
+          type: number
+          format: decimal
+        motivo:
+          type: string
+        estado:
+          type: string
+          enum: [aceptado, rechazado, procesado]
+        nota_credito_id:
+          type: integer
+          format: int64
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+
+    Factura:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+        id_comercio:
+          type: integer
+          format: int64
+        consecutivo:
+          type: string
+        xml:
+          type: string
+          description: Documento de comprobante electrónico en formato XML.
+        estado_hacienda:
+          type: string
+          enum: [pendiente, aceptada, rechazada]
+        fecha_emision:
+          type: string
+          format: date-time
+
+    NotaCreditoDebito:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        id_factura:
+          type: integer
+          format: int64
+        tipo:
+          type: string
+          enum: [credito, debito]
+        monto:
+          type: number
+          format: decimal
+        motivo:
+          type: string
+        xml:
+          type: string
+        fecha_emision:
+          type: string
+          format: date-time
+
+    ReporteConciliacion:
+      type: object
+      properties:
+        fecha_inicio:
+          type: string
+          format: date
+        fecha_fin:
+          type: string
+          format: date
+        total_cobrado:
+          type: number
+          format: decimal
+        total_reembolsado:
+          type: number
+          format: decimal
+        estado:
+          type: string
+          enum: [completa, parcial]
+          description: "\"parcial\" cuando M7 no respondió con la confirmación del asiento (CU-003)."
+        diferencias:
+          type: array
+          items:
+            type: object
+            properties:
+              id_pago:
+                type: integer
+                format: int64
+              monto_sistema:
+                type: number
+                format: decimal
+              monto_pasarela:
+                type: number
+                format: decimal
+              estado:
+                type: string
+                enum: [pendiente_de_revision, resuelto]
+
+    ErrorResponse:
+      type: object
+      description: >
+        Formato estándar de error del Núcleo Compartido (ManejadorErrores).
+        "codigo" es el código ERR-M6-nnn y "detalles.motivo" el nombre del
+        error de negocio de M6. "detalles" puede traer datos adicionales, por
+        ejemplo "disponible" en REEMBOLSO_EXCEDE_MONTO y NOTA_EXCEDE_MONTO_FACTURA.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [codigo, mensaje]
+          properties:
+            codigo:
+              type: string
+              pattern: '^ERR-'
+              example: ERR-M6-003
+            mensaje:
+              type: string
+            detalles:
+              type: object
+              nullable: true
+              additionalProperties: true
+              properties:
+                motivo:
+                  type: string
+                  example: MONTO_INCONSISTENTE
+
+    PagoConfirmadoEvent:
+      type: object
+      description: Payload del evento publicado hacia M5 y M7 al confirmarse un pago.
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+          description: >
+            Identificador único de esta publicación del evento. Es la clave
+            de idempotencia que M7 debe usar para no procesar dos veces la
+            misma notificación (un mismo id_pago nunca genera más de un
+            id_evento con este nombre de evento)[cite: 4].
+        id_pedido:
+          type: integer
+          format: int64
+        id_pago:
+          type: integer
+          format: int64
+        monto:
+          type: number
+          format: decimal
+        fecha:
+          type: string
+          format: date-time
+
+    PagoRechazadoEvent:
+      type: object
+      description: Payload del evento publicado hacia M5 y M7 al rechazarse un pago.
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+          description: Identificador único de esta publicación del evento de rechazo.
+        id_pedido:
+          type: integer
+          format: int64
+        id_pago:
+          type: integer
+          format: int64
+        motivo:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+    ReembolsoProcesadoEvent:
+      type: object
+      description: Payload del evento publicado hacia M5 y M7 al procesarse un reembolso.
+      properties:
+        id_evento:
+          type: string
+          format: uuid
+          description: Identificador único del evento publicado para control de idempotencia en consumidores (M5, M7).
+        id_pedido:
+          type: integer
+          format: int64
+        id_subpedido:
+          type: integer
+          format: int64
+          nullable: true
+          description: Subpedido/comercio afectado cuando el reembolso es parcial.
+        id_comercio:
+          type: integer
+          format: int64
+          nullable: true
+          description: Comercio asociado al subpedido reembolsado.
+        id_reembolso:
+          type: integer
+          format: int64
+        monto:
+          type: number
+          format: decimal
+        nota_credito_id:
+          type: integer
+          format: int64
+        fecha:
+          type: string
+          format: date-time

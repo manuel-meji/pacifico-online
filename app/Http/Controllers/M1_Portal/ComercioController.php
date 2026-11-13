@@ -6,6 +6,7 @@ use App\Contracts\M1_Portal\Exceptions\DatosInvalidosException;
 use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Http\Controllers\Controller;
 use App\Services\M1_Portal\MicrositioService;
+use App\Services\M1_Portal\PortalPublicoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -26,13 +27,20 @@ class ComercioController extends Controller
     public function __construct(private PortalPublicoContract $portal) {}
 
     /**
-     * GET /api/m1/v1/comercios (listarComercios).
+     * GET /api/m1/v1/comercios (listarComercios). Desde 1.6.0 acepta q para buscar por
+     * nombre comercial; esa búsqueda la resuelve PortalPublicoService, porque no forma
+     * parte de la interfaz PHP.
      *
      * @throws DatosInvalidosException ERR-005 con el detalle por campo.
      */
-    public function listar(Request $request): JsonResponse
+    public function listar(Request $request, PortalPublicoService $servicio): JsonResponse
     {
         [$pagina, $porPagina] = $this->paginacion($request);
+        $termino = $request->query('q');
+
+        if (is_string($termino) && trim($termino) !== '') {
+            return response()->json($servicio->buscarComercios($termino, $pagina, $porPagina));
+        }
 
         return response()->json($this->portal->listarComercios($pagina, $porPagina));
     }

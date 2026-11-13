@@ -40,6 +40,41 @@ function OpcionCategoria({ categoria, marcada, onElegir, sangria = false }) {
   );
 }
 
+// Categoría principal con sus subcategorías plegables. Empiezan plegadas, salvo que la elegida sea la principal
+// o una de sus subcategorías; el botón de la flecha las despliega o pliega.
+export function CategoriaConSubcategorias({ categoria, idMarcada, onElegir }) {
+  const subcategorias = categoria.subcategorias ?? [];
+  const contieneMarcada = idMarcada === categoria.id_categoria || subcategorias.some((s) => s.id_categoria === idMarcada);
+  const [abierta, setAbierta] = useState(contieneMarcada);
+
+  useEffect(() => { if (contieneMarcada) setAbierta(true); }, [contieneMarcada]);
+
+  const idLista = `subcategorias-${categoria.id_categoria}`;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <OpcionCategoria categoria={categoria} marcada={idMarcada === categoria.id_categoria} onElegir={() => onElegir(categoria.id_categoria)} />
+        </div>
+        {subcategorias.length > 0 && (
+          <button type="button" onClick={() => setAbierta(!abierta)} aria-expanded={abierta} aria-controls={idLista}
+            aria-label={`${abierta ? 'Plegar' : 'Desplegar'} subcategorías de ${categoria.nombre}`}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-brandBlue lg:h-7 lg:w-7">
+            <Icono nombre={abierta ? 'abajo' : 'derecha'} className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      {abierta && subcategorias.length > 0 && (
+        <div id={idLista} className="space-y-1.5">
+          {subcategorias.map((s) => (
+            <OpcionCategoria key={s.id_categoria} categoria={s} sangria marcada={idMarcada === s.id_categoria} onElegir={() => onElegir(s.id_categoria)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FiltrosComercio({ categorias = [], criterio, onCambio, conBuscador = false, requiereCriterio = false }) {
   const [termino, setTermino] = useState(criterio.q ?? '');
   const [avisoTermino, setAvisoTermino] = useState('');
@@ -102,12 +137,7 @@ export default function FiltrosComercio({ categorias = [], criterio, onCambio, c
         <Grupo titulo="Categoría" onLimpiar={criterio.id_categoria ? () => elegirCategoria(null) : null}>
           <OpcionCategoria categoria={{ nombre: 'Todas' }} marcada={!criterio.id_categoria} onElegir={() => elegirCategoria(null)} />
           {categorias.map((c) => (
-            <div key={c.id_categoria} className="space-y-1.5">
-              <OpcionCategoria categoria={c} marcada={criterio.id_categoria === c.id_categoria} onElegir={() => elegirCategoria(c.id_categoria)} />
-              {(c.subcategorias ?? []).map((s) => (
-                <OpcionCategoria key={s.id_categoria} categoria={s} sangria marcada={criterio.id_categoria === s.id_categoria} onElegir={() => elegirCategoria(s.id_categoria)} />
-              ))}
-            </div>
+            <CategoriaConSubcategorias key={c.id_categoria} categoria={c} idMarcada={criterio.id_categoria} onElegir={elegirCategoria} />
           ))}
         </Grupo>
       )}

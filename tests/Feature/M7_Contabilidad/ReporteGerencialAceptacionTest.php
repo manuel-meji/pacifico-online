@@ -14,11 +14,29 @@ class ReporteGerencialAceptacionTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
+    private const MIGRACIONES = [
+        'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php',
+        'database/migrations/Nucleo/2026_09_30_000002_crear_tabla_bitacora_auditoria.php',
+        'database/migrations/Nucleo/2026_09_30_000003_crear_tablas_sesiones_y_restablecimientos.php',
+        'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
+        'database/migrations/Nucleo/2026_11_02_191532_agregar_inmutabilidad_a_bitacora_auditoria.php',
+    ];
+
+    protected function migrateUsing(): array
+    {
+        return [
+            '--path' => self::MIGRACIONES,
+            '--seed' => false,
+        ];
+    }
+
     protected function migrateFreshUsing(): array
     {
         return [
-            '--path' => database_path('migrations/Nucleo'),
-            '--realpath' => true,
+            '--path' => self::MIGRACIONES,
+            '--drop-views' => false,
+            '--drop-types' => false,
+            '--seed' => false,
         ];
     }
 

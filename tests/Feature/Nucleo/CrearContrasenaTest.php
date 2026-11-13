@@ -34,6 +34,9 @@ class CrearContrasenaTest extends TestCase
         'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
     ];
 
+    /** Enlace del último correo de invitación generado por invitar(). */
+    private string $enlace = '';
+
     /** @return array<string, mixed> */
     protected function migrateUsing(): array
     {
@@ -77,9 +80,12 @@ class CrearContrasenaTest extends TestCase
             return true;
         });
 
-        $this->assertStringContainsString('/crear-contrasena?', $enlace);
+        $this->assertStringContainsString('/app.html?', $enlace);
         parse_str((string) parse_url($enlace, PHP_URL_QUERY), $consulta);
+        $this->assertSame('crear-contrasena', $consulta['pantalla']);
         $this->assertSame($correo, $consulta['correo']);
+
+        $this->enlace = $enlace;
 
         return [$usuario, $consulta['token']];
     }
@@ -93,6 +99,27 @@ class CrearContrasenaTest extends TestCase
             'contrasena' => 'clave-nueva-123',
             'contrasena_confirmation' => 'clave-nueva-123',
         ], $cambios);
+    }
+
+    public function test_el_enlace_del_correo_apunta_a_la_pantalla_del_frontend_con_token_y_correo(): void
+    {
+        // Distinto del valor por defecto y con barra final, que no debe duplicarse.
+        config(['app.frontend_url' => 'https://portal.pacificos.test/']);
+
+        [, $token] = $this->invitar('elena+tienda@example.com');
+
+        $this->assertStringStartsWith('https://portal.pacificos.test/app.html?', $this->enlace);
+        $this->assertStringNotContainsString('localhost', $this->enlace);
+
+        parse_str((string) parse_url($this->enlace, PHP_URL_QUERY), $consulta);
+        $this->assertSame(['pantalla', 'token', 'correo'], array_keys($consulta));
+        $this->assertSame('crear-contrasena', $consulta['pantalla']);
+        $this->assertSame('elena+tienda@example.com', $consulta['correo']);
+        $this->assertNotSame('', $token);
+
+        // El token del enlace es el que acepta POST /crear-contrasena.
+        $this->postJson('/crear-contrasena', $this->cuerpo($token, ['correo' => 'elena+tienda@example.com']))
+            ->assertOk();
     }
 
     public function test_crea_la_contrasena_con_el_token_de_la_invitacion_y_luego_inicia_sesion(): void
