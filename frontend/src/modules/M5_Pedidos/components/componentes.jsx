@@ -122,7 +122,7 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
                 aria-label="Lista de deseos"
                 className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition hover:text-brandBlue cursor-pointer"
               >
-                <Heart className="h-5 w-5 text-rose-500" aria-hidden="true" />
+                <Heart className="h-5 w-5 text-brandDarkBlue" aria-hidden="true" />
                 <span className="hidden sm:inline">Deseos</span>
               </button>
             )}
