@@ -75,7 +75,21 @@ Orden confirmado de migraciones M3:
 6. imágenes de producto
 7. productos relacionados
 
-El seeder M3 oficial está publicado en `database/seeders/M3_Catalogo/M3CatalogoSeeder.php`. Define 10 productos y 11 variaciones con identificadores fijos y debe ejecutarse únicamente en una base propia aislada.
+El seeder M3 oficial está publicado en `database/seeders/M3_Catalogo/M3CatalogoSeeder.php` y debe ejecutarse únicamente en una base propia aislada. Define, con identificadores fijos:
+
+| Tabla | Filas | Identificadores |
+|---|---|---|
+| `estado_comercios_catalogo` | 5 | comercios 1 a 5 |
+| `categorias` | 6 | 1 a 6 |
+| `marcas` | 1 | 1 |
+| `productos` | 12 | 1 a 10 (escenarios del PC4), 301 y 401 (demostración de inventario de M4) |
+| `producto_variaciones` | 14 | 1 a 11 (escenarios), 501, 502 y 601 (M4) |
+| `atributos_variacion` | 16 | de las variaciones 1 a 11 |
+| `imagenes_producto` | 5 | productos 1, 2, 7, 9 y 10 |
+
+Los productos 3, 4, 5, 6, 8, 301 y 401 quedan sin imagen: no hay en el repositorio una imagen que les corresponda.
+
+El seeder se puede ejecutar varias veces. No borra productos, variaciones ni categorías; conserva `created_at`; no cambia `disponible` de una variación existente ni `estado_producto` de un producto existente; no pisa el estado de un comercio ya registrado ni las imágenes que haya puesto un comercio. Se detiene con un mensaje si un SKU suyo ya lo usa otra variación del mismo comercio.
 
 Comando ejecutado en la base local aislada:
 
