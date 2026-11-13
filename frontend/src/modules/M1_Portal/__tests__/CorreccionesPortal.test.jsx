@@ -20,11 +20,15 @@ describe('Insignia del carrito', () => {
     expect(textoInsignia(120)).toBe('+30');
   });
 
-  it('no se muestra con 0 ni sin dato', () => {
+  it('se muestra siempre: 0 con el carrito vacío o sin dato', () => {
     const { rerender } = render(<EncabezadoPortal cantidadCarrito={0} />);
-    expect(screen.getByRole('link', { name: 'Carrito' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Carrito, 0 productos' })).toBeTruthy();
+    expect(screen.getByTestId('insignia-carrito').textContent).toBe('0');
     rerender(<EncabezadoPortal cantidadCarrito={null} />);
-    expect(screen.getByRole('link', { name: 'Carrito' })).toBeTruthy();
+    expect(screen.getByTestId('insignia-carrito').textContent).toBe('0');
+    rerender(<EncabezadoPortal cantidadCarrito={3} />);
+    expect(screen.getByRole('link', { name: 'Carrito, 3 productos' })).toBeTruthy();
+    expect(screen.getByTestId('insignia-carrito').textContent).toBe('3');
   });
 
   it('con más de 30 líneas anuncia "más de 30"', () => {
