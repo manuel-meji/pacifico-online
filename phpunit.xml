@@ -33,6 +33,10 @@
         <env name="M5_M3_MODO" force="true" value="doble"/>
         <env name="M5_M4_MODO" force="true" value="doble"/>
         <env name="M5_M6_MODO" force="true" value="doble"/>
+        <env name="M4_M2_MODO" force="true" value="doble"/>
+        <env name="M4_M3_MODO" force="true" value="doble"/>
+        <env name="M4_NUCLEO_MODO" force="true" value="doble"/>
+        <env name="M4_M5_MODO" force="true" value="doble"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
