@@ -18,6 +18,8 @@ use App\Http\Controllers\Controller;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
+use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
+use App\Services\M5_Pedidos\Dobles\ErrorProveedorException;
 use App\Services\M5_Pedidos\PedidosService;
 use App\Services\M6_Pagos\PagosService;
 use App\Services\Nucleo\ContextoCliente;
@@ -510,6 +512,20 @@ class ControladorPedido extends Controller
             });
         } catch (DomainException $e) {
             return $this->errorRespuesta('ERR-M5-002', $e->getMessage(), null, 409);
+        } catch (ErrorInventarioException|ErrorProveedorException $e) {
+            Log::error('M5: error al confirmar salida de inventario en M4 durante despacho de subpedido.', [
+                'id_subpedido' => $subpedido->id_subpedido,
+                'id_pedido' => $subpedido->id_pedido,
+                'id_comercio' => $subpedido->id_comercio,
+                'exception' => $e->getMessage(),
+            ]);
+
+            return $this->errorRespuesta(
+                'ERR-M5-002',
+                'No se pudo confirmar la salida de inventario en M4: '.$e->getMessage().' El subpedido permanece sin despachar.',
+                null,
+                409
+            );
         } catch (\Throwable $e) {
             Log::error('M5: error al confirmar salida de inventario en M4 durante despacho de subpedido.', [
                 'id_subpedido' => $subpedido->id_subpedido,

@@ -576,7 +576,7 @@ export function ModalLoginRequerido({ abierto, onCerrar }) {
 // onConfirmar(valor) recibe el texto sin espacios extremos. Si `obligatorio`, no se envía vacío.
 export function ModalConCampo({
   abierto, titulo, descripcion, etiquetaCampo, placeholder, obligatorio = false, multilinea = false,
-  textoConfirmar = 'Confirmar', textoOcupado = 'Procesando…', peligro = false, icono: Icono = Check, ocupado, onConfirmar, onCerrar,
+  textoConfirmar = 'Confirmar', textoOcupado = 'Procesando…', peligro = false, icono: Icono = Check, ocupado, error = null, onConfirmar, onCerrar,
 }) {
   const [valor, setValor] = useState('');
   const [intentado, setIntentado] = useState(false);
@@ -635,6 +635,7 @@ export function ModalConCampo({
           />
           {mostrarError && <p id="modal-campo-error" role="alert" className="mt-1 text-xs text-red-600">Este campo es obligatorio.</p>}
         </div>
+        {error && <Alerta tipo="error" titulo="No se pudo completar la operación">{error}</Alerta>}
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <button type="button" disabled={ocupado} onClick={onCerrar}
             className="min-h-11 px-5 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50">

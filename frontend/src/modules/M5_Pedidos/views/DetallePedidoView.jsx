@@ -7,7 +7,7 @@ import { Alerta, Boton, Encabezado, Total } from '../components/componentes';
 import PasarelaPagoSimulada, { esPasarelaSimulada } from '../components/PasarelaPagoSimulada';
 import { colones } from '../services/calculos';
 import { etiquetaEstado, formatearFecha } from '../services/estados';
-import { cancelarPedido, obtenerPedido, solicitarDevolucionSubpedido } from '../services/m5Api';
+import { cancelarPedido, cancelarSubpedido, obtenerPedido, solicitarDevolucionSubpedido } from '../services/m5Api';
 import { EtiquetaEstado } from './MisPedidosView';
 
 // Los montos llegan como texto decimal ("35400.00") por los casts del modelo.
@@ -23,6 +23,7 @@ const indicePaso = (estado) => {
 
 // RN-M5-05: no se cancela el pedido completo si algún subpedido ya avanzó a estos estados.
 const ESTADOS_NO_CANCELABLES = ['en_preparacion', 'despachado', 'entregado'];
+const ESTADOS_CANCELABLES_SUBPEDIDO = ['pendiente', 'confirmado', 'pagado'];
 
 // Solo se puede pagar un pedido pendiente de pago ('confirmado' es el respaldo del servicio).
 const ESTADOS_PAGABLES = ['pendiente', 'confirmado'];
@@ -88,8 +89,10 @@ function LineaEstados({ estado, omitidos = [] }) {
   );
 }
 
-function TarjetaSubpedido({ subpedido, numero, historial, onSolicitarDevolucion }) {
-  const cancelado = normalizar(subpedido.estado_subpedido) === 'cancelado';
+function TarjetaSubpedido({ subpedido, numero, historial, onSolicitarDevolucion, onCancelarSubpedido }) {
+  const estadoActual = normalizar(subpedido.estado_subpedido);
+  const cancelado = estadoActual === 'cancelado';
+  const puedeCancelarSubpedido = ESTADOS_CANCELABLES_SUBPEDIDO.includes(estadoActual);
   const devolucionSolicitada = (subpedido.cancelaciones ?? []).find((c) =>
     String(c.motivo ?? '').startsWith('[DEVOLUCIÓN]')
   );
@@ -149,6 +152,19 @@ function TarjetaSubpedido({ subpedido, numero, historial, onSolicitarDevolucion 
           <dt className="font-bold">Total del subpedido</dt><dd className="font-extrabold">{monto(subpedido.total)}</dd>
         </div>
       </dl>
+
+      {puedeCancelarSubpedido && (
+        <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-xs text-gray-500">Este comercio aún no prepara este subpedido.</span>
+          <button
+            type="button"
+            onClick={() => onCancelarSubpedido?.(subpedido)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition cursor-pointer"
+          >
+            <Ban className="w-3.5 h-3.5" aria-hidden="true" /> Cancelar subpedido
+          </button>
+        </div>
+      )}
 
       {normalizar(subpedido.estado_subpedido) === 'entregado' && (
         <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
@@ -260,7 +276,7 @@ function ModalDevolucion({ subpedido, ocupado, error, onConfirmar, onCerrar }) {
   );
 }
 
-function ModalCancelar({ abierto, idPedido, ocupado, error, onConfirmar, onCerrar }) {
+function ModalCancelar({ abierto, idPedido, subpedido, ocupado, error, onConfirmar, onCerrar }) {
   const [motivo, setMotivo] = useState('');
   const [intentado, setIntentado] = useState(false);
   const campoRef = useRef(null);
@@ -300,8 +316,14 @@ function ModalCancelar({ abierto, idPedido, ocupado, error, onConfirmar, onCerra
             <Ban className="w-5 h-5 text-red-600" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <h2 id="cancelar-titulo" className="text-base font-bold text-gray-900">¿Cancelar el pedido #{idPedido}?</h2>
-            <p className="mt-1 text-sm text-gray-600">Se cancelarán todos sus subpedidos y se liberarán las reservas. Si ya estaba pagado, se solicitará el reembolso.</p>
+            <h2 id="cancelar-titulo" className="text-base font-bold text-gray-900">
+              {subpedido ? `¿Cancelar el subpedido #${subpedido.id_subpedido}?` : `¿Cancelar el pedido #${idPedido}?`}
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              {subpedido
+                ? `Se cancelará únicamente el subpedido de ${nombreComercio(subpedido)} y se liberarán sus reservas. Los demás subpedidos del pedido continuarán su curso.`
+                : 'Se cancelarán todos sus subpedidos y se liberarán las reservas. Si ya estaba pagado, se solicitará el reembolso.'}
+            </p>
           </div>
         </div>
 
@@ -332,7 +354,7 @@ function ModalCancelar({ abierto, idPedido, ocupado, error, onConfirmar, onCerra
           <button type="submit" disabled={ocupado}
             className="min-h-11 px-5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition inline-flex items-center justify-center gap-2 disabled:opacity-70">
             {ocupado ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Ban className="w-4 h-4" aria-hidden="true" />}
-            {ocupado ? 'Cancelando…' : 'Cancelar pedido'}
+            {ocupado ? 'Cancelando…' : subpedido ? 'Cancelar subpedido' : 'Cancelar pedido'}
           </button>
         </div>
       </form>
@@ -348,6 +370,7 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
   const [intento, setIntento] = useState(0);
 
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [subpedidoCancelar, setSubpedidoCancelar] = useState(null);
   const [cancelando, setCancelando] = useState(false);
   const [errorCancelar, setErrorCancelar] = useState(null);
   const [exito, setExito] = useState(null); // { titulo, texto }
@@ -370,7 +393,10 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
     return () => { vigente = false; };
   }, [idPedido, intento]);
 
-  const cerrarModal = useCallback(() => setModalAbierto(false), []);
+  const cerrarModal = useCallback(() => {
+    setModalAbierto(false);
+    setSubpedidoCancelar(null);
+  }, []);
   const cerrarPasarela = useCallback(() => setPasarelaAbierta(false), []);
 
   // Misma regla que en PedidoPendienteView: sin URL o con la del doble de M6 se usa la pasarela simulada.
@@ -396,9 +422,20 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
     setCancelando(true);
     setErrorCancelar(null);
     try {
-      await cancelarPedido(idPedido, { motivo, requiere_reembolso: normalizar(pedido?.estado_pedido) === 'pagado' });
-      setModalAbierto(false);
-      setExito({ titulo: 'Pedido cancelado', texto: 'El pedido se canceló correctamente.' });
+      const requiereReembolso = normalizar(pedido?.estado_pedido) === 'pagado';
+      if (subpedidoCancelar) {
+        await cancelarSubpedido(subpedidoCancelar.id_subpedido, { motivo, requiere_reembolso: requiereReembolso });
+        setModalAbierto(false);
+        setSubpedidoCancelar(null);
+        setExito({
+          titulo: 'Subpedido cancelado',
+          texto: `El subpedido #${subpedidoCancelar.id_subpedido} se canceló correctamente.`,
+        });
+      } else {
+        await cancelarPedido(idPedido, { motivo, requiere_reembolso: requiereReembolso });
+        setModalAbierto(false);
+        setExito({ titulo: 'Pedido cancelado', texto: 'El pedido se canceló correctamente.' });
+      }
       setIntento((n) => n + 1); // Recarga el detalle desde la API.
     } catch (e) {
       // 409 (ERR-M5-003): se muestra el mensaje de la API, que indica qué subpedido lo impide.
@@ -512,7 +549,7 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
               )}
               <Boton variante="peligro" icono={Ban} disabled={Boolean(bloqueo) || cargando}
                 aria-describedby={bloqueo ? 'cancelar-bloqueo' : undefined}
-                onClick={() => { setErrorCancelar(null); setExito(null); setModalAbierto(true); }}>
+                onClick={() => { setErrorCancelar(null); setExito(null); setSubpedidoCancelar(null); setModalAbierto(true); }}>
                 Cancelar pedido
               </Boton>
             </div>
@@ -532,6 +569,11 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
               onSolicitarDevolucion={(sub) => {
                 setErrorDevolucion(null);
                 setSubpedidoDevolucion(sub);
+              }}
+              onCancelarSubpedido={(sub) => {
+                setErrorCancelar(null);
+                setSubpedidoCancelar(sub);
+                setModalAbierto(true);
               }}
             />
           ))}
@@ -567,6 +609,7 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
       <ModalCancelar
         abierto={modalAbierto}
         idPedido={pedido.id_pedido}
+        subpedido={subpedidoCancelar}
         ocupado={cancelando}
         error={errorCancelar}
         onConfirmar={confirmarCancelacion}

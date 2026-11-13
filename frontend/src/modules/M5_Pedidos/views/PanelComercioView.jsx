@@ -409,6 +409,7 @@ export default function PanelComercioView({ onVolver }) {
   const [enCurso, setEnCurso] = useState(null);
   const [modalDespacho, setModalDespacho] = useState(null);
   const [modalCancelacion, setModalCancelacion] = useState(null);
+  const [errorModal, setErrorModal] = useState(null);
 
   useEffect(() => {
     let activo = true;
@@ -555,17 +556,20 @@ export default function PanelComercioView({ onVolver }) {
   async function ejecutar(clave, fn, mensajeExito) {
     setEnCurso(clave);
     setAviso(null);
+    setErrorModal(null);
     try {
       await fn();
       await cargar();
       setAviso({ tipo: 'exito', titulo: 'Estado actualizado', texto: mensajeExito });
       return true;
     } catch (e) {
+      const textoError = `${e.mensaje || e.message}${e.codigo ? ` (${e.codigo})` : ''}`;
       setAviso({
         tipo: 'error',
         titulo: 'No se pudo completar la operación',
-        texto: `${e.mensaje || e.message}${e.codigo ? ` (${e.codigo})` : ''}`,
+        texto: textoError,
       });
+      setErrorModal(textoError);
       return false;
     } finally {
       setEnCurso(null);
@@ -869,9 +873,9 @@ export default function PanelComercioView({ onVolver }) {
                 enCurso={enCurso}
                 onConfirmarPago={handleConfirmarPago}
                 onPreparar={handlePreparar}
-                onAbrirDespacho={setModalDespacho}
+                onAbrirDespacho={(s) => { setErrorModal(null); setModalDespacho(s); }}
                 onEntregar={handleEntregar}
-                onAbrirCancelacion={setModalCancelacion}
+                onAbrirCancelacion={(s) => { setErrorModal(null); setModalCancelacion(s); }}
               />
             ))}
           </div>
@@ -889,8 +893,9 @@ export default function PanelComercioView({ onVolver }) {
         textoOcupado="Despachando…"
         icono={Truck}
         ocupado={Boolean(modalDespacho && enCurso === `desp-${modalDespacho.id_subpedido}`)}
+        error={errorModal}
         onConfirmar={confirmarDespacho}
-        onCerrar={() => setModalDespacho(null)}
+        onCerrar={() => { setErrorModal(null); setModalDespacho(null); }}
       />
 
       <ModalConCampo
@@ -906,8 +911,9 @@ export default function PanelComercioView({ onVolver }) {
         textoOcupado="Cancelando…"
         icono={X}
         ocupado={Boolean(modalCancelacion && enCurso === `canc-${modalCancelacion.id_subpedido}`)}
+        error={errorModal}
         onConfirmar={confirmarCancelacion}
-        onCerrar={() => setModalCancelacion(null)}
+        onCerrar={() => { setErrorModal(null); setModalCancelacion(null); }}
       />
     </div>
   );
