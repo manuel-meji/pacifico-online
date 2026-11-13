@@ -26,7 +26,10 @@ export default function ResultadoPago({ pago, onOtroMedio, onVerFactura }) {
         <button onClick={onOtroMedio} className="w-full rounded-lg border border-gray-300 py-2 text-sm font-semibold">Elegir otro medio de pago</button>
       )}
       {pago.estado === 'confirmado' && (
-        <button onClick={onVerFactura} className="w-full rounded-lg bg-brandDarkBlue py-2 text-sm font-bold text-white">Ver factura electrónica</button>
+        <div className="space-y-2">
+          <button onClick={onVerFactura} className="w-full rounded-lg bg-brandDarkBlue py-2 text-sm font-bold text-white">Ver factura electrónica</button>
+          <a href="/carrito.html?pantalla=mis-pedidos" className="block w-full rounded-lg border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Volver a Mis Pedidos</a>
+        </div>
       )}
     </section>
   );

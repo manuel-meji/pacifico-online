@@ -19,12 +19,15 @@ use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
 use App\Services\M5_Pedidos\PedidosService;
+use App\Services\M6_Pagos\PagosService;
 use App\Services\Nucleo\ContextoCliente;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ControladorPedido extends Controller
 {
@@ -142,6 +145,22 @@ class ControladorPedido extends Controller
             return $this->errorRespuesta('ERR-003', 'Comercio no disponible o suspendido', null, 409);
         }
 
+        $codigoCupon = trim((string) $request->input('cupon_descuento', ''));
+        if ($codigoCupon !== '') {
+            try {
+                $this->pedidosService->validarCuponCheckout(
+                    $codigoCupon,
+                    $clienteId,
+                    $itemsAgrupados,
+                    (float) ($desglose['resumen']['subtotal'] ?? 0.0)
+                );
+            } catch (ValidationException $e) {
+                $mensaje = $e->validator->errors()->first('cupon_descuento') ?: 'El cupón ingresado no es válido.';
+
+                return $this->errorRespuesta('ERR-M5-CUPON', $mensaje, $e->errors(), 422);
+            }
+        }
+
         // 3. Reservar existencias en M4_Inventario (Contrato M4 v1.1.0 / v1.2.1 / RF-010)
         $idempotencyKey = Str::uuid()->toString();
         $idReserva = null;
@@ -179,16 +198,22 @@ class ControladorPedido extends Controller
         }
 
         // 4 y 5. B3 + D4: Delegar creación de maestro, subpedidos y líneas en PedidosService (DB::transaction)
-        $pedidoData = $this->pedidosService->crearPedidoCheckout([
-            'id_cliente' => $clienteId,
-            'id_direccion_cliente' => $direccionClienteId,
-            'cupon_descuento' => $request->input('cupon_descuento'),
-            'tarjeta_regalo' => $request->input('tarjeta_regalo'),
-            'id_reserva' => $idReserva,
-            'carrito' => $carrito,
-            'grupos_comercio' => $itemsAgrupados,
-            'resumen' => $desglose['resumen'],
-        ]);
+        try {
+            $pedidoData = $this->pedidosService->crearPedidoCheckout([
+                'id_cliente' => $clienteId,
+                'id_direccion_cliente' => $direccionClienteId,
+                'cupon_descuento' => $request->input('cupon_descuento'),
+                'tarjeta_regalo' => $request->input('tarjeta_regalo'),
+                'id_reserva' => $idReserva,
+                'carrito' => $carrito,
+                'grupos_comercio' => $itemsAgrupados,
+                'resumen' => $desglose['resumen'],
+            ]);
+        } catch (ValidationException $e) {
+            $mensaje = $e->validator->errors()->first('cupon_descuento') ?: 'El cupón ingresado no es válido.';
+
+            return $this->errorRespuesta('ERR-M5-CUPON', $mensaje, $e->errors(), 422);
+        }
 
         $idPedido = (int) $pedidoData['id_pedido'];
         $montoTotal = (float) $pedidoData['monto_total'];
@@ -203,7 +228,9 @@ class ControladorPedido extends Controller
 
         // 7. Procesar pago con M6_Pagos (Contrato M6 v1.0.0 / v1.1.1)
         $urlPasarelaPago = 'https://pago.pacificos.com/checkout/'.$idPedido;
-        if ($this->m6Pagos) {
+        if ($this->m6Pagos instanceof PagosService) {
+            $urlPasarelaPago = url("/m6.html?pedido={$idPedido}&monto=".number_format($montoTotal, 2, '.', ''));
+        } elseif ($this->m6Pagos) {
             try {
                 if (method_exists($this->m6Pagos, 'ProcesarPagoPedido')) {
                     $urlPasarelaPago = $this->m6Pagos->ProcesarPagoPedido(
@@ -223,8 +250,12 @@ class ControladorPedido extends Controller
                         $urlPasarelaPago = $resPago['urlPasarelaPago'];
                     }
                 }
-            } catch (\Throwable) {
-                // Conservar URL por defecto
+            } catch (\Throwable $e) {
+                Log::error('M5: error al invocar M6 durante el checkout.', [
+                    'id_pedido' => $idPedido,
+                    'monto_total' => $montoTotal,
+                    'exception' => $e,
+                ]);
             }
         }
 
@@ -456,6 +487,14 @@ class ControladorPedido extends Controller
             'motivo' => 'Devolución solicitada por cliente: '.$motivoTexto,
             'fecha_estado' => now(),
         ]);
+
+        $montoDevolucion = (float) ($subpedido->total ?? ($subpedido->subtotal + $subpedido->impuesto + $subpedido->costo_envio));
+        $this->pedidosService->solicitarReembolsoM6(
+            (int) $subpedido->id_pedido,
+            $montoDevolucion,
+            '[DEVOLUCIÓN] '.$motivoTexto,
+            (int) $subpedido->id_subpedido
+        );
 
         return response()->json([
             'id_subpedido' => (int) $subpedido->id_subpedido,

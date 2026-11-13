@@ -2,6 +2,7 @@
 
 namespace App\Services\M5_Pedidos;
 
+use App\Contracts\M1_Portal\ComercialPortalContract;
 use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Contracts\M1_Portal\PortalServiceInterface;
 use App\Contracts\M2_Comercios\ComerciosServiceInterface;
@@ -14,13 +15,16 @@ use App\Contracts\M5_Pedidos\SubpedidosServiceInterface;
 use App\Contracts\M6_Pagos\PagosServiceInterface;
 use App\Events\M5_Pedidos\PedidoPagado;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\M5_Pedidos\Carrito;
 use App\Models\M5_Pedidos\ItemCarrito;
 use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class PedidosService implements CarritoServiceInterface, GestionPedidosServiceInterface, PedidosServiceInterface, SubpedidosServiceInterface
 {
@@ -676,7 +680,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 // Solicitar reembolso en M6 si ya estaba pagado (RN-M5-10)
                 if ($estabaPagado) {
                     $montoReembolso = (float) ($subpedido->total ?? ($subpedido->subtotal + $subpedido->impuesto + $subpedido->costo_envio));
-                    $this->solicitarReembolsoM6((int) $subpedido->id_pedido, $montoReembolso, $motivo);
+                    $this->solicitarReembolsoM6((int) $subpedido->id_pedido, $montoReembolso, $motivo, (int) $subpedido->id_subpedido);
                 }
 
                 // Si todos los subpedidos están cancelados, cancelar el maestro
@@ -750,7 +754,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
     {
         $idCliente = (int) ($datosCheckout['id_cliente'] ?? 1);
         $idDireccion = isset($datosCheckout['id_direccion_cliente']) ? (int) $datosCheckout['id_direccion_cliente'] : null;
-        $cupon = $datosCheckout['cupon_descuento'] ?? null;
+        $codigoCupon = trim((string) ($datosCheckout['cupon_descuento'] ?? ''));
+        $cupon = $codigoCupon !== '' ? strtoupper($codigoCupon) : null;
         $tarjetaRegalo = $datosCheckout['tarjeta_regalo'] ?? null;
         $idReservaDefault = $datosCheckout['id_reserva'] ?? null;
 
@@ -769,6 +774,16 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 $resumen = $desglose['resumen'];
             }
 
+            [$subtotalMaestro, $impuestoMaestro, $envioMaestro] = $this->calcularTotalesCheckout($resumen, $grupos);
+            $resultadoCupon = $this->validarCuponCheckout(
+                $codigoCupon,
+                $idCliente,
+                is_array($grupos) ? $grupos : [],
+                $subtotalMaestro
+            );
+            $descuentoMaestro = round((float) ($resultadoCupon['monto_descuento'] ?? 0.0), 2);
+            $montoTotal = max(0.0, round($subtotalMaestro + $envioMaestro + $impuestoMaestro - $descuentoMaestro, 2));
+
             $pedidoCreado = DB::transaction(function () use (
                 $idCliente,
                 $idDireccion,
@@ -777,27 +792,13 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 $idReservaDefault,
                 $carrito,
                 $grupos,
-                $resumen
+                $subtotalMaestro,
+                $impuestoMaestro,
+                $envioMaestro,
+                $descuentoMaestro,
+                $montoTotal,
+                $resultadoCupon
             ): PedidoMaestro {
-                $subtotalMaestro = 0.0;
-                $impuestoMaestro = 0.0;
-                $envioMaestro = 0.0;
-                $descuentoMaestro = 0.0;
-
-                if (is_array($resumen)) {
-                    $subtotalMaestro = round((float) ($resumen['subtotal'] ?? 0.0), 2);
-                    $impuestoMaestro = round((float) ($resumen['impuesto'] ?? 0.0), 2);
-                    $envioMaestro = round((float) ($resumen['costo_envio'] ?? 0.0), 2);
-                } elseif (is_array($grupos)) {
-                    foreach ($grupos as $g) {
-                        $subtotalMaestro = round($subtotalMaestro + (float) ($g['subtotal'] ?? 0.0), 2);
-                        $impuestoMaestro = round($impuestoMaestro + (float) ($g['impuesto'] ?? 0.0), 2);
-                        $envioMaestro = round($envioMaestro + (float) ($g['costo_envio'] ?? 0.0), 2);
-                    }
-                }
-
-                $montoTotal = round($subtotalMaestro + $envioMaestro + $impuestoMaestro - $descuentoMaestro, 2);
-
                 $pedidoMaestro = new PedidoMaestro;
                 $idPedido = $pedidoMaestro->crearPedidoMaestro(
                     $montoTotal,
@@ -811,6 +812,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                     $descuentoMaestro,
                     'pendiente'
                 );
+
+                $this->registrarUsoCuponSiAplica($resultadoCupon, $idCliente, $idPedido);
 
                 if (is_array($grupos) && ! empty($grupos)) {
                     $subpedidoObj = new Subpedido;
@@ -884,49 +887,57 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
     {
         if ($this->hasTable('pedidos_maestros')) {
             $pedido = PedidoMaestro::with(['subpedidos.lineas', 'estados', 'cancelaciones'])->find($idPedido);
-            if ($pedido) {
-                return [
-                    'id_pedido' => $pedido->id_pedido,
-                    'id_cliente' => $pedido->id_cliente,
-                    'id_direccion_cliente' => $pedido->id_direccion_cliente,
-                    'fecha_creacion' => $pedido->fecha_creacion ? $pedido->fecha_creacion->toIso8601String() : now()->toIso8601String(),
-                    'subtotal' => (float) $pedido->subtotal,
-                    'costo_envio' => (float) $pedido->costo_envio,
-                    'impuesto' => (float) $pedido->impuesto,
-                    'descuento' => (float) $pedido->descuento,
-                    'monto_total' => (float) $pedido->monto_total,
-                    'estado_pedido' => (string) $pedido->estado_pedido,
-                    'estado' => strtoupper((string) $pedido->estado_pedido),
-                    'cupon_descuento' => $pedido->cupon_descuento,
-                    'tarjeta_regalo' => $pedido->tarjeta_regalo,
-                    'subpedidos' => $pedido->subpedidos->map(fn ($sub) => [
-                        'id_subpedido' => $sub->id_subpedido,
-                        'id_pedido' => $sub->id_pedido,
-                        'id_comercio' => $sub->id_comercio,
-                        'subtotal' => (float) $sub->subtotal,
-                        'costo_envio' => (float) $sub->costo_envio,
-                        'impuesto' => (float) $sub->impuesto,
-                        'impuestos' => (float) $sub->impuesto,
-                        'total' => (float) ($sub->total ?? ($sub->subtotal + $sub->costo_envio + $sub->impuesto)),
-                        'estado_subpedido' => (string) $sub->estado_subpedido,
-                        'guia_seguimiento' => $sub->guia_seguimiento,
-                        'fecha_despacho' => $sub->fecha_despacho?->toIso8601String(),
-                        'lineas' => $sub->lineas->map(fn ($l) => [
-                            'id_linea' => $l->id_linea,
-                            'id_subpedido' => $l->id_subpedido,
-                            'id_variacion' => $l->id_variacion,
-                            'id_reserva' => $l->id_reserva,
-                            'cantidad' => $l->cantidad,
-                            'precio_unitario' => (float) $l->precio_unitario,
-                            'tarifa_impuesto' => (float) $l->tarifa_impuesto,
-                            'descuento' => (float) ($l->descuento ?? 0.0),
-                            'id_promocion' => $l->id_promocion !== null ? (int) $l->id_promocion : null,
-                        ])->all(),
-                    ])->all(),
-                    'historial_estados' => $pedido->estados?->toArray() ?? [],
-                    'cancelaciones' => $pedido->cancelaciones?->toArray() ?? [],
-                ];
+            if (! $pedido) {
+                throw ErrorNucleoException::recursoNoEncontrado("Pedido #{$idPedido} no encontrado.");
             }
+
+            $respuesta = [
+                'id_pedido' => $pedido->id_pedido,
+                'id_cliente' => $pedido->id_cliente,
+                'id_direccion_cliente' => $pedido->id_direccion_cliente,
+                'fecha_creacion' => $pedido->fecha_creacion ? $pedido->fecha_creacion->toIso8601String() : now()->toIso8601String(),
+                'subtotal' => (float) $pedido->subtotal,
+                'costo_envio' => (float) $pedido->costo_envio,
+                'impuesto' => (float) $pedido->impuesto,
+                'descuento' => (float) $pedido->descuento,
+                'monto_total' => (float) $pedido->monto_total,
+                'estado_pedido' => (string) $pedido->estado_pedido,
+                'estado' => strtoupper((string) $pedido->estado_pedido),
+                'cupon_descuento' => $pedido->cupon_descuento,
+                'tarjeta_regalo' => $pedido->tarjeta_regalo,
+                'subpedidos' => $pedido->subpedidos->map(fn ($sub) => [
+                    'id_subpedido' => $sub->id_subpedido,
+                    'id_pedido' => $sub->id_pedido,
+                    'id_comercio' => $sub->id_comercio,
+                    'subtotal' => (float) $sub->subtotal,
+                    'costo_envio' => (float) $sub->costo_envio,
+                    'impuesto' => (float) $sub->impuesto,
+                    'impuestos' => (float) $sub->impuesto,
+                    'total' => (float) ($sub->total ?? ($sub->subtotal + $sub->costo_envio + $sub->impuesto)),
+                    'estado_subpedido' => (string) $sub->estado_subpedido,
+                    'guia_seguimiento' => $sub->guia_seguimiento,
+                    'fecha_despacho' => $sub->fecha_despacho?->toIso8601String(),
+                    'lineas' => $sub->lineas->map(fn ($l) => [
+                        'id_linea' => $l->id_linea,
+                        'id_subpedido' => $l->id_subpedido,
+                        'id_variacion' => $l->id_variacion,
+                        'id_reserva' => $l->id_reserva,
+                        'cantidad' => $l->cantidad,
+                        'precio_unitario' => (float) $l->precio_unitario,
+                        'tarifa_impuesto' => (float) $l->tarifa_impuesto,
+                        'descuento' => (float) ($l->descuento ?? 0.0),
+                        'id_promocion' => $l->id_promocion !== null ? (int) $l->id_promocion : null,
+                    ])->all(),
+                ])->all(),
+                'historial_estados' => $pedido->estados?->toArray() ?? [],
+                'cancelaciones' => $pedido->cancelaciones?->toArray() ?? [],
+            ];
+
+            if (config('integraciones.m5.m6.modo') === 'real') {
+                $respuesta['urlPasarelaPago'] = url("/m6.html?pedido={$pedido->id_pedido}&monto=".number_format((float) $pedido->monto_total, 2, '.', ''));
+            }
+
+            return $respuesta;
         }
 
         return [
@@ -1068,7 +1079,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
     /**
      * Solicita el reembolso del monto a M6 cuando se cancela un pedido/subpedido ya pagado.
      */
-    public function solicitarReembolsoM6(int $idPedido, float $monto, string $motivo): void
+    public function solicitarReembolsoM6(int $idPedido, float $monto, string $motivo, ?int $idSubpedido = null): void
     {
         $pagos = $this->pagosService ?? (app()->bound(PagosServiceInterface::class) ? app(PagosServiceInterface::class) : null);
         if (! $pagos) {
@@ -1077,12 +1088,125 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
 
         try {
             if (method_exists($pagos, 'solicitarReembolso')) {
-                $pagos->solicitarReembolso($idPedido, $monto, $motivo);
+                $pagos->solicitarReembolso($idPedido, $monto, $motivo, $idSubpedido);
             } elseif (method_exists($pagos, 'reembolsarPago')) {
                 $pagos->reembolsarPago($idPedido, $monto, $motivo);
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::error('M5: error al solicitar reembolso en M6.', [
+                'id_pedido' => $idPedido,
+                'id_subpedido' => $idSubpedido,
+                'monto' => $monto,
+                'exception' => $e,
+            ]);
         }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $grupos
+     * @return array{valido: bool, id_cupon: int|null, monto_descuento: float, mensaje: string|null}
+     */
+    public function validarCuponCheckout(string $codigoCupon, int $idCliente, array $grupos, float $subtotal): array
+    {
+        $codigo = trim($codigoCupon);
+        if ($codigo === '') {
+            return ['valido' => true, 'id_cupon' => null, 'monto_descuento' => 0.0, 'mensaje' => null];
+        }
+
+        $comercial = $this->resolverComercialPortalM1();
+        if ($comercial === null) {
+            return ['valido' => true, 'id_cupon' => null, 'monto_descuento' => 0.0, 'mensaje' => null];
+        }
+
+        $idsComercios = [];
+        $subtotalesPorComercio = [];
+        foreach ($grupos as $grupo) {
+            $idComercio = (int) ($grupo['id_comercio'] ?? 0);
+            if ($idComercio > 0) {
+                $idsComercios[] = $idComercio;
+                $subtotalesPorComercio[$idComercio] = round((float) ($grupo['subtotal'] ?? 0.0), 2);
+            }
+        }
+
+        $resultado = $comercial->validarCupon(
+            $codigo,
+            $idCliente,
+            round($subtotal, 2),
+            array_values(array_unique($idsComercios)),
+            $subtotalesPorComercio
+        );
+
+        if (! ($resultado['valido'] ?? false)) {
+            throw ValidationException::withMessages([
+                'cupon_descuento' => [$resultado['mensaje'] ?? 'El cupón ingresado no es válido.'],
+            ]);
+        }
+
+        return [
+            'valido' => true,
+            'id_cupon' => isset($resultado['id_cupon']) ? (int) $resultado['id_cupon'] : null,
+            'monto_descuento' => round((float) ($resultado['monto_descuento'] ?? 0.0), 2),
+            'mensaje' => $resultado['mensaje'] ?? null,
+        ];
+    }
+
+    /**
+     * @param  array{id_cupon?: int|null}  $resultadoCupon
+     */
+    private function registrarUsoCuponSiAplica(array $resultadoCupon, int $idCliente, int $idPedido): void
+    {
+        $idCupon = $resultadoCupon['id_cupon'] ?? null;
+        if (! $idCupon) {
+            return;
+        }
+
+        $comercial = $this->resolverComercialPortalM1();
+        if ($comercial === null) {
+            return;
+        }
+
+        if (! $comercial->registrarUsoCupon((int) $idCupon, $idCliente, $idPedido)) {
+            throw ValidationException::withMessages([
+                'cupon_descuento' => ['El cupón ya no se encuentra disponible.'],
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $resumen
+     * @param  array<int, array<string, mixed>>|null  $grupos
+     * @return array{0: float, 1: float, 2: float}
+     */
+    private function calcularTotalesCheckout(?array $resumen, ?array $grupos): array
+    {
+        if (is_array($resumen)) {
+            return [
+                round((float) ($resumen['subtotal'] ?? 0.0), 2),
+                round((float) ($resumen['impuesto'] ?? 0.0), 2),
+                round((float) ($resumen['costo_envio'] ?? 0.0), 2),
+            ];
+        }
+
+        $subtotal = 0.0;
+        $impuesto = 0.0;
+        $envio = 0.0;
+
+        foreach ($grupos ?? [] as $grupo) {
+            $subtotal = round($subtotal + (float) ($grupo['subtotal'] ?? 0.0), 2);
+            $impuesto = round($impuesto + (float) ($grupo['impuesto'] ?? 0.0), 2);
+            $envio = round($envio + (float) ($grupo['costo_envio'] ?? 0.0), 2);
+        }
+
+        return [$subtotal, $impuesto, $envio];
+    }
+
+    private function resolverComercialPortalM1(): ?ComercialPortalContract
+    {
+        if (config('integraciones.m5.m1.modo') !== 'doble' && app()->bound(ComercialPortalContract::class)) {
+            return app(ComercialPortalContract::class);
+        }
+
+        return null;
     }
 
     private function hasTable(string $table): bool

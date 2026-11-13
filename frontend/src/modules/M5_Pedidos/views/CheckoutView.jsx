@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, CreditCard, LoaderCircle, MapPin, Plus, RefreshCw, Tag, Truck } from 'lucide-react';
 import { Alerta, Boton, Campo, clasesInput, Encabezado, TarjetaComercio, Total } from '../components/componentes';
 import { colones, validarCheckout } from '../services/calculos';
-import { crearPedido, obtenerCarrito, obtenerDirecciones } from '../services/m5Api';
+import { crearPedido, obtenerCarrito, obtenerDirecciones, validarCupon } from '../services/m5Api';
 
 // Errores de ControladorPedido::procesarCheckout que obligan a volver al carrito.
 const ERRORES_QUE_VUELVEN_AL_CARRITO = {
@@ -44,7 +44,8 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const [direcciones, setDirecciones] = useState([]);
   const [f, setF] = useState({ idDireccion: '', cupon: '', tarjetaRegalo: '', nota: '' });
   const [errores, setErrores] = useState({});
-  const [cuponIngresado, setCuponIngresado] = useState('');
+  const [cuponAplicado, setCuponAplicado] = useState(null);
+  const [validandoCupon, setValidandoCupon] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState(null);
   const enviandoRef = useRef(false); // Evita un segundo POST antes de que React deshabilite el botón.
@@ -71,14 +72,57 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
     return () => { vigente = false; };
   }, [intentoCarga]);
 
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const set = (k) => (e) => {
+    const valor = e.target.value;
+    setF({ ...f, [k]: valor });
+    if (k === 'cupon') {
+      setCuponAplicado(null);
+      setErrores((prev) => ({ ...prev, cupon: undefined }));
+    }
+  };
 
-  // El cupón se envía con el pedido (cupon_descuento); la validación y el descuento los hace el servidor.
-  function aplicarCupon() {
+  async function aplicarCupon() {
     const codigo = f.cupon.trim();
-    if (codigo.length > 50) { setErrores((e) => ({ ...e, cupon: 'El cupón no puede superar los 50 caracteres.' })); return; }
+    if (!codigo) {
+      setCuponAplicado(null);
+      setErrores((e) => ({ ...e, cupon: 'Ingrese un código de cupón.' }));
+      return;
+    }
+    if (codigo.length > 50) {
+      setErrores((e) => ({ ...e, cupon: 'El cupón no puede superar los 50 caracteres.' }));
+      return;
+    }
+
+    setValidandoCupon(true);
     setErrores((e) => ({ ...e, cupon: undefined }));
-    setCuponIngresado(codigo);
+    try {
+      const resultado = await validarCupon({
+        codigo,
+        subtotal: Number(carrito?.resumen?.subtotal ?? 0),
+        ids_comercios: (carrito?.grupos_comercio ?? []).map((g) => Number(g.id_comercio)),
+        subtotales_por_comercio: (carrito?.grupos_comercio ?? []).map((g) => ({
+          id_comercio: Number(g.id_comercio),
+          subtotal: Number(g.subtotal ?? 0),
+        })),
+      });
+
+      if (!resultado?.valido) {
+        setCuponAplicado(null);
+        setErrores((e) => ({ ...e, cupon: resultado?.mensaje || 'El cupón no aplica para este pedido.' }));
+        return;
+      }
+
+      setCuponAplicado({
+        codigo: codigo.toUpperCase(),
+        monto_descuento: Number(resultado.monto_descuento ?? 0),
+        mensaje: resultado.mensaje || 'Cupón aplicado.',
+      });
+    } catch (err) {
+      setCuponAplicado(null);
+      setErrores((e) => ({ ...e, cupon: err.mensaje || err.message }));
+    } finally {
+      setValidandoCupon(false);
+    }
   }
 
   async function enviar(e) {
@@ -94,7 +138,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
     try {
       const respuesta = await crearPedido({
         id_direccion_cliente: Number(f.idDireccion),
-        cupon_descuento: f.cupon.trim() || null,
+        cupon_descuento: cuponAplicado?.codigo || f.cupon.trim() || null,
         tarjeta_regalo: f.tarjetaRegalo.trim() || null,
         nota: f.nota.trim() || null,
       });
@@ -112,6 +156,10 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
       if (aviso) {
         onVolverConAviso({ ...aviso, texto: err.mensaje ? `${aviso.texto} Detalle: ${err.mensaje}.` : aviso.texto });
         return;
+      }
+      if (err.codigo === 'ERR-M5-CUPON') {
+        setCuponAplicado(null);
+        setErrores((prev) => ({ ...prev, cupon: err.mensaje || err.message }));
       }
       setErrorEnvio(err);
     } finally {
@@ -148,7 +196,8 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
 
   const grupos = carrito?.grupos_comercio ?? [];
   const resumen = carrito?.resumen ?? {};
-  const total = resumen.total ?? 0;
+  const descuento = cuponAplicado?.monto_descuento ?? 0;
+  const total = Math.max(0, Number(resumen.total ?? 0) - descuento);
   const hayBloqueo = carrito?.hay_comercio_suspendido ?? grupos.some((g) => g.comercio_suspendido);
   const sinDirecciones = direcciones.length === 0;
 
@@ -267,10 +316,22 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                     placeholder="Ej: PACIFICO10"
                     className={`${clasesInput(errores.cupon)} flex-1 uppercase`}
                   />
-                  <Boton variante="oscuro" icono={Check} type="button" onClick={aplicarCupon}>Aplicar</Boton>
+                  <Boton
+                    variante="oscuro"
+                    icono={validandoCupon ? LoaderCircle : Check}
+                    type="button"
+                    disabled={validandoCupon}
+                    onClick={aplicarCupon}
+                  >
+                    {validandoCupon ? 'Validando…' : 'Aplicar'}
+                  </Boton>
                 </div>
               </Campo>
-              {cuponIngresado && <Alerta tipo="info" titulo="Cupón ingresado">El código {cuponIngresado.toUpperCase()} se enviará al confirmar la compra.</Alerta>}
+              {cuponAplicado && (
+                <Alerta tipo="ok" titulo={`Cupón ${cuponAplicado.codigo} aplicado`}>
+                  {cuponAplicado.mensaje} (-{colones(cuponAplicado.monto_descuento)})
+                </Alerta>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Campo id="tarjetaRegalo" etiqueta="Tarjeta de regalo" error={errores.tarjetaRegalo}>
                   <input
@@ -326,6 +387,12 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                   <dt>Envío</dt>
                   <dd className="font-semibold text-gray-900">{colones(resumen.costo_envio ?? 0)}</dd>
                 </div>
+                {descuento > 0 && (
+                  <div className="flex justify-between text-brandGreen">
+                    <dt>Descuento ({cuponAplicado.codigo})</dt>
+                    <dd className="font-semibold">-{colones(descuento)}</dd>
+                  </div>
+                )}
                 <div className="pt-4 border-t border-gray-100">
                   <Total etiqueta="Total a cobrar" valor={total} />
                 </div>
