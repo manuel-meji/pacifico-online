@@ -24,11 +24,29 @@ class M7_ProveedorContratoTest extends TestCase
 
     private const ERROR = ['error' => ['codigo', 'mensaje', 'detalles']];
 
+    private const MIGRACIONES = [
+        'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php',
+        'database/migrations/Nucleo/2026_09_30_000002_crear_tabla_bitacora_auditoria.php',
+        'database/migrations/Nucleo/2026_09_30_000003_crear_tablas_sesiones_y_restablecimientos.php',
+        'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
+        'database/migrations/Nucleo/2026_11_02_191532_agregar_inmutabilidad_a_bitacora_auditoria.php',
+    ];
+
+    protected function migrateUsing(): array
+    {
+        return [
+            '--path' => self::MIGRACIONES,
+            '--seed' => false,
+        ];
+    }
+
     protected function migrateFreshUsing(): array
     {
         return [
-            '--path' => database_path('migrations/Nucleo'),
-            '--realpath' => true,
+            '--path' => self::MIGRACIONES,
+            '--drop-views' => false,
+            '--drop-types' => false,
+            '--seed' => false,
         ];
     }
 
@@ -159,7 +177,7 @@ class M7_ProveedorContratoTest extends TestCase
         ]);
     }
 
-    //listarCuentasContables / consultarCuentaContable 
+    // listarCuentasContables / consultarCuentaContable
 
     public function test_listar_cuentas_cumple_el_esquema(): void
     {
@@ -174,10 +192,18 @@ class M7_ProveedorContratoTest extends TestCase
                 'success',
                 'data' => [
                     'id_comercio',
-                    'cuentas' => ['*' => [
-                        'id_cuenta_contable', 'codigo', 'nombre', 'tipo',
-                        'naturaleza', 'nivel', 'id_cuenta_padre', 'activa',
-                    ]],
+                    'cuentas' => [
+                        '*' => [
+                            'id_cuenta_contable',
+                            'codigo',
+                            'nombre',
+                            'tipo',
+                            'naturaleza',
+                            'nivel',
+                            'id_cuenta_padre',
+                            'activa',
+                        ]
+                    ],
                 ],
             ]);
     }
@@ -213,8 +239,14 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'id_cuenta_contable', 'codigo', 'nombre', 'tipo',
-                    'naturaleza', 'nivel', 'id_cuenta_padre', 'activa',
+                    'id_cuenta_contable',
+                    'codigo',
+                    'nombre',
+                    'tipo',
+                    'naturaleza',
+                    'nivel',
+                    'id_cuenta_padre',
+                    'activa',
                 ],
             ]);
     }
@@ -238,7 +270,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertNotFound();
     }
 
-    //consultarLibroDiario 
+    // consultarLibroDiario
 
     public function test_libro_diario_cumple_el_esquema(): void
     {
@@ -253,12 +285,23 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'asientos' => ['*' => [
-                        'id', 'numero', 'fecha', 'descripcion', 'tipo', 'estado',
-                        'referencia', 'totalDebe', 'totalHaber',
-                        'lineas' => ['*' => ['codigo', 'cuenta', 'debe', 'haber', 'descripcion']],
-                    ]],
-                    'totalDebe', 'totalHaber', 'cantidad',
+                    'asientos' => [
+                        '*' => [
+                            'id',
+                            'numero',
+                            'fecha',
+                            'descripcion',
+                            'tipo',
+                            'estado',
+                            'referencia',
+                            'totalDebe',
+                            'totalHaber',
+                            'lineas' => ['*' => ['codigo', 'cuenta', 'debe', 'haber', 'descripcion']],
+                        ]
+                    ],
+                    'totalDebe',
+                    'totalHaber',
+                    'cantidad',
                 ],
             ]);
     }
@@ -271,7 +314,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-005');
     }
 
-    //consultarLibroMayor / listarCuentasLibroMayor 
+    // consultarLibroMayor / listarCuentasLibroMayor
 
     public function test_libro_mayor_cumple_el_esquema(): void
     {
@@ -288,12 +331,28 @@ class M7_ProveedorContratoTest extends TestCase
                 'success',
                 'data' => [
                     'cuenta' => ['id_cuenta_contable', 'codigo', 'nombre', 'naturaleza'],
-                    'id_comercio', 'fecha_desde', 'fecha_hasta', 'incluir_anulados',
-                    'saldo_inicial', 'total_debe', 'total_haber', 'saldo_final',
-                    'movimientos' => ['*' => [
-                        'id_asiento', 'fecha', 'numero_linea', 'asiento', 'tipo',
-                        'descripcion', 'estado', 'debe', 'haber', 'saldo',
-                    ]],
+                    'id_comercio',
+                    'fecha_desde',
+                    'fecha_hasta',
+                    'incluir_anulados',
+                    'saldo_inicial',
+                    'total_debe',
+                    'total_haber',
+                    'saldo_final',
+                    'movimientos' => [
+                        '*' => [
+                            'id_asiento',
+                            'fecha',
+                            'numero_linea',
+                            'asiento',
+                            'tipo',
+                            'descripcion',
+                            'estado',
+                            'debe',
+                            'haber',
+                            'saldo',
+                        ]
+                    ],
                 ],
             ]);
 
@@ -333,7 +392,7 @@ class M7_ProveedorContratoTest extends TestCase
             ]);
     }
 
-    //consultarReporteGerencial 
+    // consultarReporteGerencial
 
     public function test_reporte_gerencial_cumple_el_esquema(): void
     {
@@ -349,7 +408,9 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'id_comercio', 'fecha_desde', 'fecha_hasta',
+                    'id_comercio',
+                    'fecha_desde',
+                    'fecha_hasta',
                     'resumen' => ['ingresos', 'costos', 'utilidad_bruta'],
                     'mensual' => ['*' => ['periodo', 'ingresos', 'costos', 'utilidad_bruta']],
                 ],
@@ -368,7 +429,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-005');
     }
 
-    //Autorización de las rutas protegidas 
+    // Autorización de las rutas protegidas
 
     /** @return array<string, array{string}> */
     public static function rutasProtegidas(): array
@@ -401,7 +462,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-002');
     }
 
-    //Rutas web (sin autenticación según el contrato v1.1.0)
+    // Rutas web (sin autenticación según el contrato v1.1.0)
 
     public function test_estado_del_modulo(): void
     {

@@ -16,14 +16,31 @@ class PlanCuentasApiTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
-    protected function migrateFreshUsing(): array
+    private const MIGRACIONES = [
+        'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php',
+        'database/migrations/Nucleo/2026_09_30_000002_crear_tabla_bitacora_auditoria.php',
+        'database/migrations/Nucleo/2026_09_30_000003_crear_tablas_sesiones_y_restablecimientos.php',
+        'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
+        'database/migrations/Nucleo/2026_11_02_191532_agregar_inmutabilidad_a_bitacora_auditoria.php',
+    ];
+
+    protected function migrateUsing(): array
     {
         return [
-            '--path' => database_path('migrations/Nucleo'),
-            '--realpath' => true,
+            '--path' => self::MIGRACIONES,
+            '--seed' => false,
         ];
     }
 
+    protected function migrateFreshUsing(): array
+    {
+        return [
+            '--path' => self::MIGRACIONES,
+            '--drop-views' => false,
+            '--drop-types' => false,
+            '--seed' => false,
+        ];
+    }
     protected function setUp(): void
     {
         parent::setUp();
@@ -261,8 +278,9 @@ class PlanCuentasApiTest extends TestCase
         $respuesta
             ->assertForbidden()
             ->assertJsonPath(
-            'error.codigo',
-            'ERR-002');
+                'error.codigo',
+                'ERR-002'
+            );
     }
 
     public function test_usuario_no_autenticado_no_puede_consultar_plan_de_cuentas(): void

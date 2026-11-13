@@ -13,13 +13,22 @@ info:
     de este archivo — se listan en la sección "Dependencias externas" al final
     de este documento, y su contrato formal corresponde al módulo proveedor.
 
-    El formato exacto de la respuesta de error (envelope común de la
-    plataforma) es una decisión transversal aún pendiente del Comité de
-    Arquitectura e Integración. Mientras tanto, este contrato usa el esquema
-    provisional `ErrorResponse` (ver components/schemas).
-  version: 1.0.0
+    Los errores usan el formato estándar del Núcleo Compartido:
+    {"error": {"codigo", "mensaje", "detalles"}}. "codigo" es el código
+    ERR-M6-nnn y "detalles.motivo" el nombre del error de negocio
+    (por ejemplo MONTO_INCONSISTENTE). Ver components/schemas/ErrorResponse.
+
+    Cambios en v1.3.0 (solicitud de cambio de SG6):
+    1. servers.url pasa a /api/m6/v1, que es la ruta real del módulo.
+    2. POST /pedidos/{id_pedido}/reembolsos responde una lista cuando el
+       reembolso total de un pedido multicomercio crea un reembolso por
+       subpedido (decisión de SG6: un reembolso y una nota de crédito por subpedido).
+    3. POST /pagos documenta el campo opcional token_medio_pago.
+    4. Las respuestas de error usan el formato estándar del Núcleo.
+    5. info.version se alinea con la versión publicada del contrato.
+  version: 1.3.0
 servers:
-  - url: /api/v1/m6-pagos
+  - url: /api/m6/v1
     description: Servidor local / integración
 
 tags:
@@ -92,6 +101,14 @@ paths:
                   type: number
                   format: decimal
                   description: Debe coincidir exactamente con el monto informado por M5 (RN-001).
+                token_medio_pago:
+                  type: string
+                  maxLength: 100
+                  nullable: true
+                  description: >
+                    Token del medio de pago entregado por la pasarela (simulador).
+                    M6 nunca recibe ni guarda número de tarjeta ni CVV
+                    (requisito de seguridad del PC2).
       responses:
         '201':
           description: Intento de pago registrado
@@ -106,8 +123,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: MONTO_INCONSISTENTE
-                mensaje: El monto recibido no coincide con el monto calculado del pedido.
+                error:
+                  codigo: ERR-M6-003
+                  mensaje: El monto recibido no coincide con el monto calculado del pedido.
+                  detalles:
+                    motivo: MONTO_INCONSISTENTE
         '404':
           description: El pedido no existe
           content:
@@ -115,8 +135,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: PEDIDO_NO_ENCONTRADO
-                mensaje: No se encontró el pedido indicado
+                error:
+                  codigo: ERR-M6-002
+                  mensaje: No se encontró el pedido indicado.
+                  detalles:
+                    motivo: PEDIDO_NO_ENCONTRADO
         '422':
           description: El medio de pago no está disponible
           content:
@@ -124,8 +147,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: MEDIO_PAGO_NO_DISPONIBLE
-                mensaje: El medio de pago solicitado no está habilitado .
+                error:
+                  codigo: ERR-M6-004
+                  mensaje: El medio de pago solicitado no está habilitado.
+                  detalles:
+                    motivo: MEDIO_PAGO_NO_DISPONIBLE
 
   /pagos/{id_pago}:
     get:
@@ -148,8 +174,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: PAGO_NO_ENCONTRADO
-                mensaje: No se encontró el pago indicado .
+                error:
+                  codigo: ERR-M6-008
+                  mensaje: No se encontró el pago indicado.
+                  detalles:
+                    motivo: PAGO_NO_ENCONTRADO
 
   /pagos/{id_pago}/confirmaciones:
     post:
@@ -215,8 +244,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: TRANSACCION_NO_ENCONTRADA
-                mensaje: No existe un intento de pago pendiente con ese identificador .
+                error:
+                  codigo: ERR-M6-009
+                  mensaje: No existe un intento de pago con ese identificador.
+                  detalles:
+                    motivo: TRANSACCION_NO_ENCONTRADA
         '401':
           description: La notificación no superó la verificación de autenticidad 
           content:
@@ -224,8 +256,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: NOTIFICACION_NO_AUTENTICA
-                mensaje: La notificación recibida no pudo autenticarse.
+                error:
+                  codigo: ERR-M6-010
+                  mensaje: La notificación recibida no pudo autenticarse.
+                  detalles:
+                    motivo: NOTIFICACION_NO_AUTENTICA
 
   /pedidos/{id_pedido}/reembolsos:
     post:
@@ -278,11 +313,20 @@ paths:
                   type: string
       responses:
         '201':
-          description: Reembolso aceptado y en proceso 
+          description: >
+            Reembolso registrado. Con id_subpedido (reembolso parcial) se
+            devuelve un objeto Reembolso. Sin id_subpedido (reembolso total)
+            se crea un reembolso por cada subpedido con saldo, cada uno con su
+            nota de crédito; si el pedido tiene más de un subpedido se devuelve
+            una lista de Reembolso.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Reembolso'
+                oneOf:
+                  - $ref: '#/components/schemas/Reembolso'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Reembolso'
         '409':
           description: No existe un pago confirmado sobre el cual reembolsar 
           content:
@@ -290,8 +334,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: PAGO_NO_CONFIRMADO
-                mensaje: No existe un pago confirmado asociado a este pedido 
+                error:
+                  codigo: ERR-M6-014
+                  mensaje: No existe un pago confirmado asociado a este pedido.
+                  detalles:
+                    motivo: PAGO_NO_CONFIRMADO
         '422':
           description: El monto solicitado excede el monto disponible para reembolso
           content:
@@ -299,8 +346,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: REEMBOLSO_EXCEDE_MONTO
-                mensaje: El monto solicitado supera el monto pagado menos lo ya reembolsado
+                error:
+                  codigo: ERR-M6-015
+                  mensaje: El monto solicitado supera el monto pagado menos lo ya reembolsado.
+                  detalles:
+                    motivo: REEMBOLSO_EXCEDE_MONTO
 
   /facturas:
     get:
@@ -352,8 +402,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: FACTURA_NO_ENCONTRADA
-                mensaje: No se encontró la factura indicada.
+                error:
+                  codigo: ERR-M6-016
+                  mensaje: No se encontró la factura indicada.
+                  detalles:
+                    motivo: FACTURA_NO_ENCONTRADA
 
   /facturas/{id_factura}/notas-credito:
     post:
@@ -393,8 +446,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: FACTURA_NO_ENCONTRADA
-                mensaje: No se encontró la factura de referencia.
+                error:
+                  codigo: ERR-M6-016
+                  mensaje: No se encontró la factura indicada.
+                  detalles:
+                    motivo: FACTURA_NO_ENCONTRADA
         '422':
           description: El monto de la nota supera el monto de la factura original
           content:
@@ -402,8 +458,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: NOTA_EXCEDE_MONTO_FACTURA
-                mensaje: El monto de la nota de crédito no puede superar el de la factura original.
+                error:
+                  codigo: ERR-M6-017
+                  mensaje: El monto de la nota de crédito no puede superar el de la factura original.
+                  detalles:
+                    motivo: NOTA_EXCEDE_MONTO_FACTURA
 
   /facturas/{id_factura}/notas-debito:
     post:
@@ -442,8 +501,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: FACTURA_NO_ENCONTRADA
-                mensaje: No se encontró la factura de referencia.
+                error:
+                  codigo: ERR-M6-016
+                  mensaje: No se encontró la factura indicada.
+                  detalles:
+                    motivo: FACTURA_NO_ENCONTRADA
         '409':
           description: La factura de referencia no está aceptada por Hacienda
           content:
@@ -451,8 +513,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: FACTURA_NO_ACEPTADA
-                mensaje: Solo se puede emitir una nota de débito sobre una factura aceptada por Hacienda (RN-005).
+                error:
+                  codigo: ERR-M6-018
+                  mensaje: Solo se puede emitir una nota de débito sobre una factura aceptada por Hacienda.
+                  detalles:
+                    motivo: FACTURA_NO_ACEPTADA
 
   /conciliaciones:
     post:
@@ -495,8 +560,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: PERIODO_INVALIDO
-                mensaje: El rango de fechas solicitado no es válido.
+                error:
+                  codigo: ERR-M6-019
+                  mensaje: El rango de fechas solicitado no es válido.
+                  detalles:
+                    motivo: PERIODO_INVALIDO
 
   /historial:
     get:
@@ -545,8 +613,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                codigo: SIN_RESULTADOS
-                mensaje: No se encontraron pagos ni facturas para los filtros indicados.
+                error:
+                  codigo: ERR-M6-020
+                  mensaje: No se encontraron pagos ni facturas para los filtros indicados.
+                  detalles:
+                    motivo: SIN_RESULTADOS
 
 components:
   parameters:
@@ -711,14 +782,30 @@ components:
     ErrorResponse:
       type: object
       description: >
-        Estructura provisional. El envelope de error único de toda la
-        plataforma está pendiente de definición por el Comité de Arquitectura
-        e Integración (PC3)[cite: 4].
+        Formato estándar de error del Núcleo Compartido (ManejadorErrores).
+        "codigo" es el código ERR-M6-nnn y "detalles.motivo" el nombre del
+        error de negocio de M6. "detalles" puede traer datos adicionales, por
+        ejemplo "disponible" en REEMBOLSO_EXCEDE_MONTO y NOTA_EXCEDE_MONTO_FACTURA.
+      required: [error]
       properties:
-        codigo:
-          type: string
-        mensaje:
-          type: string
+        error:
+          type: object
+          required: [codigo, mensaje]
+          properties:
+            codigo:
+              type: string
+              pattern: '^ERR-'
+              example: ERR-M6-003
+            mensaje:
+              type: string
+            detalles:
+              type: object
+              nullable: true
+              additionalProperties: true
+              properties:
+                motivo:
+                  type: string
+                  example: MONTO_INCONSISTENTE
 
     PagoConfirmadoEvent:
       type: object

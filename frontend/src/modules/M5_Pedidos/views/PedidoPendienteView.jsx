@@ -102,18 +102,15 @@ export default function PedidoPendientePage({ pedido: pedidoInicial, grupos = []
             <Total etiqueta="Total general" valor={Number(pedido.monto_total ?? 0)} />
           </div>
 
-          {!pagado && (esPasarelaSimulada(urlPago) ? (
-            <button type="button" onClick={() => setPasarelaAbierta(true)} className={`${CLASES_BOTON_PAGAR} cursor-pointer`}>
+          {!pagado && (
+            <a
+              href={urlPago && !esPasarelaSimulada(urlPago) ? urlPago : `/m6.html?pedido=${pedido.id_pedido}&monto=${pedido.monto_total ?? ''}`}
+              className={CLASES_BOTON_PAGAR}
+            >
               <CreditCard className="w-4 h-4" aria-hidden="true" />
-              Ir a pagar
-            </button>
-          ) : (
-            <a href={urlPago} target="_blank" rel="noopener noreferrer" className={CLASES_BOTON_PAGAR}>
-              <ExternalLink className="w-4 h-4" aria-hidden="true" />
-              Ir a pagar
-              <span className="sr-only">(se abre en otra pestaña)</span>
+              Ir a pagar a la pasarela M6
             </a>
-          ))}
+          )}
         </section>
 
         <div role="status">

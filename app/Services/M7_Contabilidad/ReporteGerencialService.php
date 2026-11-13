@@ -45,7 +45,7 @@ final class ReporteGerencialService
             ->whereIn('a.tipo', ['VENTA', 'COSTO_VENTA'])
             ->whereDate('a.fecha', '>=', $fechaDesde)
             ->whereDate('a.fecha', '<=', $fechaHasta)
-            ->selectRaw("SUBSTR(CAST(a.fecha AS TEXT), 1, 7) AS periodo")
+            ->selectRaw('SUBSTR(CAST(a.fecha AS TEXT), 1, 7) AS periodo')
             ->selectRaw("
                 SUM(
                     CASE
@@ -64,7 +64,7 @@ final class ReporteGerencialService
                     END
                 ) AS costos
             ")
-            ->groupByRaw("SUBSTR(CAST(a.fecha AS TEXT), 1, 7)")
+            ->groupByRaw('SUBSTR(CAST(a.fecha AS TEXT), 1, 7)')
             ->orderBy('periodo')
             ->get();
 
@@ -156,8 +156,8 @@ final class ReporteGerencialService
     private function formatearImporte(int $centimos): string
     {
         return intdiv($centimos, 100)
-            . '.'
-            . str_pad(
+            .'.'
+            .str_pad(
                 (string) ($centimos % 100),
                 2,
                 '0',

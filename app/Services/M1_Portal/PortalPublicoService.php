@@ -314,6 +314,24 @@ class PortalPublicoService implements PortalPublicoContract
         ];
     }
 
+    /**
+     * GET /comercios?q= (contrato 1.6.0). Solo existe en la API HTTP: no se agrega a
+     * PortalPublicoContract para no romper a quienes la implementan con dobles (por ejemplo,
+     * el PortalStub de M5). Devuelve la misma forma que listarComercios.
+     */
+    public function buscarComercios(string $termino, int $pagina = 1, int $porPagina = 20): array
+    {
+        /** @var ListadoComerciosDTO $listado */
+        $listado = $this->servicio(self::SERVICIO_MICROSITIO)->buscarComercios($termino, $pagina, $porPagina);
+
+        return [
+            'pagina' => $listado->pagina,
+            'por_pagina' => $listado->porPagina,
+            'total' => $listado->total,
+            'comercios' => array_map(fn (ComercioDTO $comercio): array => $this->comercioListado($comercio), $listado->comercios),
+        ];
+    }
+
     public function obtenerMicrositio(int $idComercio, int $pagina = 1, int $porPagina = 20): array
     {
         /** @var MicrositioDTO $micrositio */
@@ -353,7 +371,9 @@ class PortalPublicoService implements PortalPublicoContract
     // ---------------------------------------------------------------
 
     /**
-     * Esquema Cliente.
+     * Esquema Cliente. Desde 1.7.0 (SC-14) incluye identificacion_tributaria,
+     * que es la cédula del cliente (clientes.cedula), para que M6 la ponga en
+     * la factura del comprador.
      *
      * @return array<string, mixed>
      */
@@ -366,6 +386,7 @@ class PortalPublicoService implements PortalPublicoContract
             'correo_electronico' => $cliente->correoElectronico,
             'telefono' => $cliente->telefono,
             'direccion_envio' => $cliente->direccionEnvio,
+            'identificacion_tributaria' => $cliente->cedula,
         ];
     }
 

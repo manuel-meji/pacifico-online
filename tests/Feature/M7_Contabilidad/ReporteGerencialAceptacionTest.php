@@ -4,21 +4,39 @@ namespace Tests\Feature\M7_Contabilidad;
 
 use App\Models\Nucleo\Usuario;
 use Database\Factories\UsuarioFactory;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Tests\TestCase;
 
 class ReporteGerencialAceptacionTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
+    private const MIGRACIONES = [
+        'database/migrations/Nucleo/2026_09_30_000001_crear_tabla_usuarios.php',
+        'database/migrations/Nucleo/2026_09_30_000002_crear_tabla_bitacora_auditoria.php',
+        'database/migrations/Nucleo/2026_09_30_000003_crear_tablas_sesiones_y_restablecimientos.php',
+        'database/migrations/Nucleo/2026_09_30_000004_crear_tablas_trabajos_cola.php',
+        'database/migrations/Nucleo/2026_11_02_191532_agregar_inmutabilidad_a_bitacora_auditoria.php',
+    ];
+
+    protected function migrateUsing(): array
+    {
+        return [
+            '--path' => self::MIGRACIONES,
+            '--seed' => false,
+        ];
+    }
+
     protected function migrateFreshUsing(): array
     {
         return [
-            '--path' => database_path('migrations/Nucleo'),
-            '--realpath' => true,
+            '--path' => self::MIGRACIONES,
+            '--drop-views' => false,
+            '--drop-types' => false,
+            '--seed' => false,
         ];
     }
 
@@ -146,6 +164,7 @@ class ReporteGerencialAceptacionTest extends TestCase
             ->assertJsonPath('data.resumen.costos', '0.00')
             ->assertJsonPath('data.resumen.utilidad_bruta', '1000.00');
     }
+
     public function test_el_reporte_respeta_el_periodo_solicitado(): void
     {
         $this->crearAsiento(
@@ -176,6 +195,7 @@ class ReporteGerencialAceptacionTest extends TestCase
             ->assertJsonPath('data.resumen.costos', '0.00')
             ->assertJsonPath('data.resumen.utilidad_bruta', '1000.00');
     }
+
     public function test_rechaza_un_periodo_con_fecha_hasta_anterior_a_fecha_desde(): void
     {
         $usuario = $this->usuarioComercio(1);

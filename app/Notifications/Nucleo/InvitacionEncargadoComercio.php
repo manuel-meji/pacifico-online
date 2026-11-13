@@ -32,8 +32,12 @@ class InvitacionEncargadoComercio extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        // La ruta de la pantalla para definir la contraseña la define el frontend (pendiente).
-        $url = url('/crear-contrasena').'?token='.$this->token.'&correo='.urlencode((string) $notifiable->correo);
+        // Pantalla del portal (frontend) que envía el formulario a POST /crear-contrasena.
+        $url = rtrim((string) config('app.frontend_url'), '/').'/app.html?'.http_build_query([
+            'pantalla' => 'crear-contrasena',
+            'token' => $this->token,
+            'correo' => (string) $notifiable->correo,
+        ]);
 
         return (new MailMessage)
             ->subject('Invitación a Pacíficos Online')

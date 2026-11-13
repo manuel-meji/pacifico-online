@@ -31,4 +31,22 @@ interface ServicioIdentidadInterface
      * @throws ErrorNucleoException ERR-004 si el usuario no existe; ERR-005 (detalles['correo']) si el correo no es válido.
      */
     public function actualizarCorreo(int $idUsuario, string $correo): void;
+
+    /**
+     * Consulta si ya existe una cuenta asociada a un correo electrónico.
+     *
+     * Aplica la misma normalización que crearCuenta (se pasa a minúsculas y sin espacios
+     * al inicio ni al final). Cuenta también las cuentas inactivas, ya que la restricción
+     * de unicidad del correo en la tabla usuarios aplica sin importar el estado de la cuenta.
+     *
+     * No abre una transacción propia: es una consulta de solo lectura. No reemplaza la
+     * validación ni el control de concurrencia de crearCuenta, porque el correo puede
+     * registrarse entre la consulta y la creación efectiva de la cuenta.
+     *
+     * Si el correo está vacío o tiene un formato no válido, devuelve false sin lanzar excepción.
+     *
+     * @param  string  $correo  Correo a consultar.
+     * @return bool True si el correo ya pertenece a una cuenta (activa o inactiva); false en caso contrario.
+     */
+    public function existeCorreo(string $correo): bool;
 }

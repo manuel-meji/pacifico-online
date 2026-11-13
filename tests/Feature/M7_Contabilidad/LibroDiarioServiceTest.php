@@ -300,7 +300,7 @@ class LibroDiarioServiceTest extends TestCase
         $this->assertSame(1, $resultado['cantidad']);
         $this->assertSame($asiento, $resultado['asientos'][0]['id']);
         $this->assertCount(2, $resultado['asientos'][0]['lineas']);
-        $this->assertSame('ASI-' . str_pad((string) $asiento, 4, '0', STR_PAD_LEFT), $resultado['asientos'][0]['numero']);
+        $this->assertSame('ASI-'.str_pad((string) $asiento, 4, '0', STR_PAD_LEFT), $resultado['asientos'][0]['numero']);
         $this->assertSame('Subpedido 51', $resultado['asientos'][0]['referencia']);
         $this->assertSame(250.5, $resultado['asientos'][0]['totalDebe']);
         $this->assertSame(250.5, $resultado['asientos'][0]['totalHaber']);

@@ -11,8 +11,7 @@ class LibroMayorService
     public function __construct(
         private readonly ContextoComercio $contexto,
         private readonly PlanCuentasService $planCuentas
-    ) {
-    }
+    ) {}
 
     /**
      * Consulta los movimientos de una cuenta y calcula su saldo.
@@ -25,30 +24,31 @@ class LibroMayorService
      * - incluirAnulados
      */
     /**
- * Lista las cuentas activas disponibles para consultar el Libro Mayor.
- */
-public function listarCuentas(array $filtros = []): array
-{
-    $idComercio = $this->resolverComercio(
-        $filtros['id_comercio'] ?? null
-    );
+     * Lista las cuentas activas disponibles para consultar el Libro Mayor.
+     */
+    public function listarCuentas(array $filtros = []): array
+    {
+        $idComercio = $this->resolverComercio(
+            $filtros['id_comercio'] ?? null
+        );
 
-    $cuentas = $this->planCuentas->listar(
-        $idComercio,
-        true
-    );
+        $cuentas = $this->planCuentas->listar(
+            $idComercio,
+            true
+        );
 
-    return [
-        'id_comercio' => $idComercio,
-        'cuentas' => $cuentas->map(fn ($cuenta) => [
-            'id_cuenta_contable' => $cuenta->id_cuenta_contable,
-            'codigo' => $cuenta->codigo,
-            'nombre' => $cuenta->nombre,
-            'tipo' => $cuenta->tipo,
-            'naturaleza' => $cuenta->naturaleza,
-        ])->values()->all(),
-    ];
-}
+        return [
+            'id_comercio' => $idComercio,
+            'cuentas' => $cuentas->map(fn ($cuenta) => [
+                'id_cuenta_contable' => $cuenta->id_cuenta_contable,
+                'codigo' => $cuenta->codigo,
+                'nombre' => $cuenta->nombre,
+                'tipo' => $cuenta->tipo,
+                'naturaleza' => $cuenta->naturaleza,
+            ])->values()->all(),
+        ];
+    }
+
     public function consultar(array $filtros): array
     {
         $idCuenta = (int) ($filtros['id_cuenta_contable'] ?? 0);
@@ -158,7 +158,7 @@ public function listarCuentas(array $filtros = []): array
                 'id_asiento' => $movimiento->id_asiento,
                 'fecha' => $movimiento->fecha,
                 'numero_linea' => $movimiento->numero_linea,
-                'asiento' => 'ASI-' . str_pad(
+                'asiento' => 'ASI-'.str_pad(
                     (string) $movimiento->id_asiento,
                     4,
                     '0',
@@ -312,7 +312,7 @@ public function listarCuentas(array $filtros = []): array
     {
         $importe = (string) ($importe ?? '0');
 
-        if (!preg_match('/^\d+(?:\.\d{1,2})?$/', $importe)) {
+        if (! preg_match('/^\d+(?:\.\d{1,2})?$/', $importe)) {
             throw new LogicException(
                 'Se encontró un importe contable con formato inválido.'
             );
@@ -338,9 +338,9 @@ public function listarCuentas(array $filtros = []): array
         $valorAbsoluto = abs($centimos);
 
         return $signo
-            . intdiv($valorAbsoluto, 100)
-            . '.'
-            . str_pad(
+            .intdiv($valorAbsoluto, 100)
+            .'.'
+            .str_pad(
                 (string) ($valorAbsoluto % 100),
                 2,
                 '0',

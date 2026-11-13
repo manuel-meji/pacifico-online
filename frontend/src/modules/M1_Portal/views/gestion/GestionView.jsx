@@ -60,6 +60,12 @@ export default function GestionView({ seccion }) {
             <p className="mt-1 text-sm text-gray-600">{usuario.nombre} · {NOMBRE_ROL[usuario.rol]}</p>
           )}
         </div>
+        {/* Regreso al panel del encargado en M2 (/m2.html), con la misma sesión del núcleo. */}
+        {usuario && ROLES_GESTION.includes(usuario.rol) && (
+          <a href="/m2.html" className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-brandDarkBlue hover:border-brandBlue hover:text-brandBlue">
+            ← Volver a mi panel
+          </a>
+        )}
       </div>
       {contenido}
     </PaginaPortal>

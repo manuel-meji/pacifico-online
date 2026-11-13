@@ -4,8 +4,10 @@ import PaginaPortal, { PortalContext } from './components/PaginaPortal';
 import { obtenerCantidadCarrito } from './services/carritoApi';
 import { correoDuplicado, credencialesIncorrectas } from './services/datosMock';
 import { listarCategorias, registrarCliente } from './services/m1Api';
-import { cerrarSesion, iniciarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
+import { cerrarSesion, crearContrasena, iniciarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
 import BusquedaView from './views/BusquedaView';
+import BusquedaComerciosView from './views/BusquedaComerciosView';
+import CrearContrasenaView from './views/CrearContrasenaView';
 import CrearCuentaView from './views/CrearCuentaView';
 import FichaComercioView from './views/FichaComercioView';
 import IniciarSesionView from './views/IniciarSesionView';
@@ -21,11 +23,13 @@ const esperar = () => new Promise((r) => setTimeout(r, 600));
 const titulos = {
   inicio: 'Pacíficos Online · Inicio',
   busqueda: 'Pacíficos Online · Búsqueda',
+  comercios: 'Pacíficos Online · Comercios',
   producto: 'Pacíficos Online · Producto',
   comercio: 'Pacíficos Online · Comercio',
   noticia: 'Pacíficos Online · Noticia',
   ingresar: 'Pacíficos Online · M1 Iniciar sesión',
   crear: 'Pacíficos Online · M1 Crear cuenta',
+  'crear-contrasena': 'Pacíficos Online · Definir contraseña',
   perfil: 'Pacíficos Online · M1 Mi cuenta',
   gestion: 'Pacíficos Online · Panel de gestión',
 };
@@ -33,7 +37,8 @@ const titulos = {
 // Parámetros de las pantallas del portal que viajan en la URL (?pantalla=producto&id=1520, etc.).
 // Los nombres de la búsqueda son los del contrato de buscarProductos.
 const PARAMETROS_NUMERICOS = ['id', 'id_categoria', 'precio_minimo', 'precio_maximo', 'pagina', 'por_pagina'];
-const PARAMETROS_TEXTO = ['q', 'orden', 'slug', 'motivo', 'seccion'];
+// token y correo son los del enlace de invitación (pantalla crear-contrasena).
+const PARAMETROS_TEXTO = ['q', 'orden', 'slug', 'motivo', 'seccion', 'token', 'correo'];
 
 export function leerParametros(busqueda = window.location.search) {
   const url = new URLSearchParams(busqueda);
@@ -91,7 +96,7 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
     return () => { activo = false; };
   }, []);
 
-  // Unidades del carrito de M5 para la insignia del encabezado. Solo se consulta con sesión de cliente
+  // Líneas del carrito de M5 para la insignia (sin sesión de cliente queda en null y la insignia muestra 0) del encabezado. Solo se consulta con sesión de cliente
   // (sin sesión M5 no tiene a quién asociar el carrito). Se refresca al cambiar de pantalla y al volver
   // a la pestaña, por ejemplo después de agregar productos en el carrito de M5 (carrito.html).
   const [cantidadCarrito, setCantidadCarrito] = useState(null);
@@ -211,10 +216,11 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   const portal = useMemo(() => ({ ir: navegar, categorias, usuario, cargandoUsuario, cantidadCarrito }), [categorias, usuario, cargandoUsuario, cantidadCarrito, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pantallas del portal público (encabezado con buscador y categorías).
-  if (!['ingresar', 'crear', 'perfil'].includes(pantalla)) {
+  if (!['ingresar', 'crear', 'crear-contrasena', 'perfil'].includes(pantalla)) {
     const { id, ...criterio } = parametros;
     let vista;
     if (pantalla === 'busqueda') vista = <BusquedaView criterio={criterio} />;
+    else if (pantalla === 'comercios') vista = <BusquedaComerciosView criterio={criterio} />;
     else if (pantalla === 'producto') vista = <FichaProductoView key={id} idProducto={id} />;
     else if (pantalla === 'comercio') vista = <FichaComercioView key={id} idComercio={id} criterio={criterio} />;
     else if (pantalla === 'noticia') vista = <NoticiaView key={criterio.slug} slug={criterio.slug} />;
@@ -247,6 +253,17 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
         <CrearCuentaView
           onRegistrar={registrar}
           onIrIngresar={() => navegar('ingresar')}
+        />
+      )}
+
+      {/* Al terminar se reemplaza la entrada del historial: el enlace con el token ya usado no queda en "Atrás". */}
+      {pantalla === 'crear-contrasena' && (
+        <CrearContrasenaView
+          token={parametros.token}
+          correo={parametros.correo}
+          onCrear={crearContrasena}
+          onIrIngresar={() => navegar('ingresar', {}, { reemplazar: true })}
+          onIrInicio={() => navegar('inicio', {}, { reemplazar: true })}
         />
       )}
 

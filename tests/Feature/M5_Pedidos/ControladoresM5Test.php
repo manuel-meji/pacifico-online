@@ -489,4 +489,20 @@ class ControladoresM5Test extends TestCase
             'estado_pedido' => 'pagado',
         ]);
     }
+
+    public function test_obtener_carrito_recalcula_costo_envio_segun_zona_o_direccion(): void
+    {
+        $this->postJson('/m5/carrito/items', [
+            'id_variacion' => 101,
+            'cantidad' => 1,
+        ]);
+
+        $resGam = $this->getJson('/m5/carrito?id_cliente=1&zona=GAM');
+        $resGam->assertOk();
+        $this->assertEqualsWithDelta(1500.0, (float) $resGam->json('resumen.costo_envio'), 0.01);
+
+        $resResto = $this->getJson('/m5/carrito?id_cliente=1&zona=Resto%20del%20pa%C3%ADs');
+        $resResto->assertOk();
+        $this->assertEqualsWithDelta(2500.0, (float) $resResto->json('resumen.costo_envio'), 0.01);
+    }
 }

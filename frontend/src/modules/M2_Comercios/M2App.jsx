@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, ClipboardList, FileText, Home, Store, ShieldCheck } from 'lucide-react';
+import { Boxes, ClipboardList, FileText, Home, Megaphone, Store, ShieldCheck } from 'lucide-react';
 import { cerrarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
 import { AvisoError, C, Cargando, Encabezado, SesionContexto, textoDeError } from './components/comunes';
 import SolicitudIncorporacion from './views/SolicitudIncorporacion';
@@ -7,7 +7,7 @@ import PanelComercio from './views/PanelComercio';
 import PanelPlataforma from './views/PanelPlataforma';
 
 const VISTAS = [
-  { clave: 'solicitud', nombre: 'Solicitud de incorporación', corto: 'Solicitud', icono: FileText, Vista: SolicitudIncorporacion, rol: null },
+  { clave: 'solicitud', nombre: 'Solicitud de incorporación', corto: 'Solicitud', icono: FileText, Vista: SolicitudIncorporacion, rol: null, ocultarPara: ['encargado_comercio'] },
   { clave: 'comercio', nombre: 'Mi comercio', corto: 'Mi comercio', icono: Store, Vista: PanelComercio, rol: 'encargado_comercio' },
   { clave: 'plataforma', nombre: 'Panel de la plataforma', corto: 'Plataforma', icono: ShieldCheck, Vista: PanelPlataforma, rol: 'encargado_plataforma' },
 ];
@@ -48,8 +48,11 @@ export default function M2App() {
 
   const contexto = useMemo(() => ({ usuario: usuario ?? null, mensajeDeError }), [usuario, mensajeDeError]);
 
-  const visibles = VISTAS.filter((v) => v.rol === null || v.rol === usuario?.rol);
-  // Sin sesión (o sin vista propia del rol) se ve la solicitud de incorporación, la única pública.
+  const visibles = VISTAS.filter(
+    (v) => (v.rol === null || v.rol === usuario?.rol) && !v.ocultarPara?.includes(usuario?.rol),
+  );
+  // La solicitud de incorporación es pública (sin sesión, clientes y encargado de plataforma), pero no se
+  // muestra al encargado de comercio porque su cuenta está ligada a un solo comercio.
   const actual = visibles.find((v) => v.clave === vista) ?? visibles[0];
 
   let contenido;
@@ -91,6 +94,13 @@ export default function M2App() {
               <a href="/carrito.html?pantalla=comercio"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <ClipboardList size={18} /> Pedidos
+              </a>
+            )}
+            {/* Panel de gestión de M1 (/app.html?pantalla=gestion): destacados, promociones, cupones y noticias. */}
+            {['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol) && (
+              <a href="/app.html?pantalla=gestion" title="Productos destacados, promociones, cupones y noticias (M1)"
+                className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
+                <Megaphone size={18} /> Gestión del portal
               </a>
             )}
           </div>
