@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, ClipboardList, FileText, Home, Store, ShieldCheck } from 'lucide-react';
+import { Boxes, ClipboardList, FileText, Home, Megaphone, Store, ShieldCheck } from 'lucide-react';
 import { cerrarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
 import { AvisoError, C, Cargando, Encabezado, SesionContexto, textoDeError } from './components/comunes';
 import SolicitudIncorporacion from './views/SolicitudIncorporacion';
@@ -94,6 +94,13 @@ export default function M2App() {
               <a href="/carrito.html?pantalla=comercio"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <ClipboardList size={18} /> Pedidos
+              </a>
+            )}
+            {/* Panel de gestión de M1 (/app.html?pantalla=gestion): destacados, promociones, cupones y noticias. */}
+            {['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol) && (
+              <a href="/app.html?pantalla=gestion" title="Productos destacados, promociones, cupones y noticias (M1)"
+                className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
+                <Megaphone size={18} /> Gestión del portal
               </a>
             )}
           </div>

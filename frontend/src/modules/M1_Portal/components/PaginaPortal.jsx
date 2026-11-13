@@ -30,7 +30,7 @@ export default function PaginaPortal({ terminoBusqueda = '', tipoBusqueda = 'pro
         onCategoria={(idCategoria) => ir('busqueda', { id_categoria: idCategoria })}
         onMiCuenta={() => ir(usuario ? 'perfil' : 'ingresar')}
         mostrarVender={mostrarVender}
-        onGestion={esEncargado ? () => ir('gestion') : null}
+        onGestion={esEncargado ? () => { window.location.href = '/m2.html'; } : null}
       />
       <main className="mx-auto w-full max-w-7xl px-4 pb-12">{children}</main>
       <footer className="border-t border-gray-200 bg-white px-4 py-6 text-center text-xs text-gray-500">
