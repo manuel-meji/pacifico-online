@@ -48,6 +48,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const [validandoCupon, setValidandoCupon] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState(null);
+  const [recalculandoEnvio, setRecalculandoEnvio] = useState(false);
   const enviandoRef = useRef(false); // Evita un segundo POST antes de que React deshabilite el botón.
 
   useEffect(() => {
@@ -59,10 +60,21 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
         const c = await obtenerCarrito();
         const dirs = await cargarDirecciones(c);
         if (!vigente) return;
-        setCarrito(c);
         setDirecciones(dirs);
         const preseleccionada = dirs.find((d) => d.es_principal === true) ?? dirs[0];
-        setF((actual) => ({ ...actual, idDireccion: preseleccionada ? String(preseleccionada.id_direccion_cliente) : '' }));
+        const idInicial = preseleccionada ? String(preseleccionada.id_direccion_cliente) : '';
+        setF((actual) => ({ ...actual, idDireccion: idInicial }));
+
+        if (idInicial) {
+          try {
+            const cConDir = await obtenerCarrito(undefined, { id_direccion_cliente: idInicial });
+            if (vigente) setCarrito(cConDir);
+          } catch {
+            if (vigente) setCarrito(c);
+          }
+        } else {
+          setCarrito(c);
+        }
       } catch (e) {
         if (vigente) setErrorCarga(e);
       } finally {
@@ -71,6 +83,24 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
     })();
     return () => { vigente = false; };
   }, [intentoCarga]);
+
+  const cambiarDireccion = async (e) => {
+    const nuevaDirId = e.target.value;
+    setF((actual) => ({ ...actual, idDireccion: nuevaDirId }));
+    setErrores((prev) => ({ ...prev, idDireccion: undefined }));
+
+    if (!nuevaDirId) return;
+
+    setRecalculandoEnvio(true);
+    try {
+      const c = await obtenerCarrito(undefined, { id_direccion_cliente: nuevaDirId });
+      setCarrito(c);
+    } catch (err) {
+      console.error('Error al recalcular tarifas de envío por dirección:', err);
+    } finally {
+      setRecalculandoEnvio(false);
+    }
+  };
 
   const set = (k) => (e) => {
     const valor = e.target.value;
@@ -216,11 +246,11 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   const botonConfirmar = (clases) => (
     <Boton
       type="submit"
-      disabled={enviando || hayBloqueo || sinDirecciones}
-      icono={enviando ? LoaderCircle : ArrowRight}
+      disabled={enviando || hayBloqueo || sinDirecciones || recalculandoEnvio}
+      icono={enviando || recalculandoEnvio ? LoaderCircle : ArrowRight}
       className={clases}
     >
-      {enviando ? 'Procesando…' : 'Confirmar pedido'}
+      {enviando ? 'Procesando…' : recalculandoEnvio ? 'Actualizando tarifas…' : 'Confirmar pedido'}
     </Boton>
   );
 
@@ -259,8 +289,8 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                   <select
                     id="idDireccion"
                     value={f.idDireccion}
-                    onChange={set('idDireccion')}
-                    disabled={sinDirecciones}
+                    onChange={cambiarDireccion}
+                    disabled={sinDirecciones || recalculandoEnvio}
                     aria-invalid={!!errores.idDireccion}
                     aria-describedby="idDireccion-ayuda"
                     className={clasesInput(errores.idDireccion, true)}
@@ -384,8 +414,13 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                   <dd className="font-semibold text-gray-900">{colones(resumen.impuesto ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <dt>Envío</dt>
-                  <dd className="font-semibold text-gray-900">{colones(resumen.costo_envio ?? 0)}</dd>
+                  <dt className="flex items-center gap-1.5">
+                    <span>Envío</span>
+                    {recalculandoEnvio && <LoaderCircle className="w-3 h-3 animate-spin text-brandBlue" />}
+                  </dt>
+                  <dd className="font-semibold text-gray-900">
+                    {recalculandoEnvio ? 'Recalculando…' : colones(resumen.costo_envio ?? 0)}
+                  </dd>
                 </div>
                 {descuento > 0 && (
                   <div className="flex justify-between text-brandGreen">

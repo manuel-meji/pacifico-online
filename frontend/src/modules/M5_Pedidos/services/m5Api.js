@@ -73,8 +73,8 @@ export const validarCupon = ({ codigo, subtotal, ids_comercios, subtotales_por_c
 
 // ---------- Carrito ----------
 
-export const obtenerCarrito = (idCliente = ID_CLIENTE_POR_DEFECTO) =>
-  llamar(armarRuta('/carrito', idCliente));
+export const obtenerCarrito = (idCliente = ID_CLIENTE_POR_DEFECTO, query = {}) =>
+  llamar(armarRuta('/carrito', idCliente, query));
 
 // Respuesta: { id_cliente, direcciones: [{ id_direccion_cliente, texto_completo, es_principal, ... }] }.
 export const obtenerDirecciones = (idCliente = ID_CLIENTE_POR_DEFECTO) =>
