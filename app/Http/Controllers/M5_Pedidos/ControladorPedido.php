@@ -550,6 +550,19 @@ class ControladorPedido extends Controller
             );
         }
 
+        $yaSolicitada = $subpedido->cancelaciones()
+            ->where('motivo', 'like', '[DEVOLUCIÓN]%')
+            ->exists();
+
+        if ($yaSolicitada) {
+            return $this->errorRespuesta(
+                'ERR-M5-002',
+                'Ya existe una solicitud de devolución registrada para este subpedido.',
+                null,
+                409
+            );
+        }
+
         // Registrar la cancelación / devolución
         $subpedido->cancelaciones()->create([
             'id_pedido' => (int) $subpedido->id_pedido,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Boxes, Calendar, Check, ChevronDown, ChevronUp, ClipboardList, Clock, CreditCard, History,
-  LoaderCircle, MapPin, Package, PackageCheck, RefreshCw, Search, Store, Truck, X,
+  LoaderCircle, MapPin, Package, PackageCheck, RefreshCw, RotateCcw, Search, Store, Truck, X,
 } from 'lucide-react';
 import { Alerta, Boton, ModalConCampo } from '../components/componentes';
 import {
@@ -116,6 +116,9 @@ function TarjetaSubpedido({
   const guia = sub.guia_seguimiento || sub.guia_transporte;
   const lineas = sub.lineas || [];
   const historial = sub.estados || sub.historial_estados || [];
+  const devolucionSolicitada = (sub.cancelaciones || []).find((c) =>
+    String(c.motivo || '').startsWith('[DEVOLUCIÓN]')
+  );
   const total = sub.total ?? Number(sub.subtotal || 0) + Number(sub.impuesto || 0) + Number(sub.costo_envio || 0);
 
   const ocupadoPago = enCurso === `pago-${sub.id_pedido}`;
@@ -294,6 +297,21 @@ function TarjetaSubpedido({
             </span>
           )}
         </div>
+
+        {devolucionSolicitada && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 flex items-start gap-2">
+            <RotateCcw className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" aria-hidden="true" />
+            <div className="min-w-0 space-y-0.5">
+              <p className="font-bold">Devolución solicitada por el cliente</p>
+              <p className="text-amber-800 break-words">
+                Motivo: {String(devolucionSolicitada.motivo || '').replace(/^\[DEVOLUCIÓN\]\s*/, '')}
+              </p>
+              <p className="text-amber-700">
+                El reembolso se gestiona en Pagos (M6). Al recibir físicamente el producto, decide si reingresarlo en Inventario (M4).
+              </p>
+            </div>
+          </div>
+        )}
 
         {historial.length > 0 && (
           <button
