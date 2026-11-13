@@ -10,17 +10,18 @@ use App\Services\M5_Pedidos\Dobles\PagosStub;
  */
 class PagosEspia extends PagosStub
 {
-    /** @var list<array{id_pedido: int, monto: float, motivo: string}> */
+    /** @var list<array{id_pedido: int, monto: float, motivo: string, id_subpedido: ?int}> */
     public array $reembolsos = [];
 
-    public function solicitarReembolso(int $pedidoId, float $monto, string $motivo = 'Cancelación de pedido'): array
+    public function solicitarReembolso(int $pedidoId, float $monto, string $motivo = 'Cancelación de pedido', ?int $idSubpedido = null): array
     {
         $this->reembolsos[] = [
             'id_pedido' => $pedidoId,
             'monto' => $monto,
             'motivo' => $motivo,
+            'id_subpedido' => $idSubpedido,
         ];
 
-        return parent::solicitarReembolso($pedidoId, $monto, $motivo);
+        return parent::solicitarReembolso($pedidoId, $monto, $motivo, $idSubpedido);
     }
 }

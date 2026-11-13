@@ -26,6 +26,7 @@ return [
     ],
 
     'confirmacion_inmediata' => (bool) env('M6_CONFIRMACION_INMEDIATA', true),
+    'url_frontend' => env('M6_URL_FRONTEND', 'http://localhost:5173'),
 
     'webhook' => [
         // Cabecera con la firma: hash_hmac('sha256', <cuerpo crudo>, secreto).

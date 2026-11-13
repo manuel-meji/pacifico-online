@@ -51,7 +51,9 @@ class PagosService implements PagosServiceInterface
             'monto' => (float) $pago->monto,
             'metodo_pago' => $pago->medio->nombre_medio,
             'estado' => $estado,
-            'urlPasarelaPago' => url("/api/m6/v1/pagos/{$pago->id_pago}"),
+            'urlPasarelaPago' => rtrim((string) config('m6.url_frontend'), '/')
+                .'/m6.html?pedido='.$pago->id_pedido
+                .'&monto='.number_format((float) $pago->monto, 2, '.', ''),
             'fecha_pago' => ($pago->fecha_confirmacion ?? $pago->fecha_creacion)?->toIso8601String(),
         ];
     }

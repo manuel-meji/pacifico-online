@@ -26,11 +26,11 @@ function armarRuta(ruta, idCliente, query = {}) {
   return texto ? `${ruta}?${texto}` : ruta;
 }
 
-async function llamar(ruta, opciones = {}, reintentado = false) {
+async function solicitarUrl(url, opciones = {}, reintentado = false) {
   const metodo = (opciones.method || 'GET').toUpperCase();
   const xsrf = leerCookie('XSRF-TOKEN');
 
-  const resp = await fetch(`${BASE}${ruta}`, {
+  const resp = await fetch(url, {
     ...opciones,
     method: metodo,
     credentials: 'include',
@@ -42,16 +42,15 @@ async function llamar(ruta, opciones = {}, reintentado = false) {
     },
   });
 
-  // 419: token CSRF ausente o vencido. Se pide uno nuevo y se reintenta una sola vez.
   if (resp.status === 419 && !reintentado && METODOS_CON_CSRF.includes(metodo)) {
     await obtenerCookieCsrf();
-    return llamar(ruta, opciones, true);
+    return solicitarUrl(url, opciones, true);
   }
 
   const cuerpo = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const error = cuerpo.error || cuerpo;
-    const mensaje = error.mensaje || cuerpo.message || `Error de M5 (HTTP ${resp.status})`;
+    const mensaje = error.mensaje || cuerpo.message || `Error (HTTP ${resp.status})`;
     throw Object.assign(new Error(mensaje), {
       codigo: error.codigo,
       mensaje,
@@ -62,12 +61,20 @@ async function llamar(ruta, opciones = {}, reintentado = false) {
   return cuerpo;
 }
 
+const llamar = (ruta, opciones = {}) => solicitarUrl(`${BASE}${ruta}`, opciones);
+
 const json = (datos) => JSON.stringify(datos ?? {});
+
+export const validarCupon = ({ codigo, subtotal, ids_comercios, subtotales_por_comercio }) =>
+  solicitarUrl('/api/m1/v1/cupones/validar', {
+    method: 'POST',
+    body: json({ codigo, subtotal, ids_comercios, subtotales_por_comercio }),
+  });
 
 // ---------- Carrito ----------
 
-export const obtenerCarrito = (idCliente = ID_CLIENTE_POR_DEFECTO) =>
-  llamar(armarRuta('/carrito', idCliente));
+export const obtenerCarrito = (idCliente = ID_CLIENTE_POR_DEFECTO, query = {}) =>
+  llamar(armarRuta('/carrito', idCliente, query));
 
 // Respuesta: { id_cliente, direcciones: [{ id_direccion_cliente, texto_completo, es_principal, ... }] }.
 export const obtenerDirecciones = (idCliente = ID_CLIENTE_POR_DEFECTO) =>

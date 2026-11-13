@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import FormularioPago from './components/FormularioPago';
 import ResultadoPago from './components/ResultadoPago';
 import FacturasPedidoView from './views/FacturasPedidoView';
 import HistorialComercioView from './views/HistorialComercioView';
+import { listarFacturasPedido } from './api/pagosApi';
 
-// Pedido de prueba por defecto (dobles). Con ?pedido=ID&monto=MONTO se usa un pedido real de M5.
+// Pedido de prueba por defecto (dobles de M5).
 const PEDIDO_PRUEBA = {
   id_pedido: 8942,
   estado: 'confirmado',
@@ -12,20 +13,30 @@ const PEDIDO_PRUEBA = {
   subpedidos: [],
 };
 
-function pedidoDesdeUrl() {
+// Lee de la dirección ?pedido=ID y, opcionalmente, &monto=MONTO.
+function parametrosDeUrl() {
   const params = new URLSearchParams(window.location.search);
   const id = Number(params.get('pedido'));
   const monto = Number(params.get('monto'));
 
-  if (!Number.isInteger(id) || id <= 0 || !Number.isFinite(monto) || monto <= 0) {
-    return PEDIDO_PRUEBA;
-  }
-
-  // El estado "confirmado" solo habilita el botón; el backend valida el estado real en M5.
-  return { id_pedido: id, estado: 'confirmado', monto_total: monto, subpedidos: [] };
+  return {
+    id: Number.isInteger(id) && id > 0 ? id : null,
+    monto: Number.isFinite(monto) && monto > 0 ? monto : null,
+  };
 }
 
-const PEDIDO_ACTUAL = pedidoDesdeUrl();
+const PARAMS = parametrosDeUrl();
+const HAY_COBRO = Boolean(PARAMS.id && PARAMS.monto);
+
+// ?pedido=ID&monto=MONTO -> formulario de cobro (o facturas si el pedido ya fue cobrado).
+// Solo ?pedido=ID        -> facturas del pedido.
+// Sin parámetros         -> pedido de prueba.
+const PEDIDO_ACTUAL = HAY_COBRO
+  ? { id_pedido: PARAMS.id, estado: 'confirmado', monto_total: PARAMS.monto, subpedidos: [] }
+  : PEDIDO_PRUEBA;
+
+const ID_PEDIDO_FACTURAS = PARAMS.id ?? PEDIDO_PRUEBA.id_pedido;
+const PANTALLA_INICIAL = PARAMS.id && !PARAMS.monto ? 'factura' : 'pago';
 
 const PESTANAS = [
   ['pago', 'Pagar pedido'],
@@ -34,10 +45,24 @@ const PESTANAS = [
 ];
 
 export default function M6App() {
-  const [pantalla, setPantalla] = useState('pago');
+  const [pantalla, setPantalla] = useState(PANTALLA_INICIAL);
   const [pago, setPago] = useState(null);
- 
   const [intento, setIntento] = useState(0);
+  const [verificando, setVerificando] = useState(HAY_COBRO);
+
+  // Si el pedido ya tiene facturas, ya fue cobrado: se muestran en vez del formulario.
+  useEffect(() => {
+    if (!HAY_COBRO) return;
+
+    listarFacturasPedido(PARAMS.id)
+      .then((facturas) => {
+        if (Array.isArray(facturas) && facturas.length > 0) setPantalla('factura');
+      })
+      .catch(() => {
+        // Sin facturas o sin respuesta: se queda en el formulario de cobro.
+      })
+      .finally(() => setVerificando(false));
+  }, []);
 
   const verResultado = (p) => { setPago(p); setPantalla('resultado'); };
   const otroMedio = () => { setIntento((n) => n + 1); setPantalla('pago'); };
@@ -56,11 +81,15 @@ export default function M6App() {
         })}
       </nav>
 
-      {pantalla === 'pago' && (
-        <FormularioPago key={intento} pedido={PEDIDO_ACTUAL} />
+      {verificando && (
+        <p className="mx-auto max-w-xl text-sm text-gray-500">Verificando el pedido…</p>
       )}
 
-      {pantalla === 'resultado' && pago && (
+      {!verificando && pantalla === 'pago' && (
+        <FormularioPago key={intento} pedido={PEDIDO_ACTUAL} onResultado={verResultado} />
+      )}
+
+      {!verificando && pantalla === 'resultado' && pago && (
         <div className="space-y-3">
           <ResultadoPago
             pago={pago}
@@ -70,14 +99,13 @@ export default function M6App() {
         </div>
       )}
 
-      {pantalla === 'factura' && (
-        <FacturasPedidoView idPedido={pago?.id_pedido ?? PEDIDO_ACTUAL.id_pedido} />
+      {!verificando && pantalla === 'factura' && (
+        <FacturasPedidoView idPedido={pago?.id_pedido ?? ID_PEDIDO_FACTURAS} />
       )}
 
-      {pantalla === 'historial' && (
-       
-          // CU-008: el filtro se elige en la pantalla; con sesión, el backend lo fija al propio (RN-12).
-         <HistorialComercioView />
+      {!verificando && pantalla === 'historial' && (
+        // CU-008: el filtro se elige en la pantalla; con sesión, el backend lo fija al propio (RN-12).
+        <HistorialComercioView />
       )}
     </div>
   );

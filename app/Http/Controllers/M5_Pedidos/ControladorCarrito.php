@@ -49,7 +49,19 @@ class ControladorCarrito extends Controller
         $carrito = (new Carrito)->obtenerOCrearCarrito($clienteId);
         $carrito->load('items');
 
-        $desglose = $this->pedidosService->calcularDesgloseCarrito($carrito, $this->m3Catalogo, $this->m2Comercios, $this->m1Portal);
+        $direccionClienteId = $request->filled('id_direccion_cliente')
+            ? (int) $request->input('id_direccion_cliente')
+            : null;
+        $zonaEntrega = $request->input('zona') ?? $request->input('zona_entrega');
+
+        $desglose = $this->pedidosService->calcularDesgloseCarrito(
+            $carrito,
+            $this->m3Catalogo,
+            $this->m2Comercios,
+            $this->m1Portal,
+            $zonaEntrega,
+            $direccionClienteId
+        );
         $totalGeneral = (float) ($desglose['resumen']['total'] ?? 0.0);
 
         if ($totalGeneral > 0.0) {

@@ -96,7 +96,7 @@ return [
 
     'm4' => [
         'm2' => [
-            'modo' => env('M4_M2_MODO', 'doble'),
+            'modo' => env('M4_M2_MODO', 'real'),
             'doble' => M4ComerciosStub::class,
         ],
         'm3' => [
