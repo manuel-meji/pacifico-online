@@ -88,6 +88,12 @@ class ProductoService
     public function crearProducto(array $datos): array
     {
         $idComercio = $this->idComercioDeLaSesion();
+        if (
+            array_key_exists('id_comercio', $datos)
+            && (int) $datos['id_comercio'] !== $idComercio
+        ) {
+            throw ErrorNucleoException::rolSinPermiso();
+        }
         $this->exigirComercioActivo($idComercio);
 
         $producto = (new Producto)->forceFill([
@@ -344,6 +350,46 @@ class ProductoService
         return Producto::query()
             ->where('id_comercio', $this->idComercioDeLaSesion())
             ->findOrFail($idProducto);
+    }
+
+    /**
+     * Actualiza exclusivamente la disponibilidad de una variación.
+     * La variación debe pertenecer al comercio de la sesión (RN-12).
+     *
+     * @return array<string, mixed>
+     */
+    public function actualizarDisponibilidadVariacion(
+        int $idVariacion,
+        bool $disponible
+    ): array {
+        $variacion = ProductoVariacion::query()
+            ->delComercio($this->idComercioDeLaSesion())
+            ->findOrFail($idVariacion);
+
+        $variacion->forceFill([
+            'disponible' => $disponible,
+        ]);
+
+        $variacion->save();
+
+        return [
+            'id_variacion' => (int) $variacion->getKey(),
+            'id_producto' => (int) $variacion->id_producto,
+            'sku' => $variacion->sku,
+            'precio' => (float) $variacion->precio,
+            'tarifa_impuesto' => (float) $variacion->tarifa_impuesto,
+            'codigo_barras' => $variacion->codigo_barras,
+            'codigo_fabricante' => $variacion->codigo_fabricante,
+            'disponible' => (bool) $variacion->disponible,
+            'atributos' => $variacion->atributos()
+                ->get()
+                ->map(fn (AtributoVariacion $atributo): array => [
+                    'tipo_atributo' => $atributo->tipo_atributo,
+                    'valor' => $atributo->valor,
+                ])
+                ->values()
+                ->all(),
+        ];
     }
 
     /** RN-M3-07: un comercio suspendido no crea ni publica productos. */

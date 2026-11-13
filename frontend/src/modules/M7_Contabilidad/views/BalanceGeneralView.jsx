@@ -2,22 +2,16 @@
 import { useMemo, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
 
-// Datos financieros ficticios para el prototipo.
-// No son saldos reales ni provienen de la base de datos.
-const cuentasBalance = [
-  { codigo: '1.1.0', nombre: 'Caja y bancos', grupo: 'Activo corriente', tipo: 'Activo', saldo: 850000 },
-  { codigo: '1.2.0', nombre: 'Cuentas por cobrar', grupo: 'Activo corriente', tipo: 'Activo', saldo: 385000 },
-  { codigo: '1.3.0', nombre: 'Inventario', grupo: 'Activo corriente', tipo: 'Activo', saldo: 620000 },
-  { codigo: '1.4.0', nombre: 'Equipo y mobiliario', grupo: 'Activo no corriente', tipo: 'Activo', saldo: 950000 },
-  { codigo: '2.1.0', nombre: 'Cuentas por pagar', grupo: 'Pasivo corriente', tipo: 'Pasivo', saldo: 425000 },
-  { codigo: '2.2.0', nombre: 'Obligaciones a largo plazo', grupo: 'Pasivo no corriente', tipo: 'Pasivo', saldo: 580000 },
-  { codigo: '3.1.0', nombre: 'Capital aportado', grupo: 'Patrimonio', tipo: 'Patrimonio', saldo: 1200000 },
-  { codigo: '3.2.0', nombre: 'Utilidades acumuladas', grupo: 'Patrimonio', tipo: 'Patrimonio', saldo: 600000 },
-];
+// Los datos se incorporarán cuando esté disponible la consulta real del balance.
+const cuentasBalance = [];
 
 const tiposDisponibles = ['Activo', 'Pasivo', 'Patrimonio'];
 
 function formatoMoneda(monto) {
+  if (monto === null || monto === undefined || monto === '') {
+    return '—';
+  }
+
   return new Intl.NumberFormat('es-CR', {
     style: 'currency',
     currency: 'CRC',
@@ -50,23 +44,34 @@ export default function BalanceGeneralView({ onNavegar }) {
     });
   }, [busqueda, tipoSeleccionado, grupoSeleccionado]);
 
-  // Los totales del balance se calculan con todas las cuentas.
-  // Los filtros solo modifican las filas visibles.
-  const activos = cuentasBalance
-    .filter((cuenta) => cuenta.tipo === 'Activo')
-    .reduce((total, cuenta) => total + cuenta.saldo, 0);
+  const hayDatos = cuentasBalance.length > 0;
 
-  const pasivos = cuentasBalance
-    .filter((cuenta) => cuenta.tipo === 'Pasivo')
-    .reduce((total, cuenta) => total + cuenta.saldo, 0);
+  const activos = hayDatos
+    ? cuentasBalance
+      .filter((cuenta) => cuenta.tipo === 'Activo')
+      .reduce((total, cuenta) => total + cuenta.saldo, 0)
+    : null;
 
-  const patrimonio = cuentasBalance
-    .filter((cuenta) => cuenta.tipo === 'Patrimonio')
-    .reduce((total, cuenta) => total + cuenta.saldo, 0);
+  const pasivos = hayDatos
+    ? cuentasBalance
+      .filter((cuenta) => cuenta.tipo === 'Pasivo')
+      .reduce((total, cuenta) => total + cuenta.saldo, 0)
+    : null;
 
-  const totalPasivoPatrimonio = pasivos + patrimonio;
-  const diferencia = activos - totalPasivoPatrimonio;
-  const balanceCuadrado = Math.abs(diferencia) < 0.005;
+  const patrimonio = hayDatos
+    ? cuentasBalance
+      .filter((cuenta) => cuenta.tipo === 'Patrimonio')
+      .reduce((total, cuenta) => total + cuenta.saldo, 0)
+    : null;
+
+  const totalPasivoPatrimonio =
+    hayDatos ? pasivos + patrimonio : null;
+
+  const diferencia =
+    hayDatos ? activos - totalPasivoPatrimonio : null;
+
+  const balanceCuadrado =
+    hayDatos ? Math.abs(diferencia) < 0.005 : null;
 
   const gruposDisponibles = [
     ...new Set(cuentasBalance.map((cuenta) => cuenta.grupo)),
@@ -135,41 +140,37 @@ export default function BalanceGeneralView({ onNavegar }) {
         </section>
 
         <section
-          className={`mb-6 rounded-xl border p-5 shadow-sm ${
-            balanceCuadrado
-              ? 'border-green-200 bg-green-50'
-              : 'border-amber-200 bg-amber-50'
-          }`}
+          className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
           aria-live="polite"
         >
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-              <h2 className="font-bold text-gray-800">
-                Comprobación de la ecuación contable
-              </h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Activos = Pasivos + Patrimonio
-              </p>
-              <p className="mt-2 text-sm text-gray-700">
+          <h2 className="font-bold text-gray-800">
+            Comprobación de la ecuación contable
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-600">
+            Activos = Pasivos + Patrimonio
+          </p>
+
+          {hayDatos ? (
+            <div className="mt-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <p className="text-sm text-gray-700">
                 {formatoMoneda(activos)} = {formatoMoneda(pasivos)} + {formatoMoneda(patrimonio)}
               </p>
-            </div>
 
-            <div className="sm:text-right">
-              <span
-                className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
-                  balanceCuadrado
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                {balanceCuadrado ? 'Balance cuadrado' : 'Diferencia detectada'}
-              </span>
-              <p className="mt-2 text-sm text-gray-700">
-                Diferencia: {formatoMoneda(diferencia)}
-              </p>
+              <div className="sm:text-right">
+                <span className="text-sm font-semibold text-gray-700">
+                  {balanceCuadrado ? 'Balance cuadrado' : 'Diferencia detectada'}
+                </span>
+                <p className="mt-2 text-sm text-gray-700">
+                  Diferencia: {formatoMoneda(diferencia)}
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">
+              Sin información disponible para comprobar la ecuación contable.
+            </p>
+          )}
         </section>
 
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -178,7 +179,7 @@ export default function BalanceGeneralView({ onNavegar }) {
               Cuentas del balance
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Datos demostrativos clasificados por tipo y grupo.
+              Cuentas contables registradas en el sistema.
             </p>
           </div>
 
@@ -373,8 +374,7 @@ export default function BalanceGeneralView({ onNavegar }) {
         </section>
 
         <p className="mt-5 text-xs text-gray-500">
-          Datos ficticios para el prototipo. El balance definitivo deberá
-          generarse a partir de los saldos contables validados.
+          Los saldos se mostrarán cuando estén disponibles los datos contables correspondientes.
         </p>
       </main>
     </div>

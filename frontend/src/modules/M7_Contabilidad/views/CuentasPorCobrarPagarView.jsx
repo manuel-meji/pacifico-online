@@ -2,81 +2,17 @@
 import { useMemo, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
 
-// Datos ficticios para el prototipo.
-// No representan saldos reales ni están conectados con M2 o M6.
-const documentosIniciales = [
-  {
-    id: 1,
-    referencia: 'CXC-0001',
-    tercero: 'Comercio Demo Norte',
-    tipo: 'Por cobrar',
-    fechaEmision: '2026-10-10',
-    fechaVencimiento: '2026-10-25',
-    monto: 125000,
-    abonado: 0,
-    estado: 'Pendiente',
-  },
-  {
-    id: 2,
-    referencia: 'CXC-0002',
-    tercero: 'Comercio Demo Centro',
-    tipo: 'Por cobrar',
-    fechaEmision: '2026-10-12',
-    fechaVencimiento: '2026-10-18',
-    monto: 180000,
-    abonado: 50000,
-    estado: 'Pendiente',
-  },
-  {
-    id: 3,
-    referencia: 'CXC-0003',
-    tercero: 'Comercio Demo Sur',
-    tipo: 'Por cobrar',
-    fechaEmision: '2026-10-14',
-    fechaVencimiento: '2026-10-16',
-    monto: 80000,
-    abonado: 80000,
-    estado: 'Pagado',
-  },
-  {
-    id: 4,
-    referencia: 'CXP-0001',
-    tercero: 'Proveedor Demo A',
-    tipo: 'Por pagar',
-    fechaEmision: '2026-10-08',
-    fechaVencimiento: '2026-10-20',
-    monto: 95000,
-    abonado: 0,
-    estado: 'Pendiente',
-  },
-  {
-    id: 5,
-    referencia: 'CXP-0002',
-    tercero: 'Proveedor Demo B',
-    tipo: 'Por pagar',
-    fechaEmision: '2026-10-11',
-    fechaVencimiento: '2026-10-30',
-    monto: 150000,
-    abonado: 40000,
-    estado: 'Pendiente',
-  },
-  {
-    id: 6,
-    referencia: 'CXP-0003',
-    tercero: 'Proveedor Demo C',
-    tipo: 'Por pagar',
-    fechaEmision: '2026-10-13',
-    fechaVencimiento: '2026-10-17',
-    monto: 60000,
-    abonado: 60000,
-    estado: 'Pagado',
-  },
-];
+// Los documentos se mostrarán cuando estén disponibles los registros reales.
+const documentosIniciales = [];
 
 const opcionesTipo = ['Por cobrar', 'Por pagar'];
 const opcionesEstado = ['Pendiente', 'Pagado'];
 
 function formatoMoneda(monto) {
+  if (monto === null || monto === undefined || monto === '') {
+    return '—';
+  }
+
   return new Intl.NumberFormat('es-CR', {
     style: 'currency',
     currency: 'CRC',
@@ -156,6 +92,15 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
   ]);
 
   const resumen = useMemo(() => {
+    if (documentosIniciales.length === 0) {
+      return {
+        porCobrar: null,
+        porPagar: null,
+        vencidoPorCobrar: null,
+        vencidoPorPagar: null,
+      };
+    }
+
     const porCobrar = documentosIniciales
       .filter((documento) => documento.tipo === 'Por cobrar')
       .reduce((total, documento) => total + saldoPendiente(documento), 0);
@@ -178,6 +123,7 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
 
     return { porCobrar, porPagar, vencidoPorCobrar, vencidoPorPagar };
   }, []);
+
 
   const totalPaginas = Math.max(
     1,
@@ -261,21 +207,31 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Por cobrar vencido</p>
-            <p className="mt-2 text-2xl font-bold text-red-700">
+            <p className={`mt-2 text-2xl font-bold ${resumen.vencidoPorCobrar === null || resumen.vencidoPorCobrar === 0
+              ? 'text-gray-500'
+              : 'text-red-700'
+              }`}>
               {formatoMoneda(resumen.vencidoPorCobrar)}
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              Según la fecha actual
+              {documentosIniciales.length === 0
+                ? 'Sin información disponible'
+                : 'Según la fecha actual'}l
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Por pagar vencido</p>
-            <p className="mt-2 text-2xl font-bold text-red-700">
+            <p className={`mt-2 text-2xl font-bold ${resumen.vencidoPorPagar === null || resumen.vencidoPorPagar === 0
+              ? 'text-gray-500'
+              : 'text-red-700'
+              }`}>
               {formatoMoneda(resumen.vencidoPorPagar)}
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              Según la fecha actual
+              {documentosIniciales.length === 0
+                ? 'Sin información disponible'
+                : 'Según la fecha actual'}
             </p>
           </article>
         </section>
@@ -386,9 +342,11 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
 
           <div className="flex flex-col justify-between gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center">
             <p className="text-sm text-gray-600" aria-live="polite">
-              {documentosFiltrados.length === 0
-                ? 'No hay documentos que coincidan con los filtros.'
-                : `Mostrando ${inicio + 1}–${Math.min(
+              {documentosIniciales.length === 0
+                ? 'No hay documentos disponibles para mostrar.'
+                : documentosFiltrados.length === 0
+                  ? 'No hay documentos que coincidan con los filtros.'
+                  : `Mostrando ${inicio + 1}-${Math.min(
                     inicio + filasPorPagina,
                     documentosFiltrados.length
                   )} de ${documentosFiltrados.length} documentos`}
@@ -433,11 +391,10 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
                     </div>
 
                     <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                        documento.estado === 'Pagado'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${documento.estado === 'Pagado'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-amber-100 text-amber-800'
+                        }`}
                     >
                       {documento.estado}
                     </span>
@@ -461,9 +418,8 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
 
                     <div>
                       <dt className="text-gray-500">Vencimiento</dt>
-                      <dd className={`break-words font-medium ${
-                        vencido ? 'text-red-700' : 'text-gray-800'
-                      }`}>
+                      <dd className={`break-words font-medium ${vencido ? 'text-red-700' : 'text-gray-800'
+                        }`}>
                         {formatoFecha(documento.fechaVencimiento)}
                       </dd>
                       {vencido && (
@@ -493,7 +449,9 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
 
             {documentosVisibles.length === 0 && (
               <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
-                No hay documentos que coincidan con los filtros.
+                {documentosIniciales.length === 0
+                  ? 'No hay documentos disponibles para mostrar.'
+                  : 'No hay documentos que coincidan con los filtros.'}
               </div>
             )}
           </div>
@@ -548,11 +506,10 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
                         {formatoMoneda(pendiente)}
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          documento.estado === 'Pagado'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}>
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${documento.estado === 'Pagado'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-amber-100 text-amber-800'
+                          }`}>
                           {documento.estado}
                         </span>
                       </td>
@@ -563,7 +520,9 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
                 {documentosVisibles.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-5 py-12 text-center text-gray-500">
-                      No hay documentos que coincidan con los filtros.
+                      {documentosIniciales.length === 0
+                        ? 'No hay documentos disponibles para mostrar.'
+                        : 'No hay documentos que coincidan con los filtros.'}
                     </td>
                   </tr>
                 )}
@@ -618,9 +577,7 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
         </section>
 
         <p className="mt-5 text-xs text-gray-500">
-          Información ficticia para el prototipo. En la versión definitiva,
-          los saldos deberán provenir de los registros contables y de contratos
-          de integración con los módulos responsables.
+          Los saldos y vencimientos se mostrarán cuando estén disponibles los documentos correspondientes.
         </p>
       </main>
     </div>

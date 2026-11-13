@@ -404,17 +404,18 @@ paths:
       summary: Consultar si existe un asiento registrado para un pago
       operationId: consultarRegistroContablePago
       description: |
-        Ruta web que no declara autenticación ni control de comercio. La consulta
-        no filtra por comercio: riesgo pendiente de revisión; no se recomienda
-        su exposición sin autorización. Identificadores no positivos o sin asiento
-        devuelven registrado=false. La lista subpedidos_registrados solo contiene
-        subpedidos con asiento COBRO registrado para el pago.
-      security: []
+        Ruta web protegida con sesión y rol (encargado_comercio o
+        encargado_plataforma). encargado_comercio consulta solo los asientos de
+        su comercio; encargado_plataforma consulta sin filtro de comercio. La
+        lista subpedidos_registrados solo incluye cobros registrados y se limita
+        al comercio autenticado, salvo para encargado_plataforma.
+        Identificadores sin asiento devuelven registrado=false. No demuestra
+        que se genere el asiento del pago.
       parameters:
         - name: idPago
           in: path
           required: true
-          schema: { type: integer }
+          schema: { type: integer, minimum: 1 }
       responses:
         '200':
           description: Resultado de la búsqueda
@@ -422,7 +423,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [id_pago, registrado, asiento_id, fecha_registro]
+                required: [id_pago, registrado, asiento_id, fecha_registro, subpedidos_registrados]
                 properties:
                   id_pago: { type: integer }
                   registrado: { type: boolean }
@@ -431,8 +432,10 @@ paths:
                   subpedidos_registrados:
                     type: array
                     items: { type: integer, format: int64 }
-        '500':
-          description: Error del servidor; su formato depende de si la solicitud espera JSON.
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
 
 components:
   securitySchemes:
