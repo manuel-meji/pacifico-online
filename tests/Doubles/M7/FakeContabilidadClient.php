@@ -24,4 +24,14 @@ final class FakeContabilidadClient implements ContabilidadClient
 
         return in_array($idPago, array_column($this->eventos, 0), true);
     }
+
+    /** Como el M7 anterior: no informa el detalle por subpedido. */
+    public function subpedidosConCobro(int $idPago): ?array
+    {
+        if (! $this->disponible) {
+            throw new \RuntimeException('M7 no responde');
+        }
+
+        return null;
+    }
 }

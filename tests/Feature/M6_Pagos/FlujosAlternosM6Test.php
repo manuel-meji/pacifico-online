@@ -95,6 +95,11 @@ class FlujosAlternosM6Test extends TestCase
             {
                 return false;
             }
+
+            public function subpedidosConCobro(int $idPago): ?array
+            {
+                return null;
+            }
         });
 
         $this->procesarPago()

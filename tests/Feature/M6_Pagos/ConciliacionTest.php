@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\M6_Pagos;
 
 use App\Contracts\M6_Pagos\PasarelaPagoInterface;
+use App\Models\M6_Pagos\FacturaElectronica;
 use App\Models\M6_Pagos\TipoDiferencia;
 use App\Services\M6_Pagos\Clients\ContabilidadClient;
 use Tests\Doubles\M7\FakeContabilidadClient;
@@ -95,6 +96,34 @@ class ConciliacionTest extends TestCase
         $this->assertDatabaseCount('conciliaciones', 1);
     }
 
+    /** Conexión M6–M7 · pago multicomercio: si M7 registró el cobro de un solo comercio, queda "parcial". */
+    public function test_multicomercio_con_un_cobro_faltante_en_m7_queda_parcial(): void
+    {
+        $this->procesarPago()->assertCreated();
+        $this->m7QueRegistra([1001]);
+
+        $this->conciliarHoy()->assertOk()->assertJsonPath('estado', 'parcial');
+    }
+
+    /** Conexión M6–M7 · pago multicomercio: M7 registró el cobro de cada factura → "completa". */
+    public function test_multicomercio_con_todos_los_cobros_en_m7_queda_completa(): void
+    {
+        $this->procesarPago()->assertCreated();
+        $this->m7QueRegistra([1002, 1001]);
+
+        $this->conciliarHoy()->assertOk()->assertJsonPath('estado', 'completa');
+    }
+
+    /** Conexión M6–M7: si el pago aún no tiene facturas, M7 no puede tener sus cobros → "parcial". */
+    public function test_pago_sin_facturas_queda_parcial_cuando_m7_informa_el_detalle(): void
+    {
+        $this->procesarPago()->assertCreated();
+        FacturaElectronica::query()->delete();
+        $this->m7QueRegistra([]);
+
+        $this->conciliarHoy()->assertOk()->assertJsonPath('estado', 'parcial');
+    }
+
     /** CP-M6-C06 · Período con fecha final anterior a la inicial → 422 ERR-M6-019. */
     public function test_periodo_invalido_responde_err_019(): void
     {
@@ -111,6 +140,27 @@ class ConciliacionTest extends TestCase
         $hoy = now()->toDateString();
 
         return $this->postJson('/api/m6/v1/conciliaciones', ['fecha_inicio' => $hoy, 'fecha_fin' => $hoy]);
+    }
+
+    /** @param list<int> $subpedidos Subpedidos con cobro registrado que informa M7. */
+    private function m7QueRegistra(array $subpedidos): void
+    {
+        $this->app->instance(ContabilidadClient::class, new class($subpedidos) implements ContabilidadClient
+        {
+            public function __construct(private readonly array $subpedidos) {}
+
+            public function enviarEventoFinanciero(int $idPago, string $tipo): void {}
+
+            public function consultarRegistroContablePago(int $idPago): bool
+            {
+                return $this->subpedidos !== [];
+            }
+
+            public function subpedidosConCobro(int $idPago): ?array
+            {
+                return $this->subpedidos;
+            }
+        });
     }
 
     /** @param list<array{referencia_proveedor: string, monto: float}> $movimientos */

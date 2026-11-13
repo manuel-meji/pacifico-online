@@ -31,4 +31,21 @@ final class AdaptadorM7 implements ContabilidadClient
 
         return (bool) ($resultado['registrado'] ?? false);
     }
+
+    /**
+     * Lee el campo opcional "subpedidos_registrados" de M7 (subpedidos del pago
+     * con asiento COBRO registrado). Si M7 aún no lo envía, devuelve null y la
+     * conciliación sigue usando solo "registrado", como antes.
+     */
+    public function subpedidosConCobro(int $idPago): ?array
+    {
+        $subpedidos = $this->contabilidad
+            ->consultarRegistroContablePago($idPago)['subpedidos_registrados'] ?? null;
+
+        if (! is_array($subpedidos)) {
+            return null;
+        }
+
+        return array_values(array_unique(array_map('intval', $subpedidos)));
+    }
 }

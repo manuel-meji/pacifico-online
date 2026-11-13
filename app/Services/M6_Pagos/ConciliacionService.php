@@ -12,6 +12,7 @@ use App\Models\M6_Pagos\EstadoConciliacion;
 use App\Models\M6_Pagos\EstadoPago;
 use App\Models\M6_Pagos\EstadoReembolso;
 use App\Models\M6_Pagos\EstadoRevisionDiferencia;
+use App\Models\M6_Pagos\FacturaElectronica;
 use App\Models\M6_Pagos\Pago;
 use App\Models\M6_Pagos\Reembolso;
 use App\Models\M6_Pagos\TipoDiferencia;
@@ -161,6 +162,10 @@ class ConciliacionService
                 if (! $this->contabilidad->consultarRegistroContablePago($pago->id_pago)) {
                     return false;
                 }
+
+                if (! $this->m7RegistroTodasLasFacturas($pago)) {
+                    return false;
+                }
             }
 
             return true;
@@ -169,6 +174,41 @@ class ConciliacionService
 
             return false;
         }
+    }
+
+    /**
+     * Conexión M6–M7 (pago multicomercio): un pago está registrado en M7 solo si
+     * cada factura que M6 emitió para ese pago tiene su cobro en M7. M6 es la
+     * fuente de qué facturas existen; M7 informa los subpedidos con cobro.
+     * Si M7 no informa ese detalle (null), se mantiene el criterio anterior.
+     */
+    private function m7RegistroTodasLasFacturas(Pago $pago): bool
+    {
+        $registrados = $this->contabilidad->subpedidosConCobro($pago->id_pago);
+
+        if ($registrados === null) {
+            return true;
+        }
+
+        $facturados = FacturaElectronica::query()
+            ->where('id_pago', $pago->id_pago)
+            ->pluck('id_subpedido')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        $faltantes = array_values(array_diff($facturados, $registrados));
+
+        if ($facturados === [] || $faltantes !== []) {
+            Log::warning("[M6_Pagos] M7 no registró el cobro de todas las facturas del pago {$pago->id_pago}.", [
+                'facturados' => $facturados,
+                'registrados_en_m7' => $registrados,
+                'faltantes' => $facturados === [] ? 'el pago aún no tiene facturas' : $faltantes,
+            ]);
+
+            return false;
+        }
+
+        return true;
     }
 
     /** Se compara en céntimos para no arrastrar errores de punto flotante. */

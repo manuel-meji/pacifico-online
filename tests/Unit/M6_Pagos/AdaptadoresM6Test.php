@@ -48,9 +48,10 @@ class AdaptadoresM6Test extends TestCase
         $this->assertSame((new FakeClienteClient)->obtenerCliente(77)->nombre, $real->nombre);
     }
 
-    public function test_m1_la_identificacion_tributaria_aun_no_viaja_en_el_contrato(): void
+    /** M1 ya publica identificacion_tributaria (decisión abierta 6 resuelta): el adaptador la entrega. */
+    public function test_m1_entrega_la_identificacion_tributaria_del_contrato(): void
     {
-        $this->assertSame('', (new AdaptadorM1(new PortalPublicoFake))->obtenerCliente(77)->identificacionTributaria);
+        $this->assertSame('116540892', (new AdaptadorM1(new PortalPublicoFake))->obtenerCliente(77)->identificacionTributaria);
     }
 
     public function test_m1_cliente_inexistente(): void
@@ -176,5 +177,26 @@ class AdaptadoresM6Test extends TestCase
 
         // Conexión M6–M7: el aviso ya no lanza ERR-006; M7 consume los eventos.
         $adaptador->enviarEventoFinanciero(5, 'PagoConfirmado');
+
+        // M7 todavía no informa subpedidos_registrados: null, sin romper.
+        $this->assertNull($adaptador->subpedidosConCobro(5));
+    }
+
+    public function test_m7_informa_los_subpedidos_con_cobro_del_pago_multicomercio(): void
+    {
+        $m7 = new class implements ContabilidadServiceInterface
+        {
+            public function registrarAsientoDespacho(int $pedidoId, float $totalVenta, float $costoVentas): bool
+            {
+                return true;
+            }
+
+            public function consultarRegistroContablePago(int $idPago): array
+            {
+                return ['id_pago' => $idPago, 'registrado' => true, 'asiento_id' => 90, 'fecha_registro' => null, 'subpedidos_registrados' => ['1001', 1002, 1002]];
+            }
+        };
+
+        $this->assertSame([1001, 1002], (new AdaptadorM7($m7))->subpedidosConCobro(5));
     }
 }
