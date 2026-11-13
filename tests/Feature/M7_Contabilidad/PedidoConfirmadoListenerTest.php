@@ -143,6 +143,40 @@ class PedidoConfirmadoListenerTest extends TestCase
         $this->assertDatabaseCount('eventos_procesados', 1);
     }
 
+
+    public function test_uuid_diferente_para_el_mismo_subpedido_no_duplica_el_asiento(): void
+    {
+        $this->crearCuentas(1);
+
+        $primerEvento = $this->crearEventoPedidoConfirmado(
+            '33333333-3333-4333-8333-333333333333'
+        );
+
+        $segundoEvento = $this->crearEventoPedidoConfirmado(
+            '44444444-4444-4444-8444-444444444444'
+        );
+
+        $listener = app(ProcesarPedidoConfirmadoListener::class);
+
+        $listener->handle($primerEvento);
+        $listener->handle($segundoEvento);
+
+        // El segundo evento no debe generar otro asiento.
+        $this->assertDatabaseCount('asientos_contables', 1);
+        $this->assertDatabaseCount('detalle_asientos', 2);
+
+        // El primer evento debe quedar procesado.
+        $this->assertDatabaseHas('eventos_procesados', [
+            'evento_id' => '33333333-3333-4333-8333-333333333333',
+            'estado' => 'PROCESADO',
+        ]);
+
+        // El segundo evento también debe quedar procesado.
+        $this->assertDatabaseHas('eventos_procesados', [
+            'evento_id' => '44444444-4444-4444-8444-444444444444',
+            'estado' => 'PROCESADO',
+        ]);
+    }
     private function crearEventoPedidoConfirmado(
         string $eventoId = '11111111-1111-4111-8111-111111111111'
     ): PedidoConfirmado {
