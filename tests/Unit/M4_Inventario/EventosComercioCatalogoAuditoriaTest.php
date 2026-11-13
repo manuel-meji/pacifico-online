@@ -3,9 +3,12 @@
 namespace Tests\Unit\M4_Inventario;
 
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
+use App\Events\M4_Inventario\ExistenciaAgotada;
+use App\Events\M4_Inventario\ExistenciaRepuesta;
 use App\Services\M4_Inventario\Excepciones\ErrorInventarioException;
 use App\Services\Nucleo\ContextoComercio;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Tests\Doubles\M4\EventosCatalogoSimulados;
 use Tests\Doubles\M4\EventosComercioSimulados;
 use Tests\Feature\M4_Inventario\EsquemaInventarioPrueba;
@@ -57,6 +60,35 @@ class EventosComercioCatalogoAuditoriaTest extends TestCase
         $this->assertSame([0, 0], $filas->pluck('cantidad_fisica')->map(fn ($v): int => (int) $v)->all());
         $this->assertSame(0, DB::table('movimientos_inventario')->count(), 'No se inventan unidades físicas.');
         $this->assertSame('agotado', app(InventarioModuleInterface::class)->consultarStockDisponible(1, 501)['estado_disponibilidad']);
+    }
+
+    /** Acuerdo con M3: un producto publicado sin stock se avisa agotado una sola vez, y la primera entrada lo repone. */
+    public function test_producto_publicado_sin_stock_se_avisa_agotado_y_la_primera_entrada_lo_repone(): void
+    {
+        Event::fake([ExistenciaAgotada::class, ExistenciaRepuesta::class]);
+        $evento = EventosCatalogoSimulados::productoPublicado(1, 300, 10);
+
+        $this->publicar($evento);
+        $this->publicar(EventosCatalogoSimulados::duplicar($evento));
+
+        Event::assertDispatchedTimes(ExistenciaAgotada::class, 1);
+        Event::assertDispatched(ExistenciaAgotada::class, fn (ExistenciaAgotada $e): bool => [$e->idComercio, $e->idProducto, $e->idVariacion] === [1, 300, 10]);
+        Event::assertNotDispatched(ExistenciaRepuesta::class);
+
+        $this->entrada(1);
+
+        Event::assertDispatchedTimes(ExistenciaRepuesta::class, 1);
+    }
+
+    /** Si la variación ya tiene unidades disponibles (por ejemplo, se vuelve a publicar), no se avisa agotada. */
+    public function test_producto_publicado_con_stock_no_se_avisa_agotado(): void
+    {
+        $this->existencia(['id_producto' => 300, 'id_variacion' => 10, 'id_ubicacion' => 1, 'cantidad_fisica' => 5]);
+        Event::fake([ExistenciaAgotada::class]);
+
+        $this->publicar(EventosCatalogoSimulados::productoPublicado(1, 300, 10));
+
+        Event::assertNotDispatched(ExistenciaAgotada::class);
     }
 
     /** CP-M4-13 · RN-M4-009: un comercio suspendido no registra movimientos; reactivado, sí. Un evento viejo no lo bloquea de nuevo. */

@@ -779,11 +779,12 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         $subpedido = null;
 
         if ($this->hasTable('pedidos_subpedidos')) {
-            $subpedido = Subpedido::find($subpedidoId);
+            $subpedido = Subpedido::with('lineas')->find($subpedidoId);
             if ($subpedido) {
                 $subpedido->despachar($guiaTransporte);
                 $pedidoId = (int) $subpedido->id_pedido;
                 $subtotal = (float) $subpedido->subtotal;
+                $this->confirmarSalidaLineas($subpedido);
             }
         }
 
@@ -1094,7 +1095,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             ];
 
             if (config('integraciones.m5.m6.modo') === 'real') {
-                $respuesta['urlPasarelaPago'] = url("/m6.html?pedido={$pedido->id_pedido}&monto=".number_format((float) $pedido->monto_total, 2, '.', ''));
+                $respuesta['urlPasarelaPago'] = "/m6.html?pedido={$pedido->id_pedido}&monto=".number_format((float) $pedido->monto_total, 2, '.', ''); // justin M6 modificó
             }
 
             return $respuesta;
@@ -1159,7 +1160,9 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
     public function marcarComoPagado(int $pedidoId, string $comprobantePago): bool
     {
         if ($this->hasTable('pedidos_maestros')) {
-            $pedido = PedidoMaestro::with('subpedidos.lineas')->find($pedidoId);
+            $pedido = PedidoMaestro::withoutGlobalScope('cliente')
+                ->with(['subpedidos' => fn ($q) => $q->withoutGlobalScope('comercio')->with('lineas')])
+                ->find($pedidoId);
             if (! $pedido) {
                 return false;
             }
@@ -1176,10 +1179,12 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 if (strtolower((string) $subpedido->estado_subpedido) !== 'pagado') {
                     $subpedido->cambiarEstado('pagado', $motivo);
                 }
-                $this->confirmarReservasLineas($subpedido->lineas);
+                $this->confirmarReservasLineas($subpedido->lineas, (int) $pedido->id_pedido, (int) $subpedido->id_subpedido);
             }
 
-            PedidoPagado::dispatch($pedido->fresh('subpedidos.lineas'));
+            PedidoPagado::dispatch(
+                $pedido->fresh(['subpedidos' => fn ($q) => $q->withoutGlobalScope('comercio')->with('lineas')]) ?? $pedido
+            );
         }
 
         return true;
@@ -1190,7 +1195,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
      *
      * @param  iterable<PedidoLinea>  $lineas
      */
-    public function liberarReservasLineas(iterable $lineas, string $motivo = 'Cancelación de pedido'): void
+    public function liberarReservasLineas(iterable $lineas, string $motivo = 'pedido_cancelado'): void
     {
         $inventario = $this->inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
         if (! $inventario || ! method_exists($inventario, 'liberarReserva')) {
@@ -1212,7 +1217,7 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
      *
      * @param  iterable<PedidoLinea>  $lineas
      */
-    public function confirmarReservasLineas(iterable $lineas): void
+    public function confirmarReservasLineas(iterable $lineas, ?int $idPedidoExplicito = null, ?int $idSubpedidoExplicito = null): void
     {
         $inventario = $this->inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
         if (! $inventario) {
@@ -1223,13 +1228,46 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             if (! empty($linea->id_reserva)) {
                 try {
                     if (method_exists($inventario, 'confirmarReserva')) {
-                        // Contrato M4 v1.3.0: confirmarReserva(id_reserva, id_pedido, id_subpedido).
-                        $inventario->confirmarReserva(
-                            (string) $linea->id_reserva,
-                            (int) $linea->subpedido->id_pedido,
-                            (int) $linea->id_subpedido,
-                        );
+                        $idSubpedido = $idSubpedidoExplicito ?? (int) $linea->id_subpedido;
+                        $idPedido = $idPedidoExplicito ?? (int) ($linea->subpedido()->withoutGlobalScope('comercio')->value('id_pedido') ?? $linea->subpedido?->id_pedido ?? 0);
+
+                        if ($idPedido > 0 && $idSubpedido > 0) {
+                            // Contrato M4 v1.3.0: confirmarReserva(id_reserva, id_pedido, id_subpedido).
+                            $inventario->confirmarReserva(
+                                (string) $linea->id_reserva,
+                                $idPedido,
+                                $idSubpedido,
+                            );
+                        }
                     }
+                } catch (\Throwable) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Confirma en M4 la salida física de inventario para las reservas de un subpedido despachado.
+     */
+    public function confirmarSalidaLineas(Subpedido $subpedido): void
+    {
+        $inventario = $this->inventarioService ?? (app()->bound(InventarioServiceInterface::class) ? app(InventarioServiceInterface::class) : null);
+        if (! $inventario || ! method_exists($inventario, 'confirmarSalidaPorReserva')) {
+            return;
+        }
+
+        $subpedido->loadMissing('lineas');
+        $idPedido = (int) $subpedido->id_pedido;
+        $idSubpedido = (int) $subpedido->id_subpedido;
+
+        foreach ($subpedido->lineas as $linea) {
+            if (! empty($linea->id_reserva)) {
+                try {
+                    $inventario->confirmarSalidaPorReserva(
+                        (string) $linea->id_reserva,
+                        $idPedido,
+                        $idSubpedido,
+                    );
                 } catch (\Throwable) {
                 }
             }

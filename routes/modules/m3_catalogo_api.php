@@ -53,6 +53,9 @@ Route::prefix('api/m3/v1')
                 Route::post('productos/{id_producto}/variaciones', [AltaCatalogoController::class, 'crearVariacion'])
                     ->whereNumber('id_producto')
                     ->name('variaciones.store');
+                Route::patch('variaciones/{id_variacion}', [VariacionController::class, 'updateDisponibilidad'])
+                    ->whereNumber('id_variacion')
+                    ->name('variaciones.update');
                 Route::post('productos/{id_producto}/imagenes', [AltaCatalogoController::class, 'agregarImagen'])
                     ->whereNumber('id_producto')
                     ->name('imagenes.store');

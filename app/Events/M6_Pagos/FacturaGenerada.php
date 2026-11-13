@@ -10,6 +10,11 @@ use Illuminate\Foundation\Events\Dispatchable;
  * Evento FacturaGenerada (diagrama DS-03 del PC3). Consumidor previsto: M7.
  * Se publica una sola vez por factura: la tabla tiene UNIQUE(id_subpedido) y el
  * evento sale solo cuando la factura se crea (decisión abierta 7: confirmar con M7).
+ * idEvento es estable por id_factura (IdentificadorEventoM6).
+ *
+ * Contrato M6 v1.4.0 (conexión M6–M7): se agregan al final, opcionales, id_pago y
+ * el desglose del monto (subtotal + impuesto + envio = monto) para que M7 tenga
+ * el importe por comercio. Compatible hacia atrás.
  */
 final class FacturaGenerada
 {
@@ -24,6 +29,10 @@ final class FacturaGenerada
         public readonly float $monto,
         public readonly string $xml,
         public readonly string $fecha,
+        public readonly ?int $idPago = null,
+        public readonly ?float $subtotal = null,
+        public readonly ?float $impuesto = null,
+        public readonly ?float $envio = null,
     ) {}
 
     /** @return array<string, mixed> */
@@ -38,6 +47,10 @@ final class FacturaGenerada
             'monto' => $this->monto,
             'xml' => $this->xml,
             'fecha' => $this->fecha,
+            'id_pago' => $this->idPago,
+            'subtotal' => $this->subtotal,
+            'impuesto' => $this->impuesto,
+            'envio' => $this->envio,
         ];
     }
 }

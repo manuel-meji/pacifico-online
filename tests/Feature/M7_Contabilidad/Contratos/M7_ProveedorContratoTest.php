@@ -441,6 +441,7 @@ class M7_ProveedorContratoTest extends TestCase
             'consultarLibroMayor' => ['/api/m7/v1/libro-mayor?id_cuenta_contable=1'],
             'listarCuentasLibroMayor' => ['/api/m7/v1/libro-mayor/cuentas'],
             'consultarReporteGerencial' => ['/api/m7/v1/reporte-gerencial'],
+            'consultarRegistroContablePago' => ['/m7/pagos/1/registro-contable'],
         ];
     }
 
@@ -462,7 +463,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-002');
     }
 
-    // Rutas web (sin autenticación según el contrato v1.1.0)
+    // Rutas web 
 
     public function test_estado_del_modulo(): void
     {
@@ -471,17 +472,59 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertExactJson(['module' => 'M7_Contabilidad', 'status' => 'online']);
     }
 
-    /**
-     * El contrato v1.1.0 declara esta ruta con "security: []" y la marca como riesgo
-     * pendiente. La prueba documenta el comportamiento actual, no lo aprueba.
-     */
+    // consultarRegistroContablePago
+
     public function test_registro_contable_de_pago_sin_asiento_devuelve_registrado_false(): void
     {
-        $this->getJson('/m7/pagos/999/registro-contable')
+        $this->actingAs($this->encargado(1), 'web')->getJson('/m7/pagos/999/registro-contable')
             ->assertOk()
             ->assertJsonStructure(['id_pago', 'registrado', 'asiento_id', 'fecha_registro'])
             ->assertJsonPath('id_pago', 999)
             ->assertJsonPath('registrado', false)
             ->assertJsonPath('asiento_id', null);
+    }
+
+    public function test_registro_contable_de_pago_propio_devuelve_registrado_true(): void
+    {
+        $idCuenta = $this->crearCuenta(1, '1.1.01', 'Caja');
+        $idAsiento = $this->crearAsiento(1, 'PAGO', $idCuenta, 100, 0);
+        DB::table('asientos_contables')->where('id_asiento', $idAsiento)->update(['id_pago' => 555]);
+
+        $this->actingAs($this->encargado(1), 'web')->getJson('/m7/pagos/555/registro-contable')
+            ->assertOk()
+            ->assertJsonPath('id_pago', 555)
+            ->assertJsonPath('registrado', true)
+            ->assertJsonPath('asiento_id', $idAsiento);
+    }
+
+    public function test_registro_contable_de_pago_ajeno_no_se_expone(): void
+    {
+        $idCuenta = $this->crearCuenta(2, '1.1.01', 'Caja comercio 2');
+        $idAsiento = $this->crearAsiento(2, 'PAGO', $idCuenta, 100, 0);
+        DB::table('asientos_contables')->where('id_asiento', $idAsiento)->update(['id_pago' => 556]);
+
+        $this->actingAs($this->encargado(1), 'web')->getJson('/m7/pagos/556/registro-contable')
+            ->assertOk()
+            ->assertJsonPath('registrado', false)
+            ->assertJsonPath('asiento_id', null);
+    }
+
+    public function test_plataforma_consulta_el_registro_de_un_pago_de_cualquier_comercio(): void
+    {
+        $idCuenta = $this->crearCuenta(2, '1.1.01', 'Caja comercio 2');
+        $idAsiento = $this->crearAsiento(2, 'PAGO', $idCuenta, 100, 0);
+        DB::table('asientos_contables')->where('id_asiento', $idAsiento)->update(['id_pago' => 557]);
+
+        $plataforma = UsuarioFactory::new()->create([
+            'rol' => 'encargado_plataforma',
+            'id_comercio' => null,
+            'activo' => true,
+        ]);
+
+        $this->actingAs($plataforma, 'web')->getJson('/m7/pagos/557/registro-contable')
+            ->assertOk()
+            ->assertJsonPath('id_pago', 557)
+            ->assertJsonPath('registrado', true)
+            ->assertJsonPath('asiento_id', $idAsiento);
     }
 }

@@ -6,7 +6,6 @@ namespace App\Services\M6_Pagos;
 
 use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Enums\M6_Pagos\CodigoErrorM6;
-use App\Events\M6_Pagos\ReembolsoProcesado;
 use App\Exceptions\M6_Pagos\ErrorContratoException;
 use App\Models\M6_Pagos\EstadoPago;
 use App\Models\M6_Pagos\EstadoReembolso;
@@ -19,7 +18,6 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as ColeccionBase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -211,16 +209,8 @@ class ReembolsoService
                 continue;
             }
 
-            event(new ReembolsoProcesado(
-                (string) Str::uuid(),
-                $idPedido,
-                $reembolso->id_subpedido,
-                $reembolso->notaCredito->factura->id_comercio,
-                $reembolso->id_reembolso,
-                (float) $reembolso->monto,
-                $reembolso->id_nota_credito,
-                ($reembolso->fecha_procesado ?? now())->toIso8601String(),
-            ));
+            // Conexión M6–M7: el mismo armado que usa ConsultaEventosPagosService.
+            event(FabricaEventosM6::reembolsoProcesado($reembolso));
 
             $this->auditar($reembolso);
         }

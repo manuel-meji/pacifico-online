@@ -74,25 +74,24 @@ class SubpedidoDespachadoListenerTest extends TestCase
 
         $this->app->instance(
             CostosProductosVendidosGatewayInterface::class,
-            new class implements CostosProductosVendidosGatewayInterface
-            {
-                public function obtenerCostosProductosVendidos(
-                    int $subpedidoId
-                ): array {
-                    return [
-                        'id_subpedido' => $subpedidoId,
-                        'id_comercio' => 1,
-                        'variaciones' => [
-                            [
-                                'id_variacion' => 100,
-                                'cantidad' => 2,
-                                'costo_unitario' => 20.25,
-                                'costo_total' => 40.50,
-                            ],
+            new class implements CostosProductosVendidosGatewayInterface {
+            public function obtenerCostosProductosVendidos(
+                int $subpedidoId
+            ): array {
+                return [
+                    'id_subpedido' => $subpedidoId,
+                    'id_comercio' => 1,
+                    'variaciones' => [
+                        [
+                            'id_variacion' => 100,
+                            'cantidad' => 2,
+                            'costo_unitario' => 20.25,
+                            'costo_total' => 40.50,
                         ],
-                        'costo_total' => 40.50,
-                    ];
-                }
+                    ],
+                    'costo_total' => 40.50,
+                ];
+            }
             }
         );
     }
@@ -190,4 +189,37 @@ class SubpedidoDespachadoListenerTest extends TestCase
         $this->assertDatabaseCount('detalle_asientos', 2);
         $this->assertDatabaseCount('eventos_procesados', 1);
     }
+
+    public function test_uuid_diferente_para_el_mismo_subpedido_no_duplica_el_asiento(): void
+    {
+        $primerEvento = $this->crearEvento(
+            '55555555-5555-4555-8555-555555555555'
+        );
+
+        $segundoEvento = $this->crearEvento(
+            '66666666-6666-4666-8666-666666666666'
+        );
+
+        $listener = app(ProcesarSubpedidoDespachadoListener::class);
+
+        $listener->handle($primerEvento);
+        $listener->handle($segundoEvento);
+
+        // No debe generarse un segundo asiento de costo.
+        $this->assertDatabaseCount('asientos_contables', 1);
+        $this->assertDatabaseCount('detalle_asientos', 2);
+
+        // El primer evento debe quedar procesado.
+        $this->assertDatabaseHas('eventos_procesados', [
+            'evento_id' => '55555555-5555-4555-8555-555555555555',
+            'estado' => 'PROCESADO',
+        ]);
+
+        // El segundo evento también debe quedar procesado.
+        $this->assertDatabaseHas('eventos_procesados', [
+            'evento_id' => '66666666-6666-4666-8666-666666666666',
+            'estado' => 'PROCESADO',
+        ]);
+    }
+
 }
