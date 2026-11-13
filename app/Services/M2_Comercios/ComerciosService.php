@@ -949,10 +949,20 @@ class ComerciosService implements ComerciosServiceInterface
             $solicitud->aprobar();
             $comercio->activar();
 
-            $this->identidad->crearCuenta([
-                'nombre' => $solicitud->nombre_encargado,
-                'correo' => $solicitud->correo_encargado,
-            ], RolUsuario::EncargadoComercio, $comercio->id_comercio);
+            try {
+                $this->identidad->crearCuenta([
+                    'nombre' => $solicitud->nombre_encargado,
+                    'correo' => $solicitud->correo_encargado,
+                ], RolUsuario::EncargadoComercio, $comercio->id_comercio);
+            } catch (ErrorNucleoException $e) {
+                // El núcleo rechaza el correo del encargado (ya tiene cuenta): se relanza dentro de la
+                // transacción, así que la aprobación y la activación del comercio se revierten.
+                if (array_key_exists('correo', $e->getDetalles() ?? [])) {
+                    $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con el correo del encargado, por lo que no se puede crear la cuenta del comercio.']]);
+                }
+
+                throw $e;
+            }
 
             $this->nucleo->registrarAuditoria('aprobar_solicitud_comercio', 'solicitud_comercio', $solicitud->id_solicitud, [
                 'modulo' => 'M2', 'id_comercio' => $comercio->id_comercio,
