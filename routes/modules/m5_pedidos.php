@@ -20,6 +20,7 @@ Route::get('/', function () {
 
 // Carrito
 Route::get('/carrito', [ControladorCarrito::class, 'obtenerCarrito'])->name('carrito.obtener');
+Route::post('/carrito/previsualizar', [ControladorCarrito::class, 'previsualizarCarrito'])->name('carrito.previsualizar');
 Route::get('/carrito/direcciones', [ControladorCarrito::class, 'listarDirecciones'])->name('carrito.direcciones');
 Route::delete('/carrito', [ControladorCarrito::class, 'vaciarCarrito'])->name('carrito.vaciar');
 Route::post('/carrito/items', [ControladorCarrito::class, 'agregarAlCarrito'])->name('carrito.agregar');

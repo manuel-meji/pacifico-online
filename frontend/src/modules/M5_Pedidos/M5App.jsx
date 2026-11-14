@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ModalLoginRequerido, NavegacionM5 } from './components/componentes';
-import { actualizarCantidad, agregarItem, eliminarItem, obtenerCarrito, vaciarCarrito } from './services/m5Api';
+import { actualizarCantidad, agregarItem, eliminarItem, obtenerCarrito, previsualizarCarritoInvitado, vaciarCarrito } from './services/m5Api';
+import {
+  calcularItemsConAgregado,
+  calcularItemsConCantidad,
+  calcularItemsSinVariacion,
+  guardarItemsInvitado,
+  leerItemsInvitado,
+  limpiarCarritoInvitado,
+} from './services/carritoInvitado';
 import { obtenerUsuario } from '../Nucleo/services/sesionApi';
 import CarritoPage from './views/CarritoView';
 import CheckoutPage from './views/CheckoutView';
@@ -58,22 +66,53 @@ function avisoErrorAgregar(e) {
 // Punto de entrada del modulo M5: carrito → checkout → pedido pendiente de pago, todo contra /api/m5/v1.
 // Las alternativas del CU-004 (stock agotado, comercio suspendido) llegan ahora como errores reales de la API.
 export default function M5App() {
-  // Carrito real: GET /api/m5/v1/carrito (id_cliente=1 por defecto).
   const [carrito, setCarrito] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+  const esInvitadoRef = useRef(true);
+
+  const sincronizarInvitadoSiAutenticado = useCallback(async () => {
+    try {
+      const resp = await obtenerUsuario();
+      const autenticado = Boolean(resp?.ok && resp?.datos?.user);
+      esInvitadoRef.current = !autenticado;
+
+      if (autenticado) {
+        const pendientesInvitado = leerItemsInvitado();
+        if (pendientesInvitado.length > 0) {
+          for (const item of pendientesInvitado) {
+            try {
+              await agregarItem({ id_variacion: item.id_variacion, cantidad: item.cantidad });
+            } catch {
+              // Si algún ítem quedó sin stock mientras iniciaba sesión, continuamos con los demás.
+            }
+          }
+          limpiarCarritoInvitado();
+        }
+      }
+
+      return autenticado;
+    } catch {
+      esInvitadoRef.current = true;
+      return false;
+    }
+  }, []);
 
   const cargarCarrito = useCallback(async () => {
     setCargando(true);
     setError(null);
     try {
-      setCarrito(await obtenerCarrito());
+      const autenticado = await sincronizarInvitadoSiAutenticado();
+      const datos = autenticado
+        ? await obtenerCarrito()
+        : await previsualizarCarritoInvitado(leerItemsInvitado());
+      setCarrito(datos);
     } catch (e) {
       setError(e);
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [sincronizarInvitadoSiAutenticado]);
 
 
   // ---------- Acciones del carrito (la pantalla se actualiza con la respuesta de la API) ----------
@@ -111,7 +150,15 @@ export default function M5App() {
     if (cantidad < 1) return; // La cantidad mínima es 1: no se envía la petición.
     setAviso(null);
     try {
-      const respuesta = await ejecutar(`cantidad-${id}`, () => actualizarCantidad(id, cantidad));
+      const respuesta = await ejecutar(`cantidad-${id}`, async () => {
+        if (esInvitadoRef.current) {
+          const itemsActualizados = calcularItemsConCantidad(leerItemsInvitado(), id, cantidad);
+          const preview = await previsualizarCarritoInvitado(itemsActualizados, { id_variacion: id, cantidad });
+          guardarItemsInvitado(itemsActualizados);
+          return preview;
+        }
+        return actualizarCantidad(id, cantidad);
+      });
       if (!respuesta) return;
       setCarrito(respuesta);
       fijarAvisoItem(id, null);
@@ -127,7 +174,14 @@ export default function M5App() {
   async function quitar(id) {
     setAviso(null);
     try {
-      const respuesta = await ejecutar(`quitar-${id}`, () => eliminarItem(id));
+      const respuesta = await ejecutar(`quitar-${id}`, async () => {
+        if (esInvitadoRef.current) {
+          const itemsActualizados = calcularItemsSinVariacion(leerItemsInvitado(), id);
+          guardarItemsInvitado(itemsActualizados);
+          return previsualizarCarritoInvitado(itemsActualizados);
+        }
+        return eliminarItem(id);
+      });
       if (!respuesta) return;
       setCarrito(respuesta);
       fijarAvisoItem(id, null);
@@ -141,6 +195,10 @@ export default function M5App() {
     setAviso(null);
     try {
       const respuesta = await ejecutar('vaciar', async () => {
+        if (esInvitadoRef.current) {
+          limpiarCarritoInvitado();
+          return previsualizarCarritoInvitado([]);
+        }
         await vaciarCarrito();
         return obtenerCarrito();
       });
@@ -185,7 +243,22 @@ export default function M5App() {
       setCargando(true);
       setError(null);
       try {
-        const respuesta = await agregarItem({ id_variacion: solicitud.idVariacion, cantidad: solicitud.cantidad });
+        const autenticado = await sincronizarInvitadoSiAutenticado();
+        let respuesta;
+        if (autenticado) {
+          respuesta = await agregarItem({ id_variacion: solicitud.idVariacion, cantidad: solicitud.cantidad });
+        } else {
+          const { items, cantidadFinal } = calcularItemsConAgregado(
+            leerItemsInvitado(),
+            solicitud.idVariacion,
+            solicitud.cantidad
+          );
+          respuesta = await previsualizarCarritoInvitado(items, {
+            id_variacion: solicitud.idVariacion,
+            cantidad: cantidadFinal,
+          });
+          guardarItemsInvitado(items);
+        }
         setCarrito(respuesta);
         setAviso({
           tipo: 'exito',
@@ -198,7 +271,7 @@ export default function M5App() {
         await cargarCarrito(); // Muestra el carrito tal como está, con el aviso de error.
       }
     })();
-  }, [cargarCarrito]);
+  }, [cargarCarrito, sincronizarInvitadoSiAutenticado]);
 
   // Vuelve al carrito y lo recarga, porque el checkout pudo haber cambiado su estado (reservas, stock, pedido).
   function volverAlCarrito(nuevoAviso = null) {
