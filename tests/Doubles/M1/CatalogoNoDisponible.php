@@ -15,7 +15,7 @@ class CatalogoNoDisponible extends CatalogoFake
         throw ErrorProveedorException::noDisponible('M3');
     }
 
-    public function listarMarcas(): array
+    public function listarMarcas(?bool $destacada = null): array
     {
         throw ErrorProveedorException::noDisponible('M3');
     }

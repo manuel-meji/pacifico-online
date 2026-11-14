@@ -5,6 +5,7 @@ namespace App\Services\M1_Portal\Integraciones;
 use App\Contracts\M1_Portal\Exceptions\CriterioInvalidoException;
 use App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException;
 use App\Contracts\M1_Portal\Exceptions\RecursoNoEncontradoException;
+use App\Contracts\M3_Catalogo\CatalogoConsultasInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Services\M1_Portal\DTO\CategoriaDTO;
 use App\Services\M1_Portal\DTO\ComercioDTO;
@@ -33,9 +34,11 @@ use Throwable;
  * (CatalogoConsultasInterface aparte, obtenerDetalleProducto con null,
  * imagen_principal_url, imágenes como objetos y sin moneda).
  *
- * Mientras M3 no publique estas operaciones en CatalogoServiceInterface, se
- * llaman con las firmas que el contrato de M1 espera de M3 1.2.0 (las mismas
- * de CatalogoFake); si el servicio real no las tiene, se informa ERR-006.
+ * El contrato se tipa con la intersección CatalogoConsultasInterface (las
+ * consultas: buscarProductos, listarCategorias, listarMarcas, listarRelacionados)
+ * y CatalogoServiceInterface (obtenerDetalleProducto, obtenerVariacion), para no
+ * depender de que un doble que solo cumpla una de las dos traiga igual todos los
+ * métodos. Si el proveedor real no responde una operación, se informa ERR-006.
  */
 class CatalogoClient
 {
@@ -52,7 +55,7 @@ class CatalogoClient
     private const RELACIONADOS = 4;
 
     public function __construct(
-        private CatalogoServiceInterface $contrato,
+        private CatalogoConsultasInterface&CatalogoServiceInterface $contrato,
         private CachePortal $cache,
     ) {
         $this->cargarTiempoMaximo();
