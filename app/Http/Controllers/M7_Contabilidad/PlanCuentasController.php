@@ -161,10 +161,7 @@ final class PlanCuentasController extends Controller
 
         if ($this->contexto->esModoSistema()) {
             if ($solicitado === null) {
-                throw ErrorNucleoException::paraModulo(
-                    'M7_Contabilidad',
-                    'ERR-M7-003',
-                    422,
+                throw new LogicException(
                     'Debe indicar el comercio que desea consultar.'
                 );
             }

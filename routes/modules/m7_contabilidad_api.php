@@ -35,16 +35,5 @@ Route::prefix('api/m7/v1')
 
             Route::get('reporte-gerencial', [ReporteGerencialController::class, 'consultar'])
                 ->name('reporte-gerencial');
-
-            Route::post('cuentas', [PlanCuentasController::class, 'crear'])
-                ->name('cuentas.store');
-
-            Route::put('cuentas/{idCuentaContable}', [PlanCuentasController::class, 'actualizar'])
-                ->whereNumber('idCuentaContable')
-                ->name('cuentas.update');
-
-            Route::delete('cuentas/{idCuentaContable}', [PlanCuentasController::class, 'desactivar'])
-                ->whereNumber('idCuentaContable')
-                ->name('cuentas.destroy');
         });
     });

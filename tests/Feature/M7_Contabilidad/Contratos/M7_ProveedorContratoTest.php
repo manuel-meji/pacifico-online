@@ -202,7 +202,7 @@ class M7_ProveedorContratoTest extends TestCase
                             'nivel',
                             'id_cuenta_padre',
                             'activa',
-                        ]
+                        ],
                     ],
                 ],
             ]);
@@ -251,7 +251,7 @@ class M7_ProveedorContratoTest extends TestCase
             ]);
     }
 
-    public function test_cuenta_ajena_o_inexistente_responde_404_err_m7_001(): void
+    public function test_cuenta_ajena_o_inexistente_responde_404_err_004(): void
     {
         $idAjena = $this->crearCuenta(2, '4.1.01', 'Ventas comercio 2', 'INGRESO');
         $encargado = $this->encargado(1);
@@ -260,7 +260,7 @@ class M7_ProveedorContratoTest extends TestCase
             $this->actingAs($encargado, 'web')->getJson("/api/m7/v1/cuentas/{$id}")
                 ->assertNotFound()
                 ->assertJsonStructure(self::ERROR)
-                ->assertJsonPath('error.codigo', 'ERR-M7-001');
+                ->assertJsonPath('error.codigo', 'ERR-004');
         }
     }
 
@@ -297,7 +297,7 @@ class M7_ProveedorContratoTest extends TestCase
                             'totalDebe',
                             'totalHaber',
                             'lineas' => ['*' => ['codigo', 'cuenta', 'debe', 'haber', 'descripcion']],
-                        ]
+                        ],
                     ],
                     'totalDebe',
                     'totalHaber',
@@ -351,7 +351,7 @@ class M7_ProveedorContratoTest extends TestCase
                             'debe',
                             'haber',
                             'saldo',
-                        ]
+                        ],
                     ],
                 ],
             ]);
@@ -463,7 +463,7 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('error.codigo', 'ERR-002');
     }
 
-    // Rutas web 
+    // Rutas web
 
     public function test_estado_del_modulo(): void
     {

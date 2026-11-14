@@ -31,20 +31,10 @@ class PlanCuentasService
 
     public function obtener(int $idComercio, int $idCuenta): CuentaContable
     {
-        $cuenta = CuentaContable::query()
+        return CuentaContable::query()
             ->where('id_comercio', $idComercio)
             ->where('id_cuenta_contable', $idCuenta)
-            ->first();
-
-        if ($cuenta === null) {
-            throw $this->errorM7(
-                'ERR-M7-001',
-                404,
-                'La cuenta contable solicitada no existe.'
-            );
-        }
-
-        return $cuenta;
+            ->firstOrFail();
     }
 
     public function crear(int $idComercio, array $datos): CuentaContable

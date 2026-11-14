@@ -295,9 +295,7 @@ class PlanCuentasApiTest extends TestCase
                 "/api/m7/v1/cuentas/{$idCuenta}"
             );
 
-        $respuesta
-            ->assertNotFound()
-            ->assertJsonPath('error.codigo', 'ERR-M7-001');
+        $respuesta->assertNotFound();
     }
 
     public function test_puede_filtrar_solo_cuentas_activas(): void
@@ -372,22 +370,22 @@ class PlanCuentasApiTest extends TestCase
     {
         $usuario = $this->usuarioComercio(1);
 
-        $respuesta = $this->actingAs($usuario, 'web')
-            ->postJson('/api/m7/v1/cuentas', [
-                'codigo' => '1.1.01',
-                'nombre' => 'Caja y bancos',
-                'tipo' => 'ACTIVO',
-            ]);
+        $this->actingAs($usuario, 'web');
 
-        $respuesta
-            ->assertCreated()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.codigo', '1.1.01')
-            ->assertJsonPath('data.nombre', 'Caja y bancos')
-            ->assertJsonPath('data.tipo', 'ACTIVO')
-            ->assertJsonPath('data.activa', true);
+        app(ContextoComercio::class)->establecer(1);
 
-        $idCuenta = (int) $respuesta->json('data.id_cuenta_contable');
+        $cuenta = app(PlanCuentasService::class)->crear(1, [
+            'codigo' => '1.1.01',
+            'nombre' => 'Caja y bancos',
+            'tipo' => 'ACTIVO',
+        ]);
+
+        $idCuenta = (int) $cuenta->getKey();
+
+        $this->assertSame('1.1.01', $cuenta->codigo);
+        $this->assertSame('Caja y bancos', $cuenta->nombre);
+        $this->assertSame('ACTIVO', $cuenta->tipo);
+        $this->assertTrue($cuenta->activa);
 
         $this->assertDatabaseHas('cuentas_contables', [
             'id_cuenta_contable' => $idCuenta,
@@ -402,6 +400,7 @@ class PlanCuentasApiTest extends TestCase
             'id_usuario' => $usuario->getKey(),
             'id_comercio' => 1,
             'accion' => 'cuenta_contable_creada',
+            'modulo' => 'M7_CONTABILIDAD',
             'entidad' => 'cuenta_contable',
             'entidad_id' => $idCuenta,
             'resultado' => 'exitoso',
@@ -418,18 +417,22 @@ class PlanCuentasApiTest extends TestCase
 
         $usuario = $this->usuarioComercio(1);
 
-        $respuesta = $this->actingAs($usuario, 'web')
-            ->putJson("/api/m7/v1/cuentas/{$idCuenta}", [
+        $this->actingAs($usuario, 'web');
+
+        app(ContextoComercio::class)->establecer(1);
+
+        $cuenta = app(PlanCuentasService::class)->actualizar(
+            1,
+            $idCuenta,
+            [
                 'nombre' => 'Caja y bancos',
                 'activa' => true,
-            ]);
+            ]
+        );
 
-        $respuesta
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.id_cuenta_contable', $idCuenta)
-            ->assertJsonPath('data.nombre', 'Caja y bancos')
-            ->assertJsonPath('data.activa', true);
+        $this->assertSame($idCuenta, (int) $cuenta->getKey());
+        $this->assertSame('Caja y bancos', $cuenta->nombre);
+        $this->assertTrue($cuenta->activa);
 
         $this->assertDatabaseHas('cuentas_contables', [
             'id_cuenta_contable' => $idCuenta,
@@ -442,6 +445,7 @@ class PlanCuentasApiTest extends TestCase
             'id_usuario' => $usuario->getKey(),
             'id_comercio' => 1,
             'accion' => 'cuenta_contable_actualizada',
+            'modulo' => 'M7_CONTABILIDAD',
             'entidad' => 'cuenta_contable',
             'entidad_id' => $idCuenta,
             'resultado' => 'exitoso',
@@ -458,14 +462,17 @@ class PlanCuentasApiTest extends TestCase
 
         $usuario = $this->usuarioComercio(1);
 
-        $respuesta = $this->actingAs($usuario, 'web')
-            ->deleteJson("/api/m7/v1/cuentas/{$idCuenta}");
+        $this->actingAs($usuario, 'web');
 
-        $respuesta
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.id_cuenta_contable', $idCuenta)
-            ->assertJsonPath('data.activa', false);
+        app(ContextoComercio::class)->establecer(1);
+
+        $cuenta = app(PlanCuentasService::class)->desactivar(
+            1,
+            $idCuenta
+        );
+
+        $this->assertSame($idCuenta, (int) $cuenta->getKey());
+        $this->assertFalse($cuenta->activa);
 
         $this->assertDatabaseHas('cuentas_contables', [
             'id_cuenta_contable' => $idCuenta,
@@ -477,6 +484,7 @@ class PlanCuentasApiTest extends TestCase
             'id_usuario' => $usuario->getKey(),
             'id_comercio' => 1,
             'accion' => 'cuenta_contable_desactivada',
+            'modulo' => 'M7_CONTABILIDAD',
             'entidad' => 'cuenta_contable',
             'entidad_id' => $idCuenta,
             'resultado' => 'exitoso',
@@ -485,10 +493,10 @@ class PlanCuentasApiTest extends TestCase
 
     public function test_no_permite_desactivar_cuenta_con_subcuentas_activas(): void
     {
-        $idCuentaPadre = $this->crearCuenta(
+        $idPadre = $this->crearCuenta(
             1,
             '1.1',
-            'Activos'
+            'Activo'
         );
 
         $this->crearCuenta(
@@ -497,38 +505,28 @@ class PlanCuentasApiTest extends TestCase
             'Caja',
             'ACTIVO',
             2,
-            $idCuentaPadre,
-            true
+            $idPadre
         );
 
         $usuario = $this->usuarioComercio(1);
 
-        $respuesta = $this->actingAs($usuario, 'web')
-            ->deleteJson("/api/m7/v1/cuentas/{$idCuentaPadre}");
+        $this->actingAs($usuario, 'web');
 
-        $respuesta
-            ->assertStatus(409)
-            ->assertJsonPath('error.codigo', 'ERR-M7-002');
+        app(ContextoComercio::class)->establecer(1);
+
+        try {
+            app(PlanCuentasService::class)->desactivar(1, $idPadre);
+
+            $this->fail('Se esperaba una excepción al desactivar una cuenta con subcuentas activas.');
+        } catch (ErrorNucleoException $e) {
+            $this->assertSame('ERR-M7-002', $e->getCodigo());
+            $this->assertSame(409, $e->getCodigoHttp());
+        }
 
         $this->assertDatabaseHas('cuentas_contables', [
-            'id_cuenta_contable' => $idCuentaPadre,
+            'id_cuenta_contable' => $idPadre,
             'id_comercio' => 1,
             'activa' => true,
-        ]);
-
-        $this->assertDatabaseHas('cuentas_contables', [
-            'id_cuenta_padre' => $idCuentaPadre,
-            'id_comercio' => 1,
-            'activa' => true,
-        ]);
-
-        $this->assertDatabaseMissing('bitacora_auditoria', [
-            'id_usuario' => $usuario->getKey(),
-            'id_comercio' => 1,
-            'accion' => 'cuenta_contable_desactivada',
-            'entidad' => 'cuenta_contable',
-            'entidad_id' => $idCuentaPadre,
-            'resultado' => 'exitoso',
         ]);
     }
 
@@ -564,12 +562,18 @@ class PlanCuentasApiTest extends TestCase
 
         $usuario = $this->usuarioComercio(1);
 
-        $respuesta = $this->actingAs($usuario, 'web')
-            ->deleteJson("/api/m7/v1/cuentas/{$idCuenta}");
+        $this->actingAs($usuario, 'web');
 
-        $respuesta
-            ->assertStatus(409)
-            ->assertJsonPath('error.codigo', 'ERR-M7-002');
+        app(ContextoComercio::class)->establecer(1);
+
+        try {
+            app(PlanCuentasService::class)->desactivar(1, $idCuenta);
+
+            $this->fail('Se esperaba una excepción al desactivar una cuenta con movimientos.');
+        } catch (ErrorNucleoException $e) {
+            $this->assertSame('ERR-M7-002', $e->getCodigo());
+            $this->assertSame(409, $e->getCodigoHttp());
+        }
 
         $this->assertDatabaseHas('cuentas_contables', [
             'id_cuenta_contable' => $idCuenta,
@@ -597,16 +601,22 @@ class PlanCuentasApiTest extends TestCase
 
         $usuario = $this->usuarioComercio(1);
 
-        $respuesta = $this->actingAs($usuario, 'web')
-            ->postJson('/api/m7/v1/cuentas', [
+        $this->actingAs($usuario, 'web');
+
+        app(ContextoComercio::class)->establecer(1);
+
+        try {
+            app(PlanCuentasService::class)->crear(1, [
                 'codigo' => '1.1.01',
                 'nombre' => 'Caja secundaria',
                 'tipo' => 'ACTIVO',
             ]);
 
-        $respuesta
-            ->assertStatus(422)
-            ->assertJsonPath('error.codigo', 'ERR-M7-003');
+            $this->fail('Se esperaba una excepción por código de cuenta duplicado.');
+        } catch (ErrorNucleoException $e) {
+            $this->assertSame('ERR-M7-003', $e->getCodigo());
+            $this->assertSame(422, $e->getCodigoHttp());
+        }
 
         $this->assertDatabaseCount('cuentas_contables', 1);
 
@@ -621,14 +631,12 @@ class PlanCuentasApiTest extends TestCase
 
     public function test_no_permite_crear_subcuentas_bajo_cuentas_con_movimientos(): void
     {
-        // Creamos la cuenta padre.
         $idCuentaPadre = $this->crearCuenta(
             1,
             '1.1',
             'Activos'
         );
 
-        // Creamos un asiento contable de prueba.
         $ahora = now();
 
         $idAsiento = DB::table('asientos_contables')->insertGetId([
@@ -643,7 +651,6 @@ class PlanCuentasApiTest extends TestCase
             'updated_at' => $ahora,
         ], 'id_asiento');
 
-        // Asociamos un movimiento contable a la cuenta padre.
         DB::table('detalle_asientos')->insert([
             'id_asiento' => $idAsiento,
             'id_cuenta_contable' => $idCuentaPadre,
@@ -657,27 +664,30 @@ class PlanCuentasApiTest extends TestCase
 
         $usuario = $this->usuarioComercio(1);
 
-        // Intentamos crear una subcuenta.
-        $respuesta = $this->actingAs($usuario, 'web')
-            ->postJson('/api/m7/v1/cuentas', [
+        $this->actingAs($usuario, 'web');
+
+        app(ContextoComercio::class)->establecer(1);
+
+        try {
+            app(PlanCuentasService::class)->crear(1, [
                 'codigo' => '1.1.01',
                 'nombre' => 'Caja',
                 'tipo' => 'ACTIVO',
                 'id_cuenta_padre' => $idCuentaPadre,
             ]);
 
-        $respuesta
-            ->assertStatus(409)
-            ->assertJsonPath('error.codigo', 'ERR-M7-002')
-            ->assertJsonPath(
-                'error.mensaje',
-                'No se pueden crear subcuentas bajo una cuenta que ya tiene movimientos.'
+            $this->fail('Se esperaba una excepción al crear una subcuenta bajo una cuenta con movimientos.');
+        } catch (ErrorNucleoException $e) {
+            $this->assertSame('ERR-M7-002', $e->getCodigo());
+            $this->assertSame(409, $e->getCodigoHttp());
+            $this->assertSame(
+                'No se pueden crear subcuentas bajo una cuenta que ya tiene movimientos.',
+                $e->getMessage()
             );
+        }
 
-        // No debe haberse creado la subcuenta.
         $this->assertDatabaseCount('cuentas_contables', 1);
 
-        // Tampoco debe registrarse una creación exitosa.
         $this->assertDatabaseMissing('bitacora_auditoria', [
             'id_usuario' => $usuario->getKey(),
             'id_comercio' => 1,

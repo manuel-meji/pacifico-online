@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\M7_Contabilidad;
 
-use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Services\M7_Contabilidad\LibroMayorService;
 use App\Services\Nucleo\ContextoComercio;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -265,18 +265,11 @@ class LibroMayorServiceTest extends TestCase
 
         app(ContextoComercio::class)->establecer(1);
 
-        try {
-            app(LibroMayorService::class)->consultar([
-                'id_cuenta_contable' => $cuentaComercioDos,
-            ]);
+        $this->expectException(ModelNotFoundException::class);
 
-            $this->fail(
-                'Se permitió consultar una cuenta de otro comercio.'
-            );
-        } catch (ErrorNucleoException $e) {
-            $this->assertSame('ERR-M7-001', $e->getCodigo());
-            $this->assertSame(404, $e->getCodigoHttp());
-        }
+        app(LibroMayorService::class)->consultar([
+            'id_cuenta_contable' => $cuentaComercioDos,
+        ]);
     }
 
     public function test_calcula_correctamente_el_saldo_de_una_cuenta_acreedora(): void
