@@ -6,7 +6,13 @@ namespace App\Providers;
 
 use App\Contracts\M7_Contabilidad\ComerciosM7GatewayInterface;
 use App\Contracts\M7_Contabilidad\CostosProductosVendidosGatewayInterface;
+use App\Contracts\M7_Contabilidad\SubpedidosM7GatewayInterface;
+use App\Services\M7_Contabilidad\Gateways\M5SubpedidosGateway;
+use App\Contracts\M7_Contabilidad\ProcesadorCuentaPagarComercioInterface;
+use App\Services\M7_Contabilidad\ProcesarCuentaPagarComercioService;
 use App\Events\M5_Pedidos\PedidoConfirmado;
+use App\Events\M5_Pedidos\SubpedidoEntregado;
+use App\Listeners\M7_Contabilidad\ProcesarSubpedidoEntregadoListener;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
 use App\Events\M6_Pagos\FacturaGenerada;
 use App\Events\M6_Pagos\PagoConfirmado;
@@ -35,6 +41,16 @@ final class M7ContabilidadServiceProvider extends ServiceProvider
             ComerciosM7GatewayInterface::class,
             M2ComerciosGateway::class
         );
+
+        $this->app->bind(
+            SubpedidosM7GatewayInterface::class,
+            M5SubpedidosGateway::class
+        );
+
+        $this->app->bind(
+            ProcesadorCuentaPagarComercioInterface::class,
+            ProcesarCuentaPagarComercioService::class
+        );
     }
 
     public function boot(): void
@@ -53,6 +69,11 @@ final class M7ContabilidadServiceProvider extends ServiceProvider
             ProcesarSubpedidoDespachadoListener::class
         );
 
+        Event::listen(
+            SubpedidoEntregado::class,
+            ProcesarSubpedidoEntregadoListener::class
+        );
+
         Event::listen(FacturaGenerada::class, ProcesarFacturaGeneradaListener::class);
         Event::listen(PagoConfirmado::class, ProcesarPagoConfirmadoListener::class);
         Event::listen(ReembolsoProcesado::class, ProcesarReembolsoProcesadoListener::class);
@@ -60,6 +81,7 @@ final class M7ContabilidadServiceProvider extends ServiceProvider
         $this->callAfterResolving(Schedule::class, function (Schedule $programa): void {
             $programa->command('m7:recuperar-eventos-m6')->daily()->withoutOverlapping();
             $programa->command('m7:recuperar-eventos-m6 --solo-pendientes')->hourly()->withoutOverlapping();
+            $programa->command('m7:reintentar-cuentas-pagar')->hourly()->withoutOverlapping();
         });
     }
 }
