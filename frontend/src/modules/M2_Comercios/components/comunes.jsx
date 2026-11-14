@@ -1,6 +1,7 @@
 
 import { createContext, useContext } from 'react';
 import { AlertCircle, CheckCircle2, ShieldCheck, Loader2, LogOut, User } from 'lucide-react';
+import logo from '../../../assets/logo-pacificos.png';
 
 
 export const C = {
@@ -121,7 +122,8 @@ export const Encabezado = ({ usuario, onIngresar, onSalir }) => (
     <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
       <a href="/m1.html" aria-label="Pacíficos Online, ir al inicio"
         className="flex items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2">
-        <span className={`flex h-10 w-10 items-center justify-center rounded-full ${C.verde} text-lg font-extrabold text-white`}>P</span>
+        {/* Mismo logotipo del portal (M1), para que el panel se vea como parte de la plataforma. */}
+        <img src={logo} alt="" className="h-10 w-10 rounded-full" />
         <span className="leading-tight">
           <span className={`block text-lg font-extrabold ${C.marinoTexto}`}>Pacíficos</span>
           <span className={`block text-[11px] font-bold tracking-widest ${C.verdeTexto}`}>ONLINE</span>

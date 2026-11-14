@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, ClipboardList, FileText, Home, Megaphone, Store, ShieldCheck } from 'lucide-react';
+import { Boxes, ClipboardList, FileText, Home, LayoutGrid, Megaphone, Store, ShieldCheck, Wallet } from 'lucide-react';
 import { cerrarSesion, obtenerUsuario } from '../Nucleo/services/sesionApi';
 import { AvisoError, C, Cargando, Encabezado, SesionContexto, textoDeError } from './components/comunes';
 import SolicitudIncorporacion from './views/SolicitudIncorporacion';
@@ -48,12 +48,14 @@ export default function M2App() {
 
   const contexto = useMemo(() => ({ usuario: usuario ?? null, mensajeDeError }), [usuario, mensajeDeError]);
 
-  const visibles = VISTAS.filter(
+  // Mientras se verifica la sesión (usuario === undefined) no se muestra ninguna pestaña: si no, un encargado
+  // vería por un instante la Solicitud, que es la vista de quien no tiene sesión.
+  const visibles = usuario === undefined ? [] : VISTAS.filter(
     (v) => (v.rol === null || v.rol === usuario?.rol) && !v.ocultarPara?.includes(usuario?.rol),
   );
   // La solicitud de incorporación es pública (sin sesión, clientes y encargado de plataforma), pero no se
   // muestra al encargado de comercio porque su cuenta está ligada a un solo comercio.
-  const actual = visibles.find((v) => v.clave === vista) ?? visibles[0];
+  const actual = visibles.find((v) => v.clave === vista) ?? visibles[0] ?? VISTAS[0];
 
   let contenido;
   if (usuario === undefined) {
@@ -82,6 +84,13 @@ export default function M2App() {
                 <Icono size={18} /> {corto}
               </button>
             ))}
+            {/* Catálogo de M3 (/m3.html): el encargado del comercio registra y publica sus productos. */}
+            {usuario?.rol === 'encargado_comercio' && (
+              <a href="/m3.html"
+                className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
+                <LayoutGrid size={18} /> Catálogo
+              </a>
+            )}
             {/* Enlace al inventario de M4 (/m4.html): el encargado del comercio entra con la misma sesión del núcleo. */}
             {usuario?.rol === 'encargado_comercio' && (
               <a href="/m4.html"
@@ -94,6 +103,13 @@ export default function M2App() {
               <a href="/carrito.html?pantalla=comercio"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <ClipboardList size={18} /> Pedidos
+              </a>
+            )}
+            {/* Finanzas del comercio en M7 (/m7.html): su reporte gerencial ya filtra por comercio con EstablecerComercio. */}
+            {usuario?.rol === 'encargado_comercio' && (
+              <a href="/m7.html"
+                className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
+                <Wallet size={18} /> Finanzas
               </a>
             )}
             {/* Panel de gestión de M1 (/app.html?pantalla=gestion): destacados, promociones, cupones y noticias. */}
