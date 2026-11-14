@@ -1035,14 +1035,18 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                 $this->registrarUsoCuponSiAplica($resultadoCupon, $idCliente, $idPedido);
 
                 if (is_array($grupos) && ! empty($grupos)) {
+                    $descuentosPorGrupo = $this->distribuirDescuentoEntreGrupos($grupos, $descuentoMaestro);
                     $subpedidoObj = new Subpedido;
-                    foreach ($grupos as $grupo) {
+                    foreach ($grupos as $claveGrupo => $grupo) {
+                        $descuentoGrupo = (float) ($descuentosPorGrupo[$claveGrupo] ?? 0.0);
+                        $subtotalNeto = round(max(0.0, (float) ($grupo['subtotal'] ?? 0.0) - $descuentoGrupo), 2);
                         $subpedidosCreados = $subpedidoObj->crearSubpedidos([
                             [
                                 'id_comercio' => (int) ($grupo['id_comercio'] ?? 1),
-                                'subtotal' => (float) ($grupo['subtotal'] ?? 0.0),
+                                'subtotal' => $subtotalNeto,
                                 'costo_envio' => (float) ($grupo['costo_envio'] ?? 0.0),
                                 'impuesto' => (float) ($grupo['impuesto'] ?? 0.0),
+                                'descuento' => 0.0,
                             ],
                         ], $idPedido);
 
@@ -1141,7 +1145,8 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                         'costo_envio' => (float) $sub->costo_envio,
                         'impuesto' => (float) $sub->impuesto,
                         'impuestos' => (float) $sub->impuesto,
-                        'total' => (float) ($sub->total ?? ($sub->subtotal + $sub->costo_envio + $sub->impuesto)),
+                        'descuento' => (float) ($sub->descuento ?? 0.0),
+                        'total' => (float) ($sub->total ?? ($sub->subtotal + $sub->costo_envio + $sub->impuesto - ($sub->descuento ?? 0.0))),
                         'estado_subpedido' => (string) $sub->estado_subpedido,
                         'guia_seguimiento' => $sub->guia_seguimiento,
                         'fecha_despacho' => $sub->fecha_despacho?->toIso8601String(),
@@ -1557,6 +1562,69 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
         }
 
         return implode(', ', $partes);
+    }
+
+    /**
+     * Prorratea el descuento de cupón del pedido maestro entre los subpedidos
+     * según su peso en el subtotal y ajusta el último céntimo por redondeo.
+     *
+     * @param  array<int|string, array<string, mixed>>  $grupos
+     * @return array<int|string, float>
+     */
+    private function distribuirDescuentoEntreGrupos(array $grupos, float $descuentoTotal): array
+    {
+        $resultado = [];
+        foreach ($grupos as $clave => $_) {
+            $resultado[$clave] = 0.0;
+        }
+
+        $centavosTotales = (int) round(max(0.0, $descuentoTotal) * 100);
+        if ($centavosTotales <= 0 || empty($grupos)) {
+            return $resultado;
+        }
+
+        $basePorGrupo = [];
+        foreach ($grupos as $clave => $grupo) {
+            $basePorGrupo[$clave] = max(0.0, (float) ($grupo['subtotal'] ?? 0.0));
+        }
+
+        $totalBase = array_sum($basePorGrupo);
+        if ($totalBase <= 0.0) {
+            foreach ($grupos as $clave => $grupo) {
+                $basePorGrupo[$clave] = max(
+                    0.0,
+                    (float) ($grupo['subtotal'] ?? 0.0)
+                    + (float) ($grupo['costo_envio'] ?? 0.0)
+                    + (float) ($grupo['impuesto'] ?? 0.0)
+                );
+            }
+            $totalBase = array_sum($basePorGrupo);
+        }
+
+        if ($totalBase <= 0.0) {
+            foreach ($grupos as $clave => $_) {
+                $basePorGrupo[$clave] = 1.0;
+            }
+            $totalBase = (float) count($grupos);
+        }
+
+        $claves = array_keys($grupos);
+        $ultimoIndice = count($claves) - 1;
+        $centavosRestantes = $centavosTotales;
+
+        foreach ($claves as $indice => $clave) {
+            if ($indice === $ultimoIndice) {
+                $resultado[$clave] = round(max(0, $centavosRestantes) / 100, 2);
+                break;
+            }
+
+            $proporcion = $basePorGrupo[$clave] / $totalBase;
+            $centavosGrupo = min($centavosRestantes, max(0, (int) round($centavosTotales * $proporcion)));
+            $resultado[$clave] = round($centavosGrupo / 100, 2);
+            $centavosRestantes -= $centavosGrupo;
+        }
+
+        return $resultado;
     }
 
     private function hasTable(string $table): bool

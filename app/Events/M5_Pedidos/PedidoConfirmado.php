@@ -103,12 +103,20 @@ class PedidoConfirmado
             $subReservas = $sub->lineas->pluck('id_reserva')->filter()->values()->all();
             $reservasCollect = array_merge($reservasCollect, $subReservas);
 
+            $subtotalSub = round((float) $sub->subtotal, 2);
+            $envioSub = round((float) ($sub->costo_envio ?? 0.0), 2);
+            $impuestoSub = round((float) ($sub->impuesto ?? 0.0), 2);
+            $descuentoSub = round((float) ($sub->descuento ?? 0.0), 2);
+            $totalSub = round((float) ($sub->total ?? ($subtotalSub + $envioSub + $impuestoSub - $descuentoSub)), 2);
+
             return [
                 'id_subpedido' => $idSubpedido,
                 'id_comercio' => $idComercio,
-                'subtotal' => round((float) $sub->subtotal, 2),
-                'costo_envio' => round((float) ($sub->costo_envio ?? 0.0), 2),
-                'impuesto' => round((float) ($sub->impuesto ?? 0.0), 2),
+                'subtotal' => $subtotalSub,
+                'costo_envio' => $envioSub,
+                'impuesto' => $impuestoSub,
+                'descuento' => $descuentoSub,
+                'total' => $totalSub,
                 'reservas' => $subReservas,
             ];
         })->values()->all();

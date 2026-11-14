@@ -83,7 +83,7 @@ class M5IntegracionesServiceProvider extends ServiceProvider
      */
     private function resolver(Application $app, string $proveedor, string $interfaz): object
     {
-        if ($app->resolved($interfaz)) {
+        if ($app->isShared($interfaz)) {
             return $app->make($interfaz);
         }
 
