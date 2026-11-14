@@ -41,7 +41,7 @@ class M3_CatalogoSeederTest extends TestCase
         7 => [7, 4, 'DP-CAM-DEP-S', 8990.0, 13.0],
         8 => [7, 4, 'DP-CAM-DEP-XL', 9490.0, 13.0],
         9 => [8, 4, 'DP-BOT-TER-NEG', 6750.0, 13.0],
-        10 => [9, 5, 'CV-CAF-340-MED', 5425.0, 1.0],
+        10 => [9, 5, 'CV-CAF-340-MED', 5425.0, 13.0],
         11 => [10, 5, 'CV-TAZ-CER-BLA', 3333.0, 13.0],
     ];
 
