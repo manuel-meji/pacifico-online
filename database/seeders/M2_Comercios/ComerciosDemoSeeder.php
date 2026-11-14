@@ -78,7 +78,12 @@ class ComerciosDemoSeeder extends Seeder
         $comercio->contactos()->updateOrCreate($id + ['tipo' => 'telefono'], ['valor' => sprintf('2666-%04d', $n)]);
         $comercio->contactos()->updateOrCreate($id + ['tipo' => 'correo'], ['valor' => "contacto{$n}@demo.pacificos.test"]);
 
+        // Tarifas por zona de los escenarios del PC4 (artefactos colectivos, 2.2). Las compradoras están en
+        // Liberia (Resto del país): el escenario 1 cobra 2000, 2000 y 3000 en los comercios 1, 2 y 3, y el
+        // escenario 2 cobra 2500 y 1500 en los comercios 4 y 5.
         $tarifasPorZona = match ($d['cedula']) {
+            '3-101-100001', '3-101-100002' => ['GAM' => 2500, 'Resto del país' => 2000],
+            '3-101-100003' => ['GAM' => 2500, 'Resto del país' => 3000],
             '3-101-100004' => ['GAM' => 3500, 'Resto del país' => 2500],
             '3-101-100005' => ['GAM' => 2500, 'Resto del país' => 1500],
             default => ['GAM' => 2500, 'Resto del país' => 3500],
