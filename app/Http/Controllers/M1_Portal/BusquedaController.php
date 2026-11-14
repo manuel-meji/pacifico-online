@@ -5,11 +5,9 @@ namespace App\Http\Controllers\M1_Portal;
 use App\Contracts\M1_Portal\Exceptions\DatosInvalidosException;
 use App\Contracts\M1_Portal\PortalPublicoContract;
 use App\Http\Controllers\Controller;
-use App\Services\M1_Portal\BusquedaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Validator as ValidadorLaravel;
 
 /**
  * Búsqueda y menú de categorías del portal. Capa delgada: valida la entrada
@@ -72,8 +70,8 @@ class BusquedaController extends Controller
     }
 
     /**
-     * Reglas del contrato y RN-M1-08: sin id_categoria, q (sin espacios) debe
-     * tener al menos 2 caracteres.
+     * Reglas de formato del contrato. La búsqueda vacía o de un solo carácter
+     * ya es válida: lista todos los productos o los que coincidan (sin RN-M1-08).
      *
      * @param  array<string, mixed>  $query
      * @return array<string, mixed>
@@ -83,18 +81,6 @@ class BusquedaController extends Controller
     private function validar(array $query): array
     {
         $validador = Validator::make($query, self::REGLAS, self::MENSAJES);
-
-        $validador->after(function (ValidadorLaravel $validador) use ($query): void {
-            $termino = $query['q'] ?? null;
-
-            if ($validador->errors()->has('q') || ! blank($query['id_categoria'] ?? null)) {
-                return;
-            }
-
-            if (! is_string($termino) || mb_strlen(trim($termino)) < BusquedaService::LARGO_MINIMO_TERMINO) {
-                $validador->errors()->add('q', 'Debe tener al menos 2 caracteres si no se elige una categoría.');
-            }
-        });
 
         if ($validador->fails()) {
             throw new DatosInvalidosException(

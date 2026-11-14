@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\M1_Portal;
 
-use App\Contracts\M1_Portal\Exceptions\CriterioInvalidoException;
 use App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException;
 use App\Services\M1_Portal\BusquedaService;
 use App\Services\M1_Portal\ConfiguracionMenuCategorias;
@@ -16,7 +15,6 @@ use App\Services\M1_Portal\DTO\ResultadoBusquedaDTO;
 use App\Services\M1_Portal\Integraciones\CatalogoClient;
 use App\Services\M1_Portal\RegistroBusquedas;
 use Illuminate\Support\Facades\Log;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Doubles\M1\CatalogoConComercioSuspendido;
 use Tests\Doubles\M1\CatalogoNoDisponible;
 use Tests\Doubles\M1\ComerciosNoDisponible;
@@ -89,38 +87,35 @@ class BusquedaServiceTest extends PruebaM1
     }
 
     // ---------------------------------------------------------------
-    // Validación del criterio (RN-M1-08)
+    // Búsqueda vacía: lista todo el catálogo (sin RN-M1-08)
     // ---------------------------------------------------------------
 
-    public function test_un_termino_de_un_caracter_sin_categoria_es_invalido_a1(): void
+    public function test_un_termino_vacio_sin_categoria_lista_todos_los_productos(): void
     {
-        $this->expectException(CriterioInvalidoException::class);
+        $resultado = $this->buscar(new CriterioBusquedaDTO(termino: ''));
 
-        $this->buscar(new CriterioBusquedaDTO(termino: 'c'));
+        $this->assertNotEmpty($resultado->productos);
     }
 
-    #[DataProvider('terminosInvalidos')]
-    public function test_un_termino_vacio_o_corto_sin_categoria_lanza_err_005(?string $termino): void
+    public function test_un_termino_nulo_sin_categoria_lista_todos_los_productos(): void
     {
-        try {
-            $this->buscar(new CriterioBusquedaDTO(termino: $termino));
-            $this->fail('Se esperaba CriterioInvalidoException.');
-        } catch (CriterioInvalidoException $excepcion) {
-            $this->assertSame('ERR-005', $excepcion->codigo());
-        }
+        $resultado = $this->buscar(new CriterioBusquedaDTO(termino: null));
+
+        $this->assertNotEmpty($resultado->productos);
     }
 
-    /**
-     * @return array<string, array{string|null}>
-     */
-    public static function terminosInvalidos(): array
+    public function test_una_busqueda_vacia_se_registra(): void
     {
-        return [
-            'nulo' => [null],
-            'vacío' => [''],
-            'solo espacios' => ['   '],
-            'una letra con espacios' => [' a '],
-        ];
+        $this->buscar(new CriterioBusquedaDTO(termino: ''));
+
+        $this->assertNotEmpty($this->registro->registradas);
+    }
+
+    public function test_un_termino_de_un_caracter_sin_categoria_ya_busca(): void
+    {
+        $resultado = $this->buscar(new CriterioBusquedaDTO(termino: 'c'));
+
+        $this->assertNotEmpty($resultado->productos);
     }
 
     public function test_un_termino_corto_con_categoria_si_busca(): void
@@ -128,16 +123,6 @@ class BusquedaServiceTest extends PruebaM1
         $resultado = $this->buscar(new CriterioBusquedaDTO(termino: 'c', idCategoria: DatosPrueba::CATEGORIA_ALIMENTOS));
 
         $this->assertSame([DatosPrueba::PRODUCTO_CAFE_MOLIDO, DatosPrueba::PRODUCTO_CAFE_TOSTADO], $this->ids($resultado));
-    }
-
-    public function test_una_busqueda_rechazada_no_se_registra(): void
-    {
-        try {
-            $this->buscar(new CriterioBusquedaDTO(termino: 'c'));
-        } catch (CriterioInvalidoException) {
-        }
-
-        $this->assertSame([], $this->registro->registradas);
     }
 
     // ---------------------------------------------------------------

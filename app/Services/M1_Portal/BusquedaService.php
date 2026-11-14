@@ -2,7 +2,6 @@
 
 namespace App\Services\M1_Portal;
 
-use App\Contracts\M1_Portal\Exceptions\CriterioInvalidoException;
 use App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException;
 use App\Services\M1_Portal\DTO\CategoriaDTO;
 use App\Services\M1_Portal\DTO\CriterioBusquedaDTO;
@@ -19,8 +18,6 @@ use Throwable;
  */
 class BusquedaService
 {
-    public const LARGO_MINIMO_TERMINO = 2;
-
     /** Menú ya armado (RNF-M1-06). */
     private const CLAVE_MENU = 'menu.categorias';
 
@@ -33,13 +30,14 @@ class BusquedaService
     ) {}
 
     /**
-     * @throws CriterioInvalidoException ERR-005 (RN-M1-08).
+     * Un criterio sin término ni categoría lista todos los productos visibles
+     * paginados: la búsqueda vacía muestra todo el catálogo (sin RN-M1-08).
+     *
      * @throws DependenciaNoDisponibleException ERR-006 si M3 no responde.
      */
     public function buscar(CriterioBusquedaDTO $criterio): ResultadoBusquedaDTO
     {
         $criterio = $this->normalizar($criterio);
-        $this->validarCriterio($criterio);
 
         $resultado = $this->catalogo->buscarProductos($criterio);
 
@@ -138,20 +136,6 @@ class BusquedaService
             pagina: $criterio->pagina,
             porPagina: $criterio->porPagina,
         );
-    }
-
-    /**
-     * RN-M1-08: término de al menos 2 caracteres o una categoría.
-     *
-     * @throws CriterioInvalidoException
-     */
-    private function validarCriterio(CriterioBusquedaDTO $criterio): void
-    {
-        if ($criterio->idCategoria === null && mb_strlen((string) $criterio->termino) < self::LARGO_MINIMO_TERMINO) {
-            throw new CriterioInvalidoException(
-                'El término de búsqueda debe tener al menos '.self::LARGO_MINIMO_TERMINO.' caracteres, o se debe elegir una categoría.'
-            );
-        }
     }
 
     /**
