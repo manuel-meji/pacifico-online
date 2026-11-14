@@ -10,15 +10,12 @@ use Illuminate\Http\JsonResponse;
 
 class VariacionController extends Controller
 {
-    public function __construct(
-        private CatalogoServiceInterface $catalogo,
-        private ProductoService $productos
-    ) {}
-
     // operationId: obtenerVariacion
-    public function show(int $id_variacion): JsonResponse
-    {
-        $variacion = $this->catalogo->obtenerVariacion($id_variacion);
+    public function show(
+        CatalogoServiceInterface $catalogo,
+        int $id_variacion
+    ): JsonResponse {
+        $variacion = $catalogo->obtenerVariacion($id_variacion);
 
         if ($variacion === null) {
             return response()->json([
@@ -38,7 +35,9 @@ class VariacionController extends Controller
         ActualizarDisponibilidadVariacionRequest $request,
         int $id_variacion
     ): JsonResponse {
-        $variacion = $this->productos->actualizarDisponibilidadVariacion(
+        $productos = app(ProductoService::class);
+
+        $variacion = $productos->actualizarDisponibilidadVariacion(
             $id_variacion,
             $request->validated()['disponible']
         );
