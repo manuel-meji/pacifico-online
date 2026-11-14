@@ -22,9 +22,9 @@ class TarifasEnvioDemoTest extends TestCase
 {
     use PreparaM2;
 
-    #[TestWith(['3-101-100001', 2500.0, 3500.0])]
-    #[TestWith(['3-101-100002', 2500.0, 3500.0])]
-    #[TestWith(['3-101-100003', 2500.0, 3500.0])]
+    #[TestWith(['3-101-100001', 2500.0, 2000.0])]
+    #[TestWith(['3-101-100002', 2500.0, 2000.0])]
+    #[TestWith(['3-101-100003', 2500.0, 3000.0])]
     #[TestWith(['3-101-100004', 3500.0, 2500.0])]
     #[TestWith(['3-101-100005', 2500.0, 1500.0])]
     public function test_seeder_conserva_las_tarifas_por_comercio_y_zona_al_repetirse(string $cedula, float $costoGam, float $costoResto): void
@@ -80,5 +80,36 @@ class TarifasEnvioDemoTest extends TestCase
         $this->assertSame(2500.0, $liberia['grupos_comercio'][$deportes->id_comercio]['costo_envio']);
         $this->assertSame(1500.0, $liberia['grupos_comercio'][$cafe->id_comercio]['costo_envio']);
         $this->assertSame(4000.0, $liberia['resumen']['costo_envio']);
+    }
+
+    public function test_m5_cobra_el_envio_del_escenario_1_para_liberia(): void
+    {
+        $this->seed(ComerciosDemoSeeder::class);
+        $ids = [];
+        foreach (['3-101-100001', '3-101-100002', '3-101-100003'] as $cedula) {
+            $ids[] = Comercio::query()->where('cedula_juridica', $cedula)->firstOrFail()->id_comercio;
+        }
+        [$milenio, $temulandia, $elegancia] = $ids;
+        $catalogo = new CatalogoPreciosFijos([
+            101 => ['precio' => 1000, 'id_comercio' => $milenio],
+            201 => ['precio' => 1000, 'id_comercio' => $temulandia],
+            301 => ['precio' => 1000, 'id_comercio' => $elegancia],
+        ]);
+        $carrito = new Carrito;
+        $carrito->setRelation('items', new Collection([
+            new ItemCarrito(['id_variacion' => 101, 'cantidad' => 1]),
+            new ItemCarrito(['id_variacion' => 201, 'cantidad' => 1]),
+            new ItemCarrito(['id_variacion' => 301, 'cantidad' => 1]),
+        ]));
+
+        $liberia = (new PedidosService)->calcularDesgloseCarrito($carrito, $catalogo, app(ComerciosService::class), new PortalStub, [
+            'provincia' => 'Guanacaste', 'canton' => 'Liberia', 'distrito' => 'Liberia',
+        ]);
+
+        // Tabla 2 del escenario 1: envío de 2000, 2000 y 3000, total 7000.
+        $this->assertSame(2000.0, $liberia['grupos_comercio'][$milenio]['costo_envio']);
+        $this->assertSame(2000.0, $liberia['grupos_comercio'][$temulandia]['costo_envio']);
+        $this->assertSame(3000.0, $liberia['grupos_comercio'][$elegancia]['costo_envio']);
+        $this->assertSame(7000.0, $liberia['resumen']['costo_envio']);
     }
 }
