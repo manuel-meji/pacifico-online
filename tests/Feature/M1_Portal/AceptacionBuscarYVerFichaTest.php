@@ -133,14 +133,20 @@ class AceptacionBuscarYVerFichaTest extends PruebaM1
     // Errores de punta a punta
     // ---------------------------------------------------------------
 
-    public function test_un_termino_de_una_letra_sin_categoria_responde_422(): void
+    public function test_un_termino_de_una_letra_sin_categoria_ya_responde_200(): void
     {
         $this->buscar(['q' => 'c'])
-            ->assertStatus(422)
-            ->assertJsonPath('error.codigo', 'ERR-005')
-            ->assertJsonStructure(['error' => ['detalles' => ['q']]]);
+            ->assertOk()
+            ->assertJsonStructure(['productos']);
 
-        $this->assertSame([], $this->registro->registradas);
+        $this->assertNotEmpty($this->registro->registradas);
+    }
+
+    public function test_una_busqueda_vacia_lista_todos_los_productos(): void
+    {
+        $respuesta = $this->buscar([])->assertOk();
+
+        $this->assertNotEmpty($respuesta->json('productos'));
     }
 
     public function test_un_producto_inexistente_responde_404(): void

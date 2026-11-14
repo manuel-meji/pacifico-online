@@ -41,6 +41,16 @@ export default function InicioView() {
       <section className="mt-6 overflow-hidden rounded-xl bg-gradient-to-r from-brandDarkBlue to-brandBlue px-6 py-8 text-white sm:py-10">
         <h1 className="text-2xl font-bold sm:text-3xl">Bienvenido a Pacíficos Online</h1>
         <p className="mt-2 max-w-xl text-sm text-blue-50 sm:text-base">Descubrí productos y comercios de Guanacaste y todo Costa Rica.</p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" onClick={() => ir('busqueda')}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-bold text-brandDarkBlue shadow-sm transition hover:bg-blue-50">
+            <Icono nombre="paquete" className="h-5 w-5" /> Ver todos los productos
+          </button>
+          <button type="button" onClick={() => ir('comercios')}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-white px-5 py-2.5 text-sm font-bold text-white transition hover:bg-white/10">
+            <Icono nombre="tienda" className="h-5 w-5" /> Ver todos los comercios
+          </button>
+        </div>
       </section>
 
       {categorias.length > 0 && (
