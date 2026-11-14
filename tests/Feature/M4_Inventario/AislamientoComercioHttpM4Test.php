@@ -5,6 +5,7 @@ namespace Tests\Feature\M4_Inventario;
 use App\Contracts\M4_Inventario\InventarioModuleInterface;
 use App\Models\Nucleo\Usuario;
 use App\Services\M4_Inventario\Dobles\CatalogoStub;
+use App\Services\M4_Inventario\Dobles\ComerciosStub;
 use Database\Seeders\M4_Inventario\InventarioDemoSeeder;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -103,24 +104,68 @@ class AislamientoComercioHttpM4Test extends TestCase
             ->value('k.saldo_cantidad'));
     }
 
-    public function test_el_seeder_carga_las_variaciones_reales_del_catalogo_de_m3(): void
+    public function test_el_seeder_carga_el_catalogo_de_m3_y_la_tabla_5_en_las_sedes_que_da_m2(): void
     {
+        config(['integraciones.m4.m2.doble' => SedesComerciosEscenario::class]);
+
         $this->seed(InventarioDemoSeeder::class);
 
-        // variación => [comercio, producto, sede], como en producto_variaciones (M3) y sedes_comercio (M2).
+        // variación => [comercio, producto, sede, existencia, costo], como en M3CatalogoSeeder y la tabla 5 del escenario 2.2.
         $esperado = [
-            1 => [1, 1, 1], 2 => [1, 2, 1], 3 => [2, 3, 3], 4 => [3, 4, 4], 5 => [3, 5, 4], 6 => [4, 6, 5],
-            7 => [4, 6, 5], 8 => [4, 7, 5], 9 => [5, 8, 6], 10 => [5, 9, 6], 11 => [5, 10, 6],
+            1 => [1, 1, 1, 30, 6500], 2 => [1, 2, 1, 20, 9750], 3 => [2, 3, 3, 30, 2900], 4 => [2, 4, 3, 15, 2300],
+            5 => [3, 5, 4, 20, 16000], 6 => [3, 6, 4, 20, 19500],
+            7 => [4, 7, 5, 6, 4200], 8 => [4, 7, 5, 2, 4600], 9 => [4, 8, 5, 1, 3100],
+            10 => [5, 9, 6, 12, 2900], 11 => [5, 10, 6, 8, 1400],
         ];
 
-        foreach ($esperado as $variacion => [$comercio, $producto, $sede]) {
-            $this->assertDatabaseHas('existencias', [
-                'id_variacion' => $variacion, 'id_comercio' => $comercio, 'id_producto' => $producto, 'id_ubicacion' => $sede,
-            ]);
+        foreach ($esperado as $variacion => [$comercio, $producto, $sede, $cantidad, $costo]) {
+            $fila = DB::table('existencias')->where(['id_variacion' => $variacion, 'id_comercio' => $comercio])->first();
+            $this->assertNotNull($fila, "Falta la variación {$variacion}.");
+            $this->assertSame([$producto, $sede, $cantidad], [(int) $fila->id_producto, (int) $fila->id_ubicacion, (int) $fila->cantidad_fisica], "Variación {$variacion}.");
+            $this->assertEqualsWithDelta($costo, (float) $fila->costo_promedio, 0.001, "Costo de la variación {$variacion}.");
         }
 
-        $this->assertSame(30, (int) DB::table('existencias')
-            ->where(['id_comercio' => 1, 'id_variacion' => 1, 'id_ubicacion' => 1])->value('cantidad_fisica'));
+        // La 501 queda en la sede principal y en la segunda sede del comercio 1.
+        $this->assertSame([1, 2], DB::table('existencias')->where(['id_comercio' => 1, 'id_variacion' => 501])
+            ->orderBy('id_ubicacion')->pluck('id_ubicacion')->map(fn ($id): int => (int) $id)->all());
+    }
+
+    public function test_el_seeder_se_detiene_si_m2_no_tiene_las_sedes(): void
+    {
+        config(['integraciones.m4.m2.doble' => SedesComerciosEscenario::class]);
+        SedesComerciosEscenario::$sinSedes = [4];
+
+        try {
+            $this->seed(InventarioDemoSeeder::class);
+            $this->fail('El seeder debía detenerse.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('comercio 4', $e->getMessage());
+        } finally {
+            SedesComerciosEscenario::$sinSedes = [];
+        }
+
+        $this->assertSame(2, DB::table('existencias')->count(), 'No escribe nada si falta una sede.');
+    }
+}
+
+/** Sedes como las crea ComerciosDemoSeeder de M2: comercio 1 → 1 y 2, comercio 2 → 3, 3 → 4, 4 → 5, 5 → 6. */
+class SedesComerciosEscenario extends ComerciosStub
+{
+    /** @var list<int> */
+    public static array $sinSedes = [];
+
+    public function obtenerSedesComercio(int $idComercio): array
+    {
+        $ids = in_array($idComercio, self::$sinSedes, true) ? [] : match ($idComercio) {
+            1 => [2, 1],
+            2 => [3],
+            3 => [4],
+            4 => [5],
+            5 => [6],
+            default => [],
+        };
+
+        return ['id_comercio' => $idComercio, 'sedes' => array_map(fn (int $id): array => ['id_sede' => $id, 'habilitada' => true], $ids)];
     }
 }
 
