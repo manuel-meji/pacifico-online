@@ -88,7 +88,7 @@ class MicrositioHttpTest extends TestCase
             [
                 'banners' => [
                     [
-                        'imagen' => UploadedFile::fake()->image('banner.png'),
+                        'imagen' => UploadedFile::fake()->image('banner.png', 1600, 400),
                         'texto_alternativo' => 'Banner de prueba',
                         'orden' => 1,
                         'activo' => true,
@@ -102,7 +102,7 @@ class MicrositioHttpTest extends TestCase
             [
                 'galeria' => [
                     [
-                        'imagen' => UploadedFile::fake()->image('galeria.png'),
+                        'imagen' => UploadedFile::fake()->image('galeria.png', 800, 600),
                         'texto_alternativo' => 'Imagen de prueba',
                         'orden' => 1,
                     ],
