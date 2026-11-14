@@ -2,12 +2,11 @@
 
 use App\Http\Controllers\M7_Contabilidad\LibroDiarioController;
 use App\Http\Controllers\M7_Contabilidad\LibroMayorController;
+use App\Http\Controllers\M7_Contabilidad\PlanCuentasController;
 use App\Http\Controllers\M7_Contabilidad\ReporteGerencialController;
 use App\Http\Middleware\EstablecerComercio;
 use App\Http\Middleware\RequiereRol;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\M7_Contabilidad\PlanCuentasController;
-
 
 Route::prefix('api/m7/v1')
     ->middleware('api')
@@ -17,7 +16,7 @@ Route::prefix('api/m7/v1')
         Route::middleware([
             'auth:sanctum',
             EstablecerComercio::class,
-            RequiereRol::class . ':encargado_comercio,encargado_plataforma',
+            RequiereRol::class.':encargado_comercio,encargado_plataforma',
         ])->group(function (): void {
             Route::get('cuentas', [PlanCuentasController::class, 'listar'])
                 ->name('cuentas.index');
@@ -34,6 +33,18 @@ Route::prefix('api/m7/v1')
             Route::get('libro-mayor', [LibroMayorController::class, 'consultar'])
                 ->name('libro-mayor');
 
-            Route::get('reporte-gerencial', [ ReporteGerencialController::class, 'consultar',])
-        ->name('reporte-gerencial');            });
+            Route::get('reporte-gerencial', [ReporteGerencialController::class, 'consultar'])
+                ->name('reporte-gerencial');
+
+            Route::post('cuentas', [PlanCuentasController::class, 'crear'])
+                ->name('cuentas.store');
+
+            Route::put('cuentas/{idCuentaContable}', [PlanCuentasController::class, 'actualizar'])
+                ->whereNumber('idCuentaContable')
+                ->name('cuentas.update');
+
+            Route::delete('cuentas/{idCuentaContable}', [PlanCuentasController::class, 'desactivar'])
+                ->whereNumber('idCuentaContable')
+                ->name('cuentas.destroy');
+        });
     });

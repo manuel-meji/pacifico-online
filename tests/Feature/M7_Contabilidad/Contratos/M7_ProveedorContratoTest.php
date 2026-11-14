@@ -251,7 +251,7 @@ class M7_ProveedorContratoTest extends TestCase
             ]);
     }
 
-    public function test_cuenta_ajena_o_inexistente_responde_404_err_004(): void
+    public function test_cuenta_ajena_o_inexistente_responde_404_err_m7_001(): void
     {
         $idAjena = $this->crearCuenta(2, '4.1.01', 'Ventas comercio 2', 'INGRESO');
         $encargado = $this->encargado(1);
@@ -260,7 +260,7 @@ class M7_ProveedorContratoTest extends TestCase
             $this->actingAs($encargado, 'web')->getJson("/api/m7/v1/cuentas/{$id}")
                 ->assertNotFound()
                 ->assertJsonStructure(self::ERROR)
-                ->assertJsonPath('error.codigo', 'ERR-004');
+                ->assertJsonPath('error.codigo', 'ERR-M7-001');
         }
     }
 

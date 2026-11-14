@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\M7_Contabilidad;
 
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Http\Controllers\Controller;
 use App\Services\M7_Contabilidad\PlanCuentasService;
 use App\Services\Nucleo\ContextoComercio;
@@ -71,13 +72,99 @@ final class PlanCuentasController extends Controller
         ]);
     }
 
+    public function crear(Request $request): JsonResponse
+    {
+        $datos = $request->validate([
+            'id_comercio' => ['nullable', 'integer', 'min:1'],
+            'codigo' => ['required', 'string', 'max:30'],
+            'nombre' => ['required', 'string', 'max:150'],
+            'tipo' => [
+                'required',
+                'string',
+                'in:ACTIVO,PASIVO,PATRIMONIO,INGRESO,GASTO',
+            ],
+            'id_cuenta_padre' => ['nullable', 'integer', 'min:1'],
+            'activa' => ['sometimes', 'boolean'],
+        ]);
+
+        $idComercio = $this->resolverComercio(
+            $datos['id_comercio'] ?? null
+        );
+
+        unset($datos['id_comercio']);
+
+        $cuenta = $this->planCuentas->crear($idComercio, $datos);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cuenta contable creada correctamente.',
+            'data' => $this->formatearCuenta($cuenta),
+        ], 201);
+    }
+
+    public function actualizar(
+        Request $request,
+        int $idCuentaContable
+    ): JsonResponse {
+        $datos = $request->validate([
+            'id_comercio' => ['nullable', 'integer', 'min:1'],
+            'nombre' => ['sometimes', 'required', 'string', 'max:150'],
+            'activa' => ['sometimes', 'boolean'],
+        ]);
+
+        $idComercio = $this->resolverComercio(
+            $datos['id_comercio'] ?? null
+        );
+
+        unset($datos['id_comercio']);
+
+        $cuenta = $this->planCuentas->actualizar(
+            $idComercio,
+            $idCuentaContable,
+            $datos
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cuenta contable actualizada correctamente.',
+            'data' => $this->formatearCuenta($cuenta),
+        ]);
+    }
+
+    public function desactivar(
+        Request $request,
+        int $idCuentaContable
+    ): JsonResponse {
+        $filtros = $request->validate([
+            'id_comercio' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $idComercio = $this->resolverComercio(
+            $filtros['id_comercio'] ?? null
+        );
+
+        $cuenta = $this->planCuentas->desactivar(
+            $idComercio,
+            $idCuentaContable
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cuenta contable desactivada correctamente.',
+            'data' => $this->formatearCuenta($cuenta),
+        ]);
+    }
+
     private function resolverComercio(mixed $solicitado): int
     {
         $actual = $this->contexto->idActual();
 
         if ($this->contexto->esModoSistema()) {
             if ($solicitado === null) {
-                throw new LogicException(
+                throw ErrorNucleoException::paraModulo(
+                    'M7_Contabilidad',
+                    'ERR-M7-003',
+                    422,
                     'Debe indicar el comercio que desea consultar.'
                 );
             }
@@ -86,7 +173,7 @@ final class PlanCuentasController extends Controller
         } else {
             if ($actual === null) {
                 throw new LogicException(
-                    'No existe un comercio activo para consultar el plan de cuentas.'
+                    'No existe un comercio activo en el contexto de la solicitud.'
                 );
             }
 
@@ -96,7 +183,10 @@ final class PlanCuentasController extends Controller
                 $solicitado !== null
                 && (int) $solicitado !== $actual
             ) {
-                throw new LogicException(
+                throw ErrorNucleoException::paraModulo(
+                    'Nucleo',
+                    'ERR-002',
+                    403,
                     'No tiene autorización para consultar otro comercio.'
                 );
             }
@@ -104,7 +194,7 @@ final class PlanCuentasController extends Controller
 
         if ($idComercio <= 0) {
             throw new LogicException(
-                'El comercio indicado no es válido.'
+                'El comercio activo del contexto no es válido.'
             );
         }
 
