@@ -3,6 +3,7 @@ import FormularioPago from './components/FormularioPago';
 import ResultadoPago from './components/ResultadoPago';
 import FacturasPedidoView from './views/FacturasPedidoView';
 import HistorialComercioView from './views/HistorialComercioView';
+import HistorialPersonalView from './views/HistorialPersonalView';
 import { listarFacturasPedido } from './api/pagosApi';
 
 // Pedido de prueba por defecto (dobles de M5).
@@ -13,7 +14,7 @@ const PEDIDO_PRUEBA = {
   subpedidos: [],
 };
 
-// Lee de la dirección ?pedido=ID y, opcionalmente, &monto=MONTO.
+// Lee de la dirección ?pedido=ID, opcionalmente &monto=MONTO, y ?pantalla=historial.
 function parametrosDeUrl() {
   const params = new URLSearchParams(window.location.search);
   const id = Number(params.get('pedido'));
@@ -22,26 +23,34 @@ function parametrosDeUrl() {
   return {
     id: Number.isInteger(id) && id > 0 ? id : null,
     monto: Number.isFinite(monto) && monto > 0 ? monto : null,
+    pantalla: params.get('pantalla'),
   };
 }
 
 const PARAMS = parametrosDeUrl();
-const HAY_COBRO = Boolean(PARAMS.id && PARAMS.monto);
+
+// El historial ya no es una pestaña: se abre desde el botón "Historial de pagos" del portal (M1).
+// historial-comercio conserva la consulta por comercio o cliente (CU-008) para encargados.
+const PAGINA_HISTORIAL = ['historial', 'historial-comercio'].includes(PARAMS.pantalla) ? PARAMS.pantalla : null;
+
+// ?pedido=ID sin monto: solo se consultan las facturas de un pedido ya pagado (por ejemplo, desde el historial).
+// No se muestra el formulario de pago.
+const SOLO_FACTURAS = Boolean(PARAMS.id) && !PARAMS.monto && !PAGINA_HISTORIAL;
+
+const HAY_COBRO = Boolean(PARAMS.id && PARAMS.monto) && !PAGINA_HISTORIAL;
 
 // ?pedido=ID&monto=MONTO -> formulario de cobro (o facturas si el pedido ya fue cobrado).
-// Solo ?pedido=ID        -> facturas del pedido.
 // Sin parámetros         -> pedido de prueba.
 const PEDIDO_ACTUAL = HAY_COBRO
   ? { id_pedido: PARAMS.id, estado: 'confirmado', monto_total: PARAMS.monto, subpedidos: [] }
   : PEDIDO_PRUEBA;
 
 const ID_PEDIDO_FACTURAS = PARAMS.id ?? PEDIDO_PRUEBA.id_pedido;
-const PANTALLA_INICIAL = PARAMS.id && !PARAMS.monto ? 'factura' : 'pago';
+const PANTALLA_INICIAL = 'pago';
 
 const PESTANAS = [
   ['pago', 'Pagar pedido'],
   ['factura', 'Facturas'],
-  ['historial', 'Historial'],
 ];
 
 export default function M6App() {
@@ -66,6 +75,29 @@ export default function M6App() {
 
   const verResultado = (p) => { setPago(p); setPantalla('resultado'); };
   const otroMedio = () => { setIntento((n) => n + 1); setPantalla('pago'); };
+
+  if (PAGINA_HISTORIAL) {
+    return (
+      <div className="min-h-screen bg-brandLightBg px-4 py-6 text-gray-800">
+        <div className="mx-auto mb-5 max-w-xl">
+          <a href="/m1.html" className="text-sm font-semibold text-brandBlue hover:underline">← Volver al portal</a>
+        </div>
+        {/* Con sesión, el backend fija el filtro al propio (RN-12). */}
+        {PAGINA_HISTORIAL === 'historial' ? <HistorialPersonalView /> : <HistorialComercioView />}
+      </div>
+    );
+  }
+
+  if (SOLO_FACTURAS) {
+    return (
+      <div className="min-h-screen bg-brandLightBg px-4 py-6 text-gray-800">
+        <div className="mx-auto mb-5 max-w-xl">
+          <a href="/m6.html?pantalla=historial" className="text-sm font-semibold text-brandBlue hover:underline">← Volver al historial</a>
+        </div>
+        <FacturasPedidoView idPedido={PARAMS.id} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-brandLightBg px-4 py-6 text-gray-800">
@@ -101,11 +133,6 @@ export default function M6App() {
 
       {!verificando && pantalla === 'factura' && (
         <FacturasPedidoView idPedido={pago?.id_pedido ?? ID_PEDIDO_FACTURAS} />
-      )}
-
-      {!verificando && pantalla === 'historial' && (
-        // CU-008: el filtro se elige en la pantalla; con sesión, el backend lo fija al propio (RN-12).
-        <HistorialComercioView />
       )}
     </div>
   );
