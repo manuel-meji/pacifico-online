@@ -84,7 +84,7 @@ export default function PlanCuentasView({ onNavegar }) {
         if (activo) {
           setError(
             excepcion.message ??
-              'No fue posible cargar el plan de cuentas.'
+            'No fue posible cargar el plan de cuentas.'
           );
         }
       } finally {
@@ -167,10 +167,11 @@ export default function PlanCuentasView({ onNavegar }) {
     setTipoSeleccionado('Todos');
     setEstadoSeleccionado('Todos');
     setPagina(1);
-  }
+  } 
 
   return (
-    <div className="min-h-screen bg-[#f5f7fa]">
+    <div className="min-h-screen bg-[#f5f7fa]">      
+
       <EncabezadoM7
         seccionActiva="Plan de cuentas"
         onNavegar={onNavegar}
@@ -398,13 +399,12 @@ export default function PlanCuentasView({ onNavegar }) {
                 ? 'Cargando cuentas...'
                 : totalCuentas === 0
                   ? 'No se encontraron cuentas.'
-                  : `Mostrando ${
-                      indiceInicial + 1
-                    }–${Math.min(
-                      indiceInicial +
-                        tamanoPagina,
-                      totalCuentas
-                    )} de ${totalCuentas} cuentas`}
+                  : `Mostrando ${indiceInicial + 1
+                  }–${Math.min(
+                    indiceInicial +
+                    tamanoPagina,
+                    totalCuentas
+                  )} de ${totalCuentas} cuentas`}
             </p>
 
             <div className="flex items-center gap-2">
@@ -451,11 +451,10 @@ export default function PlanCuentasView({ onNavegar }) {
                   </div>
 
                   <span
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                      cuenta.estado === 'Activa'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${cuenta.estado === 'Activa'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-700'
+                      }`}
                   >
                     {cuenta.estado}
                   </span>
@@ -488,12 +487,11 @@ export default function PlanCuentasView({ onNavegar }) {
 
                     <dd>
                       <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                          cuenta.naturaleza ===
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${cuenta.naturaleza ===
                           'Deudora'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-lime-100 text-lime-800'
-                        }`}
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-lime-100 text-lime-800'
+                          }`}
                       >
                         {cuenta.naturaleza}
                       </span>
@@ -621,12 +619,11 @@ export default function PlanCuentasView({ onNavegar }) {
 
                       <td className="whitespace-nowrap px-4 py-4">
                         <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                            cuenta.naturaleza ===
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${cuenta.naturaleza ===
                             'Deudora'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-lime-100 text-lime-800'
-                          }`}
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-lime-100 text-lime-800'
+                            }`}
                         >
                           {cuenta.naturaleza}
                         </span>
@@ -643,12 +640,11 @@ export default function PlanCuentasView({ onNavegar }) {
 
                       <td className="px-4 py-4">
                         <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                            cuenta.estado ===
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${cuenta.estado ===
                             'Activa'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-700'
+                            }`}
                         >
                           {cuenta.estado}
                         </span>
@@ -756,6 +752,61 @@ export default function PlanCuentasView({ onNavegar }) {
           </div>
         </section>
       </main>
+
+      {/* Documento exclusivo para impresión */}
+      <div className="print-area">
+        <header style={{ marginBottom: '24px' }}>
+          <h1>Pacíficos Online</h1>
+          <h2>Plan de cuentas</h2>
+
+          <p>
+            Catálogo y clasificación de cuentas contables.
+          </p>
+
+          <p>
+            Fecha de impresión:{' '}
+            {new Date().toLocaleDateString('es-CR')}
+          </p>
+
+          <p>
+            Total de cuentas: {cuentasFiltradas.length}
+          </p>
+        </header>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Nombre de la cuenta</th>
+              <th>Tipo</th>
+              <th>Naturaleza</th>
+              <th>Cuenta padre</th>
+              <th>Nivel</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {cuentasFiltradas.map((cuenta) => (
+              <tr key={cuenta.id}>
+                <td>{cuenta.codigo}</td>
+                <td>{cuenta.nombre}</td>
+                <td>{cuenta.tipo}</td>
+                <td>{cuenta.naturaleza}</td>
+                <td>{cuenta.idCuentaPadre ?? '—'}</td>
+                <td>{cuenta.nivel}</td>
+                <td>{cuenta.estado}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <p className="print-footer">
+          Pacíficos Online · M7 ERP Contable y Reportes Gerenciales
+        </p>
+      </div>
+
+
     </div>
   );
 }

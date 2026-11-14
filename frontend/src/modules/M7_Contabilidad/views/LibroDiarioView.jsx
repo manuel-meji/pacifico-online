@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
 import { consultarLibroDiario } from '../services/libroDiarioApi';
 
@@ -12,13 +11,29 @@ function formatoMoneda(monto) {
   return new Intl.NumberFormat('es-CR', {
     style: 'currency',
     currency: 'CRC',
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(monto);
+  }).format(Number(monto) || 0);
 }
 
 function formatoFecha(fecha) {
-  const [anio, mes, dia] = fecha.slice(0, 10).split('-');
+  if (!fecha) return '—';
+
+  const fechaTexto = String(fecha).slice(0, 10);
+  const partes = fechaTexto.split('-');
+
+  if (partes.length !== 3) return '—';
+
+  const [anio, mes, dia] = partes;
   return `${dia}/${mes}/${anio}`;
+}
+
+function normalizarTexto(valor) {
+  return String(valor ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 export default function LibroDiarioView({ onNavegar }) {
@@ -27,13 +42,17 @@ export default function LibroDiarioView({ onNavegar }) {
   const [estadoSeleccionado, setEstadoSeleccionado] = useState('Todos');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+
   const [tamanoPagina, setTamanoPagina] = useState(10);
   const [pagina, setPagina] = useState(1);
+
   const [asientoSeleccionado, setAsientoSeleccionado] = useState(null);
   const [asientosBackend, setAsientosBackend] = useState([]);
+
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
+  // Consultar la base de datos una sola vez al cargar la pantalla.
   useEffect(() => {
     let activo = true;
 
@@ -42,38 +61,26 @@ export default function LibroDiarioView({ onNavegar }) {
       setError('');
 
       try {
-        const resultado = await consultarLibroDiario({
-          buscar: busqueda.trim(),
-          tipo:
-            tipoSeleccionado === 'Todos'
-              ? ''
-              : tipoSeleccionado === 'Venta automática'
-                ? 'VENTA'
-                : tipoSeleccionado === 'Costo de ventas'
-                  ? 'COSTO_VENTA'
-                  : tipoSeleccionado,
-          estado:
-            estadoSeleccionado === 'Todos'
-              ? ''
-              : estadoSeleccionado === 'Registrado'
-                ? 'REGISTRADO'
-                : estadoSeleccionado === 'Anulado'
-                  ? 'ANULADO'
-                  : estadoSeleccionado,
-          fecha_desde: fechaDesde,
-          fecha_hasta: fechaHasta,
-        });
+        const resultado = await consultarLibroDiario();
 
-        if (activo) {
-          setAsientosBackend(resultado.asientos ?? []);
-        }
+        if (!activo) return;
+
+        const asientos = Array.isArray(resultado?.asientos)
+          ? resultado.asientos
+          : [];
+
+        setAsientosBackend(asientos);
       } catch (e) {
-        if (activo) {
-          setError(e.message || 'No se pudieron cargar los asientos.');
-          setAsientosBackend([]);
-        }
+        if (!activo) return;
+
+        setError(
+          e.message || 'No se pudieron cargar los asientos contables.'
+        );
+        setAsientosBackend([]);
       } finally {
-        if (activo) setCargando(false);
+        if (activo) {
+          setCargando(false);
+        }
       }
     }
 
@@ -82,13 +89,77 @@ export default function LibroDiarioView({ onNavegar }) {
     return () => {
       activo = false;
     };
-  }, [busqueda, tipoSeleccionado, estadoSeleccionado, fechaDesde, fechaHasta]);
+  }, []);
 
-  const asientosFiltrados = asientosBackend;
+  // Aplicar todos los filtros en tiempo real sobre los datos recibidos.
+  const asientosFiltrados = useMemo(() => {
+    const texto = normalizarTexto(busqueda);
 
+    return asientosBackend.filter((asiento) => {
+      const coincideBusqueda =
+        !texto ||
+        [
+          asiento.numero,
+          asiento.descripcion,
+          asiento.referencia,
+          asiento.tipo,
+        ].some((valor) => normalizarTexto(valor).includes(texto));
+
+      const coincideTipo =
+        tipoSeleccionado === 'Todos' ||
+        asiento.tipo === tipoSeleccionado;
+
+      const coincideEstado =
+        estadoSeleccionado === 'Todos' ||
+        normalizarTexto(asiento.estado) ===
+        normalizarTexto(estadoSeleccionado);
+
+      // La API devuelve fechas en formato YYYY-MM-DD HH:mm:ss.
+      const fechaAsiento = String(asiento.fecha ?? '').slice(0, 10);
+
+      const coincideFechaDesde =
+        !fechaDesde || fechaAsiento >= fechaDesde;
+
+      const coincideFechaHasta =
+        !fechaHasta || fechaAsiento <= fechaHasta;
+
+      return (
+        coincideBusqueda &&
+        coincideTipo &&
+        coincideEstado &&
+        coincideFechaDesde &&
+        coincideFechaHasta
+      );
+    });
+  }, [
+    asientosBackend,
+    busqueda,
+    tipoSeleccionado,
+    estadoSeleccionado,
+    fechaDesde,
+    fechaHasta,
+  ]);
+
+  // Los indicadores muestran el total de registros cargados,
+  // independientemente de los filtros de búsqueda.
   const totalAsientos = asientosFiltrados.length;
-  const totalPaginas = Math.max(1, Math.ceil(totalAsientos / tamanoPagina));
+
+  const totalRegistrados = asientosBackend.filter(
+    (asiento) => normalizarTexto(asiento.estado) === 'registrado'
+  ).length;
+
+  const totalAnulados = asientosBackend.filter(
+    (asiento) => normalizarTexto(asiento.estado) === 'anulado'
+  ).length;
+
+  // Paginación sobre los resultados filtrados.
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(totalAsientos / tamanoPagina)
+  );
+
   const paginaActual = Math.min(pagina, totalPaginas);
+
   const indiceInicial = (paginaActual - 1) * tamanoPagina;
 
   const asientosVisibles = asientosFiltrados.slice(
@@ -105,6 +176,60 @@ export default function LibroDiarioView({ onNavegar }) {
     setPagina(1);
   }
 
+  function cambiarBusqueda(valor) {
+    setBusqueda(valor);
+    setPagina(1);
+  }
+
+  function cambiarTipo(valor) {
+    setTipoSeleccionado(valor);
+    setPagina(1);
+  }
+
+  function cambiarEstado(valor) {
+    setEstadoSeleccionado(valor);
+    setPagina(1);
+  }
+
+  function cambiarFechaDesde(valor) {
+    setFechaDesde(valor);
+    setPagina(1);
+
+    if (fechaHasta && valor && valor > fechaHasta) {
+      setFechaHasta('');
+    }
+  }
+
+  function cambiarFechaHasta(valor) {
+    setFechaHasta(valor);
+    setPagina(1);
+
+    if (fechaDesde && valor && valor < fechaDesde) {
+      setFechaDesde('');
+    }
+  }
+
+  function abrirDetalle(asiento) {
+    setAsientoSeleccionado(asiento);
+  }
+
+  function cerrarDetalle() {
+    setAsientoSeleccionado(null);
+  }
+
+  function totalLineas(lineas, campo) {
+    return (Array.isArray(lineas) ? lineas : []).reduce(
+      (total, linea) => total + (Number(linea[campo]) || 0),
+      0
+    );
+  }
+
+  const lineasSeleccionadas = Array.isArray(
+    asientoSeleccionado?.lineas
+  )
+    ? asientoSeleccionado.lineas
+    : [];
+
   return (
     <div className="min-h-screen bg-[#f5f7fa]">
       <EncabezadoM7
@@ -112,7 +237,11 @@ export default function LibroDiarioView({ onNavegar }) {
         onNavegar={onNavegar}
       />
 
-      <main id="contenido" className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <main
+        id="contenido"
+        className="mx-auto max-w-7xl px-4 py-8 sm:px-6"
+      >
+        {/* Encabezado */}
         <div className="mb-6">
           <p className="mb-2 text-sm text-gray-500">
             Contabilidad / Libro diario
@@ -123,6 +252,7 @@ export default function LibroDiarioView({ onNavegar }) {
               <h1 className="text-2xl font-bold text-[#1e3a8a] sm:text-3xl">
                 Libro diario
               </h1>
+
               <p className="mt-2 text-sm text-gray-600">
                 Consulta de asientos y sus movimientos contables.
               </p>
@@ -131,102 +261,129 @@ export default function LibroDiarioView({ onNavegar }) {
             <button
               type="button"
               onClick={() => window.print()}
-              className="rounded-lg bg-[#1e3a8a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800"
+              disabled={cargando || asientosFiltrados.length === 0}
+              className="rounded-lg bg-[#1e3a8a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Imprimir listado
             </button>
           </div>
         </div>
 
+        {/* Indicadores */}
         <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Asientos encontrados</p>
-            <p className="mt-2 text-3xl font-bold text-[#1e3a8a]">
-              {totalAsientos}
+            <p className="text-sm text-gray-500">
+              Asientos encontrados
             </p>
+
+            <p className="mt-2 text-3xl font-bold text-[#1e3a8a]">
+              {cargando ? '—' : totalAsientos}
+            </p>
+
             <p className="mt-1 text-xs text-gray-500">
               Según los filtros actuales
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Asientos registrados</p>
+            <p className="text-sm text-gray-500">
+              Asientos registrados
+            </p>
+
             <p className="mt-2 text-3xl font-bold text-[#1e3a8a]">
-              {asientosBackend.filter(
-                (asiento) => asiento.estado === 'Registrado'
-              ).length}
+              {cargando ? '—' : totalRegistrados}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Total de registros cargados
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Asientos anulados</p>
+            <p className="text-sm text-gray-500">
+              Asientos anulados
+            </p>
+
             <p className="mt-2 text-3xl font-bold text-[#1e3a8a]">
-              {asientosBackend.filter(
-                (asiento) => asiento.estado === 'Anulado'
-              ).length}
+              {cargando ? '—' : totalAnulados}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Total de registros cargados
             </p>
           </article>
         </section>
 
+        {/* Registro y filtros */}
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-200 px-5 py-4">
             <h2 className="text-lg font-bold text-gray-800">
               Registro de asientos
             </h2>
+
             <p className="mt-1 text-sm text-gray-500">
               Busca por número, descripción o referencia y filtra los resultados.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 border-b border-gray-200 p-5 md:grid-cols-2 xl:grid-cols-3">
+            {/* Búsqueda */}
             <div>
-              <label htmlFor="buscar-asiento" className="mb-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="buscar-asiento"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
                 Buscar asiento
               </label>
+
               <input
                 id="buscar-asiento"
                 type="search"
                 value={busqueda}
-                onChange={(e) => {
-                  setBusqueda(e.target.value);
-                  setPagina(1);
-                }}
+                onChange={(e) => cambiarBusqueda(e.target.value)}
                 placeholder="Número, descripción o referencia..."
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
+            {/* Tipo */}
             <div>
-              <label htmlFor="tipo-asiento" className="mb-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="tipo-asiento"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
                 Tipo de asiento
               </label>
+
               <select
                 id="tipo-asiento"
                 value={tipoSeleccionado}
-                onChange={(e) => {
-                  setTipoSeleccionado(e.target.value);
-                  setPagina(1);
-                }}
+                onChange={(e) => cambiarTipo(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               >
                 <option value="Todos">Todos los tipos</option>
+
                 {tiposAsiento.map((tipo) => (
-                  <option key={tipo} value={tipo}>{tipo}</option>
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
                 ))}
               </select>
             </div>
 
+            {/* Estado */}
             <div>
-              <label htmlFor="estado-asiento" className="mb-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="estado-asiento"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
                 Estado
               </label>
+
               <select
                 id="estado-asiento"
                 value={estadoSeleccionado}
-                onChange={(e) => {
-                  setEstadoSeleccionado(e.target.value);
-                  setPagina(1);
-                }}
+                onChange={(e) => cambiarEstado(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               >
                 <option value="Todos">Todos los estados</option>
@@ -235,40 +392,45 @@ export default function LibroDiarioView({ onNavegar }) {
               </select>
             </div>
 
+            {/* Fecha desde */}
             <div>
-              <label htmlFor="fecha-desde" className="mb-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="fecha-desde"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
                 Fecha desde
               </label>
+
               <input
                 id="fecha-desde"
                 type="date"
                 value={fechaDesde}
                 max={fechaHasta || undefined}
-                onChange={(e) => {
-                  setFechaDesde(e.target.value);
-                  setPagina(1);
-                }}
+                onChange={(e) => cambiarFechaDesde(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               />
             </div>
 
+            {/* Fecha hasta */}
             <div>
-              <label htmlFor="fecha-hasta" className="mb-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="fecha-hasta"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
                 Fecha hasta
               </label>
+
               <input
                 id="fecha-hasta"
                 type="date"
                 value={fechaHasta}
                 min={fechaDesde || undefined}
-                onChange={(e) => {
-                  setFechaHasta(e.target.value);
-                  setPagina(1);
-                }}
+                onChange={(e) => cambiarFechaHasta(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               />
             </div>
 
+            {/* Limpiar */}
             <div className="flex items-end">
               <button
                 type="button"
@@ -280,20 +442,32 @@ export default function LibroDiarioView({ onNavegar }) {
             </div>
           </div>
 
+          {/* Resultados */}
           <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-gray-600" aria-live="polite">
-              {totalAsientos === 0
-                ? 'No se encontraron asientos.'
-                : `Mostrando ${indiceInicial + 1}–${Math.min(
-                  indiceInicial + tamanoPagina,
-                  totalAsientos
-                )} de ${totalAsientos} asientos`}
+            <p
+              className="text-sm text-gray-600"
+              aria-live="polite"
+            >
+              {cargando
+                ? 'Cargando asientos contables...'
+                : error
+                  ? 'No fue posible cargar los registros.'
+                  : totalAsientos === 0
+                    ? 'No se encontraron asientos.'
+                    : `Mostrando ${indiceInicial + 1}–${Math.min(
+                      indiceInicial + tamanoPagina,
+                      totalAsientos
+                    )} de ${totalAsientos} asientos`}
             </p>
 
             <div className="flex items-center gap-2">
-              <label htmlFor="filas-asientos" className="text-sm text-gray-600">
+              <label
+                htmlFor="filas-asientos"
+                className="text-sm text-gray-600"
+              >
                 Filas por página
               </label>
+
               <select
                 id="filas-asientos"
                 value={tamanoPagina}
@@ -310,16 +484,36 @@ export default function LibroDiarioView({ onNavegar }) {
             </div>
           </div>
 
+          {/* Errores */}
+          {error && (
+            <div
+              role="alert"
+              className="m-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            >
+              {error}
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="ml-2 font-semibold underline"
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
 
-          {/* Vista móvil: tarjetas de asientos contables */}
-          <div className="space-y-3 p-3 md:hidden">
-            {asientosVisibles.map((asiento) => {
-              const totalDebe = asiento.totalDebe;
-              const totalHaber = asiento.totalHaber;
+          {/* Cargando */}
+          {cargando && (
+            <div className="p-12 text-center text-sm text-gray-500">
+              Consultando los registros contables...
+            </div>
+          )}
 
-              return (
+          {/* Vista móvil */}
+          {!cargando && !error && (
+            <div className="space-y-3 p-3 md:hidden">
+              {asientosVisibles.map((asiento) => (
                 <article
-                  key={asiento.numero}
+                  key={asiento.id ?? asiento.numero}
                   className="rounded-lg border border-gray-200 bg-white p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -327,6 +521,7 @@ export default function LibroDiarioView({ onNavegar }) {
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                         Asiento
                       </p>
+
                       <p className="break-words font-bold text-[#1e3a8a]">
                         {asiento.numero}
                       </p>
@@ -334,8 +529,8 @@ export default function LibroDiarioView({ onNavegar }) {
 
                     <span
                       className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${asiento.estado === 'Registrado'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-700'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-700'
                         }`}
                     >
                       {asiento.estado}
@@ -345,206 +540,286 @@ export default function LibroDiarioView({ onNavegar }) {
                   <p className="mt-3 break-words font-semibold text-gray-900">
                     {asiento.descripcion}
                   </p>
+
                   <p className="mt-1 break-words text-xs text-gray-500">
-                    Referencia: {asiento.referencia}
+                    Referencia: {asiento.referencia || '—'}
                   </p>
 
                   <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-gray-100 pt-3 text-sm">
                     <div>
                       <dt className="text-gray-500">Fecha</dt>
-                      <dd className="break-words font-medium text-gray-800">
+                      <dd className="font-medium text-gray-800">
                         {formatoFecha(asiento.fecha)}
                       </dd>
                     </div>
+
                     <div>
                       <dt className="text-gray-500">Tipo</dt>
                       <dd className="break-words font-medium text-gray-800">
                         {asiento.tipo}
                       </dd>
                     </div>
+
                     <div>
                       <dt className="text-gray-500">Total debe</dt>
-                      <dd className="break-words font-semibold text-gray-900">
-                        {formatoMoneda(totalDebe)}
+                      <dd className="font-semibold text-gray-900">
+                        {formatoMoneda(asiento.totalDebe)}
                       </dd>
                     </div>
+
                     <div>
                       <dt className="text-gray-500">Total haber</dt>
-                      <dd className="break-words font-semibold text-gray-900">
-                        {formatoMoneda(totalHaber)}
+                      <dd className="font-semibold text-gray-900">
+                        {formatoMoneda(asiento.totalHaber)}
                       </dd>
                     </div>
                   </dl>
 
                   <button
                     type="button"
-                    onClick={() => setAsientoSeleccionado(asiento)}
+                    onClick={() => abrirDetalle(asiento)}
                     className="mt-4 w-full rounded-lg border border-[#1e3a8a] px-4 py-2.5 text-sm font-semibold text-[#1e3a8a] transition hover:bg-blue-50"
                   >
                     Ver detalle
                   </button>
                 </article>
-              );
-            })}
+              ))}
 
-            {asientosVisibles.length === 0 && (
-              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
-                No hay asientos que coincidan con los filtros.
-                <button
-                  type="button"
-                  onClick={limpiarFiltros}
-                  className="mt-3 block w-full font-semibold text-[#1e3a8a] underline"
-                >
-                  Limpiar búsqueda y filtros
-                </button>
-              </div>
-            )}
-          </div>
+              {asientosVisibles.length === 0 && (
+                <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+                  No hay asientos que coincidan con los filtros.
+                  <button
+                    type="button"
+                    onClick={limpiarFiltros}
+                    className="mt-3 block w-full font-semibold text-[#1e3a8a] underline"
+                  >
+                    Limpiar búsqueda y filtros
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Vista de escritorio: tabla original */}
-          <div className="hidden md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#1e3a8a] text-white">
-                <tr>
-                  <th scope="col" className="px-4 py-4 font-semibold">Número</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Fecha</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Descripción</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Tipo</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Estado</th>
-                  <th scope="col" className="px-4 py-4 text-right font-semibold">Total debe</th>
-                  <th scope="col" className="px-4 py-4 text-right font-semibold">Total haber</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Detalle</th>
-                </tr>
-              </thead>
+          {/* Tabla de escritorio */}
+          {!cargando && !error && (
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#1e3a8a] text-white">
+                  <tr>
+                    <th className="px-4 py-4 font-semibold">Número</th>
+                    <th className="px-4 py-4 font-semibold">Fecha</th>
+                    <th className="px-4 py-4 font-semibold">Descripción</th>
+                    <th className="px-4 py-4 font-semibold">Tipo</th>
+                    <th className="px-4 py-4 font-semibold">Estado</th>
+                    <th className="px-4 py-4 text-right font-semibold">
+                      Total debe
+                    </th>
+                    <th className="px-4 py-4 text-right font-semibold">
+                      Total haber
+                    </th>
+                    <th className="px-4 py-4 font-semibold">Detalle</th>
+                  </tr>
+                </thead>
 
-              <tbody className="divide-y divide-gray-100">
-                {asientosVisibles.map((asiento) => {
-                  const totalDebe = asiento.totalDebe;
-                  const totalHaber = asiento.totalHaber;
-
-                  return (
-                    <tr key={asiento.numero} className="transition hover:bg-blue-50">
+                <tbody className="divide-y divide-gray-100">
+                  {asientosVisibles.map((asiento) => (
+                    <tr
+                      key={asiento.id ?? asiento.numero}
+                      className="transition hover:bg-blue-50"
+                    >
                       <td className="whitespace-nowrap px-4 py-4 font-semibold text-[#1e3a8a]">
                         {asiento.numero}
                       </td>
+
                       <td className="whitespace-nowrap px-4 py-4 text-gray-600">
                         {formatoFecha(asiento.fecha)}
                       </td>
+
                       <td className="px-4 py-4 font-medium text-gray-800">
                         {asiento.descripcion}
+
                         <p className="mt-1 text-xs font-normal text-gray-500">
                           {asiento.referencia}
                         </p>
                       </td>
+
                       <td className="whitespace-nowrap px-4 py-4 text-gray-600">
                         {asiento.tipo}
                       </td>
+
                       <td className="px-4 py-4">
                         <span
                           className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${asiento.estado === 'Registrado'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-700'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-700'
                             }`}
                         >
                           {asiento.estado}
                         </span>
                       </td>
+
                       <td className="whitespace-nowrap px-4 py-4 text-right text-gray-700">
-                        {formatoMoneda(totalDebe)}
+                        {formatoMoneda(asiento.totalDebe)}
                       </td>
+
                       <td className="whitespace-nowrap px-4 py-4 text-right text-gray-700">
-                        {formatoMoneda(totalHaber)}
+                        {formatoMoneda(asiento.totalHaber)}
                       </td>
+
                       <td className="px-4 py-4">
                         <button
                           type="button"
-                          onClick={() => setAsientoSeleccionado(asiento)}
+                          onClick={() => abrirDetalle(asiento)}
                           className="font-semibold text-[#1e3a8a] underline decoration-transparent underline-offset-4 transition hover:decoration-current"
                         >
                           Ver detalle
                         </button>
                       </td>
                     </tr>
-                  );
-                })}
+                  ))}
 
-                {asientosVisibles.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-5 py-12 text-center text-gray-500">
-                      No hay asientos que coincidan con los filtros.
-                      <div className="mt-3">
+                  {asientosVisibles.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-5 py-12 text-center text-gray-500"
+                      >
+                        No hay asientos que coincidan con los filtros.
+
                         <button
                           type="button"
                           onClick={limpiarFiltros}
-                          className="font-semibold text-[#1e3a8a] underline"
+                          className="mt-3 block w-full font-semibold text-[#1e3a8a] underline"
                         >
                           Limpiar búsqueda y filtros
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-gray-600">
-              Página {paginaActual} de {totalPaginas}
-            </p>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPagina(1)}
-                disabled={paginaActual === 1}
-                aria-label="Primera página"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40"
-              >
-                «
-              </button>
-              <button
-                type="button"
-                onClick={() => setPagina((actual) => Math.max(1, actual - 1))}
-                disabled={paginaActual === 1}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40"
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                onClick={() => setPagina((actual) => Math.min(totalPaginas, actual + 1))}
-                disabled={paginaActual === totalPaginas || totalAsientos === 0}
-                className="rounded-lg bg-[#1e3a8a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-              >
-                Siguiente
-              </button>
-              <button
-                type="button"
-                onClick={() => setPagina(totalPaginas)}
-                disabled={paginaActual === totalPaginas || totalAsientos === 0}
-                aria-label="Última página"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40"
-              >
-                »
-              </button>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </section>
+          )}
 
-        <p className="mt-5 text-xs text-gray-500">
-          Los asientos son ejemplos de interfaz. No representan registros
-          contables reales ni están conectados a pedidos o pagos.
-        </p>
+          {/* Paginación */}
+          {!cargando && !error && (
+            <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-gray-600">
+                Página {paginaActual} de {totalPaginas}
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPagina(1)}
+                  disabled={paginaActual === 1}
+                  aria-label="Primera página"
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40"
+                >
+                  «
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPagina((actual) => Math.max(1, actual - 1))
+                  }
+                  disabled={paginaActual === 1}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPagina((actual) =>
+                      Math.min(totalPaginas, actual + 1)
+                    )
+                  }
+                  disabled={
+                    paginaActual === totalPaginas || totalAsientos === 0
+                  }
+                  className="rounded-lg bg-[#1e3a8a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  Siguiente
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPagina(totalPaginas)}
+                  disabled={
+                    paginaActual === totalPaginas || totalAsientos === 0
+                  }
+                  aria-label="Última página"
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-40"
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       </main>
 
-      {/* Ventana de detalle del asiento */}
+      
+      {/* VISTA EXCLUSIVA PARA IMPRESIÓN */}
+      <div className="m7-print-area">
+        <h1>Libro diario</h1>
+
+        <p>Pacíficos Online - M7 Contabilidad y Reportes Gerenciales</p>
+        <p>Fecha de impresión: {new Date().toLocaleDateString('es-CR')}</p>
+        <p>Total de asientos: {asientosFiltrados.length}</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Número</th>
+              <th>Fecha</th>
+              <th>Descripción</th>
+              <th>Referencia</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              <th>Total debe</th>
+              <th>Total haber</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {asientosFiltrados.map((asiento) => (
+              <tr key={asiento.id ?? asiento.numero}>
+                <td>{asiento.numero}</td>
+                <td>{formatoFecha(asiento.fecha)}</td>
+                <td>{asiento.descripcion}</td>
+                <td>{asiento.referencia || '—'}</td>
+                <td>{asiento.tipo}</td>
+                <td>{asiento.estado}</td>
+                <td>{formatoMoneda(asiento.totalDebe)}</td>
+                <td>{formatoMoneda(asiento.totalHaber)}</td>
+              </tr>
+            ))}
+
+            {asientosFiltrados.length === 0 && (
+              <tr>
+                <td colSpan={8}>No hay asientos para imprimir.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        <p className="print-footer">
+          Pacíficos Online | M7 ERP Contable y Reportes Gerenciales
+        </p>
+      </div>
+
+
+      {/* Modal de detalle */}
       {asientoSeleccionado && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
-              setAsientoSeleccionado(null);
+              cerrarDetalle();
             }
           }}
         >
@@ -556,20 +831,25 @@ export default function LibroDiarioView({ onNavegar }) {
           >
             <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-5">
               <div>
-                <p className="text-sm text-gray-500">Detalle del asiento</p>
+                <p className="text-sm text-gray-500">
+                  Detalle del asiento
+                </p>
+
                 <h2
                   id="titulo-detalle-asiento"
                   className="mt-1 text-xl font-bold text-[#1e3a8a]"
                 >
                   {asientoSeleccionado.numero}
                 </h2>
+
                 <p className="mt-1 text-sm text-gray-600">
                   {asientoSeleccionado.descripcion}
                 </p>
               </div>
+
               <button
                 type="button"
-                onClick={() => setAsientoSeleccionado(null)}
+                onClick={cerrarDetalle}
                 aria-label="Cerrar detalle"
                 className="rounded-lg border border-gray-300 px-3 py-2 text-gray-600 hover:bg-gray-50"
               >
@@ -580,83 +860,73 @@ export default function LibroDiarioView({ onNavegar }) {
             <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-3">
               <div>
                 <p className="text-xs text-gray-500">Fecha</p>
-                <p className="mt-1 font-medium">{formatoFecha(asientoSeleccionado.fecha)}</p>
+                <p className="mt-1 font-medium">
+                  {formatoFecha(asientoSeleccionado.fecha)}
+                </p>
               </div>
+
               <div>
                 <p className="text-xs text-gray-500">Tipo</p>
-                <p className="mt-1 font-medium">{asientoSeleccionado.tipo}</p>
+                <p className="mt-1 font-medium">
+                  {asientoSeleccionado.tipo}
+                </p>
               </div>
+
               <div>
                 <p className="text-xs text-gray-500">Referencia</p>
-                <p className="mt-1 font-medium">{asientoSeleccionado.referencia}</p>
+                <p className="mt-1 font-medium">
+                  {asientoSeleccionado.referencia || '—'}
+                </p>
               </div>
             </div>
 
-
-            {/* Detalle móvil: una tarjeta por línea contable */}
+            {/* Detalle móvil */}
             <div className="space-y-3 px-5 pb-5 md:hidden">
-              {asientoSeleccionado.lineas.map((linea, indice) => (
+              {lineasSeleccionadas.map((linea, indice) => (
                 <article
                   key={`${linea.codigo}-${indice}`}
                   className="rounded-lg border border-gray-200 p-3"
                 >
                   <p className="text-xs text-gray-500">Código</p>
+
                   <p className="font-semibold text-[#1e3a8a]">
                     {linea.codigo}
                   </p>
 
-                  <p className="mt-2 text-xs text-gray-500">Cuenta contable</p>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Cuenta contable
+                  </p>
+
                   <p className="break-words font-medium text-gray-900">
                     {linea.cuenta}
                   </p>
 
+                  {linea.descripcion && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {linea.descripcion}
+                    </p>
+                  )}
+
                   <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-sm">
                     <div>
                       <p className="text-gray-500">Debe</p>
-                      <p className="break-words font-medium">
-                        {linea.debe ? formatoMoneda(linea.debe) : '—'}
+                      <p className="font-medium">
+                        {formatoMoneda(linea.debe)}
                       </p>
                     </div>
+
                     <div>
                       <p className="text-gray-500">Haber</p>
-                      <p className="break-words font-medium">
-                        {linea.haber ? formatoMoneda(linea.haber) : '—'}
+                      <p className="font-medium">
+                        {formatoMoneda(linea.haber)}
                       </p>
                     </div>
                   </div>
                 </article>
               ))}
-
-              <div className="rounded-lg bg-gray-50 p-4">
-                <h3 className="mb-3 font-bold text-gray-900">Totales</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-gray-500">Total debe</p>
-                    <p className="break-words font-bold text-gray-900">
-                      {formatoMoneda(
-                        asientoSeleccionado.lineas.reduce(
-                          (total, linea) => total + linea.debe,
-                          0
-                        )
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Total haber</p>
-                    <p className="break-words font-bold text-gray-900">
-                      {formatoMoneda(
-                        asientoSeleccionado.lineas.reduce(
-                          (total, linea) => total + linea.haber,
-                          0
-                        )
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
 
-            {/* Tabla original para escritorio */}
+            {/* Detalle escritorio */}
             <div className="hidden overflow-x-auto px-5 pb-5 md:block">
               <table className="w-full min-w-[550px] text-left text-sm">
                 <thead className="bg-[#1e3a8a] text-white">
@@ -667,39 +937,44 @@ export default function LibroDiarioView({ onNavegar }) {
                     <th className="px-4 py-3 text-right">Haber</th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-gray-100">
-                  {asientoSeleccionado.lineas.map((linea, indice) => (
+                  {lineasSeleccionadas.map((linea, indice) => (
                     <tr key={`${linea.codigo}-${indice}`}>
                       <td className="px-4 py-3 font-semibold text-[#1e3a8a]">
                         {linea.codigo}
                       </td>
-                      <td className="px-4 py-3">{linea.cuenta}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right">
-                        {linea.debe ? formatoMoneda(linea.debe) : '—'}
+
+                      <td className="px-4 py-3">
+                        {linea.cuenta}
                       </td>
+
                       <td className="whitespace-nowrap px-4 py-3 text-right">
-                        {linea.haber ? formatoMoneda(linea.haber) : '—'}
+                        {formatoMoneda(linea.debe)}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {formatoMoneda(linea.haber)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
+
                 <tfoot className="border-t-2 border-gray-200 bg-gray-50 font-bold">
                   <tr>
-                    <td colSpan={2} className="px-4 py-3">Totales</td>
+                    <td colSpan={2} className="px-4 py-3">
+                      Totales
+                    </td>
+
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       {formatoMoneda(
-                        asientoSeleccionado.lineas.reduce(
-                          (total, linea) => total + linea.debe,
-                          0
-                        )
+                        totalLineas(lineasSeleccionadas, 'debe')
                       )}
                     </td>
+
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       {formatoMoneda(
-                        asientoSeleccionado.lineas.reduce(
-                          (total, linea) => total + linea.haber,
-                          0
-                        )
+                        totalLineas(lineasSeleccionadas, 'haber')
                       )}
                     </td>
                   </tr>
@@ -707,9 +982,35 @@ export default function LibroDiarioView({ onNavegar }) {
               </table>
             </div>
 
+            {/* Totales para móvil */}
+            <div className="mx-5 mb-5 rounded-lg bg-gray-50 p-4 md:hidden">
+              <h3 className="mb-3 font-bold text-gray-900">
+                Totales
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-500">Total debe</p>
+                  <p className="font-bold text-gray-900">
+                    {formatoMoneda(
+                      totalLineas(lineasSeleccionadas, 'debe')
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-gray-500">Total haber</p>
+                  <p className="font-bold text-gray-900">
+                    {formatoMoneda(
+                      totalLineas(lineasSeleccionadas, 'haber')
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="border-t border-gray-200 px-5 py-4 text-xs text-gray-500">
-              Detalle de demostración. Los importes y referencias deberán
-              sustituirse por datos contables validados.
+              Información obtenida de los registros contables del sistema.
             </div>
           </section>
         </div>

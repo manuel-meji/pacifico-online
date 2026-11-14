@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
 import TarjetaIndicador from '../components/TarjetaIndicador';
 import { consultarReporteGerencial } from '../services/reporteGerencialApi';
+import { consultarLibroDiario } from '../services/libroDiarioApi';
 
 function formatoMoneda(valor) {
   if (valor === null || valor === undefined || valor === '') {
@@ -15,10 +16,38 @@ function formatoMoneda(valor) {
   })}`;
 }
 
+function formatoFecha(fecha) {
+  if (!fecha) return '—';
+
+  // Evita problemas de interpretación de fechas con la zona horaria.
+  const soloFecha = String(fecha).split(' ')[0];
+  const partes = soloFecha.split('-');
+
+  if (partes.length === 3) {
+    const [anio, mes, dia] = partes;
+    return `${dia}/${mes}/${anio}`;
+  }
+
+  return fecha;
+}
+
+function normalizarEstado(estado) {
+  return String(estado ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export default function TableroEjecutivoView({ onNavegar }) {
   const [reporte, setReporte] = useState(null);
+  const [asientos, setAsientos] = useState([]);
+
   const [cargando, setCargando] = useState(true);
+  const [cargandoAsientos, setCargandoAsientos] = useState(true);
+
   const [error, setError] = useState('');
+  const [errorAsientos, setErrorAsientos] = useState('');
 
   useEffect(() => {
     let activo = true;
@@ -42,7 +71,34 @@ export default function TableroEjecutivoView({ onNavegar }) {
       }
     }
 
+    async function cargarAsientos() {
+      try {
+        const datos = await consultarLibroDiario();
+
+        if (activo) {
+          const lista = Array.isArray(datos?.asientos)
+            ? datos.asientos
+            : [];
+
+          setAsientos(lista);
+          setErrorAsientos('');
+        }
+      } catch (err) {
+        if (activo) {
+          setAsientos([]);
+          setErrorAsientos(
+            err.message || 'No se pudieron cargar los asientos contables.'
+          );
+        }
+      } finally {
+        if (activo) {
+          setCargandoAsientos(false);
+        }
+      }
+    }
+
     cargarReporte();
+    cargarAsientos();
 
     return () => {
       activo = false;
@@ -84,6 +140,17 @@ export default function TableroEjecutivoView({ onNavegar }) {
 
   const alturaBarra = (valor) =>
     ((Number(valor) || 0) / maximoMensual) * 100;
+
+  // Se muestran los cinco asientos más recientes.
+  const ultimosAsientos = asientos.slice(0, 5);
+
+  const asientosRegistrados = asientos.filter(
+    (asiento) => normalizarEstado(asiento.estado) === 'registrado'
+  ).length;
+
+  const asientosPendientes = asientos.filter(
+    (asiento) => normalizarEstado(asiento.estado) === 'pendiente'
+  ).length;
 
   return (
     <div className="m7-layout">
@@ -207,14 +274,18 @@ export default function TableroEjecutivoView({ onNavegar }) {
             <div className="m7-status-item">
               <div className="m7-status-label">
                 <span>Asientos registrados</span>
-                <strong>—</strong>
+                <strong>
+                  {cargandoAsientos ? '—' : asientosRegistrados}
+                </strong>
               </div>
             </div>
 
             <div className="m7-status-item">
               <div className="m7-status-label">
                 <span>Asientos pendientes</span>
-                <strong>—</strong>
+                <strong>
+                  {cargandoAsientos ? '—' : asientosPendientes}
+                </strong>
               </div>
             </div>
 
@@ -240,14 +311,40 @@ export default function TableroEjecutivoView({ onNavegar }) {
                 Movimientos registrados en el libro diario.
               </p>
             </div>
-            <span className="m7-tag">Libro diario</span>
+
+            <button
+              type="button"
+              className="m7-tag"
+              onClick={() => onNavegar?.('Libro diario')}
+            >
+              Libro diario
+            </button>
           </div>
 
           {/* Vista móvil */}
           <div className="m7-journal-mobile">
-            <p className="m7-muted">
-              No hay asientos disponibles para mostrar.
-            </p>
+            {cargandoAsientos ? (
+              <p className="m7-muted">Cargando asientos contables...</p>
+            ) : errorAsientos ? (
+              <p className="m7-muted">{errorAsientos}</p>
+            ) : ultimosAsientos.length > 0 ? (
+              ultimosAsientos.map((asiento) => (
+                <article
+                  className="m7-journal-mobile-item"
+                  key={asiento.id ?? asiento.numero}
+                >
+                  <strong>{asiento.numero}</strong>
+                  <span>{formatoFecha(asiento.fecha)}</span>
+                  <span>{asiento.descripcion || 'Sin descripción'}</span>
+                  <span>{asiento.tipo || '—'}</span>
+                  <span>{asiento.estado || '—'}</span>
+                </article>
+              ))
+            ) : (
+              <p className="m7-muted">
+                No hay asientos disponibles para mostrar.
+              </p>
+            )}
           </div>
 
           {/* Vista de escritorio */}
@@ -262,14 +359,41 @@ export default function TableroEjecutivoView({ onNavegar }) {
                   <th>Estado</th>
                 </tr>
               </thead>
+
               <tbody>
-                <tr>
-                  <td colSpan="5">
-                    <p className="m7-muted">
-                      No hay asientos disponibles para mostrar.
-                    </p>
-                  </td>
-                </tr>
+                {cargandoAsientos ? (
+                  <tr>
+                    <td colSpan="5">
+                      <p className="m7-muted">
+                        Cargando asientos contables...
+                      </p>
+                    </td>
+                  </tr>
+                ) : errorAsientos ? (
+                  <tr>
+                    <td colSpan="5">
+                      <p className="m7-muted">{errorAsientos}</p>
+                    </td>
+                  </tr>
+                ) : ultimosAsientos.length > 0 ? (
+                  ultimosAsientos.map((asiento) => (
+                    <tr key={asiento.id ?? asiento.numero}>
+                      <td>{asiento.numero || '—'}</td>
+                      <td>{formatoFecha(asiento.fecha)}</td>
+                      <td>{asiento.descripcion || 'Sin descripción'}</td>
+                      <td>{asiento.tipo || '—'}</td>
+                      <td>{asiento.estado || '—'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5">
+                      <p className="m7-muted">
+                        No hay asientos disponibles para mostrar.
+                      </p>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
