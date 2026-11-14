@@ -115,6 +115,15 @@ class M1IntegracionesServiceProvider extends ServiceProvider
         $this->app->when(self::CONSUMIDORES_M1)
             ->needs(self::INTERFAZ_ANTERIOR_M5)
             ->give(fn (Application $app): object => $this->resolver($app, 'm5', self::INTERFAZ_ANTERIOR_M5));
+
+        // CatalogoClient recibe el proveedor de M3 tipado como intersección
+        // (CatalogoConsultasInterface&CatalogoServiceInterface), que el contenedor
+        // no puede autoconectar por el enlace contextual: se construye a mano con
+        // la instancia que resuelve el modo (doble o real) de config/integraciones.
+        $this->app->bind(CatalogoClient::class, fn (Application $app): CatalogoClient => new CatalogoClient(
+            $this->resolver($app, 'm3', CatalogoServiceInterface::class),
+            $app->make(CachePortal::class),
+        ));
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Services\M1_Portal\Dobles;
 
+use App\Contracts\M3_Catalogo\CatalogoConsultasInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use Illuminate\Support\Str;
 use LogicException;
@@ -18,7 +19,7 @@ use LogicException;
  *
  * Solo devuelve productos de comercios Activo, como declara M1 sobre M3.
  */
-class CatalogoFake implements CatalogoServiceInterface
+class CatalogoFake implements CatalogoConsultasInterface, CatalogoServiceInterface
 {
     private const MAXIMO_POR_PAGINA = 50;
 
@@ -42,9 +43,10 @@ class CatalogoFake implements CatalogoServiceInterface
     }
 
     /**
+     * @param  bool|null  $destacada  No lo usa el doble; se acepta por compatibilidad con la interfaz.
      * @return list<array{id_marca: int, nombre: string}>
      */
-    public function listarMarcas(): array
+    public function listarMarcas(?bool $destacada = null): array
     {
         return DatosPrueba::marcas();
     }

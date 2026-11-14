@@ -143,11 +143,11 @@ class IntegracionesTest extends PruebaM1
 
             public int $llamadasCategorias = 0;
 
-            public function listarMarcas(): array
+            public function listarMarcas(?bool $destacada = null): array
             {
                 $this->llamadasMarcas++;
 
-                return parent::listarMarcas();
+                return parent::listarMarcas($destacada);
             }
 
             public function listarCategorias(): array
