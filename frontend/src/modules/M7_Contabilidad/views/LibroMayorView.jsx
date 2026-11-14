@@ -14,7 +14,7 @@ function formatoMoneda(monto) {
 }
 
 function formatoFecha(fecha) {
-  const [anio, mes, dia] = fecha.split('-');
+  const [anio, mes, dia] = String(fecha).split(/[ T]/)[0].split('-');
   return `${dia}/${mes}/${anio}`;
 }
 
