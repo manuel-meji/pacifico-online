@@ -750,4 +750,38 @@ class ControladoresM5Test extends TestCase
 
         $this->assertSame(0, PedidoMaestro::count());
     }
+
+    public function test_previsualizar_carrito_invitado_no_crea_carrito_en_bd_y_valida_stock(): void
+    {
+        $this->configurarMocks();
+
+        $resp = $this->postJson('/m5/carrito/previsualizar', [
+            'items' => [
+                ['id_variacion' => 101, 'cantidad' => 2],
+            ],
+            'validar_item' => [
+                'id_variacion' => 101,
+                'cantidad' => 2,
+            ],
+        ]);
+
+        $resp->assertOk()
+            ->assertJsonPath('id_cliente', null)
+            ->assertJsonCount(1, 'items')
+            ->assertJsonCount(1, 'grupos_comercio');
+
+        $this->assertDatabaseCount('pedidos_carritos', 0);
+
+        $this->postJson('/m5/carrito/previsualizar', [
+            'items' => [
+                ['id_variacion' => 101, 'cantidad' => 9999],
+            ],
+            'validar_item' => [
+                'id_variacion' => 101,
+                'cantidad' => 9999,
+            ],
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('error.codigo', 'ERR-M5-001');
+    }
 }

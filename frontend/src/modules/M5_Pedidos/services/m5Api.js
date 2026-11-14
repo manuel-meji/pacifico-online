@@ -2,8 +2,8 @@
 // Los errores llegan en el formato del nucleo: { error: { codigo, mensaje, detalles } }.
 const BASE = '/api/m5/v1';
 
-// Cliente creado por el seeder. Se usa mientras no haya sesion de usuario real.
-export const ID_CLIENTE_POR_DEFECTO = 1;
+// Sin sesión autenticada no se envía id_cliente=1 por defecto para evitar mezclar carritos.
+export const ID_CLIENTE_POR_DEFECTO = null;
 
 const METODOS_CON_CSRF = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
@@ -75,6 +75,15 @@ export const validarCupon = ({ codigo, subtotal, ids_comercios, subtotales_por_c
 
 export const obtenerCarrito = (idCliente = ID_CLIENTE_POR_DEFECTO, query = {}) =>
   llamar(armarRuta('/carrito', idCliente, query));
+
+export const previsualizarCarritoInvitado = (items = [], validarItem = null) =>
+  llamar('/carrito/previsualizar', {
+    method: 'POST',
+    body: json({
+      items,
+      ...(validarItem ? { validar_item: validarItem } : {}),
+    }),
+  });
 
 // Respuesta: { id_cliente, direcciones: [{ id_direccion_cliente, texto_completo, es_principal, ... }] }.
 export const obtenerDirecciones = (idCliente = ID_CLIENTE_POR_DEFECTO) =>

@@ -72,6 +72,132 @@ class ControladorCarrito extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
+    /**
+     * Previsualiza un carrito de invitado sin leer ni escribir en la BD.
+     * Valida opcionalmente un ítem contra M3 y M4 antes de devolver el desglose.
+     */
+    public function previsualizarCarrito(Request $request): JsonResponse
+    {
+        $itemsEntrada = $request->input('items', []);
+        if (! is_array($itemsEntrada)) {
+            return $this->errorRespuesta('ERR-005', 'Parámetros inválidos', ['items' => 'Debe ser una lista de ítems.'], 422);
+        }
+
+        $validarItem = $request->input('validar_item');
+        if (is_array($validarItem)) {
+            $idVarValidar = (int) ($validarItem['id_variacion'] ?? 0);
+            $cantValidar = (int) ($validarItem['cantidad'] ?? 0);
+
+            if ($idVarValidar <= 0 || $cantValidar <= 0) {
+                return $this->errorRespuesta(
+                    'ERR-005',
+                    'Parámetros inválidos',
+                    ['cantidad' => 'Debe ser un número entero mayor o igual a 1.'],
+                    422
+                );
+            }
+
+            $datosVariacion = null;
+            if ($this->m3Catalogo) {
+                try {
+                    $datosVariacion = $this->m3Catalogo->obtenerVariacion($idVarValidar);
+                } catch (\Throwable) {
+                    return $this->errorRespuesta('ERR-004', 'Variación inexistente', null, 422);
+                }
+            }
+
+            if (! $datosVariacion) {
+                return $this->errorRespuesta('ERR-004', 'Variación inexistente', null, 422);
+            }
+
+            $comercioId = $this->resolverIdComercioVariacion($datosVariacion);
+            $ubicacionId = isset($datosVariacion['id_ubicacion']) ? (int) $datosVariacion['id_ubicacion'] : null;
+            $stockDisponible = $this->consultarStockVariacion($comercioId, $idVarValidar, $ubicacionId);
+
+            if (! $stockDisponible || $stockDisponible < $cantValidar) {
+                return $this->errorRespuesta(
+                    'ERR-M5-001',
+                    'Existencia insuficiente',
+                    ['existencia_disponible' => $stockDisponible, 'cantidad_solicitada' => $cantValidar],
+                    409
+                );
+            }
+        }
+
+        $itemsVirtuales = collect();
+        foreach ($itemsEntrada as $entrada) {
+            if (! is_array($entrada)) {
+                continue;
+            }
+
+            $idVar = (int) ($entrada['id_variacion'] ?? 0);
+            $cant = (int) ($entrada['cantidad'] ?? 0);
+            if ($idVar <= 0 || $cant <= 0) {
+                continue;
+            }
+
+            $item = new ItemCarrito([
+                'id_carrito' => 0,
+                'id_variacion' => $idVar,
+                'cantidad' => $cant,
+            ]);
+            $item->id_item_carrito = $idVar;
+            $itemsVirtuales->push($item);
+        }
+
+        if ($itemsVirtuales->isEmpty()) {
+            return response()->json([
+                'id_carrito' => 0,
+                'id_cliente' => null,
+                'monto_estimado' => 0.0,
+                'created_at' => now()->toIso8601String(),
+                'updated_at' => now()->toIso8601String(),
+                'items' => [],
+                'grupos_comercio' => [],
+                'resumen' => [
+                    'subtotal' => 0.0,
+                    'impuesto' => 0.0,
+                    'costo_envio' => 0.0,
+                    'total' => 0.0,
+                ],
+                'hay_comercio_suspendido' => false,
+                'hay_producto_no_disponible' => false,
+                'direcciones_cliente' => [],
+            ], 200)->header('Cache-Control', 'no-store, no-cache, must-revalidate');
+        }
+
+        $carritoVirtual = new Carrito(['id_cliente' => 0, 'monto_estimado' => 0.0]);
+        $carritoVirtual->id_carrito = 0;
+        $carritoVirtual->setRelation('items', $itemsVirtuales);
+
+        $desglose = $this->pedidosService->calcularDesgloseCarrito(
+            $carritoVirtual,
+            $this->m3Catalogo,
+            $this->m2Comercios,
+            $this->m1Portal
+        );
+        $resumen = $desglose['resumen'] ?? [
+            'subtotal' => 0.0,
+            'impuesto' => 0.0,
+            'costo_envio' => 0.0,
+            'total' => 0.0,
+        ];
+
+        return response()->json([
+            'id_carrito' => 0,
+            'id_cliente' => null,
+            'monto_estimado' => (float) ($resumen['total'] ?? 0.0),
+            'created_at' => now()->toIso8601String(),
+            'updated_at' => now()->toIso8601String(),
+            'items' => $desglose['items'] ?? [],
+            'grupos_comercio' => array_values($desglose['grupos_comercio'] ?? []),
+            'resumen' => $resumen,
+            'hay_comercio_suspendido' => (bool) ($desglose['hay_comercio_suspendido'] ?? false),
+            'hay_producto_no_disponible' => (bool) ($desglose['hay_producto_no_disponible'] ?? false),
+            'direcciones_cliente' => [],
+        ], 200)->header('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+
     public function agregarAlCarrito(Request $request, ?int $variacionId = null, ?int $cant = null): JsonResponse
     {
         // 1. Obtener clienteId de la sesión mediante M1 (obtenerIdClientePorUsuario) o del request
