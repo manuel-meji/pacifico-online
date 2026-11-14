@@ -73,7 +73,7 @@ class ControladorDeseos extends Controller
                 'id_cliente' => (int) $deseo->id_cliente,
                 'id_variacion' => (int) $deseo->id_variacion,
                 'fecha_agregado' => $deseo->created_at?->toISOString(),
-                'producto' => $detallesVariacion,
+                'producto' => $this->normalizarVariacion($detallesVariacion, (int) $deseo->id_variacion),
             ];
         }
 
@@ -100,6 +100,27 @@ class ControladorDeseos extends Controller
                     'detalles' => null,
                 ],
             ], 422);
+        }
+
+        // Validar la variación con M3 antes de guardarla (mismo código y formato que el carrito al agregar).
+        // Si M3 no está disponible en el contenedor, se guarda como antes.
+        if ($this->m3Catalogo) {
+            try {
+                $datosVariacion = $this->m3Catalogo->obtenerVariacion($idVariacion);
+            } catch (\Throwable) {
+                $datosVariacion = null;
+            }
+
+            if (! $datosVariacion) {
+                return response()->json([
+                    'error' => [
+                        'codigo' => 'ERR-004',
+                        'mensaje' => 'Variación inexistente',
+                        'detalles' => null,
+                    ],
+                    'mensaje' => 'Variación inexistente',
+                ], 422);
+            }
         }
 
         $deseo = ItemDeseo::firstOrCreate(
@@ -170,5 +191,33 @@ class ControladorDeseos extends Controller
             'mensaje' => 'Producto movido al carrito correctamente',
             'id_variacion' => $idVariacion,
         ], 200);
+    }
+
+    /**
+     * Normaliza la variación de M3 (doble o real) con las mismas reglas que
+     * PedidosService::calcularDesgloseCarrito: el M3 real trae nombre e id_comercio dentro de 'producto'.
+     *
+     * @param  array<string, mixed>|null  $variacion
+     * @return array<string, mixed>|null
+     */
+    private function normalizarVariacion(?array $variacion, int $idVariacion): ?array
+    {
+        if ($variacion === null) {
+            return null;
+        }
+
+        $idComercio = $variacion['id_comercio'] ?? $variacion['producto']['id_comercio'] ?? null;
+        $idProducto = $variacion['id_producto'] ?? $variacion['producto']['id_producto'] ?? null;
+        $imagen = $variacion['imagen'] ?? $variacion['imagen_url'] ?? null;
+
+        return [
+            'id_variacion' => (int) ($variacion['id_variacion'] ?? $idVariacion),
+            'id_producto' => $idProducto !== null ? (int) $idProducto : null,
+            'nombre' => (string) ($variacion['nombre'] ?? $variacion['producto']['nombre'] ?? 'Producto #'.$idVariacion),
+            'precio' => (float) ($variacion['precio'] ?? 0),
+            'imagen' => $imagen !== null && $imagen !== '' ? (string) $imagen : null,
+            'id_comercio' => $idComercio !== null ? (int) $idComercio : null,
+            'sku' => isset($variacion['sku']) ? (string) $variacion['sku'] : null,
+        ];
     }
 }

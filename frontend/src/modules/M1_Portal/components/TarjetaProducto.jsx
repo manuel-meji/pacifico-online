@@ -22,7 +22,7 @@ export function BadgeAgotado() {
 // Etiqueta de una promoción vigente (contrato 1.4.0): "-20 %" o "Precio especial".
 export function BadgePromocion({ promocion }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+    <span className="inline-flex items-center gap-1 rounded-full bg-brandGreen px-2 py-0.5 text-xs font-bold text-white">
       <Icono nombre="etiqueta" className="h-3.5 w-3.5" /> {textoDescuento(promocion)}
     </span>
   );
@@ -38,7 +38,7 @@ export function PrecioProducto({ producto, className = 'text-base' }) {
     <div className={className}>
       {promocional != null ? (
         <p className="flex flex-wrap items-baseline gap-x-2">
-          <span className="font-extrabold text-red-700">
+          <span className="font-extrabold text-brandDarkBlue">
             {rango && <span className="text-xs font-normal text-gray-500">Desde </span>}
             {colones(promocional)}
           </span>

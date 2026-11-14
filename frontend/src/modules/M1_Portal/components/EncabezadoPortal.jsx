@@ -13,6 +13,7 @@ export const textoInsignia = (cantidad) => (cantidad > TOPE_CARRITO ? `+${TOPE_C
 // La validación del término (RN-M1-08) la hace la vista de búsqueda, para mostrar el aviso junto a los resultados.
 // `cantidadCarrito` son las líneas del carrito de M5 (productos o variaciones distintas). La insignia se muestra
 // siempre: 0 sin sesión, sin dato o con el carrito vacío, y de 31 en adelante +30.
+// El corazón abre la lista de deseos de M5 (carrito.html?pantalla=deseos).
 // `tipoInicial` ('productos' o 'comercios') elige qué busca el buscador; onBuscar(termino, tipo).
 // `onGestion` solo llega para los encargados (comercio o plataforma): muestra el acceso a su panel (/m2.html),
 // desde donde se llega también al panel de gestión del portal.
@@ -86,7 +87,11 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
               <Icono nombre="usuario" className="h-5 w-5" />
               <span className="hidden sm:inline">{conSesion ? 'Mi cuenta' : 'Ingresar'}</span>
             </button>
-            {/* El carrito es de M5 (carrito.html). */}
+            {/* La lista de deseos y el carrito son de M5 (carrito.html). */}
+            <a href="/carrito.html?pantalla=deseos" className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue" aria-label="Lista de deseos">
+              <Icono nombre="corazon" className="h-6 w-6" />
+              <span className="hidden sm:inline">Deseos</span>
+            </a>
             <a href="/carrito.html" className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue" aria-label={etiquetaCarrito}>
               <span className="relative mr-2.5">
                 <Icono nombre="carrito" className="h-6 w-6" />

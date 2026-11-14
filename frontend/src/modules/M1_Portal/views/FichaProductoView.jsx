@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PaginaPortal, { usePortal } from '../components/PaginaPortal';
 import TarjetaProducto, { BadgeAgotado, BadgeDisponible } from '../components/TarjetaProducto';
 import { CargandoBloque, ErrorVista } from '../components/EstadosVista';
 import Icono from '../components/IconoComercio';
 import Imagen from '../components/Imagen';
 import { obtenerFichaProducto } from '../services/m1Api';
+import { agregarADeseos } from '../services/deseosApi';
 import { colones, fechaCorta, textoAtributos } from '../services/formato';
 import useConsulta from '../services/useConsulta';
 
@@ -47,10 +48,15 @@ export default function FichaProductoView({ idProducto }) {
 }
 
 function Ficha({ ficha, onVerComercio, onVerProducto }) {
+  const { ir, usuario, cargandoUsuario } = usePortal();
   const variaciones = ficha.variaciones ?? [];
   const inicial = variaciones.find((v) => v.comprable) ?? variaciones[0] ?? null;
   const [idVariacion, setIdVariacion] = useState(inicial?.id_variacion ?? null);
   const [imagen, setImagen] = useState(0);
+  // Lista de deseos (M5): aviso = null | { tipo: 'sesion' | 'exito' | 'error', texto }.
+  const [guardando, setGuardando] = useState(false);
+  const [avisoDeseo, setAvisoDeseo] = useState(null);
+  const guardandoRef = useRef(false);
 
   useEffect(() => {
     setIdVariacion(inicial?.id_variacion ?? null);
@@ -62,6 +68,28 @@ function Ficha({ ficha, onVerComercio, onVerProducto }) {
   const variacion = variaciones.find((v) => v.id_variacion === idVariacion) ?? inicial;
   const imagenes = ficha.imagenes ?? [];
   const comprable = !!variacion?.comprable;
+  const esCliente = usuario?.rol === 'cliente';
+
+  // El aviso de la lista de deseos corresponde a una variación: se limpia al elegir otra o cambiar de producto.
+  useEffect(() => { setAvisoDeseo(null); }, [variacion?.id_variacion]);
+
+  // Sin sesión de cliente no se llama a M5: se pide iniciar sesión. El ref evita el doble clic.
+  async function guardarEnDeseos() {
+    if (!variacion || guardandoRef.current) return;
+    if (!esCliente) {
+      setAvisoDeseo({ tipo: 'sesion', texto: 'Inicie sesión para guardar en su lista de deseos' });
+      return;
+    }
+    guardandoRef.current = true;
+    setGuardando(true);
+    setAvisoDeseo(null);
+    const respuesta = await agregarADeseos(variacion.id_variacion);
+    guardandoRef.current = false;
+    setGuardando(false);
+    setAvisoDeseo(respuesta.ok
+      ? { tipo: 'exito', texto: 'Guardado en su lista de deseos' }
+      : { tipo: 'error', texto: respuesta.mensaje });
+  }
 
   return (
     <>
@@ -95,10 +123,10 @@ function Ficha({ ficha, onVerComercio, onVerProducto }) {
               {variacion.precio_promocional != null ? (
                 <>
                   <p className="flex flex-wrap items-baseline gap-x-3">
-                    <span className="text-3xl font-extrabold text-red-700">{colones(variacion.precio_promocional)}</span>
+                    <span className="text-3xl font-extrabold text-brandDarkBlue">{colones(variacion.precio_promocional)}</span>
                     <span className="text-base text-gray-500 line-through">{colones(variacion.precio)}</span>
                   </p>
-                  <p className="mt-1 text-sm font-semibold text-red-700">Precio de promoción hasta el {fechaCorta(variacion.fin_promocion)}</p>
+                  <p className="mt-1 text-sm font-semibold text-brandDarkBlue">Precio de promoción hasta el {fechaCorta(variacion.fin_promocion)}</p>
                 </>
               ) : (
                 <p className="text-3xl font-extrabold text-brandDarkBlue">{colones(variacion.precio)}</p>
@@ -121,16 +149,46 @@ function Ficha({ ficha, onVerComercio, onVerProducto }) {
             </fieldset>
           )}
 
-          {variacion && comprable ? (
-            <a href={urlAgregarAlCarrito(variacion.id_variacion)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brandGreen px-6 py-3 font-bold text-white shadow-sm transition hover:brightness-105">
-              <Icono nombre="carrito" className="h-5 w-5" /> Agregar al carrito
-            </a>
-          ) : (
-            <button type="button" disabled className="w-full cursor-not-allowed rounded-lg bg-gray-300 px-4 py-3 font-bold text-gray-500">
-              Agotado
-            </button>
-          )}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {variacion && comprable ? (
+              <a href={urlAgregarAlCarrito(variacion.id_variacion)}
+                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-brandGreen px-6 py-3 font-bold text-white shadow-sm transition hover:brightness-105 sm:flex-1">
+                <Icono nombre="carrito" className="h-5 w-5" /> Agregar al carrito
+              </a>
+            ) : (
+              <button type="button" disabled className="min-h-[44px] w-full cursor-not-allowed rounded-lg bg-gray-300 px-4 py-3 font-bold text-gray-500 sm:flex-1">
+                Agotado
+              </button>
+            )}
+            {variacion && (
+              <button type="button" onClick={guardarEnDeseos} disabled={guardando || cargandoUsuario} aria-busy={guardando}
+                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border-2 border-brandDarkBlue bg-white px-4 py-3 font-bold text-brandDarkBlue transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-white sm:flex-1">
+                <Icono nombre="corazon" className="h-5 w-5" /> {guardando ? 'Guardando…' : 'Guardar en lista de deseos'}
+              </button>
+            )}
+          </div>
+
+          <div aria-live="polite">
+            {avisoDeseo?.tipo === 'sesion' && (
+              <p className="mt-3 flex flex-wrap items-center gap-x-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-brandDarkBlue">
+                <Icono nombre="alerta" className="h-4 w-4" /> {avisoDeseo.texto}.
+                <button type="button" onClick={() => ir('ingresar')} className="inline-flex min-h-[44px] items-center font-semibold text-brandBlue underline hover:text-brandDarkBlue">
+                  Iniciar sesión
+                </button>
+              </p>
+            )}
+            {avisoDeseo?.tipo === 'exito' && (
+              <p className="mt-3 flex flex-wrap items-center gap-x-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700">
+                <Icono nombre="disponible" className="h-4 w-4" /> {avisoDeseo.texto}.
+                <a href="/carrito.html?pantalla=deseos" className="inline-flex min-h-[44px] items-center underline hover:text-green-800">Ver lista</a>
+              </p>
+            )}
+            {avisoDeseo?.tipo === 'error' && (
+              <p role="alert" className="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">
+                <Icono nombre="alerta" className="h-4 w-4" /> {avisoDeseo.texto}
+              </p>
+            )}
+          </div>
 
           {ficha.descripcion && <p className="mt-6 whitespace-pre-line text-sm leading-relaxed text-gray-600">{ficha.descripcion}</p>}
           {ficha.video_url && (
