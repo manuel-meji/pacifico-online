@@ -30,6 +30,7 @@
         <env name="M6_M5_DOBLE" force="true" value="(null)"/>
         <env name="M6_M1_DOBLE" force="true" value="(null)"/>
         <env name="M6_M2_DOBLE" force="true" value="(null)"/>
+        <env name="M6_M7_DOBLE" force="true" value="(null)"/>
         <env name="M5_M1_MODO" force="true" value="doble"/>
         <env name="M5_M2_MODO" force="true" value="doble"/>
         <env name="M5_M3_MODO" force="true" value="doble"/>
