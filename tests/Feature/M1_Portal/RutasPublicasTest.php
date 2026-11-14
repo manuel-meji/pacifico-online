@@ -59,16 +59,28 @@ class RutasPublicasTest extends PruebaM1
         $this->getJson(route('api.m1.v1.productos.busqueda', ['q' => 'café']))->assertOk();
     }
 
-    public function test_un_termino_de_una_letra_sin_categoria_responde_422_sin_llamar_al_contrato(): void
+    public function test_un_termino_de_una_letra_sin_categoria_ya_llama_al_contrato(): void
     {
         $this->mock(PortalPublicoContract::class, function (MockInterface $mock): void {
-            $mock->shouldNotReceive('buscarProductos');
+            $mock->shouldReceive('buscarProductos')
+                ->once()
+                ->with('c', null, null, 1, 20, null, null, null, null)
+                ->andReturn(self::RESULTADO_VACIO);
         });
 
-        $this->getJson(route('api.m1.v1.productos.busqueda', ['q' => 'c']))
-            ->assertStatus(422)
-            ->assertJsonPath('error.codigo', 'ERR-005')
-            ->assertJsonPath('error.detalles.q', 'Debe tener al menos 2 caracteres si no se elige una categoría.');
+        $this->getJson(route('api.m1.v1.productos.busqueda', ['q' => 'c']))->assertOk();
+    }
+
+    public function test_una_busqueda_vacia_sin_categoria_llama_al_contrato_y_responde_200(): void
+    {
+        $this->mock(PortalPublicoContract::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('buscarProductos')
+                ->once()
+                ->with(null, null, null, 1, 20, null, null, null, null)
+                ->andReturn(self::RESULTADO_VACIO);
+        });
+
+        $this->getJson(route('api.m1.v1.productos.busqueda'))->assertOk();
     }
 
     public function test_un_termino_de_una_letra_con_categoria_llama_al_contrato(): void
@@ -108,16 +120,16 @@ class RutasPublicasTest extends PruebaM1
             ->assertJsonPath('error.codigo', 'ERR-006');
     }
 
-    public function test_sin_encabezado_accept_la_busqueda_tambien_responde_json_del_nucleo(): void
+    public function test_sin_encabezado_accept_un_error_de_validacion_responde_json_del_nucleo(): void
     {
         $this->mock(PortalPublicoContract::class, function (MockInterface $mock): void {
             $mock->shouldNotReceive('buscarProductos');
         });
 
-        $this->get(route('api.m1.v1.productos.busqueda', ['q' => 'c']))
+        $this->get(route('api.m1.v1.productos.busqueda', ['por_pagina' => 51]))
             ->assertStatus(422)
             ->assertHeader('Content-Type', 'application/json')
-            ->assertJsonStructure(['error' => ['codigo', 'mensaje', 'detalles' => ['q']]])
+            ->assertJsonStructure(['error' => ['codigo', 'mensaje', 'detalles' => ['por_pagina']]])
             ->assertJsonPath('error.codigo', 'ERR-005');
     }
 

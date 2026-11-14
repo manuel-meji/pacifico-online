@@ -10,15 +10,15 @@ import useConsulta from '../services/useConsulta';
 const POR_PAGINA = 20;
 
 // Búsqueda de comercios por nombre: GET /api/m1/v1/comercios?q= (contrato M1 1.6.0, SC-13).
-// `criterio` llega de la URL: { q, pagina }. El término necesita 2 caracteres, igual que la búsqueda de
-// productos; si no los tiene, se avisa sin llamar a la API.
+// `criterio` llega de la URL: { q, pagina }. La búsqueda vacía lista todos los comercios; para filtrar por
+// nombre el término necesita 2 caracteres y con una sola letra se avisa sin llamar a la API.
 export default function BusquedaComerciosView({ criterio }) {
   const { ir } = usePortal();
   const termino = (criterio.q ?? '').trim();
   const pagina = criterio.pagina ?? 1;
-  const cumpleRegla = termino.length >= LARGO_MINIMO_TERMINO;
+  const cumpleRegla = termino === '' || termino.length >= LARGO_MINIMO_TERMINO;
 
-  const consulta = useConsulta(() => listarComercios(pagina, POR_PAGINA, termino), [termino, pagina], cumpleRegla);
+  const consulta = useConsulta(() => listarComercios(pagina, POR_PAGINA, termino || null), [termino, pagina], cumpleRegla);
   const datos = consulta.datos;
   const totalPaginas = datos ? Math.ceil(datos.total / POR_PAGINA) : 0;
 
@@ -32,7 +32,7 @@ export default function BusquedaComerciosView({ criterio }) {
         </ol>
       </nav>
 
-      <h1 className="break-words text-2xl font-bold text-brandDarkBlue">{termino ? `Comercios para "${termino}"` : 'Buscar comercios'}</h1>
+      <h1 className="break-words text-2xl font-bold text-brandDarkBlue">{termino ? `Comercios para "${termino}"` : 'Todos los comercios'}</h1>
 
       <div className="mt-6">
         {!cumpleRegla && (

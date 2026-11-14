@@ -1,5 +1,5 @@
 import PaginaPortal, { usePortal } from '../components/PaginaPortal';
-import FiltrosComercio, { LARGO_MINIMO_TERMINO } from '../components/FiltrosComercio';
+import FiltrosComercio from '../components/FiltrosComercio';
 import ListadoProductos, { POR_PAGINA } from '../components/ListadoProductos';
 import { Vacio } from '../components/EstadosVista';
 import Icono from '../components/IconoComercio';
@@ -8,19 +8,17 @@ import useConsulta from '../services/useConsulta';
 
 // CU-002 Buscar productos: GET /api/m1/v1/productos/busqueda.
 // `criterio` llega de la URL con los nombres del contrato (q, id_categoria, precio_minimo, precio_maximo,
-// orden, pagina, por_pagina). RN-M1-08: sin categoría, el término necesita 2 caracteres; si no los
-// tiene, se avisa sin llamar a la API.
+// orden, pagina, por_pagina). La búsqueda vacía (sin término ni categoría) lista todos los productos.
 export default function BusquedaView({ criterio }) {
   const { ir, categorias } = usePortal();
   const termino = (criterio.q ?? '').trim();
-  const cumpleRegla = !!criterio.id_categoria || termino.length >= LARGO_MINIMO_TERMINO;
   const parametros = { ...criterio, q: termino || null, pagina: criterio.pagina ?? 1, por_pagina: criterio.por_pagina ?? POR_PAGINA[0] };
 
-  const consulta = useConsulta(() => buscarProductos(parametros), [JSON.stringify(parametros)], cumpleRegla);
+  const consulta = useConsulta(() => buscarProductos(parametros), [JSON.stringify(parametros)]);
   const cambiar = (nuevo) => ir('busqueda', { ...nuevo, pagina: nuevo.pagina ?? 1 }, { reemplazar: true });
 
   const categoria = buscarCategoria(categorias, criterio.id_categoria);
-  const titulo = termino ? `Resultados para "${termino}"` : categoria ? categoria.nombre : 'Buscar productos';
+  const titulo = termino ? `Resultados para "${termino}"` : categoria ? categoria.nombre : 'Todos los productos';
 
   return (
     <PaginaPortal terminoBusqueda={termino}>
@@ -34,30 +32,22 @@ export default function BusquedaView({ criterio }) {
 
       <h1 className="break-words text-2xl font-bold text-brandDarkBlue">{titulo}</h1>
 
-      {!cumpleRegla ? (
-        <div className="mt-6">
-          <Vacio icono="buscar" titulo="Escribí al menos 2 caracteres o elegí una categoría">
-            Usá el buscador de arriba o elegí una categoría del menú para ver productos.
+      <ListadoProductos
+        consulta={consulta}
+        resultado={consulta.datos}
+        criterio={parametros}
+        onCambio={cambiar}
+        onAbrirProducto={(id) => ir('producto', { id })}
+        filtros={<FiltrosComercio categorias={categorias} criterio={parametros} onCambio={(f) => cambiar({ ...f, pagina: 1 })} />}
+        vacio={(
+          <Vacio icono="buscar" titulo="No encontramos productos"
+            accion={(criterio.precio_minimo != null || criterio.precio_maximo != null || criterio.id_categoria) && (
+              <button type="button" onClick={() => cambiar({ q: termino || null, pagina: 1 })} className="flex items-center gap-2 rounded-lg border border-brandBlue px-4 py-2 font-semibold text-brandBlue transition hover:bg-blue-50">Quitar filtros</button>
+            )}>
+            Probá con otras palabras o quitá algún filtro.
           </Vacio>
-        </div>
-      ) : (
-        <ListadoProductos
-          consulta={consulta}
-          resultado={consulta.datos}
-          criterio={parametros}
-          onCambio={cambiar}
-          onAbrirProducto={(id) => ir('producto', { id })}
-          filtros={<FiltrosComercio categorias={categorias} criterio={parametros} onCambio={(f) => cambiar({ ...f, pagina: 1 })} />}
-          vacio={(
-            <Vacio icono="buscar" titulo="No encontramos productos"
-              accion={(criterio.precio_minimo != null || criterio.precio_maximo != null || criterio.id_categoria) && (
-                <button type="button" onClick={() => cambiar({ q: termino || null, pagina: 1 })} className="flex items-center gap-2 rounded-lg border border-brandBlue px-4 py-2 font-semibold text-brandBlue transition hover:bg-blue-50">Quitar filtros</button>
-              )}>
-              Probá con otras palabras o quitá algún filtro.
-            </Vacio>
-          )}
-        />
-      )}
+        )}
+      />
     </PaginaPortal>
   );
 }
