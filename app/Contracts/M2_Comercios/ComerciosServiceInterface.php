@@ -9,7 +9,7 @@ use App\Exceptions\Nucleo\ErrorNucleoException;
 /**
  * Interfaz PHP de M2 — Micrositios y administración de comercios.
  *
- * Publica las 8 operaciones del contrato OpenAPI v1.2.1
+ * Publica las 8 operaciones del contrato OpenAPI v1.2.2
  * (contracts/m2-comercios/v1/openapi.yaml), con las mismas reglas que la vía HTTP:
  * - Las consultas públicas solo devuelven comercios en estado Activo.
  * - Errores con ErrorNucleoException y el código en la propiedad codigo:

@@ -43,7 +43,7 @@ use Illuminate\Support\Str;
 
 /**
  * Fachada de M2 (patrón Facade, sección 7 del PC3): implementa las 8 operaciones
- * de consulta del contrato OpenAPI v1.2.1 (contracts/m2-comercios/v1/openapi.yaml).
+ * de consulta del contrato OpenAPI v1.2.2 (contracts/m2-comercios/v1/openapi.yaml).
  *
  * Los demás módulos llaman a M2 solo por ComerciosServiceInterface, en el mismo
  * proceso; nunca usan sus modelos ni sus tablas. Por esa vía el contrato no
