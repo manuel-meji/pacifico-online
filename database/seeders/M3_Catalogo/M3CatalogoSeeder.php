@@ -91,7 +91,7 @@ class M3CatalogoSeeder extends Seeder
         ['id_variacion' => 7, 'id_producto' => 7, 'id_comercio' => 4, 'sku' => 'DP-CAM-DEP-S', 'precio' => 8990.00, 'tarifa_impuesto' => 13.00],
         ['id_variacion' => 8, 'id_producto' => 7, 'id_comercio' => 4, 'sku' => 'DP-CAM-DEP-XL', 'precio' => 9490.00, 'tarifa_impuesto' => 13.00],
         ['id_variacion' => 9, 'id_producto' => 8, 'id_comercio' => 4, 'sku' => 'DP-BOT-TER-NEG', 'precio' => 6750.00, 'tarifa_impuesto' => 13.00],
-        ['id_variacion' => 10, 'id_producto' => 9, 'id_comercio' => 5, 'sku' => 'CV-CAF-340-MED', 'precio' => 5425.00, 'tarifa_impuesto' => 1.00],
+        ['id_variacion' => 10, 'id_producto' => 9, 'id_comercio' => 5, 'sku' => 'CV-CAF-340-MED', 'precio' => 5425.00, 'tarifa_impuesto' => 13.00],
         ['id_variacion' => 11, 'id_producto' => 10, 'id_comercio' => 5, 'sku' => 'CV-TAZ-CER-BLA', 'precio' => 3333.00, 'tarifa_impuesto' => 13.00],
         ['id_variacion' => 501, 'id_producto' => 301, 'id_comercio' => 1, 'sku' => 'SDM-MON-FHD-24', 'precio' => 9500.00, 'tarifa_impuesto' => 13.00],
         ['id_variacion' => 502, 'id_producto' => 301, 'id_comercio' => 1, 'sku' => 'SDM-MON-FHD-24-PRO', 'precio' => 10000.00, 'tarifa_impuesto' => 13.00],
@@ -122,15 +122,22 @@ class M3CatalogoSeeder extends Seeder
     public const VARIACIONES_DE_ESCENARIO = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
     /**
-     * Imagen principal (orden 1) por producto. Solo hay imagen donde ya existía en el
-     * repositorio una URL que corresponde al producto; los demás quedan sin imagen.
+     * Imagen principal (orden 1) por producto. Los productos 3, 4, 5, 6 y 8 todavía no tienen
+     * imagen: sus líneas están comentadas. Para activarlas, pega la URL, quita las dos barras
+     * del comienzo y vuelve a correr las pruebas de este seeder. Mientras estén comentadas,
+     * esos productos quedan sin imagen (no se siembra ninguna URL de relleno).
      *
      * @var array<int, array{id_variacion: int, imagen_url: string, tamano_bytes: int}>
      */
     public const IMAGENES = [
         1 => ['id_variacion' => 1, 'imagen_url' => 'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?fm=jpg&w=600', 'tamano_bytes' => 150000],
         2 => ['id_variacion' => 2, 'imagen_url' => 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?fm=jpg&w=600', 'tamano_bytes' => 180000],
+        // 3 => ['id_variacion' => 3, 'imagen_url' => 'PEGAR_URL_LAMPARA_LED_BLANCA', 'tamano_bytes' => 150000],
+        // 4 => ['id_variacion' => 4, 'imagen_url' => 'PEGAR_URL_ORGANIZADOR_GRIS', 'tamano_bytes' => 150000],
+        // 5 => ['id_variacion' => 5, 'imagen_url' => 'PEGAR_URL_CAMISA_LINO_AZUL', 'tamano_bytes' => 150000],
+        // 6 => ['id_variacion' => 6, 'imagen_url' => 'PEGAR_URL_PANTALON_CHINO_BEIGE', 'tamano_bytes' => 150000],
         7 => ['id_variacion' => 7, 'imagen_url' => 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?fm=jpg&w=600', 'tamano_bytes' => 140000],
+        // 8 => ['id_variacion' => 9, 'imagen_url' => 'PEGAR_URL_BOTELLA_TERMICA_NEGRA', 'tamano_bytes' => 150000],
         9 => ['id_variacion' => 10, 'imagen_url' => 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?fm=jpg&w=600', 'tamano_bytes' => 230000],
         10 => ['id_variacion' => 11, 'imagen_url' => 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?fm=jpg&w=600', 'tamano_bytes' => 120000],
     ];
