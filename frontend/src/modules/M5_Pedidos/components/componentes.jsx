@@ -1,16 +1,16 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Check, CircleAlert, ClipboardList, CircleCheck, CircleX, Heart, Info, LoaderCircle, Lock, MapPin, Minus, Package, Phone, Plus, Search, ShoppingCart, Store, Trash2, TriangleAlert, User,
+  Check, CircleAlert, ClipboardList, CircleCheck, CircleX, Heart, Info, LoaderCircle, Lock, MapPin, Minus, Package, Phone, Plus, Search, ShoppingCart, Store, Trash2, TriangleAlert, User,
 } from 'lucide-react';
 import { colones } from '../services/calculos';
 import logoPacificos from '../../../assets/logo-pacificos.png';
 import { obtenerUsuario } from '../../Nucleo/services/sesionApi';
 
-// Navegación compartida de M5 (la provee M5App): { abrirMisPedidos, enMisPedidos, abrirPanelComercio, enPanelComercio, abrirDeseos, enDeseos }.
+// Navegación compartida de M5 (la provee M5App): { abrirCarrito, enCarrito, abrirMisPedidos, enMisPedidos, abrirPanelComercio, enPanelComercio, abrirDeseos, enDeseos }.
 // Permite que cualquier vista muestre los accesos del encabezado sin pasar props.
 export const NavegacionM5 = createContext(null);
 
-export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al carrito' }) {
+export function Encabezado({ titulo, paso, seccion = 'Compras', onVolver, etiquetaVolver = 'Volver al carrito', textoPadre }) {
   const nav = useContext(NavegacionM5);
   const [termino, setTermino] = useState('');
   const [conSesion, setConSesion] = useState(false);
@@ -37,8 +37,14 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
     }
   };
 
-  const mostrarMisPedidos = nav?.abrirMisPedidos && !nav.enMisPedidos;
-  const mostrarDeseos = nav?.abrirDeseos && !nav.enDeseos;
+  const urlCuenta = `/app.html?pantalla=${conSesion ? 'perfil' : 'ingresar'}`;
+  const activoDeseos = Boolean(nav?.enDeseos);
+  const activoMisPedidos = Boolean(nav?.enMisPedidos);
+  const activoCarrito = nav?.enCarrito ?? true;
+  const claseNav = (activo) =>
+    `flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition cursor-pointer ${
+      activo ? 'font-bold text-brandBlue hover:text-brandDarkBlue' : 'hover:text-brandBlue'
+    }`;
   const mostrarPanel = Boolean(
     nav?.abrirPanelComercio &&
     !nav.enPanelComercio &&
@@ -107,7 +113,7 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
           {/* Navegación de cuenta, deseos, pedidos y carrito */}
           <nav className="ml-auto flex shrink-0 items-center gap-4 sm:gap-5 text-sm font-medium text-gray-700 sm:ml-0" aria-label="Cuenta, pedidos y carrito">
             <a
-              href={`/app.html?pantalla=${conSesion ? 'perfil' : 'ingresar'}`}
+              href={urlCuenta}
               aria-label={conSesion ? 'Mi cuenta' : 'Ingresar'}
               className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition hover:text-brandBlue"
             >
@@ -115,40 +121,78 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
               <span className="hidden sm:inline">{conSesion ? 'Mi cuenta' : 'Ingresar'}</span>
             </a>
 
-            {mostrarDeseos && (
+            {nav?.abrirDeseos ? (
               <button
                 type="button"
                 onClick={nav.abrirDeseos}
                 aria-label="Lista de deseos"
-                className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition hover:text-brandBlue cursor-pointer"
+                aria-current={activoDeseos ? 'page' : undefined}
+                className={claseNav(activoDeseos)}
               >
-                <Heart className="h-5 w-5 text-brandDarkBlue" aria-hidden="true" />
+                <Heart className="h-5 w-5" aria-hidden="true" />
                 <span className="hidden sm:inline">Deseos</span>
               </button>
+            ) : (
+              <a
+                href="/carrito.html?pantalla=deseos"
+                aria-label="Lista de deseos"
+                aria-current={activoDeseos ? 'page' : undefined}
+                className={claseNav(activoDeseos)}
+              >
+                <Heart className="h-5 w-5" aria-hidden="true" />
+                <span className="hidden sm:inline">Deseos</span>
+              </a>
             )}
 
-            {mostrarMisPedidos && (
+            {nav?.abrirMisPedidos ? (
               <button
                 type="button"
                 onClick={nav.abrirMisPedidos}
                 aria-label="Mis pedidos"
-                className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition hover:text-brandBlue cursor-pointer"
+                aria-current={activoMisPedidos ? 'page' : undefined}
+                className={claseNav(activoMisPedidos)}
               >
                 <ClipboardList className="h-5 w-5" aria-hidden="true" />
                 <span className="hidden sm:inline">Mis pedidos</span>
               </button>
+            ) : (
+              <a
+                href="/carrito.html?pantalla=mis-pedidos"
+                aria-label="Mis pedidos"
+                aria-current={activoMisPedidos ? 'page' : undefined}
+                className={claseNav(activoMisPedidos)}
+              >
+                <ClipboardList className="h-5 w-5" aria-hidden="true" />
+                <span className="hidden sm:inline">Mis pedidos</span>
+              </a>
             )}
 
-            <a
-              href="/carrito.html"
-              aria-label="Carrito de compras"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 font-bold text-brandBlue transition hover:text-brandDarkBlue"
-            >
-              <span className="relative">
-                <ShoppingCart className="h-6 w-6" aria-hidden="true" />
-              </span>
-              <span className="hidden sm:inline">Carrito</span>
-            </a>
+            {nav?.abrirCarrito ? (
+              <button
+                type="button"
+                onClick={nav.abrirCarrito}
+                aria-label="Carrito de compras"
+                aria-current={activoCarrito ? 'page' : undefined}
+                className={claseNav(activoCarrito)}
+              >
+                <span className="relative">
+                  <ShoppingCart className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="hidden sm:inline">Carrito</span>
+              </button>
+            ) : (
+              <a
+                href="/carrito.html"
+                aria-label="Carrito de compras"
+                aria-current={activoCarrito ? 'page' : undefined}
+                className={claseNav(activoCarrito)}
+              >
+                <span className="relative">
+                  <ShoppingCart className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="hidden sm:inline">Carrito</span>
+              </a>
+            )}
 
             {mostrarPanel && (
               <button
@@ -164,24 +208,53 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
           </nav>
         </div>
 
-        {/* Barra de contexto de la pantalla de M5 (Paso actual / Breadcrumb) */}
+        {/* Barra de contexto de la pantalla de M5 (Migas de pan y paso actual) */}
         <div className="border-t border-gray-100 bg-gray-50/80 px-4 py-2">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 text-xs sm:text-sm">
-            <div className="flex items-center gap-2 min-w-0">
-              {onVolver && (
-                <button
-                  type="button"
-                  onClick={onVolver}
-                  aria-label={etiquetaVolver}
-                  className="inline-flex items-center gap-1 font-semibold text-brandDarkBlue hover:text-brandBlue transition cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-                  <span>{etiquetaVolver}</span>
-                </button>
-              )}
-              {onVolver && <span className="text-gray-300">/</span>}
-              <h1 className="font-bold text-gray-800 truncate">{titulo}</h1>
-            </div>
+            <nav aria-label="Migas de pan" className="min-w-0 text-gray-600">
+              <ol className="flex flex-wrap items-center gap-1.5">
+                <li>
+                  <a
+                    href="/app.html"
+                    className="inline-flex items-center rounded-sm font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue"
+                  >
+                    Inicio
+                  </a>
+                </li>
+                <li aria-hidden="true" className="text-gray-400">›</li>
+                <li>
+                  {seccion === 'Cuenta' ? (
+                    <a
+                      href={urlCuenta}
+                      className="inline-flex items-center rounded-sm font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue"
+                    >
+                      Cuenta
+                    </a>
+                  ) : (
+                    <span>{seccion}</span>
+                  )}
+                </li>
+                {onVolver && (
+                  <>
+                    <li aria-hidden="true" className="text-gray-400">›</li>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={onVolver}
+                        aria-label={etiquetaVolver}
+                        className="inline-flex items-center rounded-sm font-medium text-brandBlue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue cursor-pointer"
+                      >
+                        {textoPadre || etiquetaVolver}
+                      </button>
+                    </li>
+                  </>
+                )}
+                <li aria-hidden="true" className="text-gray-400">›</li>
+                <li aria-current="page" className="min-w-0">
+                  <h1 className="font-bold text-gray-800 truncate">{titulo}</h1>
+                </li>
+              </ol>
+            </nav>
             {paso && (
               <span className="shrink-0 font-semibold text-gray-600 bg-white px-2.5 py-0.5 rounded-full border border-gray-200 shadow-2xs">
                 {paso}

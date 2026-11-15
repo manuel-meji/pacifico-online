@@ -152,7 +152,7 @@ export default function CarritoPage({
                   </div>
                 )}
                 <div className="flex justify-between text-gray-600">
-                  <dt>IVA (13 %)</dt>
+                  <dt>IVA</dt>
                   <dd className="font-semibold text-gray-900">{colones(resumen.impuesto ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between text-gray-600">

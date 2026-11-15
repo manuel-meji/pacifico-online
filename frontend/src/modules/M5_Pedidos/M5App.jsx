@@ -63,6 +63,30 @@ function avisoErrorAgregar(e) {
   return { tipo: 'error', titulo: 'No se pudo agregar el producto', texto: textoError(e) };
 }
 
+const PANTALLAS_CON_URL = new Set(['carrito', 'mis-pedidos', 'deseos', 'panel-comercio']);
+
+function leerPantallaDeUrl() {
+  if (typeof window === 'undefined') return 'carrito';
+  const p = new URLSearchParams(window.location.search).get('pantalla');
+  if (p === 'comercio' || p === 'panel-comercio') return 'panel-comercio';
+  if (p === 'mis-pedidos') return 'mis-pedidos';
+  if (p === 'deseos') return 'deseos';
+  return 'carrito';
+}
+
+function actualizarUrlPantalla(destino, { reemplazar = false } = {}) {
+  if (typeof window === 'undefined' || !PANTALLAS_CON_URL.has(destino)) return;
+  const url = new URL(window.location.href);
+  if (destino === 'carrito') url.searchParams.delete('pantalla');
+  else url.searchParams.set('pantalla', destino);
+  const nuevaUrl = `${url.pathname}${url.search}${url.hash}`;
+  const actualUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nuevaUrl === actualUrl) return;
+  const estado = { pantallaM5: destino };
+  if (reemplazar) window.history.replaceState(estado, '', nuevaUrl);
+  else window.history.pushState(estado, '', nuevaUrl);
+}
+
 // Punto de entrada del modulo M5: carrito → checkout → pedido pendiente de pago, todo contra /api/m5/v1.
 // Las alternativas del CU-004 (stock agotado, comercio suspendido) llegan ahora como errores reales de la API.
 export default function M5App() {
@@ -210,14 +234,7 @@ export default function M5App() {
     }
   }
 
-  const [pantalla, setPantalla] = useState(() => {
-    if (typeof window === 'undefined') return 'carrito';
-    const p = new URLSearchParams(window.location.search).get('pantalla');
-    if (p === 'comercio' || p === 'panel-comercio') return 'panel-comercio';
-    if (p === 'mis-pedidos') return 'mis-pedidos';
-    if (p === 'deseos') return 'deseos';
-    return 'carrito';
-  });
+  const [pantalla, setPantalla] = useState(leerPantallaDeUrl);
   const [pedidoCreado, setPedidoCreado] = useState(null); // { pedido: respuesta 201, grupos: grupos_comercio }
   const [aviso, setAviso] = useState(null);
 
@@ -232,6 +249,7 @@ export default function M5App() {
     if (!solicitud) { cargarCarrito(); return; }
 
     limpiarAgregarDeUrl();
+    actualizarUrlPantalla('carrito', { reemplazar: true });
     setPantalla('carrito');
     if (solicitud.invalido) {
       setAviso({ tipo: 'error', titulo: 'Enlace no válido', texto: 'El enlace para agregar al carrito no indica una variación y cantidad válidas.' });
@@ -273,12 +291,30 @@ export default function M5App() {
     })();
   }, [cargarCarrito, sincronizarInvitadoSiAutenticado]);
 
+  useEffect(() => {
+    function manejarHistorial(evento) {
+      const destino = evento.state?.pantallaM5 || leerPantallaDeUrl();
+      setAviso(null);
+      setPantalla(destino);
+      if (destino === 'carrito') cargarCarrito();
+    }
+    window.addEventListener('popstate', manejarHistorial);
+    return () => window.removeEventListener('popstate', manejarHistorial);
+  }, [cargarCarrito]);
+
   // Vuelve al carrito y lo recarga, porque el checkout pudo haber cambiado su estado (reservas, stock, pedido).
-  function volverAlCarrito(nuevoAviso = null) {
+  const volverAlCarrito = useCallback((nuevoAviso = null) => {
     setAviso(nuevoAviso);
+    actualizarUrlPantalla('carrito');
     setPantalla('carrito');
     cargarCarrito();
-  }
+  }, [cargarCarrito]);
+
+  const irAPantallaPrincipal = useCallback((destino) => {
+    setAviso(null);
+    actualizarUrlPantalla(destino);
+    setPantalla(destino);
+  }, []);
 
   // Mis pedidos → detalle: "Ver detalle" guarda el id_pedido y abre DetallePedidoView.
   const [idPedidoSeleccionado, setIdPedidoSeleccionado] = useState(null);
@@ -287,13 +323,15 @@ export default function M5App() {
     setPantalla('detalle');
   }
   const navegacion = useMemo(() => ({
-    abrirMisPedidos: () => { setAviso(null); setPantalla('mis-pedidos'); },
+    abrirCarrito: () => volverAlCarrito(),
+    enCarrito: pantalla === 'carrito',
+    abrirMisPedidos: () => irAPantallaPrincipal('mis-pedidos'),
     enMisPedidos: pantalla === 'mis-pedidos',
-    abrirDeseos: () => { setAviso(null); setPantalla('deseos'); },
+    abrirDeseos: () => irAPantallaPrincipal('deseos'),
     enDeseos: pantalla === 'deseos',
-    abrirPanelComercio: () => { setAviso(null); setPantalla('panel-comercio'); },
+    abrirPanelComercio: () => irAPantallaPrincipal('panel-comercio'),
     enPanelComercio: pantalla === 'panel-comercio',
-  }), [pantalla]);
+  }), [pantalla, volverAlCarrito, irAPantallaPrincipal]);
 
   function mostrarPedido(pedido, grupos) {
     setPedidoCreado({ pedido, grupos });
@@ -338,13 +376,13 @@ export default function M5App() {
             onSeguirComprando={() => volverAlCarrito()} onVerMisPedidos={navegacion.abrirMisPedidos} />
         )}
         {pantalla === 'mis-pedidos' && (
-          <MisPedidosView idSeleccionado={idPedidoSeleccionado} onVerDetalle={verDetalle} onVolver={() => volverAlCarrito()} />
+          <MisPedidosView idSeleccionado={idPedidoSeleccionado} onVerDetalle={verDetalle} />
         )}
         {pantalla === 'detalle' && idPedidoSeleccionado != null && (
           <DetallePedidoView idPedido={idPedidoSeleccionado} onVolver={navegacion.abrirMisPedidos} />
         )}
         {pantalla === 'deseos' && (
-          <ListaDeseosView onVolver={() => volverAlCarrito()} onProductoMovido={() => cargarCarrito()} />
+          <ListaDeseosView onProductoMovido={() => cargarCarrito()} />
         )}
         {pantalla === 'panel-comercio' && <PanelComercioView onVolver={() => volverAlCarrito()} />}
       </div>

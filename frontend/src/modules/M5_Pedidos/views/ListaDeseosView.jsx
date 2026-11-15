@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Heart, LoaderCircle, Package, RefreshCw, ShoppingCart, Trash2 } from 'lucide-react';
+import { Heart, LoaderCircle, Package, RefreshCw, ShoppingCart, Trash2 } from 'lucide-react';
 import { Alerta, Boton, Encabezado } from '../components/componentes';
 import { colones } from '../services/calculos';
 import { eliminarDeseo, moverDeseoAlCarrito, obtenerDeseos } from '../services/m5Api';
 
-export default function ListaDeseosView({ onVolver, onProductoMovido }) {
+export default function ListaDeseosView({ onProductoMovido }) {
   const [deseos, setDeseos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -59,7 +59,7 @@ export default function ListaDeseosView({ onVolver, onProductoMovido }) {
 
   return (
     <>
-      <Encabezado titulo="Mi Lista de Deseos" onVolver={onVolver} etiquetaVolver="Volver al carrito" />
+      <Encabezado titulo="Mi Lista de Deseos" seccion="Cuenta" />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-6">
         {aviso && <Alerta tipo={aviso.tipo} titulo={aviso.titulo}>{aviso.texto}</Alerta>}
 
