@@ -7,7 +7,7 @@ use App\Http\Middleware\EstablecerComercio;
 use App\Http\Middleware\RequiereRol;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\M7_Contabilidad\PlanCuentasController;
-
+use App\Http\Controllers\M7_Contabilidad\BalanceGeneralController;
 
 Route::prefix('api/m7/v1')
     ->middleware('api')
@@ -35,5 +35,8 @@ Route::prefix('api/m7/v1')
                 ->name('libro-mayor');
 
             Route::get('reporte-gerencial', [ ReporteGerencialController::class, 'consultar',])
-        ->name('reporte-gerencial');            });
+        ->name('reporte-gerencial');  
+        
+        Route::get('balance-general', [BalanceGeneralController::class, 'consultar'])
+    ->name('balance-general');          });
     });
