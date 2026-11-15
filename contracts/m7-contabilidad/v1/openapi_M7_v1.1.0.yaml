@@ -31,6 +31,9 @@ x-dependencies:
     operaciones:
       - ObtenerDatosFiscalesComercio(id_comercio)
       - ObtenerComisionSubpedido(id_subpedido)
+      - obtenerResumenComerciosLote(ids) para mostrar el nombre comercial en los filtros de plataforma
+    eventos:
+      - ComercioAprobado
   M4:
     - operacion: ObtenerCostoProductosVendidos
       entrada: id_subpedido
@@ -152,6 +155,19 @@ x-pending-decisions:
       de M6; esa contribución debe separarse por sus responsables antes del merge.
 
 x-eventos-consumidos:
+  ComercioAprobado:
+    productor: M2
+    proposito: Crear el plan de cuentas base y el centro de costo GEN del comercio aprobado.
+    payload_esperado:
+      id_evento: uuid
+      fecha_hora: date-time
+      id_comercio: int64
+      estado: Activo
+      nombre_comercial: string
+    notas: >-
+      M7 solo usa id_comercio (id_evento queda en el log). Es idempotente: crea únicamente las cuentas
+      faltantes y no modifica las existentes. Un fallo se registra sin afectar la aprobación; se reintenta
+      con php artisan m7:crear-plan-cuentas {id_comercio}.
   PedidoConfirmado:
     productor: M5
     proposito: Registrar la venta por subtotal para cada subpedido.
@@ -260,6 +276,219 @@ tags:
   - name: Estado
 
 paths:
+  /api/m7/v1/comercios:
+    get:
+      tags: [Reportes]
+      summary: Listar comercios con contabilidad para el selector de plataforma
+      operationId: listarComerciosContables
+      description: >
+        Solo para el encargado de plataforma. Devuelve los comercios que tienen plan
+        de cuentas en M7, con el nombre comercial obtenido de M2 mediante
+        ComerciosServiceInterface::obtenerResumenComerciosLote (lotes de 50).
+        Si M2 no reconoce el comercio o no está disponible, el nombre es
+        "Comercio #id" y nombre_disponible es false. Ordenado por nombre.
+      responses:
+        '200':
+          description: Comercios disponibles para consultar
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [comercios]
+                    properties:
+                      comercios:
+                        type: array
+                        items:
+                          type: object
+                          required: [id_comercio, nombre, nombre_disponible]
+                          properties:
+                            id_comercio: { type: integer }
+                            nombre: { type: string }
+                            nombre_disponible: { type: boolean }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/saldos-cobrar-pagar:
+    get:
+      tags: [Reportes]
+      summary: Consultar saldos por cobrar y pagar del comercio
+      operationId: consultarSaldosCobrarPagar
+      description: >
+        Acumulado histórico de asientos REGISTRADO, incluidas reversiones y
+        reembolsos. Incluye las cuentas 1.1.02, 1.1.04 y 2.1.01 y sus subcuentas
+        por código. Cada fila suma solo los movimientos directos de esa cuenta,
+        sin consolidar hijos para evitar duplicación. Se conservan saldos negativos.
+        No son documentos ni vencimientos, abonos o liquidaciones. Excluye IVA por pagar.
+        En modo sistema se requiere id_comercio explícito, nunca agregado global.
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Saldos contables reales; cuentas vacías si no existe un plan
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [id_comercio, cuentas, resumen]
+                    properties:
+                      id_comercio: { type: integer }
+                      cuentas:
+                        type: array
+                        items:
+                          type: object
+                          required: [id_cuenta_contable, codigo, nombre, tipo, saldo]
+                          properties:
+                            id_cuenta_contable: { type: integer }
+                            codigo: { type: string }
+                            nombre: { type: string }
+                            tipo: { type: string, enum: [Por cobrar, Por pagar] }
+                            saldo: { type: string, pattern: '^-?\d+\.\d{2}$' }
+                      resumen:
+                        type: object
+                        required: [por_cobrar, por_pagar]
+                        properties:
+                          por_cobrar: { type: string, pattern: '^-?\d+\.\d{2}$' }
+                          por_pagar: { type: string, pattern: '^-?\d+\.\d{2}$' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/centros-costo:
+    get:
+      tags: [Reportes]
+      summary: Reporte de rentabilidad por centro de costo
+      operationId: consultarCentrosCosto
+      description: >
+        Por centro del comercio: ingresos (haber menos debe en cuentas INGRESO),
+        costos (debe menos haber en cuentas GASTO), utilidad y margen, de asientos
+        REGISTRADO en el período indicado (sin fechas, todo el historial).
+        Los asientos nuevos imputan sus líneas de ingresos y gastos al centro GEN
+        activo del comercio; las líneas sin centro se reportan aparte en sin_centro
+        (null si no hay). Los totales del resumen incluyen centros inactivos y sin_centro.
+        hay_movimientos es false cuando el período no tiene líneas de ingresos ni gastos
+        ("Sin movimientos en el período consultado"). Sin presupuesto ni responsable.
+        En modo sistema se requiere id_comercio explícito, nunca agregado global.
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+        - $ref: '#/components/parameters/FechaDesde'
+        - $ref: '#/components/parameters/FechaHasta'
+      responses:
+        '200':
+          description: Centros existentes con su rentabilidad, sin datos simulados
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [id_comercio, fecha_desde, fecha_hasta, hay_movimientos, centros, sin_centro, resumen]
+                    properties:
+                      id_comercio: { type: integer }
+                      fecha_desde: { type: string, nullable: true, example: '2026-11-01' }
+                      fecha_hasta: { type: string, nullable: true, example: '2026-11-30' }
+                      hay_movimientos: { type: boolean }
+                      centros:
+                        type: array
+                        items:
+                          allOf:
+                            - type: object
+                              required: [id_centro_costo, codigo, nombre, activo]
+                              properties:
+                                id_centro_costo: { type: integer }
+                                codigo: { type: string }
+                                nombre: { type: string }
+                                activo: { type: boolean }
+                            - $ref: '#/components/schemas/ResultadoCentroCosto'
+                      sin_centro:
+                        allOf:
+                          - $ref: '#/components/schemas/ResultadoCentroCosto'
+                        nullable: true
+                      resumen:
+                        allOf:
+                          - type: object
+                            required: [cantidad, activos]
+                            properties:
+                              cantidad: { type: integer }
+                              activos: { type: integer }
+                          - $ref: '#/components/schemas/ResultadoCentroCosto'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/centros-costo/{idCentroCosto}/movimientos:
+    get:
+      tags: [Reportes]
+      summary: Consultar movimientos que componen la rentabilidad de un centro
+      operationId: consultarMovimientosCentroCosto
+      description: >
+        Devuelve las líneas en cuentas INGRESO y GASTO de asientos REGISTRADO
+        imputadas al centro en el período, ordenadas por fecha, asiento y línea.
+        Usa los mismos filtros que el reporte; ingresos, costos y utilidad coinciden
+        con la fila del centro. saldo es la utilidad acumulada. Incluye reversiones
+        y permite consultar centros inactivos. Un centro sin movimientos devuelve
+        lista vacía y totales cero. Un centro inexistente o de otro comercio devuelve 404.
+        En modo sistema se requiere id_comercio explícito.
+      parameters:
+        - name: idCentroCosto
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: Identificador del centro; la ruta solo acepta dígitos.
+        - $ref: '#/components/parameters/IdComercio'
+        - $ref: '#/components/parameters/FechaDesde'
+        - $ref: '#/components/parameters/FechaHasta'
+      responses:
+        '200':
+          description: Detalle real y totales del centro
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaMovimientosCentro' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
+  /api/m7/v1/centros-costo/sin-asignar/movimientos:
+    get:
+      tags: [Reportes]
+      summary: Consultar movimientos sin centro de costo asignado
+      operationId: consultarMovimientosSinCentroCosto
+      description: >
+        Igual que el detalle de un centro, pero con las líneas de ingresos y gastos
+        sin centro (por ejemplo, asientos anteriores a la imputación automática).
+        centro es null y los totales coinciden con sin_centro del reporte.
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+        - $ref: '#/components/parameters/FechaDesde'
+        - $ref: '#/components/parameters/FechaHasta'
+      responses:
+        '200':
+          description: Detalle real y totales de las líneas sin centro
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaMovimientosCentro' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
   /api/m7/v1/cuentas:
     get:
       tags: [Plan de cuentas]
@@ -363,6 +592,10 @@ paths:
       tags: [Libros contables]
       summary: Consultar movimientos y saldo de una cuenta
       operationId: consultarLibroMayor
+      description: >
+        También proporciona el detalle de los saldos por cobrar y pagar.
+        Sin filtro de fechas devuelve todos los movimientos históricos; por defecto
+        solo incluye asientos REGISTRADO. El saldo respeta la naturaleza de la cuenta.
       parameters:
         - name: id_cuenta_contable
           in: query
@@ -869,6 +1102,61 @@ components:
         ingresos: { type: number, format: double }
         costos: { type: number, format: double }
         utilidad: { type: number, format: double }
+    ResultadoCentroCosto:
+      type: object
+      description: Importes con dos decimales; margen = utilidad / ingresos * 100, null si ingresos <= 0.
+      required: [ingresos, costos, utilidad, margen]
+      properties:
+        ingresos: { type: string, pattern: '^-?\d+\.\d{2}$' }
+        costos: { type: string, pattern: '^-?\d+\.\d{2}$' }
+        utilidad: { type: string, pattern: '^-?\d+\.\d{2}$' }
+        margen: { type: string, nullable: true, pattern: '^-?\d+\.\d{2}$', example: '79.96' }
+    RespuestaMovimientosCentro:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [id_comercio, fecha_desde, fecha_hasta, centro, ingresos, costos, utilidad, movimientos]
+          properties:
+            id_comercio: { type: integer }
+            fecha_desde: { type: string, nullable: true }
+            fecha_hasta: { type: string, nullable: true }
+            centro:
+              type: object
+              nullable: true
+              description: null en el grupo sin centro de costo asignado.
+              required: [id_centro_costo, codigo, nombre, activo]
+              properties:
+                id_centro_costo: { type: integer }
+                codigo: { type: string }
+                nombre: { type: string }
+                activo: { type: boolean }
+            ingresos: { type: string, pattern: '^-?\d+\.\d{2}$' }
+            costos: { type: string, pattern: '^-?\d+\.\d{2}$' }
+            utilidad: { type: string, pattern: '^-?\d+\.\d{2}$' }
+            movimientos:
+              type: array
+              items:
+                type: object
+                required: [id_detalle_asiento, id_asiento, numero_linea, fecha, tipo, descripcion, codigo_cuenta, nombre_cuenta, tipo_cuenta, id_pedido, id_subpedido, id_pago, debe, haber, saldo]
+                properties:
+                  id_detalle_asiento: { type: integer }
+                  id_asiento: { type: integer }
+                  numero_linea: { type: integer }
+                  fecha: { type: string, example: '2026-11-14 12:00:00' }
+                  tipo: { type: string }
+                  descripcion: { type: string }
+                  codigo_cuenta: { type: string }
+                  nombre_cuenta: { type: string }
+                  tipo_cuenta: { type: string, enum: [INGRESO, GASTO] }
+                  id_pedido: { type: integer, nullable: true }
+                  id_subpedido: { type: integer, nullable: true }
+                  id_pago: { type: integer, nullable: true }
+                  debe: { type: string, pattern: '^\d+\.\d{2}$' }
+                  haber: { type: string, pattern: '^\d+\.\d{2}$' }
+                  saldo: { type: string, pattern: '^-?\d+\.\d{2}$', description: Utilidad acumulada. }
     Rentabilidad:
       type: object
       required: [id_comercio, periodo, ingresos, costos, utilidad, centros_costo]

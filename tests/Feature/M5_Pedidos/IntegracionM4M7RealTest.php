@@ -249,6 +249,15 @@ class IntegracionM4M7RealTest extends TestCase
             });
         }
 
+        if (! Schema::hasTable('centros_costo')) {
+            Schema::create('centros_costo', function (Blueprint $table): void {
+                $table->id('id_centro_costo');
+                $table->unsignedBigInteger('id_comercio');
+                $table->string('codigo');
+                $table->boolean('activo')->default(true);
+            });
+        }
+
         if (! Schema::hasTable('detalle_asientos')) {
             Schema::create('detalle_asientos', function (Blueprint $table): void {
                 $table->id('id_detalle_asiento');

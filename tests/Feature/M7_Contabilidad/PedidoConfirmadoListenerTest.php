@@ -59,8 +59,15 @@ class PedidoConfirmadoListenerTest extends TestCase
             $tabla->timestamps();
         });
 
+        Schema::create('centros_costo', function (Blueprint $tabla): void {
+            $tabla->id('id_centro_costo');
+            $tabla->unsignedBigInteger('id_comercio');
+            $tabla->string('codigo');
+            $tabla->boolean('activo')->default(true);
+        });
         Schema::create('detalle_asientos', function (Blueprint $tabla): void {
             $tabla->id('id_detalle_asiento');
+            $tabla->unsignedBigInteger('id_centro_costo')->nullable();
             $tabla->unsignedBigInteger('id_asiento');
             $tabla->unsignedBigInteger('id_cuenta_contable');
             $tabla->unsignedInteger('numero_linea');
@@ -143,7 +150,6 @@ class PedidoConfirmadoListenerTest extends TestCase
         $this->assertDatabaseCount('eventos_procesados', 1);
     }
 
-
     public function test_uuid_diferente_para_el_mismo_subpedido_no_duplica_el_asiento(): void
     {
         $this->crearCuentas(1);
@@ -177,6 +183,7 @@ class PedidoConfirmadoListenerTest extends TestCase
             'estado' => 'PROCESADO',
         ]);
     }
+
     private function crearEventoPedidoConfirmado(
         string $eventoId = '11111111-1111-4111-8111-111111111111'
     ): PedidoConfirmado {

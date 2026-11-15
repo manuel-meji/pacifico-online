@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\M7_Contabilidad\CentroCosto;
-use App\Models\M7_Contabilidad\CuentaContable;
-use App\Services\Nucleo\ContextoComercio;
+use App\Services\M7_Contabilidad\PlanCuentasBaseService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -28,38 +26,8 @@ class M7_PlanCuentasSeeder extends Seeder
         '3-101-100005',
     ];
 
-    /**
-     * [codigo, nombre, tipo, codigo padre]
-     */
-    public const PLAN_BASE = [
-        ['1', 'Activo', 'ACTIVO', null],
-        ['1.1', 'Activo corriente', 'ACTIVO', '1'],
-        ['1.1.01', 'Caja y bancos', 'ACTIVO', '1.1'],
-        ['1.1.02', 'Cuentas por cobrar', 'ACTIVO', '1.1'],
-        ['1.1.03', 'Inventarios', 'ACTIVO', '1.1'],
-        ['1.1.04', 'Fondos por cobrar a plataforma', 'ACTIVO', '1.1'],
-
-        ['2', 'Pasivo', 'PASIVO', null],
-        ['2.1', 'Pasivo corriente', 'PASIVO', '2'],
-        ['2.1.01', 'Cuentas por pagar', 'PASIVO', '2.1'],
-        ['2.1.02', 'IVA por pagar', 'PASIVO', '2.1'],
-
-        ['3', 'Patrimonio', 'PATRIMONIO', null],
-        ['3.1', 'Capital y resultados', 'PATRIMONIO', '3'],
-        ['3.1.01', 'Capital social', 'PATRIMONIO', '3.1'],
-        ['3.1.02', 'Utilidades acumuladas', 'PATRIMONIO', '3.1'],
-
-        ['4', 'Ingresos', 'INGRESO', null],
-        ['4.1', 'Ingresos operativos', 'INGRESO', '4'],
-        ['4.1.01', 'Ventas', 'INGRESO', '4.1'],
-        ['4.1.02', 'Ingresos por envío', 'INGRESO', '4.1'],
-
-        ['5', 'Costos y gastos', 'GASTO', null],
-        ['5.1', 'Costos', 'GASTO', '5'],
-        ['5.1.01', 'Costo de ventas', 'GASTO', '5.1'],
-        ['5.2', 'Gastos operativos', 'GASTO', '5'],
-        ['5.2.01', 'Comisiones de plataforma', 'GASTO', '5.2'],
-    ];
+    /** @see PlanCuentasBaseService::PLAN_BASE */
+    public const PLAN_BASE = PlanCuentasBaseService::PLAN_BASE;
 
     public function run(): void
     {
@@ -124,51 +92,6 @@ class M7_PlanCuentasSeeder extends Seeder
 
     public function sembrarComercio(int $idComercio): void
     {
-        app(ContextoComercio::class)
-            ->ejecutarComoSistema(
-                function () use ($idComercio): void {
-                    DB::transaction(
-                        function () use ($idComercio): void {
-                            $porCodigo = [];
-
-                            foreach (
-                                self::PLAN_BASE as [$codigo, $nombre, $tipo, $codigoPadre]
-                            ) {
-                                $padre = $codigoPadre !== null
-                                    ? $porCodigo[$codigoPadre]
-                                    : null;
-
-                                $porCodigo[$codigo] =
-                                    CuentaContable::updateOrCreate(
-                                        [
-                                            'id_comercio' => $idComercio,
-                                            'codigo' => $codigo,
-                                        ],
-                                        [
-                                            'nombre' => $nombre,
-                                            'tipo' => $tipo,
-                                            'nivel' => $padre
-                                                ? $padre->nivel + 1
-                                                : 1,
-                                            'id_cuenta_padre' => $padre?->getKey(),
-                                            'activa' => true,
-                                        ]
-                                    );
-                            }
-
-                            CentroCosto::updateOrCreate(
-                                [
-                                    'id_comercio' => $idComercio,
-                                    'codigo' => 'GEN',
-                                ],
-                                [
-                                    'nombre' => 'General',
-                                    'activo' => true,
-                                ]
-                            );
-                        }
-                    );
-                }
-            );
+        app(PlanCuentasBaseService::class)->crearParaComercio($idComercio, 'seeder');
     }
 }

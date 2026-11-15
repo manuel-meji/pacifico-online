@@ -1,585 +1,110 @@
-
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
+import DetalleMovimientosM7 from '../components/DetalleMovimientosM7';
+import SelectorComercioM7 from '../components/SelectorComercioM7';
+import { consultarSaldos } from '../services/consultasOperativasApi';
 
-// Los documentos se mostrarán cuando estén disponibles los registros reales.
-const documentosIniciales = [];
-
-const opcionesTipo = ['Por cobrar', 'Por pagar'];
-const opcionesEstado = ['Pendiente', 'Pagado'];
-
-function formatoMoneda(monto) {
-  if (monto === null || monto === undefined || monto === '') {
-    return '—';
-  }
-
-  return new Intl.NumberFormat('es-CR', {
-    style: 'currency',
-    currency: 'CRC',
-    maximumFractionDigits: 2,
-  }).format(monto);
-}
-
-function formatoFecha(fecha) {
-  const [anio, mes, dia] = fecha.split('-');
-  return `${dia}/${mes}/${anio}`;
-}
-
-function saldoPendiente(documento) {
-  return Math.max(0, documento.monto - documento.abonado);
-}
-
-function estaVencido(documento) {
-  // La fecha se compara con el día actual del navegador.
-  // Un documento pagado no se considera vencido.
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-
-  const vencimiento = new Date(`${documento.fechaVencimiento}T00:00:00`);
-
-  return documento.estado !== 'Pagado' &&
-    saldoPendiente(documento) > 0 &&
-    vencimiento < hoy;
+function moneda(valor) {
+  return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC' }).format(Number(valor));
 }
 
 export default function CuentasPorCobrarPagarView({ onNavegar }) {
+  const [datos, setDatos] = useState(null);
+  const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
-  const [tipoSeleccionado, setTipoSeleccionado] = useState('Todos');
-  const [estadoSeleccionado, setEstadoSeleccionado] = useState('Todos');
-  const [vencimientoSeleccionado, setVencimientoSeleccionado] =
-    useState('Todos');
+  const [tipo, setTipo] = useState('Todos');
+  const [comercio, setComercio] = useState('');
+  const [consulta, setConsulta] = useState({ comercio: '' });
   const [pagina, setPagina] = useState(1);
-  const [filasPorPagina, setFilasPorPagina] = useState(5);
+  const [seleccion, setSeleccion] = useState(null);
 
-  const documentosFiltrados = useMemo(() => {
-    const texto = busqueda.trim().toLowerCase();
-
-    return documentosIniciales.filter((documento) => {
-      const coincideTexto = [
-        documento.referencia,
-        documento.tercero,
-      ].some((valor) => valor.toLowerCase().includes(texto));
-
-      const coincideTipo =
-        tipoSeleccionado === 'Todos' ||
-        documento.tipo === tipoSeleccionado;
-
-      const coincideEstado =
-        estadoSeleccionado === 'Todos' ||
-        documento.estado === estadoSeleccionado;
-
-      const vencido = estaVencido(documento);
-
-      const coincideVencimiento =
-        vencimientoSeleccionado === 'Todos' ||
-        (vencimientoSeleccionado === 'Vencidos' && vencido) ||
-        (vencimientoSeleccionado === 'Vigentes' && !vencido &&
-          documento.estado !== 'Pagado' &&
-          saldoPendiente(documento) > 0);
-
-      return (
-        coincideTexto &&
-        coincideTipo &&
-        coincideEstado &&
-        coincideVencimiento
-      );
+  useEffect(() => {
+    let activo = true;
+    consultarSaldos(consulta.comercio).then((resultado) => {
+      if (activo) { setDatos(resultado); setError(''); }
+    }).catch((fallo) => {
+      if (activo) setError(fallo.message || 'No fue posible consultar los saldos.');
     });
-  }, [
-    busqueda,
-    tipoSeleccionado,
-    estadoSeleccionado,
-    vencimientoSeleccionado,
-  ]);
+    return () => { activo = false; };
+  }, [consulta]);
 
-  const resumen = useMemo(() => {
-    if (documentosIniciales.length === 0) {
-      return {
-        porCobrar: null,
-        porPagar: null,
-        vencidoPorCobrar: null,
-        vencidoPorPagar: null,
-      };
-    }
-
-    const porCobrar = documentosIniciales
-      .filter((documento) => documento.tipo === 'Por cobrar')
-      .reduce((total, documento) => total + saldoPendiente(documento), 0);
-
-    const porPagar = documentosIniciales
-      .filter((documento) => documento.tipo === 'Por pagar')
-      .reduce((total, documento) => total + saldoPendiente(documento), 0);
-
-    const vencidoPorCobrar = documentosIniciales
-      .filter((documento) =>
-        documento.tipo === 'Por cobrar' && estaVencido(documento)
-      )
-      .reduce((total, documento) => total + saldoPendiente(documento), 0);
-
-    const vencidoPorPagar = documentosIniciales
-      .filter((documento) =>
-        documento.tipo === 'Por pagar' && estaVencido(documento)
-      )
-      .reduce((total, documento) => total + saldoPendiente(documento), 0);
-
-    return { porCobrar, porPagar, vencidoPorCobrar, vencidoPorPagar };
-  }, []);
-
-
-  const totalPaginas = Math.max(
-    1,
-    Math.ceil(documentosFiltrados.length / filasPorPagina)
+  const cuentas = (datos?.cuentas ?? []).filter((cuenta) =>
+    (tipo === 'Todos' || cuenta.tipo === tipo) &&
+    `${cuenta.codigo} ${cuenta.nombre}`.toLowerCase().includes(busqueda.trim().toLowerCase())
   );
-
-  const paginaActual = Math.min(pagina, totalPaginas);
-  const inicio = (paginaActual - 1) * filasPorPagina;
-  const documentosVisibles = documentosFiltrados.slice(
-    inicio,
-    inicio + filasPorPagina
-  );
-
-  function cambiarFiltro(callback, valor) {
-    callback(valor);
-    setPagina(1);
-  }
-
-  function limpiarFiltros() {
-    setBusqueda('');
-    setTipoSeleccionado('Todos');
-    setEstadoSeleccionado('Todos');
-    setVencimientoSeleccionado('Todos');
-    setPagina(1);
-    setFilasPorPagina(5);
-  }
+  const paginas = Math.max(1, Math.ceil(cuentas.length / 10));
+  const visibles = cuentas.slice((pagina - 1) * 10, pagina * 10);
 
   return (
     <div className="min-h-screen bg-[#f5f7fa]">
-      <EncabezadoM7
-        seccionActiva="Cuentas por cobrar y pagar"
-        onNavegar={onNavegar}
-      />
-
+      <EncabezadoM7 seccionActiva="Cuentas por cobrar y pagar" onNavegar={onNavegar} />
       <main id="contenido" className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        <div className="mb-6">
-          <p className="mb-2 text-sm text-gray-500">
-            Contabilidad / Cuentas por cobrar y pagar
-          </p>
-
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-[#1e3a8a] sm:text-3xl">
-                Cuentas por cobrar y pagar
-              </h1>
-              <p className="mt-2 text-sm text-gray-600">
-                Consulta de saldos pendientes y fechas de vencimiento.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="rounded-lg bg-[#1e3a8a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800"
-            >
-              Imprimir listado
-            </button>
-          </div>
-        </div>
-
-        <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Saldo por cobrar</p>
-            <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
-              {formatoMoneda(resumen.porCobrar)}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              Pendiente de clientes
-            </p>
-          </article>
-
-          <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Saldo por pagar</p>
-            <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
-              {formatoMoneda(resumen.porPagar)}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              Pendiente con proveedores
-            </p>
-          </article>
-
-          <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Por cobrar vencido</p>
-            <p className={`mt-2 text-2xl font-bold ${resumen.vencidoPorCobrar === null || resumen.vencidoPorCobrar === 0
-              ? 'text-gray-500'
-              : 'text-red-700'
-              }`}>
-              {formatoMoneda(resumen.vencidoPorCobrar)}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              {documentosIniciales.length === 0
-                ? 'Sin información disponible'
-                : 'Según la fecha actual'}l
-            </p>
-          </article>
-
-          <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Por pagar vencido</p>
-            <p className={`mt-2 text-2xl font-bold ${resumen.vencidoPorPagar === null || resumen.vencidoPorPagar === 0
-              ? 'text-gray-500'
-              : 'text-red-700'
-              }`}>
-              {formatoMoneda(resumen.vencidoPorPagar)}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              {documentosIniciales.length === 0
-                ? 'Sin información disponible'
-                : 'Según la fecha actual'}
-            </p>
-          </article>
-        </section>
-
-        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-5 py-4">
-            <h2 className="text-lg font-bold text-gray-800">
-              Registro de cuentas pendientes
-            </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Busca por referencia o tercero y filtra los resultados.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 border-b border-gray-200 p-5 md:grid-cols-2 xl:grid-cols-4">
-            <div className="xl:col-span-2">
-              <label
-                htmlFor="buscar-cuentas-pendientes"
-                className="mb-2 block text-sm font-medium text-gray-700"
-              >
-                Buscar documento o tercero
-              </label>
-              <input
-                id="buscar-cuentas-pendientes"
-                type="search"
-                value={busqueda}
-                onChange={(e) => cambiarFiltro(setBusqueda, e.target.value)}
-                placeholder="Referencia o nombre..."
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="tipo-cuenta-pendiente"
-                className="mb-2 block text-sm font-medium text-gray-700"
-              >
-                Tipo de cuenta
-              </label>
-              <select
-                id="tipo-cuenta-pendiente"
-                value={tipoSeleccionado}
-                onChange={(e) =>
-                  cambiarFiltro(setTipoSeleccionado, e.target.value)
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="Todos">Por cobrar y pagar</option>
-                {opcionesTipo.map((tipo) => (
-                  <option key={tipo} value={tipo}>{tipo}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="estado-cuenta-pendiente"
-                className="mb-2 block text-sm font-medium text-gray-700"
-              >
-                Estado
-              </label>
-              <select
-                id="estado-cuenta-pendiente"
-                value={estadoSeleccionado}
-                onChange={(e) =>
-                  cambiarFiltro(setEstadoSeleccionado, e.target.value)
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="Todos">Todos los estados</option>
-                {opcionesEstado.map((estado) => (
-                  <option key={estado} value={estado}>{estado}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="vencimiento-cuenta-pendiente"
-                className="mb-2 block text-sm font-medium text-gray-700"
-              >
-                Vencimiento
-              </label>
-              <select
-                id="vencimiento-cuenta-pendiente"
-                value={vencimientoSeleccionado}
-                onChange={(e) =>
-                  cambiarFiltro(setVencimientoSeleccionado, e.target.value)
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="Todos">Todos los vencimientos</option>
-                <option value="Vencidos">Vencidos</option>
-                <option value="Vigentes">Pendientes vigentes</option>
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <button
-                type="button"
-                onClick={limpiarFiltros}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-              >
-                Limpiar filtros
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col justify-between gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center">
-            <p className="text-sm text-gray-600" aria-live="polite">
-              {documentosIniciales.length === 0
-                ? 'No hay documentos disponibles para mostrar.'
-                : documentosFiltrados.length === 0
-                  ? 'No hay documentos que coincidan con los filtros.'
-                  : `Mostrando ${inicio + 1}-${Math.min(
-                    inicio + filasPorPagina,
-                    documentosFiltrados.length
-                  )} de ${documentosFiltrados.length} documentos`}
-            </p>
-
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              Filas por página
-              <select
-                value={filasPorPagina}
-                onChange={(e) => {
-                  setFilasPorPagina(Number(e.target.value));
-                  setPagina(1);
-                }}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-              </select>
-            </label>
-          </div>
-
-          {/* Vista móvil: tarjetas de documentos */}
-          <div className="space-y-3 p-3 md:hidden">
-            {documentosVisibles.map((documento) => {
-              const vencido = estaVencido(documento);
-              const pendiente = saldoPendiente(documento);
-
-              return (
-                <article
-                  key={documento.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Referencia
-                      </p>
-                      <p className="break-words font-bold text-[#1e3a8a]">
-                        {documento.referencia}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${documento.estado === 'Pagado'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-amber-100 text-amber-800'
-                        }`}
-                    >
-                      {documento.estado}
-                    </span>
-                  </div>
-
-                  <h3 className="mt-3 break-words font-semibold text-gray-900">
-                    {documento.tercero}
-                  </h3>
-
-                  <p className="mt-1 text-sm text-gray-600">
-                    Tipo: {documento.tipo}
-                  </p>
-
-                  <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-gray-100 pt-3 text-sm">
-                    <div>
-                      <dt className="text-gray-500">Emisión</dt>
-                      <dd className="break-words font-medium text-gray-800">
-                        {formatoFecha(documento.fechaEmision)}
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-gray-500">Vencimiento</dt>
-                      <dd className={`break-words font-medium ${vencido ? 'text-red-700' : 'text-gray-800'
-                        }`}>
-                        {formatoFecha(documento.fechaVencimiento)}
-                      </dd>
-                      {vencido && (
-                        <span className="mt-1 block text-xs font-semibold text-red-700">
-                          Vencido
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <dt className="text-gray-500">Monto</dt>
-                      <dd className="break-words font-medium text-gray-800">
-                        {formatoMoneda(documento.monto)}
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-gray-500">Pendiente</dt>
-                      <dd className="break-words font-semibold text-gray-900">
-                        {formatoMoneda(pendiente)}
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })}
-
-            {documentosVisibles.length === 0 && (
-              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
-                {documentosIniciales.length === 0
-                  ? 'No hay documentos disponibles para mostrar.'
-                  : 'No hay documentos que coincidan con los filtros.'}
-              </div>
-            )}
-          </div>
-
-          {/* Vista de escritorio: tabla original */}
-          <div className="hidden md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#1e3a8a] text-white">
-                <tr>
-                  <th scope="col" className="px-4 py-4 font-semibold">Referencia</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Tercero</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Tipo</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Emisión</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Vencimiento</th>
-                  <th scope="col" className="px-4 py-4 text-right font-semibold">Monto</th>
-                  <th scope="col" className="px-4 py-4 text-right font-semibold">Pendiente</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Estado</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {documentosVisibles.map((documento) => {
-                  const vencido = estaVencido(documento);
-                  const pendiente = saldoPendiente(documento);
-
-                  return (
-                    <tr key={documento.id} className="transition hover:bg-blue-50">
-                      <td className="whitespace-nowrap px-4 py-4 font-semibold text-[#1e3a8a]">
-                        {documento.referencia}
-                      </td>
-                      <td className="px-4 py-4 font-medium text-gray-800">
-                        {documento.tercero}
-                      </td>
-                      <td className="px-4 py-4 text-gray-600">{documento.tipo}</td>
-                      <td className="whitespace-nowrap px-4 py-4 text-gray-600">
-                        {formatoFecha(documento.fechaEmision)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4">
-                        <span className={vencido ? 'font-semibold text-red-700' : 'text-gray-600'}>
-                          {formatoFecha(documento.fechaVencimiento)}
-                        </span>
-                        {vencido && (
-                          <span className="mt-1 block text-xs font-semibold text-red-700">
-                            Vencido
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-right">
-                        {formatoMoneda(documento.monto)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-right font-semibold">
-                        {formatoMoneda(pendiente)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${documento.estado === 'Pagado'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-amber-100 text-amber-800'
-                          }`}>
-                          {documento.estado}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {documentosVisibles.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-5 py-12 text-center text-gray-500">
-                      {documentosIniciales.length === 0
-                        ? 'No hay documentos disponibles para mostrar.'
-                        : 'No hay documentos que coincidan con los filtros.'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-col justify-between gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center">
-            <p className="text-sm text-gray-500">
-              Página {paginaActual} de {totalPaginas}
-            </p>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPagina(1)}
-                disabled={paginaActual === 1}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Primera página"
-              >
-                «
-              </button>
-              <button
-                type="button"
-                onClick={() => setPagina((actual) => Math.max(1, actual - 1))}
-                disabled={paginaActual === 1}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setPagina((actual) => Math.min(totalPaginas, actual + 1))
-                }
-                disabled={paginaActual === totalPaginas}
-                className="rounded-lg bg-[#1e3a8a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Siguiente
-              </button>
-              <button
-                type="button"
-                onClick={() => setPagina(totalPaginas)}
-                disabled={paginaActual === totalPaginas}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Última página"
-              >
-                »
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <p className="mt-5 text-xs text-gray-500">
-          Los saldos y vencimientos se mostrarán cuando estén disponibles los documentos correspondientes.
+        <h1 className="text-2xl font-bold text-[#1e3a8a]">Cuentas por cobrar y pagar</h1>
+        <p className="mt-2 text-sm text-gray-600">
+          Saldos netos de los asientos registrados del comercio, incluidos fondos por cobrar a plataforma.
+          No representa documentos, vencimientos, abonos ni liquidaciones.
         </p>
+        <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={(evento) => {
+          evento.preventDefault(); setDatos(null); setError(''); setPagina(1); setConsulta({ comercio });
+        }}>
+          <SelectorComercioM7 valor={comercio} onCambiar={setComercio} onCargados={(lista) => {
+            if (lista.length === 0 || consulta.comercio) return;
+            const primero = String(lista[0].id_comercio);
+            setComercio(primero); setDatos(null); setError(''); setPagina(1); setConsulta({ comercio: primero });
+          }} />
+          <button className="rounded bg-[#1e3a8a] p-2 text-white">Actualizar consulta</button>
+        </form>
+        {error ? <p role="alert" className="mt-4 text-red-700">{error}</p> : !datos ? (
+          <p role="status" className="mt-4">Cargando saldos contables...</p>
+        ) : (
+          <>
+            <section className="my-6 grid gap-4 sm:grid-cols-2" aria-label="Resumen de saldos">
+              <article className="rounded-xl bg-white p-5 shadow-sm">
+                <h2>Saldo por cobrar</h2>
+                <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">{moneda(datos.resumen.por_cobrar)}</p>
+              </article>
+              <article className="rounded-xl bg-white p-5 shadow-sm">
+                <h2>Saldo por pagar</h2>
+                <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">{moneda(datos.resumen.por_pagar)}</p>
+              </article>
+            </section>
+            <div className="mb-4 flex flex-wrap gap-4">
+              <label className="flex flex-col gap-1">Buscar cuenta
+                <input className="rounded border p-2" value={busqueda} onChange={(evento) => { setBusqueda(evento.target.value); setPagina(1); }} />
+              </label>
+              <label className="flex flex-col gap-1">Tipo
+                <select className="rounded border p-2" value={tipo} onChange={(evento) => { setTipo(evento.target.value); setPagina(1); }}>
+                  {['Todos', 'Por cobrar', 'Por pagar'].map((opcion) => <option key={opcion}>{opcion}</option>)}
+                </select>
+              </label>
+              <button className="self-end rounded border bg-white p-2" onClick={() => { setBusqueda(''); setTipo('Todos'); setPagina(1); }}>Limpiar filtros</button>
+              <button className="self-end rounded bg-[#1e3a8a] p-2 text-white" onClick={() => window.print()}>Imprimir listado</button>
+            </div>
+            <div className="overflow-x-auto rounded-xl bg-white">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#1e3a8a] text-white"><tr>
+                  <th className="p-3">Código</th><th className="p-3">Cuenta</th><th className="p-3">Tipo</th><th className="p-3 text-right">Saldo neto</th><th className="p-3">Detalle</th>
+                </tr></thead>
+                <tbody>{visibles.map((cuenta) => <tr key={cuenta.id_cuenta_contable} className="border-b">
+                  <td className="p-3">{cuenta.codigo}</td><td className="p-3">{cuenta.nombre}</td>
+                  <td className="p-3">{cuenta.tipo}</td><td className="p-3 text-right">{moneda(cuenta.saldo)}</td>
+                  <td className="p-3"><button className="rounded border border-blue-800 p-2 text-blue-800"
+                    aria-label={`Ver movimientos de ${cuenta.codigo}`}
+                    onClick={() => setSeleccion({ tipo: 'cuenta', id: cuenta.id_cuenta_contable, idComercio: datos.id_comercio, titulo: `${cuenta.codigo} · ${cuenta.nombre}` })}>Ver movimientos</button></td>
+                </tr>)}</tbody>
+              </table>
+              {cuentas.length === 0 && <p className="p-4">No hay cuentas para los filtros seleccionados.</p>}
+            </div>
+            <nav aria-label="Paginación de cuentas" className="mt-4 flex items-center gap-3">
+              <button className="rounded border p-2 disabled:opacity-50" disabled={pagina === 1} onClick={() => setPagina(pagina - 1)}>Anterior</button>
+              <span>Página {pagina} de {paginas}</span>
+              <button className="rounded border p-2 disabled:opacity-50" disabled={pagina === paginas} onClick={() => setPagina(pagina + 1)}>Siguiente</button>
+            </nav>
+            <p className="mt-3 text-xs text-gray-600">Los saldos negativos se conservan para revisión; no se sustituyen por cero. El resumen incluye todas las cuentas consultadas.</p>
+          </>
+        )}
       </main>
+      {seleccion && <DetalleMovimientosM7 seleccion={seleccion} onCerrar={() => setSeleccion(null)} />}
     </div>
   );
 }

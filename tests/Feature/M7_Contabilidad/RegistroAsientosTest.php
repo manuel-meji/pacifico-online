@@ -55,8 +55,15 @@ class RegistroAsientosTest extends TestCase
             $tabla->string('estado');
             $tabla->timestamps();
         });
+        Schema::create('centros_costo', function (Blueprint $tabla): void {
+            $tabla->id('id_centro_costo');
+            $tabla->unsignedBigInteger('id_comercio');
+            $tabla->string('codigo');
+            $tabla->boolean('activo')->default(true);
+        });
         Schema::create('detalle_asientos', function (Blueprint $tabla): void {
             $tabla->id('id_detalle_asiento');
+            $tabla->unsignedBigInteger('id_centro_costo')->nullable();
             $tabla->unsignedBigInteger('id_asiento');
             $tabla->unsignedBigInteger('id_cuenta_contable');
             $tabla->unsignedInteger('numero_linea');

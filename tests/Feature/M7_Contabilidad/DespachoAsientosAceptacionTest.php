@@ -108,6 +108,12 @@ class DespachoAsientosAceptacionTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('centros_costo', function (Blueprint $table): void {
+            $table->id('id_centro_costo');
+            $table->unsignedBigInteger('id_comercio');
+            $table->string('codigo');
+            $table->boolean('activo')->default(true);
+        });
         Schema::create('detalle_asientos', function (Blueprint $table): void {
             $table->id('id_detalle_asiento');
             $table->unsignedBigInteger('id_asiento');
