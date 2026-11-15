@@ -967,6 +967,15 @@ class ComerciosService implements ComerciosServiceInterface
                 }
             }
             $this->exigirValidos($errores);
+            // M4 toma las ubicaciones de inventario de las sedes del comercio (id_sede = id_ubicacion):
+            // un comercio recién aprobado necesita al menos una para registrar existencias.
+            if (! $comercio->sedes()->exists()) {
+                $comercio->sedes()->create([
+                    'nombre' => 'Sede principal',
+                    'direccion' => $comercio->direccion_fiscal,
+                    'habilitada' => true,
+                ]);
+            }
 
             $solicitud->aprobar();
             $comercio->activar();

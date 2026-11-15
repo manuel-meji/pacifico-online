@@ -5,8 +5,9 @@ namespace App\Events\M4_Inventario;
 use App\Models\M4_Inventario\Existencia;
 
 /**
- * AlertaStockMinimo v1.0.0. Consumidor: M2 (aviso al comercio). Se publica cuando
- * el disponible de una existencia queda en o bajo su stock mínimo (RN-M4-004).
+ * AlertaStockMinimo v1.0.0. Se publica cuando el disponible de una existencia queda
+ * en o bajo su stock mínimo (RN-M4-004). Sin consumidores desde la SC-15: M2 retiró
+ * su consumo y la alerta de reposición se muestra en «Existencias y mínimos» de M4.
  */
 class AlertaStockMinimo extends EventoInventario
 {

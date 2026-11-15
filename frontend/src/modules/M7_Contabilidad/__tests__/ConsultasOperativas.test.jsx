@@ -1,8 +1,18 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderReact, screen, waitFor, within } from '@testing-library/react';
 import CuentasPorCobrarPagarView from '../views/CuentasPorCobrarPagarView';
 import CentrosCostoView from '../views/CentrosCostoView';
+import M7App from '../M7App';
+import { SesionM7Context } from '../context/SesionM7Context';
+
+function render(elemento) {
+  return renderReact(
+    <SesionM7Context.Provider value={{ usuario: { rol: 'encargado_comercio' } }}>
+      {elemento}
+    </SesionM7Context.Provider>
+  );
+}
 
 beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
@@ -30,6 +40,47 @@ function conComercios(consultas, comercios = sinPermisoComercios) {
 }
 
 describe('Consultas contables reales', () => {
+  it('exige seleccionar comercio y conserva ese ámbito al navegar o cambiar de comercio', async () => {
+    const fetch = vi.fn(async (url) => {
+      if (url === '/api/user') {
+        return { ok: true, json: async () => ({ user: { rol: 'encargado_plataforma', nombre: 'Plataforma' } }) };
+      }
+      if (url === '/api/m7/v1/comercios') {
+        return { ok: true, json: async () => ({ success: true, data: { comercios: [
+          { id_comercio: 1, nombre: 'Comercio uno' },
+          { id_comercio: 2, nombre: 'Comercio dos' },
+        ] } }) };
+      }
+      return { ok: false, status: 500, json: async () => ({ error: { mensaje: 'Consulta no disponible.' } }) };
+    });
+    vi.stubGlobal('fetch', fetch);
+    render(<M7App />);
+
+    await screen.findByRole('option', { name: 'Comercio uno' });
+    expect(fetch.mock.calls.filter(([url]) => url.startsWith('/api/m7/v1/') && url !== '/api/m7/v1/comercios')).toHaveLength(0);
+    expect(screen.getByText('Seleccione un comercio para consultar sus datos contables.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Comercio'), { target: { value: '1' } });
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/libro-diario?') && url.includes('id_comercio=1'))).toBe(true));
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/reporte-gerencial?') && url.includes('id_comercio=1'))).toBe(true));
+
+    fireEvent.change(screen.getByLabelText('Comercio'), { target: { value: '2' } });
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/libro-diario?') && url.includes('id_comercio=2'))).toBe(true));
+
+    for (const [seccion, ruta] of [
+      ['Plan de cuentas', '/api/m7/v1/cuentas?'],
+      ['Libro diario', '/api/m7/v1/libro-diario?'],
+      ['Libro mayor', '/api/m7/v1/libro-mayor/cuentas?'],
+      ['Balance general', '/api/m7/v1/balance-general?'],
+      ['Estado de resultados', '/api/m7/v1/reporte-gerencial?'],
+      ['Cuentas por cobrar y pagar', '/api/m7/v1/saldos-cobrar-pagar?'],
+      ['Centros de costo', '/api/m7/v1/centros-costo?'],
+    ]) {
+      fireEvent.click(within(screen.getByRole('navigation', { name: 'Secciones contables' })).getByRole('button', { name: seccion }));
+      await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith(ruta) && url.includes('id_comercio=2'))).toBe(true));
+    }
+  });
+
   it.each([
     {
       Vista: CentrosCostoView,

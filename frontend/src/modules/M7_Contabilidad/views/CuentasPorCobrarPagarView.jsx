@@ -8,13 +8,13 @@ function moneda(valor) {
   return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC' }).format(Number(valor));
 }
 
-export default function CuentasPorCobrarPagarView({ onNavegar }) {
+export default function CuentasPorCobrarPagarView({ onNavegar, idComercio }) {
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [tipo, setTipo] = useState('Todos');
-  const [comercio, setComercio] = useState('');
-  const [consulta, setConsulta] = useState({ comercio: '' });
+  const [comercio, setComercio] = useState(idComercio || '');
+  const [consulta, setConsulta] = useState({ comercio: idComercio || '' });
   const [pagina, setPagina] = useState(1);
   const [seleccion, setSeleccion] = useState(null);
 
@@ -45,11 +45,11 @@ export default function CuentasPorCobrarPagarView({ onNavegar }) {
         <form className="no-print mt-4 flex flex-wrap items-end gap-3" onSubmit={(evento) => {
           evento.preventDefault(); setDatos(null); setError(''); setPagina(1); setConsulta({ comercio });
         }}>
-          <SelectorComercioM7 valor={comercio} onCambiar={setComercio} onCargados={(lista) => {
+          {!idComercio && <SelectorComercioM7 valor={comercio} onCambiar={setComercio} onCargados={(lista) => {
             if (lista.length === 0 || consulta.comercio) return;
             const primero = String(lista[0].id_comercio);
             setComercio(primero); setDatos(null); setError(''); setPagina(1); setConsulta({ comercio: primero });
-          }} />
+          }} />}
           <button className="ml-auto rounded bg-[#1e3a8a] p-2 text-white">Actualizar consulta</button>
         </form>
         {error ? <p role="alert" className="mt-4 text-red-700">{error}</p> : !datos ? (

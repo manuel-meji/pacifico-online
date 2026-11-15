@@ -34,15 +34,15 @@ function ColumnasRentabilidad({ fila }) {
   );
 }
 
-export default function CentrosCostoView({ onNavegar }) {
+export default function CentrosCostoView({ onNavegar, idComercio }) {
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [estado, setEstado] = useState('Todos');
-  const [comercio, setComercio] = useState('');
+  const [comercio, setComercio] = useState(idComercio || '');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
-  const [consulta, setConsulta] = useState({ comercio: '', desde: '', hasta: '' });
+  const [consulta, setConsulta] = useState({ comercio: idComercio || '', desde: '', hasta: '' });
   const [pagina, setPagina] = useState(1);
   const [seleccion, setSeleccion] = useState(null);
   useEffect(() => {
@@ -78,11 +78,11 @@ export default function CentrosCostoView({ onNavegar }) {
         <form className="no-print mt-4 flex flex-wrap items-end gap-3" onSubmit={(evento) => {
           evento.preventDefault(); setDatos(null); setError(''); setPagina(1); setConsulta({ comercio, desde, hasta });
         }}>
-          <SelectorComercioM7 valor={comercio} onCambiar={setComercio} onCargados={(lista) => {
+          {!idComercio && <SelectorComercioM7 valor={comercio} onCambiar={setComercio} onCargados={(lista) => {
             if (lista.length === 0 || consulta.comercio) return;
             const primero = String(lista[0].id_comercio);
             setComercio(primero); setDatos(null); setError(''); setPagina(1); setConsulta({ comercio: primero, desde, hasta });
-          }} />
+          }} />}
           <label className="flex flex-col gap-1 text-sm">Desde
             <input type="date" value={desde} max={hasta || undefined} onChange={(evento) => setDesde(evento.target.value)} className="rounded border bg-white p-2" />
           </label>
