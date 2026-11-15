@@ -117,11 +117,13 @@ export const Tarjeta = ({ className = '', children }) => (
 );
 
 
-export const Encabezado = ({ usuario, onIngresar, onSalir }) => (
-  <header className="border-b border-slate-200 bg-white">
-    <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-      <a href="/m1.html" aria-label="Pacíficos Online, ir al inicio"
-        className="flex items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2">
+export const Encabezado = ({ usuario, onIngresar, onSalir }) => {
+  const esComercio = usuario?.rol === 'encargado_comercio';
+  return (
+    <header className="border-b border-slate-200 bg-white">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+        <a href={esComercio ? '/m2.html' : '/m1.html'} aria-label={esComercio ? 'Pacíficos Online, ir a Mi comercio' : 'Pacíficos Online, ir al inicio'}
+          className="flex items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2">
         {/* Mismo logotipo del portal (M1), para que el panel se vea como parte de la plataforma. */}
         <img src={logo} alt="" className="h-10 w-10 rounded-full" />
         <span className="leading-tight">
@@ -139,4 +141,5 @@ export const Encabezado = ({ usuario, onIngresar, onSalir }) => (
       )}
     </div>
   </header>
-);
+  );
+};
