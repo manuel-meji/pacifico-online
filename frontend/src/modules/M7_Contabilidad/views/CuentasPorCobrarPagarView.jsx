@@ -39,7 +39,7 @@ export default function CuentasPorCobrarPagarView({ onNavegar, idComercio }) {
       <main id="contenido" className="m7-print-area m7-print-area-pantalla mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <h1 className="text-2xl font-bold text-[#1e3a8a]">Cuentas por cobrar y pagar</h1>
         <p className="mt-2 text-sm text-gray-600">
-          Saldos netos de los asientos registrados del comercio, incluidos fondos por cobrar a plataforma.
+          Saldos netos de los asientos registrados del comercio, incluidos fondos por cobrar a plataforma e IVA por pagar.
           No representa documentos, vencimientos, abonos ni liquidaciones.
         </p>
         <form className="no-print mt-4 flex flex-wrap items-end gap-3" onSubmit={(evento) => {

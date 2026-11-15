@@ -1,8 +1,9 @@
-async function consultar(ruta, idComercio, periodo = {}) {
+async function consultar(ruta, idComercio, filtros = {}) {
   const parametros = new URLSearchParams();
   if (idComercio) parametros.set('id_comercio', idComercio);
-  if (periodo.desde) parametros.set('fecha_desde', periodo.desde);
-  if (periodo.hasta) parametros.set('fecha_hasta', periodo.hasta);
+  if (filtros.desde) parametros.set('fecha_desde', filtros.desde);
+  if (filtros.hasta) parametros.set('fecha_hasta', filtros.hasta);
+  if (filtros.incluirIva) parametros.set('incluir_iva', '1');
   const consulta = parametros.size ? `?${parametros}` : '';
   const respuesta = await fetch(`/api/m7/v1/${ruta}${consulta}`, {
     credentials: 'include',
@@ -25,7 +26,7 @@ export function consultarComercios() {
 }
 
 export function consultarSaldos(idComercio) {
-  return consultar('saldos-cobrar-pagar', idComercio);
+  return consultar('saldos-cobrar-pagar', idComercio, { incluirIva: true });
 }
 
 export function consultarCentrosCosto(idComercio, periodo) {

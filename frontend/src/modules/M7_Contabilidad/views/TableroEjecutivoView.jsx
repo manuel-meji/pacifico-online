@@ -4,6 +4,7 @@ import EncabezadoM7 from '../components/EncabezadoM7';
 import TarjetaIndicador from '../components/TarjetaIndicador';
 import { consultarReporteGerencial } from '../services/reporteGerencialApi';
 import { consultarLibroDiario } from '../services/libroDiarioApi';
+import { consultarBalanceGeneral, obtenerFechaActual } from '../services/balanceGeneralApi';
 
 function formatoMoneda(valor) {
   if (valor === null || valor === undefined || valor === '') {
@@ -42,12 +43,16 @@ function normalizarEstado(estado) {
 export default function TableroEjecutivoView({ onNavegar, idComercio }) {
   const [reporte, setReporte] = useState(null);
   const [asientos, setAsientos] = useState([]);
+  const [balance, setBalance] = useState(null);
+  const [fechaCorte] = useState(obtenerFechaActual);
 
   const [cargando, setCargando] = useState(true);
   const [cargandoAsientos, setCargandoAsientos] = useState(true);
+  const [cargandoBalance, setCargandoBalance] = useState(true);
 
   const [error, setError] = useState('');
   const [errorAsientos, setErrorAsientos] = useState('');
+  const [errorBalance, setErrorBalance] = useState('');
 
   useEffect(() => {
     let activo = true;
@@ -97,13 +102,37 @@ export default function TableroEjecutivoView({ onNavegar, idComercio }) {
       }
     }
 
+    async function cargarBalance() {
+      setCargandoBalance(true);
+      setErrorBalance('');
+      setBalance(null);
+
+      try {
+        const datos = await consultarBalanceGeneral(fechaCorte, idComercio);
+        if (
+          !datos || !Array.isArray(datos.cuentas) || typeof datos.cuadra !== 'boolean'
+          || !['activos_centimos', 'pasivos_centimos', 'patrimonio_centimos'].every(
+            (campo) => Number.isSafeInteger(datos[campo])
+          )
+        ) {
+          throw new Error('El servidor no devolvió un balance contable válido.');
+        }
+        if (activo) setBalance(datos);
+      } catch (err) {
+        if (activo) setErrorBalance(err.message || 'No se pudo consultar el balance general.');
+      } finally {
+        if (activo) setCargandoBalance(false);
+      }
+    }
+
     cargarReporte();
     cargarAsientos();
+    cargarBalance();
 
     return () => {
       activo = false;
     };
-  }, [idComercio]);
+  }, [fechaCorte, idComercio]);
 
   const resumen = reporte?.resumen ?? {};
 
@@ -289,15 +318,33 @@ export default function TableroEjecutivoView({ onNavegar, idComercio }) {
               </div>
             </div>
 
-            <div className="m7-balance">
-              <span className="m7-balance-icon">—</span>
+            <div className={`m7-balance${errorBalance || (balance && balance.cuentas.length > 0 && !balance.cuadra) ? ' m7-balance-alerta' : ''}`}>
               <div>
                 <p>Balance contable</p>
-                <strong>Sin información</strong>
-                <span>
-                  El estado del balance estará disponible cuando se
-                  cuente con los datos correspondientes.
-                </span>
+                {cargandoBalance ? (
+                  <span role="status">Cargando balance...</span>
+                ) : errorBalance ? (
+                  <span role="alert">{errorBalance}</span>
+                ) : balance && balance.cuentas.length === 0 ? (
+                  <>
+                    <strong>Sin movimientos</strong>
+                    <span>No hay movimientos registrados hasta el {formatoFecha(fechaCorte)}.</span>
+                  </>
+                ) : balance ? (
+                  <>
+                    <strong>{balance.cuadra ? 'Balance cuadrado' : 'Diferencia detectada'}</strong>
+                    <span>Fecha de corte: {formatoFecha(fechaCorte)}</span>
+                    <dl className="m7-balance-totales">
+                      <div><dt>Activos</dt><dd>{formatoMoneda(balance.activos_centimos / 100)}</dd></div>
+                      <div><dt>Pasivos</dt><dd>{formatoMoneda(balance.pasivos_centimos / 100)}</dd></div>
+                      <div><dt>Patrimonio</dt><dd>{formatoMoneda(balance.patrimonio_centimos / 100)}</dd></div>
+                      <div><dt>Diferencia</dt><dd>{formatoMoneda((balance.activos_centimos - balance.pasivos_centimos - balance.patrimonio_centimos) / 100)}</dd></div>
+                    </dl>
+                    <button type="button" className="m7-balance-enlace" onClick={() => onNavegar?.('Balance general')}>
+                      Ver balance general
+                    </button>
+                  </>
+                ) : null}
               </div>
             </div>
           </article>

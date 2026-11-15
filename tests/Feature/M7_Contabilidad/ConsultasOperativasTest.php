@@ -61,6 +61,38 @@ class ConsultasOperativasTest extends TestCase
         $this->assertSame(['codigo', 'id_cuenta_contable', 'nombre', 'saldo', 'tipo'], collect(array_keys($respuesta->json('data.cuentas.0')))->sort()->values()->all());
     }
 
+    public function test_saldos_incluyen_iva_solo_si_se_solicita_y_conservan_su_saldo_neto(): void
+    {
+        $this->prepararComercios();
+        $iva = DB::table('cuentas_contables')->where('id_comercio', 1)->where('codigo', '2.1.02')->value('id_cuenta_contable');
+        DB::table('cuentas_contables')->insert([
+            'id_comercio' => 1, 'codigo' => '2.1.02.01', 'nombre' => 'IVA por pagar adicional',
+            'tipo' => 'PASIVO', 'nivel' => 4, 'id_cuenta_padre' => $iva, 'activa' => true,
+        ]);
+        $this->movimiento(1, '2.1.01', '0.00', '60.00');
+        $this->movimiento(1, '2.1.02', '0.00', '100.00');
+        $this->movimiento(1, '2.1.02', '20.00', '0.00', 'REEMBOLSO');
+        $this->movimiento(1, '2.1.02.01', '5.00', '0.00');
+        $this->movimiento(1, '2.1.02', '0.00', '999.00', estado: 'ANULADO');
+        $this->movimiento(2, '2.1.02', '0.00', '900.00');
+        $this->actingAs(UsuarioFactory::new()->create(['rol' => 'encargado_comercio', 'id_comercio' => 1]));
+
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=1')->assertOk()
+            ->assertJsonPath('data.resumen.por_pagar', '135.00')
+            ->assertJsonPath('data.cuentas.3.codigo', '2.1.02')
+            ->assertJsonPath('data.cuentas.3.tipo', 'Por pagar')
+            ->assertJsonPath('data.cuentas.3.saldo', '80.00')
+            ->assertJsonPath('data.cuentas.4.codigo', '2.1.02.01')
+            ->assertJsonPath('data.cuentas.4.saldo', '-5.00');
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar')->assertOk()
+            ->assertJsonPath('data.resumen.por_pagar', '60.00')
+            ->assertJsonCount(3, 'data.cuentas');
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=0')->assertOk()
+            ->assertJsonPath('data.resumen.por_pagar', '60.00');
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=invalido')->assertUnprocessable();
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=1&id_comercio=2')->assertForbidden();
+    }
+
     public function test_centros_reportan_rentabilidad_y_agrupan_lo_no_imputado(): void
     {
         $this->prepararComercios();

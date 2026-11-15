@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render as renderReact, screen, waitFor, within } from '@testing-library/react';
 import CuentasPorCobrarPagarView from '../views/CuentasPorCobrarPagarView';
 import CentrosCostoView from '../views/CentrosCostoView';
+import TableroEjecutivoView from '../views/TableroEjecutivoView';
 import M7App from '../M7App';
 import { SesionM7Context } from '../context/SesionM7Context';
 
@@ -40,6 +41,75 @@ function conComercios(consultas, comercios = sinPermisoComercios) {
 }
 
 describe('Consultas contables reales', () => {
+  function servidorTablero(respuestaBalance) {
+    return vi.fn(async (url) => {
+      if (url.startsWith('/api/m7/v1/balance-general?')) return respuestaBalance;
+      if (url.startsWith('/api/m7/v1/libro-diario')) {
+        return { ok: true, json: async () => ({ success: true, data: { asientos: [] } }) };
+      }
+      return { ok: true, json: async () => ({ success: true, data: { resumen: {}, mensual: [] } }) };
+    });
+  }
+
+  it('muestra el balance real del comercio seleccionado a la fecha de corte', async () => {
+    const fetch = servidorTablero({ ok: true, json: async () => ({ success: true, data: {
+      activos_centimos: 123456, pasivos_centimos: 23456, patrimonio_centimos: 100000,
+      cuadra: true, cuentas: [{ id_cuenta_contable: 1 }],
+    } }) });
+    vi.stubGlobal('fetch', fetch);
+    const navegar = vi.fn();
+    render(<TableroEjecutivoView idComercio="2" onNavegar={navegar} />);
+
+    expect(await screen.findByText('Balance cuadrado')).toBeTruthy();
+    const situacion = within(screen.getByRole('heading', { name: 'Situación contable' }).closest('article'));
+    expect(situacion.getByText(/₡1\s234,56/)).toBeTruthy();
+    expect(situacion.getByText('₡234,56')).toBeTruthy();
+    expect(situacion.getByText(/₡1\s000,00/)).toBeTruthy();
+    expect(situacion.getByText('₡0,00')).toBeTruthy();
+    const llamada = fetch.mock.calls.find(([url]) => url.startsWith('/api/m7/v1/balance-general?'))[0];
+    const parametros = new URL(llamada, 'http://localhost').searchParams;
+    const hoy = new Date();
+    expect(parametros.get('fecha_corte')).toBe(`${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`);
+    expect(parametros.get('id_comercio')).toBe('2');
+    fireEvent.click(situacion.getByRole('button', { name: 'Ver balance general' }));
+    expect(navegar).toHaveBeenCalledWith('Balance general');
+  });
+
+  it('muestra la diferencia cuando el balance no cuadra', async () => {
+    vi.stubGlobal('fetch', servidorTablero({ ok: true, json: async () => ({ success: true, data: {
+      activos_centimos: 10000, pasivos_centimos: 2000, patrimonio_centimos: 5000,
+      cuadra: false, cuentas: [{ id_cuenta_contable: 1 }],
+    } }) }));
+    render(<TableroEjecutivoView />);
+
+    expect(await screen.findByText('Diferencia detectada')).toBeTruthy();
+    expect(screen.getByText('₡30,00')).toBeTruthy();
+    expect(screen.queryByText('Balance cuadrado')).toBeNull();
+  });
+
+  it('no presenta como cuadrado un balance sin movimientos', async () => {
+    vi.stubGlobal('fetch', servidorTablero({ ok: true, json: async () => ({ success: true, data: {
+      activos_centimos: 0, pasivos_centimos: 0, patrimonio_centimos: 0, cuadra: true, cuentas: [],
+    } }) }));
+    render(<TableroEjecutivoView />);
+
+    expect(await screen.findByText('Sin movimientos')).toBeTruthy();
+    expect(screen.queryByText('Balance cuadrado')).toBeNull();
+  });
+
+  it.each([
+    { ok: false, status: 500, json: async () => ({ error: { mensaje: 'Balance no disponible.' } }) },
+    { ok: true, json: async () => ({ success: true, data: { cuadra: true } }) },
+  ])('muestra el fallo sin inventar un balance cuando la respuesta es inválida o falla', async (respuesta) => {
+    vi.stubGlobal('fetch', servidorTablero(respuesta));
+    render(<TableroEjecutivoView />);
+
+    const alerta = await screen.findByRole('alert');
+    expect(alerta.textContent).toMatch(/Balance no disponible|balance contable válido/);
+    expect(screen.queryByText('Balance cuadrado')).toBeNull();
+    expect(screen.queryByText('Sin movimientos')).toBeNull();
+  });
+
   it('exige seleccionar comercio y conserva ese ámbito al navegar o cambiar de comercio', async () => {
     const fetch = vi.fn(async (url) => {
       if (url === '/api/user') {
@@ -63,9 +133,11 @@ describe('Consultas contables reales', () => {
     fireEvent.change(screen.getByLabelText('Comercio'), { target: { value: '1' } });
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/libro-diario?') && url.includes('id_comercio=1'))).toBe(true));
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/reporte-gerencial?') && url.includes('id_comercio=1'))).toBe(true));
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/balance-general?') && url.includes('id_comercio=1'))).toBe(true));
 
     fireEvent.change(screen.getByLabelText('Comercio'), { target: { value: '2' } });
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/libro-diario?') && url.includes('id_comercio=2'))).toBe(true));
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/balance-general?') && url.includes('id_comercio=2'))).toBe(true));
 
     for (const [seccion, ruta] of [
       ['Plan de cuentas', '/api/m7/v1/cuentas?'],
@@ -134,8 +206,9 @@ describe('Consultas contables reales', () => {
         cuentas: [
           { id_cuenta_contable: 1, codigo: '1.1.04', nombre: 'Fondos por cobrar a plataforma', tipo: 'Por cobrar', saldo: '-10.25' },
           { id_cuenta_contable: 2, codigo: '2.1.01', nombre: 'Proveedores', tipo: 'Por pagar', saldo: '60.00' },
+          { id_cuenta_contable: 3, codigo: '2.1.02', nombre: 'IVA por pagar', tipo: 'Por pagar', saldo: '80.00' },
         ],
-        resumen: { por_cobrar: '-10.25', por_pagar: '60.00' },
+        resumen: { por_cobrar: '-10.25', por_pagar: '140.00' },
       } }),
     }));
     vi.stubGlobal('fetch', fetch);
@@ -143,11 +216,14 @@ describe('Consultas contables reales', () => {
     expect(screen.getByRole('status').textContent).toContain('Cargando');
     expect(await screen.findByText('Fondos por cobrar a plataforma')).toBeTruthy();
     expect(screen.queryByLabelText('Comercio')).toBeNull();
-    expect(fetch).toHaveBeenCalledWith('/api/m7/v1/saldos-cobrar-pagar', expect.objectContaining({ credentials: 'include' }));
+    expect(fetch).toHaveBeenCalledWith('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=1', expect.objectContaining({ credentials: 'include' }));
+    const resumen = within(screen.getByRole('region', { name: 'Resumen de saldos' }));
+    expect(resumen.getByText(/140,00/)).toBeTruthy();
     expect(screen.queryByRole('columnheader', { name: /vencimiento|abonado|tercero/i })).toBeNull();
     fireEvent.change(screen.getByLabelText('Tipo'), { target: { value: 'Por pagar' } });
     expect(screen.queryByText('Fondos por cobrar a plataforma')).toBeNull();
     expect(screen.getByText('Proveedores')).toBeTruthy();
+    expect(screen.getByText('IVA por pagar')).toBeTruthy();
   });
 
   it('muestra la rentabilidad por centro, el grupo sin centro y filtra el estado', async () => {
@@ -223,7 +299,7 @@ describe('Consultas contables reales', () => {
     render(<CuentasPorCobrarPagarView />);
     fireEvent.change(await screen.findByLabelText('Número de comercio'), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Actualizar consulta' }));
-    await vi.waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/m7/v1/saldos-cobrar-pagar?id_comercio=3', expect.anything()));
+    await vi.waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/m7/v1/saldos-cobrar-pagar?id_comercio=3&incluir_iva=1', expect.anything()));
   });
 
   it('abre el libro mayor de la cuenta con el comercio de la consulta y conserva los filtros al cerrar', async () => {

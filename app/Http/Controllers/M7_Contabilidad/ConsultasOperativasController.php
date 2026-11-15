@@ -26,7 +26,10 @@ final class ConsultasOperativasController extends Controller
 
     public function saldos(Request $request): JsonResponse
     {
-        return response()->json(['success' => true, 'data' => $this->consultas->saldos($this->comercio($request))]);
+        $comercio = $this->comercio($request);
+        $filtros = $request->validate(['incluir_iva' => ['sometimes', 'boolean']]);
+
+        return response()->json(['success' => true, 'data' => $this->consultas->saldos($comercio, (bool) ($filtros['incluir_iva'] ?? false))]);
     }
 
     public function centros(Request $request): JsonResponse

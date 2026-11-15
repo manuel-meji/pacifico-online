@@ -426,6 +426,42 @@
   line-height: 1.5;
 }
 
+.m7-balance-alerta {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.m7-balance-alerta strong,
+.m7-balance-alerta div>span {
+  color: #991b1b;
+}
+
+.m7-balance-totales {
+  margin: 10px 0;
+  font-size: 12px;
+}
+
+.m7-balance-totales div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 5px;
+}
+
+.m7-balance-totales dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.m7-balance-enlace {
+  display: block;
+  margin-top: 10px;
+  color: var(--m7-blue-dark);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .m7-journal {
   overflow: hidden;
 }
