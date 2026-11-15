@@ -324,10 +324,15 @@ paths:
         reembolsos. Incluye las cuentas 1.1.02, 1.1.04 y 2.1.01 y sus subcuentas
         por código. Cada fila suma solo los movimientos directos de esa cuenta,
         sin consolidar hijos para evitar duplicación. Se conservan saldos negativos.
-        No son documentos ni vencimientos, abonos o liquidaciones. Excluye IVA por pagar.
+        No son documentos ni vencimientos, abonos o liquidaciones. Excluye IVA por pagar
+        por defecto; con incluir_iva=1 incluye 2.1.02 y sus subcuentas en por pagar.
         El encargado de plataforma debe indicar id_comercio; no se agrega información global.
       parameters:
         - $ref: '#/components/parameters/IdComercio'
+        - name: incluir_iva
+          in: query
+          description: Incluir los saldos de IVA por pagar en las cuentas y el resumen.
+          schema: { type: integer, enum: [0, 1], default: 0 }
       responses:
         '200':
           description: Saldos contables reales; cuentas vacías si no existe un plan

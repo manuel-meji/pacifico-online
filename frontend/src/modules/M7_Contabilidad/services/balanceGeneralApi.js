@@ -1,6 +1,15 @@
 
 const BASE = '/api/m7/v1';
 
+export function obtenerFechaActual() {
+  const fecha = new Date();
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+
+  return `${anio}-${mes}-${dia}`;
+}
+
 export async function consultarBalanceGeneral(fechaCorte, idComercio = null) {
   const parametros = new URLSearchParams({
     fecha_corte: fechaCorte,

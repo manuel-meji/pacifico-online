@@ -1,7 +1,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
-import { consultarBalanceGeneral } from '../services/balanceGeneralApi';
+import { consultarBalanceGeneral, obtenerFechaActual } from '../services/balanceGeneralApi';
 
 const tiposDisponibles = ['Activo', 'Pasivo', 'Patrimonio'];
 
@@ -10,15 +10,6 @@ const nombresTipos = {
   PASIVO: 'Pasivo',
   PATRIMONIO: 'Patrimonio',
 };
-
-function obtenerFechaActual() {
-  const fecha = new Date();
-  const anio = fecha.getFullYear();
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-  const dia = String(fecha.getDate()).padStart(2, '0');
-
-  return `${anio}-${mes}-${dia}`;
-}
 
 function formatoMoneda(monto) {
   if (monto === null || monto === undefined || !Number.isFinite(monto)) {

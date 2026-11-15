@@ -55,12 +55,17 @@ final class ConsultasOperativasService
     /**
      * @return array{id_comercio: int, cuentas: list<array{id_cuenta_contable: int, codigo: string, nombre: string, tipo: string, saldo: string}>, resumen: array{por_cobrar: string, por_pagar: string}}
      */
-    public function saldos(int $idComercio): array
+    public function saldos(int $idComercio, bool $incluirIva = false): array
     {
+        $codigos = ['1.1.02', '1.1.04', '2.1.01'];
+        if ($incluirIva) {
+            $codigos[] = '2.1.02';
+        }
+
         $cuentas = DB::table('cuentas_contables')
             ->where('id_comercio', $idComercio)
-            ->where(function (Builder $consulta): void {
-                foreach (['1.1.02', '1.1.04', '2.1.01'] as $codigo) {
+            ->where(function (Builder $consulta) use ($codigos): void {
+                foreach ($codigos as $codigo) {
                     $consulta->orWhere('codigo', $codigo)->orWhere('codigo', 'like', $codigo.'.%');
                 }
             })
@@ -79,7 +84,8 @@ final class ConsultasOperativasService
         $porPagar = 0;
         $filas = [];
         foreach ($cuentas as $cuenta) {
-            $esPorPagar = $cuenta->codigo === '2.1.01' || str_starts_with($cuenta->codigo, '2.1.01.');
+            $esPorPagar = $cuenta->codigo === '2.1.01' || str_starts_with($cuenta->codigo, '2.1.01.')
+                || ($incluirIva && ($cuenta->codigo === '2.1.02' || str_starts_with($cuenta->codigo, '2.1.02.')));
             $saldo = $this->centimos($saldos->get($cuenta->id_cuenta_contable)?->saldo ?? 0);
             if ($esPorPagar) {
                 $saldo = -$saldo;
