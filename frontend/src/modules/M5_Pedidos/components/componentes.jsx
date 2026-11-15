@@ -107,7 +107,7 @@ export function Encabezado({ titulo, paso, onVolver, etiquetaVolver = 'Volver al
           {/* Navegación de cuenta, deseos, pedidos y carrito */}
           <nav className="ml-auto flex shrink-0 items-center gap-4 sm:gap-5 text-sm font-medium text-gray-700 sm:ml-0" aria-label="Cuenta, pedidos y carrito">
             <a
-              href={`/app.html?pantalla=${conSesion ? 'cuenta' : 'ingresar'}`}
+              href={`/app.html?pantalla=${conSesion ? 'perfil' : 'ingresar'}`}
               aria-label={conSesion ? 'Mi cuenta' : 'Ingresar'}
               className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 transition hover:text-brandBlue"
             >
