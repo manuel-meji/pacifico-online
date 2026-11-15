@@ -365,7 +365,7 @@ export default function LibroMayorView({ onNavegar }) {
 
 
           {/* Vista móvil: movimientos como tarjetas */}
-          <div className="space-y-3 p-3 md:hidden">
+          <div className="space-y-3 p-3 md:hidden no-print">
             {movimientosCuenta.map((movimiento) => (
               <article
                 key={`${movimiento.id_asiento}-${movimiento.numero_linea}`}
@@ -506,6 +506,104 @@ export default function LibroMayorView({ onNavegar }) {
 
         </section>
       </main>
+            {/* Documento exclusivo para impresión */}
+      <div className="m7-print-area">
+        <h1>Libro Mayor</h1>
+
+        <p>Pacíficos Online - M7 Contabilidad y Reportes Gerenciales</p>
+
+        <p>
+          Fecha de impresión: {new Date().toLocaleDateString('es-CR')}
+        </p>
+
+        <p>
+          Cuenta: {resumenVista.cuenta?.codigo} - {resumenVista.cuenta?.nombre}
+        </p>
+
+        <p>
+          Naturaleza: {resumenVista.cuenta?.naturaleza}
+        </p>
+
+        <p>
+          Período: {fechaDesde || 'Sin fecha inicial'} al{' '}
+          {fechaHasta || 'Sin fecha final'}
+        </p>
+
+        <h2>Resumen de saldos</h2>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Concepto</th>
+              <th>Importe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Saldo inicial</td>
+              <td>{formatoMoneda(resumenVista.saldoInicial)}</td>
+            </tr>
+            <tr>
+              <td>Total debe</td>
+              <td>{formatoMoneda(resumenVista.totalDebe)}</td>
+            </tr>
+            <tr>
+              <td>Total haber</td>
+              <td>{formatoMoneda(resumenVista.totalHaber)}</td>
+            </tr>
+            <tr>
+              <td>Saldo final</td>
+              <td>{formatoMoneda(resumenVista.saldoNeto)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>Movimientos de la cuenta</h2>
+
+        <p>Total de movimientos: {movimientosCuenta.length}</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Asiento</th>
+              <th>Descripción</th>
+              <th>Debe</th>
+              <th>Haber</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {movimientosCuenta.map((movimiento) => (
+              <tr
+                key={`${movimiento.id_asiento}-${movimiento.numero_linea}`}
+              >
+                <td>{formatoFecha(movimiento.fecha)}</td>
+                <td>{movimiento.asiento}</td>
+                <td>{movimiento.descripcion}</td>
+                <td>
+                  {formatoMoneda(movimiento.debe)}
+                </td>
+                <td>
+                  {formatoMoneda(movimiento.haber)}
+                </td>
+                <td>{movimiento.estado}</td>
+              </tr>
+            ))}
+
+            {movimientosCuenta.length === 0 && (
+              <tr>
+                <td colSpan={6}>No hay movimientos para mostrar.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        <p className="print-footer">
+          Pacíficos Online | M7 ERP Contable y Reportes Gerenciales
+        </p>
+      </div>
     </div>
   );
 }
