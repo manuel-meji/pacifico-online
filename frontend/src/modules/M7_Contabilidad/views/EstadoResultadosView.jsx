@@ -1,11 +1,7 @@
 
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
-
-// Las partidas se incorporarán cuando esté disponible la consulta real del reporte.
-const partidasIniciales = [];
-
-const categorias = ['Ingresos', 'Costos', 'Gastos operativos'];
+import { consultarReporteGerencial } from '../services/reporteGerencialApi';
 
 function formatoMoneda(monto) {
   if (monto === null || monto === undefined || monto === '') {
@@ -16,62 +12,105 @@ function formatoMoneda(monto) {
     style: 'currency',
     currency: 'CRC',
     maximumFractionDigits: 2,
-  }).format(monto);
+  }).format(Number(monto));
+}
+
+function formatoFecha(fecha) {
+  if (!fecha) return '';
+  const [anio, mes, dia] = fecha.slice(0, 10).split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
+function formatoPeriodo(periodo) {
+  const [anio, mes] = String(periodo).split('-');
+  const fecha = new Date(Number(anio), Number(mes) - 1, 1);
+
+  if (Number.isNaN(fecha.getTime())) return periodo;
+
+  const texto = new Intl.DateTimeFormat('es-CR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(fecha);
+
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+function formatoPorcentaje(valor) {
+  return new Intl.NumberFormat('es-CR', {
+    style: 'percent',
+    maximumFractionDigits: 1,
+  }).format(valor);
 }
 
 export default function EstadoResultadosView({ onNavegar }) {
-  const [busqueda, setBusqueda] = useState('');
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todas');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [reporte, setReporte] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
 
-  const partidasFiltradas = useMemo(() => {
-    const texto = busqueda.trim().toLowerCase();
+  const fechasIncompletas = Boolean(fechaDesde) !== Boolean(fechaHasta);
 
-    return partidasIniciales.filter((partida) => {
-      const coincideTexto =
-        partida.codigo.toLowerCase().includes(texto) ||
-        partida.nombre.toLowerCase().includes(texto);
+  const rangoInvalido =
+    fechaDesde !== '' && fechaHasta !== '' && fechaHasta < fechaDesde;
 
-      const coincideCategoria =
-        categoriaSeleccionada === 'Todas' ||
-        partida.categoria === categoriaSeleccionada;
+  const filtrosInvalidos = fechasIncompletas || rangoInvalido;
 
-      return coincideTexto && coincideCategoria;
-    });
-  }, [busqueda, categoriaSeleccionada]);
+  useEffect(() => {
+    if (filtrosInvalidos) {
+      setCargando(false);
+      setError('');
+      setReporte(null);
+      return undefined;
+    }
 
-  const hayDatos = partidasIniciales.length > 0;
+    let activo = true;
 
-  const ingresos = hayDatos
-    ? partidasIniciales
-      .filter((partida) => partida.categoria === 'Ingresos')
-      .reduce((total, partida) => total + partida.monto, 0)
-    : null;
+    async function cargarReporte() {
+      setCargando(true);
+      setError('');
+      setReporte(null);
 
-  const costos = hayDatos
-    ? partidasIniciales
-      .filter((partida) => partida.categoria === 'Costos')
-      .reduce((total, partida) => total + partida.monto, 0)
-    : null;
+      try {
+        const datos = await consultarReporteGerencial({
+          fecha_desde: fechaDesde,
+          fecha_hasta: fechaHasta,
+        });
 
-  const gastosOperativos = hayDatos
-    ? partidasIniciales
-      .filter((partida) => partida.categoria === 'Gastos operativos')
-      .reduce((total, partida) => total + partida.monto, 0)
-    : null;
+        if (activo) setReporte(datos);
+      } catch (e) {
+        if (activo) {
+          setError(e.message || 'No se pudo cargar el estado de resultados.');
+          setReporte(null);
+        }
+      } finally {
+        if (activo) setCargando(false);
+      }
+    }
 
-  const utilidadBruta = hayDatos ? ingresos - costos : null;
+    cargarReporte();
 
-  const utilidadOperativa = hayDatos
-    ? utilidadBruta - gastosOperativos
-    : null;
+    return () => {
+      activo = false;
+    };
+  }, [fechaDesde, fechaHasta, filtrosInvalidos]);
 
   function limpiarFiltros() {
-    setBusqueda('');
-    setCategoriaSeleccionada('Todas');
+    setFechaDesde('');
+    setFechaHasta('');
   }
 
+  const resumen = reporte?.resumen ?? null;
+  const mensual = reporte?.mensual ?? [];
+  const hayMovimientos = mensual.length > 0;
+
+  const ingresos = resumen ? Number(resumen.ingresos) : null;
+  const utilidadBruta = resumen ? Number(resumen.utilidad_bruta) : null;
+  const margenBruto =
+    resumen && ingresos > 0 ? utilidadBruta / ingresos : null;
+
   return (
-    <div className="min-h-screen bg-[#f5f7fa]">
+    <div className="m7-estado-resultados min-h-screen bg-[#f5f7fa]">
       <EncabezadoM7
         seccionActiva="Estado de resultados"
         onNavegar={onNavegar}
@@ -89,7 +128,8 @@ export default function EstadoResultadosView({ onNavegar }) {
                 Estado de resultados
               </h1>
               <p className="mt-2 text-sm text-gray-600">
-                Ingresos, costos y gastos del período.
+                Ingresos por ventas, costo de ventas y utilidad bruta del
+                período, a partir de los asientos registrados.
               </p>
             </div>
 
@@ -103,37 +143,129 @@ export default function EstadoResultadosView({ onNavegar }) {
           </div>
         </div>
 
-        <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label
+                htmlFor="fecha-desde-resultados"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
+                Desde
+              </label>
+              <input
+                id="fecha-desde-resultados"
+                type="date"
+                value={fechaDesde}
+                onChange={(e) => setFechaDesde(e.target.value)}
+                aria-invalid={filtrosInvalidos}
+                aria-describedby={
+                  filtrosInvalidos ? 'error-rango-resultados' : undefined
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="fecha-hasta-resultados"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
+                Hasta
+              </label>
+              <input
+                id="fecha-hasta-resultados"
+                type="date"
+                value={fechaHasta}
+                min={fechaDesde || undefined}
+                onChange={(e) => setFechaHasta(e.target.value)}
+                aria-invalid={filtrosInvalidos}
+                aria-describedby={
+                  filtrosInvalidos ? 'error-rango-resultados' : undefined
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={limpiarFiltros}
+                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Mes actual
+              </button>
+            </div>
+          </div>
+
+          {filtrosInvalidos && (
+            <p
+              id="error-rango-resultados"
+              role="alert"
+              className="mt-3 text-sm font-medium text-red-700"
+            >
+              {fechasIncompletas
+                ? 'Debe seleccionar ambas fechas para consultar el período.'
+                : 'La fecha final no puede ser anterior a la fecha inicial.'}
+            </p>
+          )}
+
+          <p className="mt-3 text-sm text-gray-500" aria-live="polite">
+            {reporte
+              ? `Período consultado: ${formatoFecha(reporte.fecha_desde)} al ${formatoFecha(reporte.fecha_hasta)}.`
+              : 'Si no elige fechas, se consulta el mes actual.'}
+          </p>
+        </section>
+
+        {error && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          >
+            {error}
+          </div>
+        )}
+
+        <section
+          className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          aria-busy={cargando}
+        >
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Ingresos netos</p>
+            <p className="text-sm text-gray-500">Ingresos por ventas</p>
             <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
-              {formatoMoneda(ingresos)}
+              {cargando ? 'Cargando…' : formatoMoneda(resumen?.ingresos)}
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Costo de ventas</p>
             <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
-              {formatoMoneda(costos)}
+              {cargando ? 'Cargando…' : formatoMoneda(resumen?.costos)}
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Utilidad bruta</p>
-            <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
-              {formatoMoneda(utilidadBruta)}
+            <p
+              className={`mt-2 text-2xl font-bold ${
+                cargando || !resumen
+                  ? 'text-gray-500'
+                  : utilidadBruta >= 0
+                    ? 'text-green-700'
+                    : 'text-red-700'
+              }`}
+            >
+              {cargando ? 'Cargando…' : formatoMoneda(resumen?.utilidad_bruta)}
             </p>
           </article>
 
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Utilidad operativa</p>
-            <p className={`mt-2 text-2xl font-bold ${!hayDatos
-              ? 'text-gray-500'
-              : utilidadOperativa >= 0
-                ? 'text-green-700'
-                : 'text-red-700'
-              }`}>
-              {formatoMoneda(utilidadOperativa)}
+            <p className="text-sm text-gray-500">Margen bruto</p>
+            <p className="mt-2 text-2xl font-bold text-[#1e3a8a]">
+              {cargando
+                ? 'Cargando…'
+                : margenBruto === null
+                  ? '—'
+                  : formatoPorcentaje(margenBruto)}
             </p>
           </article>
         </section>
@@ -145,232 +277,253 @@ export default function EstadoResultadosView({ onNavegar }) {
 
           <div className="mt-4 space-y-4">
             <div className="flex flex-col justify-between gap-1 border-b border-gray-100 pb-3 sm:flex-row">
-              <span className="text-gray-700">Ingresos netos</span>
+              <span className="text-gray-700">Ingresos por ventas</span>
               <span className="font-semibold text-gray-900">
-                {formatoMoneda(ingresos)}
+                {formatoMoneda(resumen?.ingresos)}
               </span>
             </div>
 
             <div className="flex flex-col justify-between gap-1 border-b border-gray-100 pb-3 sm:flex-row">
               <span className="text-gray-700">Menos: costo de ventas</span>
               <span className="font-semibold text-gray-900">
-                ({formatoMoneda(costos)})
+                {resumen ? `(${formatoMoneda(resumen.costos)})` : '—'}
               </span>
             </div>
 
             <div className="flex flex-col justify-between gap-1 rounded-lg bg-blue-50 px-4 py-3 sm:flex-row">
-              <span className="font-bold text-[#1e3a8a]">Utilidad bruta</span>
               <span className="font-bold text-[#1e3a8a]">
-                {formatoMoneda(utilidadBruta)}
+                {resumen && utilidadBruta < 0
+                  ? 'Pérdida bruta del período'
+                  : 'Utilidad bruta del período'}
               </span>
-            </div>
-
-            <div className="flex flex-col justify-between gap-1 border-b border-gray-100 pb-3 sm:flex-row">
-              <span className="text-gray-700">Menos: gastos operativos</span>
-              <span className="font-semibold text-gray-900">
-                ({formatoMoneda(gastosOperativos)})
-              </span>
-            </div>
-
-            <div className="flex flex-col justify-between gap-1 rounded-lg bg-gray-50 px-4 py-4 sm:flex-row">
-              <span className="font-bold text-gray-900">
-                {hayDatos
-                  ? utilidadOperativa >= 0
-                    ? 'Utilidad operativa del período'
-                    : 'Pérdida operativa del período'
-                  : 'Resultado operativo del período'}
-              </span>
-
-              <span className="text-lg font-bold text-gray-700">
-                {formatoMoneda(utilidadOperativa)}
+              <span className="font-bold text-[#1e3a8a]">
+                {formatoMoneda(resumen?.utilidad_bruta)}
               </span>
             </div>
           </div>
+
+          <p className="mt-4 text-xs text-gray-500">
+            Incluye únicamente asientos de venta y de costo de ventas en estado
+            registrado. Los gastos operativos no forman parte de este alcance.
+          </p>
         </section>
 
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-200 px-5 py-4">
             <h2 className="text-lg font-bold text-gray-800">
-              Detalle de ingresos, costos y gastos
+              Detalle mensual
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Busca partidas o filtra por categoría.
+              Ingresos, costos y utilidad bruta por mes dentro del período.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 border-b border-gray-200 p-5 md:grid-cols-3">
-            <div className="md:col-span-2">
-              <label
-                htmlFor="buscar-resultados"
-                className="mb-2 block text-sm font-medium text-gray-700"
-              >
-                Buscar partida
-              </label>
-              <input
-                id="buscar-resultados"
-                type="search"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Código o nombre de la cuenta..."
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="categoria-resultados"
-                className="mb-2 block text-sm font-medium text-gray-700"
-              >
-                Categoría
-              </label>
-              <select
-                id="categoria-resultados"
-                value={categoriaSeleccionada}
-                onChange={(e) => setCategoriaSeleccionada(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="Todas">Todas las categorías</option>
-                {categorias.map((categoria) => (
-                  <option key={categoria} value={categoria}>
-                    {categoria}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md:col-span-3">
-              <button
-                type="button"
-                onClick={limpiarFiltros}
-                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-              >
-                Limpiar filtros
-              </button>
-            </div>
-          </div>
-
-          <div className="border-b border-gray-200 px-5 py-4">
-            <p className="text-sm text-gray-600" aria-live="polite">
-              Mostrando {partidasFiltradas.length} de {partidasIniciales.length} partidas.
-              Los indicadores no cambian con los filtros.
+          {cargando && (
+            <p className="px-5 py-12 text-center text-sm text-gray-500">
+              Cargando estado de resultados…
             </p>
-          </div>
+          )}
 
+          {!cargando && !error && !hayMovimientos && (
+            <p className="px-5 py-12 text-center text-sm text-gray-500">
+              No hay asientos de venta ni de costo registrados en este período.
+            </p>
+          )}
 
-          {/* Vista móvil: partidas como tarjetas */}
-          <div className="space-y-3 p-3 md:hidden">
-            {partidasFiltradas.map((partida) => (
-              <article
-                key={partida.id}
-                className="rounded-lg border border-gray-200 bg-white p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Código
-                    </p>
-                    <p className="break-words font-bold text-[#1e3a8a]">
-                      {partida.codigo}
-                    </p>
-                  </div>
+          {!cargando && hayMovimientos && (
+            <>
+              <div className="space-y-3 p-3 md:hidden">
+                {mensual.map((fila) => (
+                  <article
+                    key={fila.periodo}
+                    className="rounded-lg border border-gray-200 bg-white p-4"
+                  >
+                    <h3 className="font-semibold text-[#1e3a8a]">
+                      {formatoPeriodo(fila.periodo)}
+                    </h3>
 
-                </div>
-
-                <h3 className="mt-3 break-words font-semibold text-gray-900">
-                  {partida.nombre}
-                </h3>
-
-                <div className="mt-3 border-t border-gray-100 pt-3">
-                  <p className="text-sm text-gray-500">Categoría</p>
-                  <p className="break-words text-sm font-medium text-gray-800">
-                    {partida.categoria}
-                  </p>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-sm text-gray-500">Monto</p>
-                  <p className="break-words font-semibold text-gray-900">
-                    {formatoMoneda(partida.monto)}
-                  </p>
-                </div>
-              </article>
-            ))}
-
-            {partidasFiltradas.length === 0 && (
-              <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
-                No hay partidas que coincidan con los filtros.
-                <button
-                  type="button"
-                  onClick={limpiarFiltros}
-                  className="mt-3 block w-full font-semibold text-[#1e3a8a] underline"
-                >
-                  Limpiar búsqueda y filtros
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Vista de escritorio: tabla original */}
-          <div className="hidden md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#1e3a8a] text-white">
-                <tr>
-                  <th scope="col" className="px-4 py-4 font-semibold">Código</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Cuenta</th>
-                  <th scope="col" className="px-4 py-4 font-semibold">Categoría</th>
-                  <th scope="col" className="px-4 py-4 text-right font-semibold">Monto</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {partidasFiltradas.map((partida) => (
-                  <tr key={partida.id} className="transition hover:bg-blue-50">
-                    <td className="whitespace-nowrap px-4 py-4 font-semibold text-[#1e3a8a]">
-                      {partida.codigo}
-                    </td>
-                    <td className="px-4 py-4 font-medium text-gray-800">
-                      {partida.nombre}
-                    </td>
-                    <td className="px-4 py-4 text-gray-600">
-                      {partida.categoria}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-4 text-right font-semibold text-gray-800">
-                      {formatoMoneda(partida.monto)}
-                    </td>
-                  </tr>
-                ))}
-
-                {partidasFiltradas.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-12 text-center text-gray-500">
-                      No hay partidas que coincidan con los filtros.
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={limpiarFiltros}
-                          className="font-semibold text-[#1e3a8a] underline"
-                        >
-                          Limpiar búsqueda y filtros
-                        </button>
+                    <dl className="mt-3 space-y-2 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-500">Ingresos</dt>
+                        <dd className="font-semibold text-gray-900">
+                          {formatoMoneda(fila.ingresos)}
+                        </dd>
                       </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-500">Costos</dt>
+                        <dd className="font-semibold text-gray-900">
+                          {formatoMoneda(fila.costos)}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-3 border-t border-gray-100 pt-2">
+                        <dt className="text-gray-500">Utilidad bruta</dt>
+                        <dd
+                          className={`font-semibold ${
+                            Number(fila.utilidad_bruta) >= 0
+                              ? 'text-green-700'
+                              : 'text-red-700'
+                          }`}
+                        >
+                          {formatoMoneda(fila.utilidad_bruta)}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
 
-          <div className="border-t border-gray-200 px-5 py-4 text-sm text-gray-500">
-            {hayDatos
-              ? `Utilidad operativa: ${formatoMoneda(utilidadOperativa)}.`
-              : 'No hay información disponible para calcular el resultado operativo.'}
-          </div>
+              <div className="hidden md:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-[#1e3a8a] text-white">
+                    <tr>
+                      <th scope="col" className="px-4 py-4 font-semibold">
+                        Mes
+                      </th>
+                      <th scope="col" className="px-4 py-4 text-right font-semibold">
+                        Ingresos
+                      </th>
+                      <th scope="col" className="px-4 py-4 text-right font-semibold">
+                        Costos
+                      </th>
+                      <th scope="col" className="px-4 py-4 text-right font-semibold">
+                        Utilidad bruta
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-100">
+                    {mensual.map((fila) => (
+                      <tr key={fila.periodo} className="transition hover:bg-blue-50">
+                        <th
+                          scope="row"
+                          className="whitespace-nowrap px-4 py-4 font-semibold text-[#1e3a8a]"
+                        >
+                          {formatoPeriodo(fila.periodo)}
+                        </th>
+                        <td className="whitespace-nowrap px-4 py-4 text-right text-gray-800">
+                          {formatoMoneda(fila.ingresos)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-right text-gray-800">
+                          {formatoMoneda(fila.costos)}
+                        </td>
+                        <td
+                          className={`whitespace-nowrap px-4 py-4 text-right font-semibold ${
+                            Number(fila.utilidad_bruta) >= 0
+                              ? 'text-green-700'
+                              : 'text-red-700'
+                          }`}
+                        >
+                          {formatoMoneda(fila.utilidad_bruta)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+
+                  <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+                    <tr>
+                      <th scope="row" className="px-4 py-4 font-bold text-gray-900">
+                        Total del período
+                      </th>
+                      <td className="whitespace-nowrap px-4 py-4 text-right font-bold text-gray-900">
+                        {formatoMoneda(resumen?.ingresos)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right font-bold text-gray-900">
+                        {formatoMoneda(resumen?.costos)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right font-bold text-gray-900">
+                        {formatoMoneda(resumen?.utilidad_bruta)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
         </section>
-
-        <p className="mt-5 text-xs text-gray-500">
-          El reporte mostrará los ingresos, costos y gastos cuando estén disponibles los datos contables correspondientes.
-        </p>
       </main>
+
+      {reporte && (
+        <section className="m7-print-area">
+          <h1>Estado de resultados</h1>
+
+          <p>Pacíficos Online</p>
+          <p>
+            Período: {formatoFecha(reporte.fecha_desde)} al{' '}
+            {formatoFecha(reporte.fecha_hasta)}
+          </p>
+
+          <h2>Resultado del período</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Ingresos por ventas</td>
+                <td>{formatoMoneda(resumen?.ingresos)}</td>
+              </tr>
+              <tr>
+                <td>Menos: costo de ventas</td>
+                <td>{formatoMoneda(resumen?.costos)}</td>
+              </tr>
+              <tr>
+                <td>Utilidad bruta</td>
+                <td>{formatoMoneda(resumen?.utilidad_bruta)}</td>
+              </tr>
+              <tr>
+                <td>Margen bruto</td>
+                <td>
+                  {margenBruto === null
+                    ? '—'
+                    : formatoPorcentaje(margenBruto)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h2>Detalle mensual</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Mes</th>
+                <th>Ingresos</th>
+                <th>Costos</th>
+                <th>Utilidad bruta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mensual.map((fila) => (
+                <tr key={fila.periodo}>
+                  <td>{formatoPeriodo(fila.periodo)}</td>
+                  <td>{formatoMoneda(fila.ingresos)}</td>
+                  <td>{formatoMoneda(fila.costos)}</td>
+                  <td>{formatoMoneda(fila.utilidad_bruta)}</td>
+                </tr>
+              ))}
+              <tr>
+                <td>Total del período</td>
+                <td>{formatoMoneda(resumen?.ingresos)}</td>
+                <td>{formatoMoneda(resumen?.costos)}</td>
+                <td>{formatoMoneda(resumen?.utilidad_bruta)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p>
+            Incluye únicamente ingresos por ventas y costo de ventas.
+            No contempla gastos operativos.
+          </p>
+
+          <p className="print-footer">
+            Reporte generado desde el módulo M7 de Pacíficos Online.
+          </p>
+        </section>
+      )}
     </div>
   );
 }
