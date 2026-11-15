@@ -180,6 +180,15 @@ class M7_ProveedorContratoTest extends TestCase
         ]);
     }
 
+    private function plataforma(): Usuario
+{
+    return UsuarioFactory::new()->create([
+        'rol' => 'encargado_plataforma',
+        'id_comercio' => null,
+        'activo' => true,
+    ]);
+}
+
     // listarCuentasContables / consultarCuentaContable
 
     public function test_listar_cuentas_cumple_el_esquema(): void
@@ -211,23 +220,14 @@ class M7_ProveedorContratoTest extends TestCase
             ]);
     }
 
-    public function test_plataforma_lista_las_cuentas_del_comercio_indicado(): void
-    {
-        $this->crearCuenta(1, '1.1.01', 'Caja comercio 1');
-        $this->crearCuenta(2, '1.1.01', 'Caja comercio 2');
-
-        $plataforma = UsuarioFactory::new()->create([
-            'rol' => 'encargado_plataforma',
-            'id_comercio' => null,
-            'activo' => true,
-        ]);
-
-        $this->actingAs($plataforma, 'web')->getJson('/api/m7/v1/cuentas?id_comercio=2')
-            ->assertOk()
-            ->assertJsonPath('data.id_comercio', 2)
-            ->assertJsonCount(1, 'data.cuentas')
-            ->assertJsonPath('data.cuentas.0.nombre', 'Caja comercio 2');
-    }
+    public function test_plataforma_no_puede_listar_las_cuentas_de_un_comercio(): void
+{
+    $this->actingAs($this->plataforma(), 'web')
+        ->getJson('/api/m7/v1/cuentas?id_comercio=2')
+        ->assertForbidden()
+        ->assertJsonStructure(self::ERROR)
+        ->assertJsonPath('error.codigo', 'ERR-002');
+}
 
     public function test_consultar_cuenta_cumple_el_esquema_y_expone_la_jerarquia(): void
     {
@@ -514,26 +514,14 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('asiento_id', null);
     }
 
-    public function test_plataforma_consulta_el_registro_de_un_pago_de_cualquier_comercio(): void
-    {
-        $idCuenta = $this->crearCuenta(2, '1.1.01', 'Caja comercio 2');
-        $idAsiento = $this->crearAsiento(2, 'DISTRIBUCION', $idCuenta, 100, 0);
-        DB::table('asientos_contables')->where('id_asiento', $idAsiento)->update(['id_pago' => 557]);
-        $this->registrarCobroGlobal(557);
-        $idCobro = (int) DB::table('pagos_contables_m6')->where('id_pago', 557)->value('id_asiento_plataforma');
-
-        $plataforma = UsuarioFactory::new()->create([
-            'rol' => 'encargado_plataforma',
-            'id_comercio' => null,
-            'activo' => true,
-        ]);
-
-        $this->actingAs($plataforma, 'web')->getJson('/m7/pagos/557/registro-contable')
-            ->assertOk()
-            ->assertJsonPath('id_pago', 557)
-            ->assertJsonPath('registrado', true)
-            ->assertJsonPath('asiento_id', $idCobro);
-    }
+   public function test_plataforma_no_puede_consultar_el_registro_contable_de_un_pago(): void
+{
+    $this->actingAs($this->plataforma(), 'web')
+        ->getJson('/m7/pagos/557/registro-contable')
+        ->assertForbidden()
+        ->assertJsonStructure(self::ERROR)
+        ->assertJsonPath('error.codigo', 'ERR-002');
+}
 
     public function test_comercio_solo_recibe_subpedidos_contabilizados_de_su_comercio(): void
     {

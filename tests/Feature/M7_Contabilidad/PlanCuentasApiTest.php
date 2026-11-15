@@ -155,59 +155,23 @@ class PlanCuentasApiTest extends TestCase
             );
     }
 
-    public function test_encargado_plataforma_puede_consultar_distintos_comercios_y_registra_auditoria(): void
+    public function test_encargado_plataforma_no_puede_consultar_plan_de_cuentas(): void
     {
-        $this->crearCuenta(
-            1,
-            '1.1.01',
-            'Caja comercio 1'
-        );
-
-        $this->crearCuenta(
-            2,
-            '1.1.01',
-            'Caja comercio 2'
-        );
-
         $usuario = $this->usuarioPlataforma();
 
-        // Consulta el comercio 1.
-        $respuestaComercio1 = $this->actingAs($usuario, 'web')
+        $respuesta = $this->actingAs($usuario, 'web')
             ->getJson('/api/m7/v1/cuentas?id_comercio=1');
 
-        $respuestaComercio1
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.id_comercio', 1)
-            ->assertJsonCount(1, 'data.cuentas')
-            ->assertJsonPath(
-                'data.cuentas.0.nombre',
-                'Caja comercio 1'
-            );
-
-        // Consulta el comercio 2.
-        $respuestaComercio2 = $this->getJson(
-            '/api/m7/v1/cuentas?id_comercio=2'
-        );
-
-        $respuestaComercio2
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.id_comercio', 2)
-            ->assertJsonCount(1, 'data.cuentas')
-            ->assertJsonPath(
-                'data.cuentas.0.nombre',
-                'Caja comercio 2'
-            );
-
-        // Cada concesión de acceso debe dejar auditoría.
-        $this->assertDatabaseHas('bitacora_auditoria', [
-            'id_usuario' => $usuario->getKey(),
-            'accion' => 'acceso_total_comercios',
-            'entidad' => 'contexto_comercio',
-            'entidad_id' => $usuario->getKey(),
-            'resultado' => 'exitoso',
-        ]);
+        $respuesta
+            ->assertForbidden()
+            ->assertJsonStructure([
+                'error' => [
+                    'codigo',
+                    'mensaje',
+                    'detalles',
+                ],
+            ])
+            ->assertJsonPath('error.codigo', 'ERR-002');
     }
 
     public function test_no_expone_cuentas_de_otro_comercio(): void

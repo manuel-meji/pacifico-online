@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware([
     'auth:sanctum',
+    RequiereRol::class.':encargado_comercio',
     EstablecerComercio::class,
-    RequiereRol::class.':encargado_comercio,encargado_plataforma',
 ])->group(function (): void {
     Route::get(
         'pagos/{idPago}/registro-contable',
