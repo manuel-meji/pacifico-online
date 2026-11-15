@@ -37,3 +37,7 @@ export function consultarMovimientosCentro(idCentro, idComercio, periodo) {
   const ruta = idCentro === null ? 'sin-asignar' : idCentro;
   return consultar(`centros-costo/${ruta}/movimientos`, idComercio, periodo);
 }
+
+export function consultarAsiento(idAsiento, idComercio) {
+  return consultar(`asientos/${idAsiento}`, idComercio);
+}

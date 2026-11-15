@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { consultarLibroMayor } from '../services/libroMayorApi';
 import { consultarMovimientosCentro } from '../services/consultasOperativasApi';
+import DetalleAsientoM7, { numeroAsiento } from './DetalleAsientoM7';
 
 function moneda(valor) {
   return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC' }).format(Number(valor));
@@ -17,6 +18,7 @@ export default function DetalleMovimientosM7({ seleccion, onCerrar }) {
   const [error, setError] = useState('');
   const [pagina, setPagina] = useState(1);
   const [intento, setIntento] = useState(0);
+  const [asientoAbierto, setAsientoAbierto] = useState(null);
   const esCentro = seleccion.tipo === 'centro';
   const { desde, hasta } = seleccion.periodo ?? {};
   const periodoCentro = desde && hasta ? `del ${desde} al ${hasta}` : desde ? `desde ${desde}` : hasta ? `hasta ${hasta}` : '';
@@ -96,7 +98,13 @@ export default function DetalleMovimientosM7({ seleccion, onCerrar }) {
               </tr></thead>
               <tbody>{movimientos.map((movimiento) => <tr key={`${movimiento.id_asiento}-${movimiento.numero_linea}`} className="border-b">
                 <td className="whitespace-nowrap p-3">{fecha(movimiento.fecha)}</td>
-                <td className="p-3">{movimiento.asiento || `ASI-${String(movimiento.id_asiento).padStart(4, '0')}`}</td>
+                <td className="p-3">
+                  <button type="button" onClick={() => setAsientoAbierto(movimiento.id_asiento)}
+                    aria-label={`Ver asiento ${movimiento.asiento || numeroAsiento(movimiento.id_asiento)}`}
+                    className="font-semibold text-[#1e3a8a] underline underline-offset-2 hover:text-blue-700">
+                    {movimiento.asiento || numeroAsiento(movimiento.id_asiento)}
+                  </button>
+                </td>
                 <td className="p-3">{movimiento.tipo}</td>
                 {esCentro && <td className="p-3">{movimiento.codigo_cuenta} · {movimiento.nombre_cuenta}</td>}
                 <td className="p-3">{movimiento.descripcion || 'Sin descripción'}</td>
@@ -117,6 +125,9 @@ export default function DetalleMovimientosM7({ seleccion, onCerrar }) {
             <button disabled={pagina === paginas} onClick={() => setPagina(pagina + 1)} className="rounded border p-2 disabled:opacity-50">Siguiente</button>
           </nav>
         </>
+      )}
+      {asientoAbierto !== null && (
+        <DetalleAsientoM7 idAsiento={asientoAbierto} idComercio={seleccion.idComercio} onCerrar={() => setAsientoAbierto(null)} />
       )}
     </dialog>
   );

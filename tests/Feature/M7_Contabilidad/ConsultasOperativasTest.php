@@ -285,6 +285,36 @@ class ConsultasOperativasTest extends TestCase
             ->assertJsonPath('data.centro.id_centro_costo', $centro);
     }
 
+    public function test_asiento_completo_muestra_todas_sus_lineas_con_centro_y_totales(): void
+    {
+        $this->prepararComercios();
+        $venta = $this->guardarAsiento(1, 'VENTA', ['1.1.02' => true, '4.1.01' => false]);
+        $ajeno = $this->guardarAsiento(2, 'VENTA', ['1.1.02' => true, '4.1.01' => false]);
+        $ruta = "/api/m7/v1/asientos/{$venta}";
+        $this->getJson($ruta)->assertUnauthorized();
+        $this->actingAs(UsuarioFactory::new()->create());
+        $this->getJson($ruta)->assertForbidden();
+
+        $this->actingAs(UsuarioFactory::new()->create(['rol' => 'encargado_comercio', 'id_comercio' => 1]));
+        $this->getJson($ruta)->assertOk()
+            ->assertJsonPath('data.tipo', 'VENTA')
+            ->assertJsonPath('data.id_subpedido', 1)
+            ->assertJsonPath('data.total_debe', '10.00')
+            ->assertJsonPath('data.total_haber', '10.00')
+            ->assertJsonPath('data.cuadrado', true)
+            ->assertJsonPath('data.lineas.0.codigo_cuenta', '1.1.02')
+            ->assertJsonPath('data.lineas.0.centro', null)
+            ->assertJsonPath('data.lineas.1.codigo_cuenta', '4.1.01')
+            ->assertJsonPath('data.lineas.1.centro.codigo', 'GEN')
+            ->assertJsonPath('data.lineas.1.haber', '10.00');
+        $this->getJson("/api/m7/v1/asientos/{$ajeno}")->assertNotFound();
+        $this->getJson($ruta.'?id_comercio=2')->assertForbidden();
+
+        $this->actingAs(UsuarioFactory::new()->create(['rol' => 'encargado_plataforma']));
+        $this->getJson($ruta)->assertUnprocessable();
+        $this->getJson("/api/m7/v1/asientos/{$ajeno}?id_comercio=2")->assertOk()->assertJsonPath('data.id_comercio', 2);
+    }
+
     public function test_plataforma_lista_comercios_contables_por_nombre_de_m2(): void
     {
         $this->prepararComercios();

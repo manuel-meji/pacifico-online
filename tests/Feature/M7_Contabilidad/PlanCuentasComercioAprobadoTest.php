@@ -6,6 +6,7 @@ namespace Tests\Feature\M7_Contabilidad;
 
 use App\Contracts\M7_Contabilidad\DirectorioComerciosM7GatewayInterface;
 use App\Events\M2_Comercios\ComercioAprobado;
+use App\Listeners\M7_Contabilidad\CrearPlanCuentasComercioListener;
 use App\Services\M7_Contabilidad\PlanCuentasBaseService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -76,6 +77,21 @@ class PlanCuentasComercioAprobadoTest extends TestCase
         $this->assertSame([42], $erroresM7);
     }
 
+    public function test_eventos_de_tipo_incompatible_se_ignoran_y_registran_sin_crear_cuentas(): void
+    {
+        Log::spy();
+        $listener = app(CrearPlanCuentasComercioListener::class);
+
+        $listener->handle((object) ['id_evento' => 'evento', 'id_comercio' => 42]);
+        $listener->handle((object) []);
+
+        Log::shouldHaveReceived('warning')->twice()->with(
+            'M7: evento ComercioAprobado ignorado por tipo incompatible.',
+            ['tipo_recibido' => 'stdClass'],
+        );
+        $this->assertSame(0, DB::table('cuentas_contables')->count());
+    }
+
     public function test_comando_crea_el_plan_solo_para_comercios_habilitados_en_m2(): void
     {
         $directorio = Mockery::mock(DirectorioComerciosM7GatewayInterface::class);
@@ -91,8 +107,67 @@ class PlanCuentasComercioAprobadoTest extends TestCase
         $this->assertSame(0, DB::table('cuentas_contables')->where('id_comercio', 99)->count());
     }
 
+    public function test_imputa_a_gen_solo_las_lineas_de_ingreso_y_gasto_sin_centro_del_comercio_indicado(): void
+    {
+        $this->aprobar(40);
+        $this->aprobar(41);
+        $ventaSinCentro = $this->lineaSinCentro(40, '4.1.01');
+        $costoSinCentro = $this->lineaSinCentro(40, '5.1.01');
+        $cobroSinCentro = $this->lineaSinCentro(40, '1.1.02');
+        $otroComercio = $this->lineaSinCentro(41, '4.1.01');
+        $gen = (int) DB::table('centros_costo')->where('id_comercio', 40)->where('codigo', 'GEN')->value('id_centro_costo');
+
+        $this->artisan('m7:imputar-centro-general', ['id_comercio' => ['40'], '--simular' => true])
+            ->expectsOutputToContain('Comercio 40: 2 líneas se imputarían a GEN.')
+            ->assertExitCode(0);
+        $this->assertNull($this->centroDeLinea($ventaSinCentro));
+
+        $this->artisan('m7:imputar-centro-general', ['id_comercio' => ['40']])
+            ->expectsOutputToContain('Comercio 40: 2 líneas imputadas a GEN.')
+            ->assertExitCode(0);
+        $this->artisan('m7:imputar-centro-general', ['id_comercio' => ['40']])
+            ->expectsOutputToContain('Comercio 40: 0 líneas imputadas a GEN.')
+            ->assertExitCode(0);
+
+        $this->assertSame([$gen, $gen, null, null], array_map($this->centroDeLinea(...), [$ventaSinCentro, $costoSinCentro, $cobroSinCentro, $otroComercio]));
+        $this->assertSame(['M7'], DB::table('bitacora_auditoria')->where('accion', 'lineas_imputadas_centro_general')->where('entidad_id', 40)->pluck('modulo')->all());
+    }
+
+    public function test_no_imputa_si_el_comercio_no_tiene_gen_activo(): void
+    {
+        $this->aprobar(40);
+        DB::table('centros_costo')->where('id_comercio', 40)->update(['activo' => false]);
+        $venta = $this->lineaSinCentro(40, '4.1.01');
+
+        $this->artisan('m7:imputar-centro-general', ['id_comercio' => ['40']])
+            ->expectsOutputToContain('Comercio 40: El comercio no tiene el centro de costo GEN activo.')
+            ->assertExitCode(1);
+
+        $this->assertNull($this->centroDeLinea($venta));
+    }
+
     private function aprobar(int $idComercio): void
     {
         ComercioAprobado::dispatch((string) Str::uuid(), now(), $idComercio, 'Activo', 'Comercio de prueba');
+    }
+
+    private function lineaSinCentro(int $idComercio, string $codigoCuenta): int
+    {
+        $asiento = DB::table('asientos_contables')->insertGetId([
+            'id_comercio' => $idComercio, 'evento_id' => (string) Str::uuid(), 'tipo_evento' => 'PRUEBA',
+            'tipo' => 'MANUAL', 'estado' => 'REGISTRADO', 'fecha' => '2026-11-01 12:00:00',
+        ], 'id_asiento');
+
+        return (int) DB::table('detalle_asientos')->insertGetId([
+            'id_asiento' => $asiento, 'numero_linea' => 1, 'debe' => '10.00', 'haber' => '0', 'id_centro_costo' => null,
+            'id_cuenta_contable' => DB::table('cuentas_contables')->where('id_comercio', $idComercio)->where('codigo', $codigoCuenta)->value('id_cuenta_contable'),
+        ], 'id_detalle_asiento');
+    }
+
+    private function centroDeLinea(int $idDetalle): ?int
+    {
+        $centro = DB::table('detalle_asientos')->where('id_detalle_asiento', $idDetalle)->value('id_centro_costo');
+
+        return $centro === null ? null : (int) $centro;
     }
 }

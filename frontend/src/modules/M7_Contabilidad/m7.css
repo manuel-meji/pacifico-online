@@ -601,6 +601,14 @@
   display: none;
 }
 
+.m7-print-area.m7-print-area-pantalla {
+  display: block;
+}
+
+.m7-solo-impresion {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4 landscape;
