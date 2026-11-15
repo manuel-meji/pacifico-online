@@ -50,9 +50,11 @@ Route::prefix('api/m7/v1')
             Route::get('centros-costo/{idCentroCosto}/movimientos', [ConsultasOperativasController::class, 'movimientosCentro'])
                 ->whereNumber('idCentroCosto')
                 ->name('centros-costo.movimientos');
+
             Route::get('asientos/{idAsiento}', [ConsultasOperativasController::class, 'asiento'])
                 ->whereNumber('idAsiento')
                 ->name('asientos.show');
+
             Route::get('cuentas', [PlanCuentasController::class, 'listar'])
                 ->name('cuentas.index');
 
