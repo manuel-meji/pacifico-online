@@ -2772,10 +2772,10 @@ x-eventos:
     version: 1.0.0
     idempotencia: Deduplicar por id_evento (UUID, sección 4.1 del PC3) y por identidad de negocio. No duplicar movimientos ni efectos ante reintentos.
   - nombre: AlertaStockMinimo
-    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0.
+    estado: Catálogo colectivo PC3 (sección 4.3), v1.0.0. Sin consumidores desde la SC-15, en la que M2 retiró su
+      consumo. La alerta de reposición la muestra M4 en su pantalla «Existencias y mínimos».
     productor: M4
-    consumidores:
-    - M2
+    consumidores: []
     disparador: La cantidad disponible queda igual o por debajo del stock mínimo configurado.
     esquema:
       $ref: '#/components/schemas/EventoAlertaStockMinimo'

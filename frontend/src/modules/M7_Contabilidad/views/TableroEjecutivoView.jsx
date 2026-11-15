@@ -39,7 +39,7 @@ function normalizarEstado(estado) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
-export default function TableroEjecutivoView({ onNavegar }) {
+export default function TableroEjecutivoView({ onNavegar, idComercio }) {
   const [reporte, setReporte] = useState(null);
   const [asientos, setAsientos] = useState([]);
 
@@ -54,7 +54,7 @@ export default function TableroEjecutivoView({ onNavegar }) {
 
     async function cargarReporte() {
       try {
-        const datos = await consultarReporteGerencial();
+        const datos = await consultarReporteGerencial({ id_comercio: idComercio });
 
         if (activo) {
           setReporte(datos);
@@ -73,7 +73,7 @@ export default function TableroEjecutivoView({ onNavegar }) {
 
     async function cargarAsientos() {
       try {
-        const datos = await consultarLibroDiario();
+        const datos = await consultarLibroDiario({ id_comercio: idComercio });
 
         if (activo) {
           const lista = Array.isArray(datos?.asientos)
@@ -103,7 +103,7 @@ export default function TableroEjecutivoView({ onNavegar }) {
     return () => {
       activo = false;
     };
-  }, []);
+  }, [idComercio]);
 
   const resumen = reporte?.resumen ?? {};
 

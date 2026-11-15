@@ -108,7 +108,7 @@ export default function PedidoPendientePage({ pedido: pedidoInicial, grupos = []
               className={CLASES_BOTON_PAGAR}
             >
               <CreditCard className="w-4 h-4" aria-hidden="true" />
-              Ir a pagar a la pasarela M6
+              Pasarela de pago
             </a>
           )}
         </section>

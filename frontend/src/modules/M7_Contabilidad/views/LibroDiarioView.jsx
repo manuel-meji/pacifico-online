@@ -36,7 +36,7 @@ function normalizarTexto(valor) {
     .trim();
 }
 
-export default function LibroDiarioView({ onNavegar }) {
+export default function LibroDiarioView({ onNavegar, idComercio }) {
   const [busqueda, setBusqueda] = useState('');
   const [tipoSeleccionado, setTipoSeleccionado] = useState('Todos');
   const [estadoSeleccionado, setEstadoSeleccionado] = useState('Todos');
@@ -61,7 +61,7 @@ export default function LibroDiarioView({ onNavegar }) {
       setError('');
 
       try {
-        const resultado = await consultarLibroDiario();
+        const resultado = await consultarLibroDiario({ id_comercio: idComercio });
 
         if (!activo) return;
 
@@ -89,7 +89,7 @@ export default function LibroDiarioView({ onNavegar }) {
     return () => {
       activo = false;
     };
-  }, []);
+  }, [idComercio]);
 
   // Aplicar todos los filtros en tiempo real sobre los datos recibidos.
   const asientosFiltrados = useMemo(() => {

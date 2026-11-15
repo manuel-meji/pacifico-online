@@ -18,7 +18,7 @@ function formatoFecha(fecha) {
   return `${dia}/${mes}/${anio}`;
 }
 
-export default function LibroMayorView({ onNavegar }) {
+export default function LibroMayorView({ onNavegar, idComercio }) {
   const [cuentas, setCuentas] = useState([]);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
@@ -43,7 +43,7 @@ export default function LibroMayorView({ onNavegar }) {
         setCargandoCuentas(true);
         setErrorCuentas('');
 
-        const resultado = await listarCuentasMayor();
+        const resultado = await listarCuentasMayor(idComercio);
 
         if (!componenteActivo) return;
 
@@ -72,7 +72,7 @@ export default function LibroMayorView({ onNavegar }) {
     return () => {
       componenteActivo = false;
     };
-  }, []);
+  }, [idComercio]);
 
   useEffect(() => {
     let componenteActivo = true;
@@ -91,6 +91,7 @@ export default function LibroMayorView({ onNavegar }) {
 
         const resultado = await consultarLibroMayor({
           id_cuenta_contable: cuentaSeleccionada,
+          id_comercio: idComercio,
           fecha_desde: fechaDesde,
           fecha_hasta: fechaHasta,
           incluirAnulados: incluirAnulados,
@@ -116,7 +117,7 @@ export default function LibroMayorView({ onNavegar }) {
     return () => {
       componenteActivo = false;
     };
-  }, [cuentaSeleccionada, fechaDesde, fechaHasta, incluirAnulados]);
+  }, [cuentaSeleccionada, fechaDesde, fechaHasta, incluirAnulados, idComercio]);
 
   const movimientosCuenta = useMemo(() => {
     const textoBusqueda = busqueda.trim().toLowerCase();
