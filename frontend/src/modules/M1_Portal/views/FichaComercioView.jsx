@@ -68,8 +68,8 @@ export default function FichaComercioView({ idComercio, criterio }) {
 
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         {banner ? (
-          <div className="grid h-32 place-items-center bg-gradient-to-r from-brandDarkBlue to-brandBlue sm:h-48">
-            <Imagen src={banner.imagen_url} alt={banner.texto_alternativo} className="h-full w-full object-cover" icono="tienda" claseIcono="h-10 w-10 text-white/60" />
+          <div className="relative grid h-32 place-items-center overflow-hidden bg-gradient-to-r from-brandDarkBlue to-brandBlue sm:h-48">
+            <Imagen src={banner.imagen_url} alt={banner.texto_alternativo} className="absolute inset-0 h-full w-full object-cover" icono="tienda" claseIcono="h-10 w-10 text-white/60" />
           </div>
         ) : (
           <div className="h-24 bg-gradient-to-r from-brandDarkBlue to-brandBlue sm:h-32" aria-hidden />
