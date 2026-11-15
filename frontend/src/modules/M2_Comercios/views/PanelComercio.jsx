@@ -62,7 +62,7 @@ const Seccion = ({ titulo, descripcion, children, separada = false }) => (
 // Vista previa: cómo verá el cliente el micrositio con lo que se está editando.
 const DIA_DE_HOY = ((new Date().getDay() + 6) % 7) + 1; // 1 = lunes … 7 = domingo
 
-function VistaPrevia({ nombre, logotipo, descripcion, horarios, contactos }) {
+function VistaPrevia({ idComercio, nombre, logotipo, descripcion, horarios, contactos }) {
   const hoy = horarios.find((h) => h.dia_semana === DIA_DE_HOY);
   const horarioHoy = !hoy || hoy.cerrado || !hoy.hora_apertura
     ? 'Cerrado hoy'
@@ -92,10 +92,12 @@ function VistaPrevia({ nombre, logotipo, descripcion, horarios, contactos }) {
           {redes > 0 && <p className="mt-3 text-xs text-slate-500">{redes === 1 ? '1 red social' : `${redes} redes sociales`}</p>}
         </div>
       </div>
-      <a href="/m1.html"
-        className={`mt-3 inline-flex items-center gap-1 text-sm font-bold ${C.marinoTexto} underline hover:no-underline`}>
-        <Home size={14} /> Abrir el portal
-      </a>
+      {idComercio && (
+        <a href={`/m1.html?pantalla=comercio&id=${idComercio}&vista_previa=1`}
+          className={`mt-3 inline-flex items-center gap-1 text-sm font-bold ${C.marinoTexto} underline hover:no-underline`}>
+          <Home size={14} /> Abrir el portal
+        </a>
+      )}
     </aside>
   );
 }
@@ -510,7 +512,7 @@ export default function PanelComercio() {
         </Tarjeta>
 
         <div className="hidden xl:block">
-          <VistaPrevia nombre={nombre} logotipo={logotipo} descripcion={descripcion} horarios={horarios} contactos={contactos} />
+          <VistaPrevia idComercio={idComercio} nombre={nombre} logotipo={logotipo} descripcion={descripcion} horarios={horarios} contactos={contactos} />
         </div>
       </div>
     </div>

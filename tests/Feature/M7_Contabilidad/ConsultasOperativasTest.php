@@ -61,6 +61,38 @@ class ConsultasOperativasTest extends TestCase
         $this->assertSame(['codigo', 'id_cuenta_contable', 'nombre', 'saldo', 'tipo'], collect(array_keys($respuesta->json('data.cuentas.0')))->sort()->values()->all());
     }
 
+    public function test_saldos_incluyen_iva_solo_si_se_solicita_y_conservan_su_saldo_neto(): void
+    {
+        $this->prepararComercios();
+        $iva = DB::table('cuentas_contables')->where('id_comercio', 1)->where('codigo', '2.1.02')->value('id_cuenta_contable');
+        DB::table('cuentas_contables')->insert([
+            'id_comercio' => 1, 'codigo' => '2.1.02.01', 'nombre' => 'IVA por pagar adicional',
+            'tipo' => 'PASIVO', 'nivel' => 4, 'id_cuenta_padre' => $iva, 'activa' => true,
+        ]);
+        $this->movimiento(1, '2.1.01', '0.00', '60.00');
+        $this->movimiento(1, '2.1.02', '0.00', '100.00');
+        $this->movimiento(1, '2.1.02', '20.00', '0.00', 'REEMBOLSO');
+        $this->movimiento(1, '2.1.02.01', '5.00', '0.00');
+        $this->movimiento(1, '2.1.02', '0.00', '999.00', estado: 'ANULADO');
+        $this->movimiento(2, '2.1.02', '0.00', '900.00');
+        $this->actingAs(UsuarioFactory::new()->create(['rol' => 'encargado_comercio', 'id_comercio' => 1]));
+
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=1')->assertOk()
+            ->assertJsonPath('data.resumen.por_pagar', '135.00')
+            ->assertJsonPath('data.cuentas.3.codigo', '2.1.02')
+            ->assertJsonPath('data.cuentas.3.tipo', 'Por pagar')
+            ->assertJsonPath('data.cuentas.3.saldo', '80.00')
+            ->assertJsonPath('data.cuentas.4.codigo', '2.1.02.01')
+            ->assertJsonPath('data.cuentas.4.saldo', '-5.00');
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar')->assertOk()
+            ->assertJsonPath('data.resumen.por_pagar', '60.00')
+            ->assertJsonCount(3, 'data.cuentas');
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=0')->assertOk()
+            ->assertJsonPath('data.resumen.por_pagar', '60.00');
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=invalido')->assertUnprocessable();
+        $this->getJson('/api/m7/v1/saldos-cobrar-pagar?incluir_iva=1&id_comercio=2')->assertForbidden();
+    }
+
     public function test_centros_reportan_rentabilidad_y_agrupan_lo_no_imputado(): void
     {
         $this->prepararComercios();
@@ -283,6 +315,36 @@ class ConsultasOperativasTest extends TestCase
         $this->getJson($ruta.'?id_comercio=2')->assertOk()
             ->assertJsonPath('data.id_comercio', 2)
             ->assertJsonPath('data.centro.id_centro_costo', $centro);
+    }
+
+    public function test_asiento_completo_muestra_todas_sus_lineas_con_centro_y_totales(): void
+    {
+        $this->prepararComercios();
+        $venta = $this->guardarAsiento(1, 'VENTA', ['1.1.02' => true, '4.1.01' => false]);
+        $ajeno = $this->guardarAsiento(2, 'VENTA', ['1.1.02' => true, '4.1.01' => false]);
+        $ruta = "/api/m7/v1/asientos/{$venta}";
+        $this->getJson($ruta)->assertUnauthorized();
+        $this->actingAs(UsuarioFactory::new()->create());
+        $this->getJson($ruta)->assertForbidden();
+
+        $this->actingAs(UsuarioFactory::new()->create(['rol' => 'encargado_comercio', 'id_comercio' => 1]));
+        $this->getJson($ruta)->assertOk()
+            ->assertJsonPath('data.tipo', 'VENTA')
+            ->assertJsonPath('data.id_subpedido', 1)
+            ->assertJsonPath('data.total_debe', '10.00')
+            ->assertJsonPath('data.total_haber', '10.00')
+            ->assertJsonPath('data.cuadrado', true)
+            ->assertJsonPath('data.lineas.0.codigo_cuenta', '1.1.02')
+            ->assertJsonPath('data.lineas.0.centro', null)
+            ->assertJsonPath('data.lineas.1.codigo_cuenta', '4.1.01')
+            ->assertJsonPath('data.lineas.1.centro.codigo', 'GEN')
+            ->assertJsonPath('data.lineas.1.haber', '10.00');
+        $this->getJson("/api/m7/v1/asientos/{$ajeno}")->assertNotFound();
+        $this->getJson($ruta.'?id_comercio=2')->assertForbidden();
+
+        $this->actingAs(UsuarioFactory::new()->create(['rol' => 'encargado_plataforma']));
+        $this->getJson($ruta)->assertUnprocessable();
+        $this->getJson("/api/m7/v1/asientos/{$ajeno}?id_comercio=2")->assertOk()->assertJsonPath('data.id_comercio', 2);
     }
 
     public function test_plataforma_lista_comercios_contables_por_nombre_de_m2(): void

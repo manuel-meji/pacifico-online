@@ -129,6 +129,11 @@ export function corregirSolicitud(idSolicitud, datos) {
 }
 
 
+// Estado de la solicitud del propio comercio (encargado que ingresa antes de la aprobación).
+export function miSolicitud() {
+  return llamar('/mi-solicitud');
+}
+
 export function listarSolicitudes({ estado, pagina, por_pagina } = {}) {
   return llamar(conConsulta('/solicitudes', { estado, pagina, por_pagina }));
 }

@@ -44,8 +44,9 @@ function Documento({ idSolicitud, documento, editable, onEvaluado }) {
         <span className="flex items-center gap-2 font-semibold"><r.Icono size={18} /> {documento.tipo}</span>
         <span className="text-xs">Vence: {fecha(documento.fecha_vencimiento)} · {r.texto}</span>
         {/* CU-0022: abre el archivo original descifrado (solo el Encargado de la plataforma). */}
+        {/* Sin noreferrer: Sanctum usa el Referer para aplicar la sesión en esta pestaña nueva. */}
         <a href={`/api/m2/v1/solicitudes/${idSolicitud}/documentos/${documento.id_documento_comercio}/archivo`}
-          target="_blank" rel="noopener noreferrer"
+          target="_blank" rel="noopener"
           className="inline-flex items-center gap-1 text-xs font-bold text-[#1E3A8A] underline hover:no-underline">
           <ExternalLink size={14} /> Ver archivo
         </a>
@@ -164,7 +165,7 @@ function DetalleSolicitud({ idSolicitud, onVolver }) {
               pregunta={`¿Aprobar a ${comercio.nombre_comercial}?`}
               aviso="El comercio quedará Activo y se creará la cuenta de su encargado."
               textoConfirmar="Sí, aprobar"
-              onConfirmar={async () => terminar(await aprobarSolicitud(solicitud.id_solicitud), `${comercio.nombre_comercial} fue aprobado y quedó Activo. El núcleo le envía a ${solicitud.correo_encargado} una invitación para definir su contraseña e ingresar.`)}
+              onConfirmar={async () => terminar(await aprobarSolicitud(solicitud.id_solicitud), (solicitud.cuenta_creada ? `${comercio.nombre_comercial} fue aprobado y quedó Activo. La persona encargada ya tiene su cuenta (${solicitud.correo_encargado}) y al ingresar verá su panel.` : `${comercio.nombre_comercial} fue aprobado y quedó Activo. El núcleo le envía a ${solicitud.correo_encargado} una invitación para definir su contraseña e ingresar.`))}
               onCancelar={() => setAccion(null)} />
           )}
           {accion === 'rechazar' && (

@@ -16,6 +16,7 @@ const TIPOS_DOCUMENTO = [
 const COMERCIO_VACIO = {
   nombre_comercial: '', cedula_juridica: '', razon_social: '', direccion_fiscal: '',
   inscrito_como_contribuyente: false, nombre_encargado: '', correo_encargado: '', telefono_encargado: '',
+  contrasena_encargado: '', contrasena_encargado_confirmation: '',
 };
 
 const manana = () => {
@@ -73,6 +74,15 @@ function CamposComercio({ datos, setDatos, errores, bloquearIdentidad = false })
         <Campo etiqueta="Nombre completo" autoComplete="name" {...campo('nombre_encargado')} />
         {!bloquearIdentidad && <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" {...campo('correo_encargado')} />}
         <Campo etiqueta="Teléfono (opcional)" type="tel" autoComplete="tel" {...campo('telefono_encargado')} />
+        {/* Con la contraseña se crea la cuenta al enviar: la persona ingresa para ver el estado de la revisión. */}
+        {!bloquearIdentidad && (
+          <>
+            <Campo etiqueta="Contraseña para ingresar (mínimo 8 caracteres)" type="password" autoComplete="new-password"
+              minLength={8} maxLength={72} required {...campo('contrasena_encargado')} />
+            <Campo etiqueta="Confirmá la contraseña" type="password" autoComplete="new-password"
+              minLength={8} maxLength={72} required {...campo('contrasena_encargado_confirmation')} />
+          </>
+        )}
       </div>
     </>
   );
@@ -89,6 +99,14 @@ function NuevaSolicitud() {
   const alEnviar = async (e) => {
     e.preventDefault();
     const datosLimpios = { ...datos, telefono_encargado: datos.telefono_encargado || null };
+    // Se revisa aquí para avisar sin esperar al servidor; el servidor vuelve a validar las dos reglas.
+    const errorContrasena = datos.contrasena_encargado.length < 8
+      ? 'La contraseña debe tener al menos 8 caracteres.'
+      : datos.contrasena_encargado !== datos.contrasena_encargado_confirmation ? 'Las contraseñas no coinciden.' : null;
+    if (errorContrasena) {
+      await enviar(async () => ({ ok: false, estado: 422, error: { codigo: 'ERR-005', mensaje: 'Revisá los datos marcados.', detalles: { contrasena_encargado: [errorContrasena] } } }));
+      return;
+    }
     const ok = await enviar(() => registrarSolicitud(datosLimpios, documentos));
     if (ok) {
       setDatos(COMERCIO_VACIO);
@@ -103,8 +121,9 @@ function NuevaSolicitud() {
         <p className="mt-2 text-slate-700">Tu número de solicitud es</p>
         <p className={`mt-1 text-4xl font-extrabold ${C.verdeTexto}`}>#{estado.respuesta.id_solicitud}</p>
         <p className="mt-3 text-sm text-slate-600">
-          Guardalo: lo vas a necesitar si la plataforma te pide corregir algo. Cuando la solicitud sea aprobada,
-          te llegará un correo a {estado.respuesta.correo_encargado} para que definás tu contraseña.
+          Guardalo: lo vas a necesitar si la plataforma te pide corregir algo. Ya podés ingresar con
+          {' '}{estado.respuesta.correo_encargado} y la contraseña que definiste para ver el estado de la revisión;
+          cuando la plataforma apruebe tu comercio, desde ahí mismo vas a poder administrarlo.
         </p>
         <Boton variante="neutro" className="mt-4" onClick={() => window.location.reload()}>Enviar otra solicitud</Boton>
       </Tarjeta>
@@ -152,9 +171,9 @@ function NuevaSolicitud() {
   );
 }
 
-function CorregirSolicitud() {
+export function CorregirSolicitud({ idInicial = '' }) {
   const { mensajeDeError } = useSesion();
-  const [idSolicitud, setIdSolicitud] = useState('');
+  const [idSolicitud, setIdSolicitud] = useState(String(idInicial));
   // inscrito_como_contribuyente arranca en null: solo se envía si la persona marca o desmarca la casilla.
   const [datos, setDatos] = useState({ ...COMERCIO_VACIO, inscrito_como_contribuyente: null });
   const [estado, enviar] = useEnvio(mensajeDeError);

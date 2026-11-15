@@ -34,7 +34,7 @@ function formatearNaturaleza(naturaleza) {
   return naturaleza;
 }
 
-export default function PlanCuentasView({ onNavegar }) {
+export default function PlanCuentasView({ onNavegar, idComercio }) {
   const [cuentas, setCuentas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -56,7 +56,7 @@ export default function PlanCuentasView({ onNavegar }) {
         setCargando(true);
         setError('');
 
-        const resultado = await listarPlanCuentas();
+        const resultado = await listarPlanCuentas({ idComercio });
 
         if (!activo) {
           return;
@@ -99,7 +99,7 @@ export default function PlanCuentasView({ onNavegar }) {
     return () => {
       activo = false;
     };
-  }, []);
+  }, [idComercio]);
 
   const textoBusqueda = busqueda
     .trim()

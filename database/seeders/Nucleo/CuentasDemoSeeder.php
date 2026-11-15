@@ -22,8 +22,9 @@ use RuntimeException;
  *     php artisan db:seed --class="Database\Seeders\M2_Comercios\ComerciosDemoSeeder"
  *     php artisan db:seed --class="Database\Seeders\Nucleo\CuentasDemoSeeder"
  *
- * Es idempotente: se puede ejecutar varias veces sin duplicar cuentas. Si falta la
- * contraseña o algún comercio, se detiene sin escribir nada.
+ * Es idempotente: se puede ejecutar varias veces sin duplicar cuentas. Si la contraseña
+ * falta o es más corta que el mínimo del núcleo (ver ContrasenaDemo), o falta algún
+ * comercio, se detiene sin escribir nada.
  *
  * No usa ServicioIdentidad::crearCuenta porque a los encargados de comercio les asigna
  * una contraseña al azar y les envía la invitación por correo.
@@ -46,7 +47,7 @@ class CuentasDemoSeeder extends Seeder
     public function run(ComerciosServiceInterface $comercios, ContextoComercio $contexto): void
     {
         // Todas las validaciones van antes de la primera escritura.
-        $contrasena = $this->contrasena();
+        $contrasena = ContrasenaDemo::exigir('CuentasDemoSeeder');
         $idPorCedula = $this->idsDeComercioPorCedula($comercios, $contexto);
 
         DB::transaction(function () use ($contrasena, $idPorCedula): void {
@@ -66,21 +67,6 @@ class CuentasDemoSeeder extends Seeder
         });
 
         $this->command?->info('Núcleo: '.count(self::CUENTAS).' cuentas del escenario de demostración listas.');
-    }
-
-    private function contrasena(): string
-    {
-        $contrasena = config('nucleo.demo.contrasena');
-
-        if (! is_string($contrasena) || trim($contrasena) === '') {
-            throw new RuntimeException(
-                'CuentasDemoSeeder: no se creó ninguna cuenta. Falta la variable DEMO_CONTRASENA en el .env; '
-                .'defínala con la contraseña de las cuentas de demostración (no hay contraseña por defecto) '
-                .'y, si la configuración está en caché, ejecute php artisan config:clear.'
-            );
-        }
-
-        return $contrasena;
     }
 
     /**

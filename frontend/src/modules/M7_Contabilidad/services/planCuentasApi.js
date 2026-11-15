@@ -22,8 +22,13 @@ async function solicitar(url) {
 
 export async function listarPlanCuentas({
   soloActivas = false,
+  idComercio,
 } = {}) {
   const parametros = new URLSearchParams();
+
+  if (idComercio) {
+    parametros.set('id_comercio', idComercio);
+  }
 
   if (soloActivas) {
     parametros.set('solo_activas', '1');

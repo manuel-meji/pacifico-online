@@ -26,7 +26,7 @@ class SolicitudComercio extends Model
 
     protected $guarded = ['id_solicitud'];
 
-    protected $casts = ['requiere_documentos' => 'boolean', 'fecha_reenvio' => 'datetime'];
+    protected $casts = ['requiere_documentos' => 'boolean', 'fecha_reenvio' => 'datetime', 'cuenta_creada' => 'boolean'];
 
     public function estaPendiente(): bool
     {

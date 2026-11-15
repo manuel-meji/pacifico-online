@@ -426,6 +426,42 @@
   line-height: 1.5;
 }
 
+.m7-balance-alerta {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.m7-balance-alerta strong,
+.m7-balance-alerta div>span {
+  color: #991b1b;
+}
+
+.m7-balance-totales {
+  margin: 10px 0;
+  font-size: 12px;
+}
+
+.m7-balance-totales div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 5px;
+}
+
+.m7-balance-totales dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.m7-balance-enlace {
+  display: block;
+  margin-top: 10px;
+  color: var(--m7-blue-dark);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .m7-journal {
   overflow: hidden;
 }
@@ -601,6 +637,14 @@
   display: none;
 }
 
+.m7-print-area.m7-print-area-pantalla {
+  display: block;
+}
+
+.m7-solo-impresion {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4 landscape;
@@ -724,4 +768,56 @@
     color: #718096 !important;
     font-size: 8pt !important;
   }
+  /* Impresión específica: Estado de Resultados */
+
+}
+
+/* Acceso y verificación de sesión de M7 */
+.m7-acceso {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  background: #f4f7fb;
+  color: #243247;
+  text-align: center;
+}
+
+.m7-acceso h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.m7-acceso p {
+  max-width: 560px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.m7-acceso button {
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 7px;
+  background: #123f70;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.m7-acceso button:hover {
+  background: #0b2e55;
+}
+
+.m7-acceso a {
+  color: #155a96;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.m7-acceso a:hover {
+  text-decoration: underline;
 }

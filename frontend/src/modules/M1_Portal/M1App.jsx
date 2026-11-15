@@ -218,6 +218,22 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
 
   const portal = useMemo(() => ({ ir: navegar, categorias, usuario, cargandoUsuario, cantidadCarrito }), [categorias, usuario, cargandoUsuario, cantidadCarrito, pantalla, parametros]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Un encargado de comercio no debe navegar el portal como cliente: solo puede acceder a su
+  // panel de gestión (?pantalla=gestion) o a la vista previa de su propio micrositio (?pantalla=comercio&id=<su_comercio>).
+  const esComercio = !cargandoUsuario && usuario?.rol === 'encargado_comercio';
+  const esSuMicrositio = pantalla === 'comercio' && Number(parametros.id) === Number(usuario?.id_comercio);
+  const bloqueadoParaComercio = esComercio && !['gestion', 'ingresar', 'crear', 'crear-contrasena'].includes(pantalla) && !esSuMicrositio;
+
+  useEffect(() => {
+    if (bloqueadoParaComercio) {
+      window.location.replace('/m2.html');
+    }
+  }, [bloqueadoParaComercio]);
+
+  if (bloqueadoParaComercio) {
+    return null;
+  }
+
   // Pantallas del portal público (encabezado con buscador y categorías).
   if (!['ingresar', 'crear', 'crear-contrasena', 'perfil'].includes(pantalla)) {
     const { id, ...criterio } = parametros;

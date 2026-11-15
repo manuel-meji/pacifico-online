@@ -28,10 +28,13 @@ class ComercioPolicy
     use VerificaRol;
 
     // --- CU-0001 a CU-0007: edición del micrositio
+    // Mientras la solicitud no se aprueba (comercio Pendiente o Rechazado), la persona encargada
+    // puede ingresar para ver el estado, pero no editar el micrositio ni pedir publicidad.
     public function actualizar(Usuario $usuario, Comercio $comercio): bool
     {
         return $this->esEncargadoComercio($usuario)
-            && $usuario->id_comercio === $comercio->id_comercio;
+            && $usuario->id_comercio === $comercio->id_comercio
+            && ! in_array($comercio->estado, [Comercio::PENDIENTE, Comercio::RECHAZADO], true);
     }
 
     /**

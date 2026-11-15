@@ -10,6 +10,7 @@ use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\Nucleo\Usuario;
 use App\Notifications\Nucleo\InvitacionEncargadoComercio;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -28,6 +29,12 @@ use Illuminate\Validation\Rule;
  */
 class ServicioIdentidad implements ServicioIdentidadInterface
 {
+    /**
+     * Largo mínimo de la contraseña de las cuentas que la traen (Cliente y Encargado de la
+     * plataforma). Los seeders de demostración validan DEMO_CONTRASENA contra este valor.
+     */
+    public const LARGO_MINIMO_CONTRASENA = 8;
+
     public function crearCuenta(array $datos, RolUsuario|string $rol, ?int $idComercio = null): Usuario
     {
         $rolEnum = $this->resolverRol($rol);
@@ -45,10 +52,18 @@ class ServicioIdentidad implements ServicioIdentidadInterface
             throw ErrorNucleoException::validacionFallida($validador->errors()->toArray());
         }
 
-        // El Encargado del comercio no trae contraseña: se genera una aleatoria que nadie
-        // conoce, y la persona define la suya con la invitación.
+        // El Encargado del comercio puede traer la contraseña que definió en su solicitud de
+        // incorporación, ya cifrada por M2. Sin ella, se genera una aleatoria que nadie conoce
+        // y la persona define la suya con la invitación.
+        $cifrada = $rolEnum === RolUsuario::EncargadoComercio ? ($datos['contrasena_cifrada'] ?? null) : null;
+        if ($cifrada !== null && (! is_string($cifrada) || ! Hash::isHashed($cifrada))) {
+            throw ErrorNucleoException::validacionFallida([
+                'contrasena' => ['La contraseña de la solicitud no es válida.'],
+            ]);
+        }
+
         $contrasena = $rolEnum === RolUsuario::EncargadoComercio
-            ? Str::random(64)
+            ? ($cifrada ?? Str::random(64))
             : $campos['contrasena'];
 
         try {
@@ -67,7 +82,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
             ]);
         }
 
-        if ($rolEnum === RolUsuario::EncargadoComercio) {
+        if ($rolEnum === RolUsuario::EncargadoComercio && $cifrada === null) {
             $token = Password::broker('invitaciones')->createToken($usuario);
             $usuario->notify(new InvitacionEncargadoComercio($token));
         }
@@ -155,7 +170,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
             'correo' => ['required', 'email', 'max:150', Rule::unique('usuarios', 'correo')],
             'contrasena' => $esEncargadoComercio
                 ? ['nullable']
-                : ['required', 'string', 'min:8'],
+                : ['required', 'string', 'min:'.self::LARGO_MINIMO_CONTRASENA],
             // id_comercio es obligatorio solo para el Encargado del comercio y nulo en los demás (5.2).
             'id_comercio' => $esEncargadoComercio
                 ? ['required', 'integer', 'min:1']

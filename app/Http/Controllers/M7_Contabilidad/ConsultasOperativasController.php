@@ -26,7 +26,10 @@ final class ConsultasOperativasController extends Controller
 
     public function saldos(Request $request): JsonResponse
     {
-        return response()->json(['success' => true, 'data' => $this->consultas->saldos($this->comercio($request))]);
+        $comercio = $this->comercio($request);
+        $filtros = $request->validate(['incluir_iva' => ['sometimes', 'boolean']]);
+
+        return response()->json(['success' => true, 'data' => $this->consultas->saldos($comercio, (bool) ($filtros['incluir_iva'] ?? false))]);
     }
 
     public function centros(Request $request): JsonResponse
@@ -45,6 +48,11 @@ final class ConsultasOperativasController extends Controller
     public function movimientosSinCentro(Request $request): JsonResponse
     {
         return $this->detalleCentro($request, null);
+    }
+
+    public function asiento(Request $request, int $idAsiento): JsonResponse
+    {
+        return response()->json(['success' => true, 'data' => $this->consultas->asiento($this->comercio($request), $idAsiento)]);
     }
 
     private function detalleCentro(Request $request, ?int $idCentroCosto): JsonResponse
