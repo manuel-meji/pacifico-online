@@ -32,7 +32,7 @@ return new class extends Migration
         });
 
         if (DB::getDriverName() === 'pgsql') {
-        DB::statement("
+            DB::statement("
         ALTER TABLE eventos_procesados
         ADD CONSTRAINT chk_eventos_procesados_estado
         CHECK (estado IN ('PENDIENTE', 'PROCESADO', 'FALLIDO'))
