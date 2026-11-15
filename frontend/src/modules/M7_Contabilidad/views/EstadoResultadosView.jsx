@@ -21,7 +21,6 @@ function formatoFecha(fecha) {
   return `${dia}/${mes}/${anio}`;
 }
 
-// El backend devuelve el período como "AAAA-MM".
 function formatoPeriodo(periodo) {
   const [anio, mes] = String(periodo).split('-');
   const fecha = new Date(Number(anio), Number(mes) - 1, 1);
@@ -50,11 +49,15 @@ export default function EstadoResultadosView({ onNavegar }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
+  const fechasIncompletas = Boolean(fechaDesde) !== Boolean(fechaHasta);
+
   const rangoInvalido =
     fechaDesde !== '' && fechaHasta !== '' && fechaHasta < fechaDesde;
 
+  const filtrosInvalidos = fechasIncompletas || rangoInvalido;
+
   useEffect(() => {
-    if (rangoInvalido) {
+    if (filtrosInvalidos) {
       setCargando(false);
       setError('');
       setReporte(null);
@@ -90,7 +93,7 @@ export default function EstadoResultadosView({ onNavegar }) {
     return () => {
       activo = false;
     };
-  }, [fechaDesde, fechaHasta, rangoInvalido]);
+  }, [fechaDesde, fechaHasta, filtrosInvalidos]);
 
   function limpiarFiltros() {
     setFechaDesde('');
@@ -154,6 +157,10 @@ export default function EstadoResultadosView({ onNavegar }) {
                 type="date"
                 value={fechaDesde}
                 onChange={(e) => setFechaDesde(e.target.value)}
+                aria-invalid={filtrosInvalidos}
+                aria-describedby={
+                  filtrosInvalidos ? 'error-rango-resultados' : undefined
+                }
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               />
             </div>
@@ -171,9 +178,9 @@ export default function EstadoResultadosView({ onNavegar }) {
                 value={fechaHasta}
                 min={fechaDesde || undefined}
                 onChange={(e) => setFechaHasta(e.target.value)}
-                aria-invalid={rangoInvalido}
+                aria-invalid={filtrosInvalidos}
                 aria-describedby={
-                  rangoInvalido ? 'error-rango-resultados' : undefined
+                  filtrosInvalidos ? 'error-rango-resultados' : undefined
                 }
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               />
@@ -190,13 +197,15 @@ export default function EstadoResultadosView({ onNavegar }) {
             </div>
           </div>
 
-          {rangoInvalido && (
+          {filtrosInvalidos && (
             <p
               id="error-rango-resultados"
               role="alert"
               className="mt-3 text-sm font-medium text-red-700"
             >
-              La fecha final no puede ser anterior a la fecha inicial.
+              {fechasIncompletas
+                ? 'Debe seleccionar ambas fechas para consultar el período.'
+                : 'La fecha final no puede ser anterior a la fecha inicial.'}
             </p>
           )}
 
@@ -323,7 +332,6 @@ export default function EstadoResultadosView({ onNavegar }) {
 
           {!cargando && hayMovimientos && (
             <>
-              {/* Vista móvil: un mes por tarjeta */}
               <div className="space-y-3 p-3 md:hidden">
                 {mensual.map((fila) => (
                   <article
@@ -364,7 +372,6 @@ export default function EstadoResultadosView({ onNavegar }) {
                 ))}
               </div>
 
-              {/* Vista de escritorio: tabla */}
               <div className="hidden md:block">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-[#1e3a8a] text-white">
@@ -432,7 +439,6 @@ export default function EstadoResultadosView({ onNavegar }) {
               </div>
             </>
           )}
-       
         </section>
       </main>
 
@@ -521,4 +527,3 @@ export default function EstadoResultadosView({ onNavegar }) {
     </div>
   );
 }
-
