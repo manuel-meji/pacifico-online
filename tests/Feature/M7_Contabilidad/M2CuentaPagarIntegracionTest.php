@@ -17,8 +17,8 @@ use Tests\TestCase;
 
 final class M2CuentaPagarIntegracionTest extends TestCase
 {
-    use PreparaM2;
     use PreparaIntegracionM6;
+    use PreparaM2;
 
     private int $comercioId;
 
@@ -273,6 +273,13 @@ final class M2CuentaPagarIntegracionTest extends TestCase
             }
         );
 
+        Schema::create('centros_costo', function (Blueprint $table): void {
+            $table->id('id_centro_costo');
+            $table->unsignedBigInteger('id_comercio');
+            $table->string('codigo');
+            $table->boolean('activo')->default(true);
+        });
+
         Schema::create(
             'detalle_asientos',
             function (Blueprint $table): void {
@@ -283,6 +290,8 @@ final class M2CuentaPagarIntegracionTest extends TestCase
                 $table->unsignedBigInteger(
                     'id_cuenta_contable'
                 );
+
+                $table->unsignedBigInteger('id_centro_costo')->nullable();
 
                 $table->unsignedInteger('numero_linea');
 
@@ -371,8 +380,7 @@ final class M2CuentaPagarIntegracionTest extends TestCase
             'id_subpedido' => 7001,
             'id_pago' => 7,
             'id_asiento_original' => null,
-            'evento_id' =>
-                '33333333-3333-4333-8333-333333333333',
+            'evento_id' => '33333333-3333-4333-8333-333333333333',
             'tipo_evento' => 'FacturaGenerada',
             'tipo' => 'DISTRIBUCION',
             'fecha' => '2026-11-14 09:00:00',
@@ -442,8 +450,7 @@ final class M2CuentaPagarIntegracionTest extends TestCase
             'id_pedido' => 8942,
             'id_comercio' => $this->comercioId,
             'id_subpedido' => 7001,
-            'evento_id' =>
-                '33333333-3333-4333-8333-333333333333',
+            'evento_id' => '33333333-3333-4333-8333-333333333333',
             'tipo_evento' => 'FacturaGenerada',
             'tipo' => 'DISTRIBUCION',
             'fecha' => '2026-11-14 09:00:00',

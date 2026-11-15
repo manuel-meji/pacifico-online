@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\M7_Contabilidad\ConsultasOperativasController;
 use App\Http\Controllers\M7_Contabilidad\LibroDiarioController;
 use App\Http\Controllers\M7_Contabilidad\LibroMayorController;
 use App\Http\Controllers\M7_Contabilidad\PlanCuentasController;
@@ -18,6 +19,18 @@ Route::prefix('api/m7/v1')
             EstablecerComercio::class,
             RequiereRol::class.':encargado_comercio,encargado_plataforma',
         ])->group(function (): void {
+            Route::get('comercios', [ConsultasOperativasController::class, 'comercios'])
+                ->middleware(RequiereRol::class.':encargado_plataforma')
+                ->name('comercios');
+            Route::get('saldos-cobrar-pagar', [ConsultasOperativasController::class, 'saldos'])
+                ->name('saldos-cobrar-pagar');
+            Route::get('centros-costo', [ConsultasOperativasController::class, 'centros'])
+                ->name('centros-costo');
+            Route::get('centros-costo/sin-asignar/movimientos', [ConsultasOperativasController::class, 'movimientosSinCentro'])
+                ->name('centros-costo.sin-asignar.movimientos');
+            Route::get('centros-costo/{idCentroCosto}/movimientos', [ConsultasOperativasController::class, 'movimientosCentro'])
+                ->whereNumber('idCentroCosto')
+                ->name('centros-costo.movimientos');
             Route::get('cuentas', [PlanCuentasController::class, 'listar'])
                 ->name('cuentas.index');
 

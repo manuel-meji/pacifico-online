@@ -12,6 +12,9 @@ use LogicException;
 
 final class AsientoRepository
 {
+    /** Centro creado por M7_PlanCuentasSeeder para cada comercio. */
+    public const CENTRO_PREDETERMINADO = 'GEN';
+
     public function __construct(private readonly ContextoComercio $contexto) {}
 
     public function buscarPorSubpedido(int $comercioId, int $subpedidoId, string $tipo): ?AsientoContable
@@ -55,9 +58,11 @@ final class AsientoRepository
         $id = DB::table('asientos_contables')->insertGetId($datos, 'id_asiento');
 
         $guardado = new AsientoContable((int) $id, $asiento->comercioId, $asiento->pedidoId, $asiento->subpedidoId, $asiento->eventoId, $asiento->tipoEvento, $asiento->tipo, $asiento->fecha, $asiento->pagoId, $asiento->asientoOriginalId);
+        [$cuentasResultado, $centro] = $this->imputacionPredeterminada($asiento);
         foreach ($asiento->detalles() as $indice => $detalle) {
             DB::table('detalle_asientos')->insert([
                 'id_asiento' => $id, 'id_cuenta_contable' => $detalle->cuentaId,
+                'id_centro_costo' => in_array($detalle->cuentaId, $cuentasResultado, true) ? $centro : null,
                 'numero_linea' => $indice + 1, 'debe' => $detalle->debe, 'haber' => $detalle->haber,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -65,6 +70,27 @@ final class AsientoRepository
         }
 
         return $guardado;
+    }
+
+    /**
+     * Las líneas de ingreso y gasto se imputan al centro predeterminado activo del comercio;
+     * si no existe, quedan sin centro y se reportan aparte.
+     *
+     * @return array{0: list<int>, 1: int|null}
+     */
+    private function imputacionPredeterminada(AsientoContable $asiento): array
+    {
+        $centro = DB::table('centros_costo')->where('id_comercio', $asiento->comercioId)
+            ->where('codigo', self::CENTRO_PREDETERMINADO)->where('activo', true)->value('id_centro_costo');
+        if ($centro === null) {
+            return [[], null];
+        }
+        $cuentas = DB::table('cuentas_contables')->where('id_comercio', $asiento->comercioId)
+            ->whereIn('id_cuenta_contable', array_map(fn (DetalleAsiento $detalle): int => $detalle->cuentaId, $asiento->detalles()))
+            ->whereIn('tipo', ['INGRESO', 'GASTO'])->pluck('id_cuenta_contable')
+            ->map(fn (int|string $cuenta): int => (int) $cuenta)->all();
+
+        return [$cuentas, (int) $centro];
     }
 
     private function verificarContexto(int $comercioId): void
