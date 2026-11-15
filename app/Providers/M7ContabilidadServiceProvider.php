@@ -6,24 +6,28 @@ namespace App\Providers;
 
 use App\Contracts\M7_Contabilidad\ComerciosM7GatewayInterface;
 use App\Contracts\M7_Contabilidad\CostosProductosVendidosGatewayInterface;
-use App\Contracts\M7_Contabilidad\SubpedidosM7GatewayInterface;
-use App\Services\M7_Contabilidad\Gateways\M5SubpedidosGateway;
+use App\Contracts\M7_Contabilidad\DirectorioComerciosM7GatewayInterface;
 use App\Contracts\M7_Contabilidad\ProcesadorCuentaPagarComercioInterface;
-use App\Services\M7_Contabilidad\ProcesarCuentaPagarComercioService;
+use App\Contracts\M7_Contabilidad\SubpedidosM7GatewayInterface;
+use App\Events\M2_Comercios\ComercioAprobado;
 use App\Events\M5_Pedidos\PedidoConfirmado;
-use App\Events\M5_Pedidos\SubpedidoEntregado;
-use App\Listeners\M7_Contabilidad\ProcesarSubpedidoEntregadoListener;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Events\M5_Pedidos\SubpedidoEntregado;
 use App\Events\M6_Pagos\FacturaGenerada;
 use App\Events\M6_Pagos\PagoConfirmado;
 use App\Events\M6_Pagos\ReembolsoProcesado;
+use App\Listeners\M7_Contabilidad\CrearPlanCuentasComercioListener;
 use App\Listeners\M7_Contabilidad\ProcesarFacturaGeneradaListener;
 use App\Listeners\M7_Contabilidad\ProcesarPagoConfirmadoListener;
 use App\Listeners\M7_Contabilidad\ProcesarPedidoConfirmadoListener;
 use App\Listeners\M7_Contabilidad\ProcesarReembolsoProcesadoListener;
 use App\Listeners\M7_Contabilidad\ProcesarSubpedidoDespachadoListener;
+use App\Listeners\M7_Contabilidad\ProcesarSubpedidoEntregadoListener;
 use App\Services\M7_Contabilidad\Gateways\M2ComerciosGateway;
+use App\Services\M7_Contabilidad\Gateways\M2DirectorioComerciosGateway;
 use App\Services\M7_Contabilidad\Gateways\M4CostosProductosVendidosGateway;
+use App\Services\M7_Contabilidad\Gateways\M5SubpedidosGateway;
+use App\Services\M7_Contabilidad\ProcesarCuentaPagarComercioService;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -40,6 +44,11 @@ final class M7ContabilidadServiceProvider extends ServiceProvider
         $this->app->bind(
             ComerciosM7GatewayInterface::class,
             M2ComerciosGateway::class
+        );
+
+        $this->app->bind(
+            DirectorioComerciosM7GatewayInterface::class,
+            M2DirectorioComerciosGateway::class
         );
 
         $this->app->bind(
@@ -75,6 +84,7 @@ final class M7ContabilidadServiceProvider extends ServiceProvider
         );
 
         Event::listen(FacturaGenerada::class, ProcesarFacturaGeneradaListener::class);
+        Event::listen(ComercioAprobado::class, CrearPlanCuentasComercioListener::class);
         Event::listen(PagoConfirmado::class, ProcesarPagoConfirmadoListener::class);
         Event::listen(ReembolsoProcesado::class, ProcesarReembolsoProcesadoListener::class);
 

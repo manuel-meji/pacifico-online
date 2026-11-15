@@ -60,8 +60,15 @@ class SubpedidoDespachadoListenerTest extends TestCase
             $tabla->timestamps();
         });
 
+        Schema::create('centros_costo', function (Blueprint $tabla): void {
+            $tabla->id('id_centro_costo');
+            $tabla->unsignedBigInteger('id_comercio');
+            $tabla->string('codigo');
+            $tabla->boolean('activo')->default(true);
+        });
         Schema::create('detalle_asientos', function (Blueprint $tabla): void {
             $tabla->id('id_detalle_asiento');
+            $tabla->unsignedBigInteger('id_centro_costo')->nullable();
             $tabla->unsignedBigInteger('id_asiento');
             $tabla->unsignedBigInteger('id_cuenta_contable');
             $tabla->unsignedInteger('numero_linea');
@@ -74,24 +81,25 @@ class SubpedidoDespachadoListenerTest extends TestCase
 
         $this->app->instance(
             CostosProductosVendidosGatewayInterface::class,
-            new class implements CostosProductosVendidosGatewayInterface {
-            public function obtenerCostosProductosVendidos(
-                int $subpedidoId
-            ): array {
-                return [
-                    'id_subpedido' => $subpedidoId,
-                    'id_comercio' => 1,
-                    'variaciones' => [
-                        [
-                            'id_variacion' => 100,
-                            'cantidad' => 2,
-                            'costo_unitario' => 20.25,
-                            'costo_total' => 40.50,
+            new class implements CostosProductosVendidosGatewayInterface
+            {
+                public function obtenerCostosProductosVendidos(
+                    int $subpedidoId
+                ): array {
+                    return [
+                        'id_subpedido' => $subpedidoId,
+                        'id_comercio' => 1,
+                        'variaciones' => [
+                            [
+                                'id_variacion' => 100,
+                                'cantidad' => 2,
+                                'costo_unitario' => 20.25,
+                                'costo_total' => 40.50,
+                            ],
                         ],
-                    ],
-                    'costo_total' => 40.50,
-                ];
-            }
+                        'costo_total' => 40.50,
+                    ];
+                }
             }
         );
     }
@@ -221,5 +229,4 @@ class SubpedidoDespachadoListenerTest extends TestCase
             'estado' => 'PROCESADO',
         ]);
     }
-
 }

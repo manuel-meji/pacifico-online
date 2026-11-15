@@ -83,7 +83,7 @@ class PlanCuentasService
                 'cuenta_contable',
                 (int) $cuenta->getKey(),
                 [
-                    'modulo' => 'M7_CONTABILIDAD',
+                    'modulo' => 'M7',
                     'id_comercio' => $idComercio,
                     'codigo' => $cuenta->codigo,
                     'nombre' => $cuenta->nombre,
@@ -148,7 +148,7 @@ class PlanCuentasService
                     'cuenta_contable',
                     (int) $cuenta->getKey(),
                     [
-                        'modulo' => 'M7_CONTABILIDAD',
+                        'modulo' => 'M7',
                         'id_comercio' => $idComercio,
                         'antes' => $antes,
                         'despues' => $despues,
@@ -195,7 +195,7 @@ class PlanCuentasService
                     'cuenta_contable',
                     (int) $cuenta->getKey(),
                     [
-                        'modulo' => 'M7_CONTABILIDAD',
+                        'modulo' => 'M7',
                         'id_comercio' => $idComercio,
                         'codigo' => $cuenta->codigo,
                         'nombre' => $cuenta->nombre,

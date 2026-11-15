@@ -1,21 +1,37 @@
 import { nombreDia } from '../services/formato';
 import Icono from './IconoComercio';
+import Imagen from './Imagen';
 
-// Información pública del comercio del esquema Micrositio: horarios, contacto, redes sociales y políticas.
+// Información pública del comercio del esquema Micrositio: galería, horarios, contacto, redes sociales y políticas.
 // Los campos opcionales vacíos no se muestran (CU-009 A3).
 export default function InfoComercio({ comercio }) {
+  const galeria = comercio.galeria ?? [];
   const horarios = comercio.horarios ?? [];
   const contacto = comercio.contacto ?? {};
   const redes = comercio.redes_sociales ?? [];
   const politicas = comercio.politicas ?? [];
   const hayContacto = contacto.telefono || contacto.correo || contacto.direccion || redes.length > 0;
 
-  if (!horarios.length && !hayContacto && !politicas.length) {
+  if (!galeria.length && !horarios.length && !hayContacto && !politicas.length) {
     return <p className="rounded-xl border border-gray-100 bg-white p-4 text-sm text-gray-600 shadow-sm">Este comercio todavía no publicó su información de contacto.</p>;
   }
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      {galeria.length > 0 && (
+        <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm md:col-span-2">
+          <h3 className="font-semibold text-gray-900">Galería</h3>
+          <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {galeria.map((imagen) => (
+              <li key={imagen.imagen_url} className="relative grid aspect-video place-items-center overflow-hidden rounded-lg bg-gray-100">
+                <Imagen src={imagen.imagen_url} alt={imagen.texto_alternativo ?? `Imagen de ${comercio.nombre_comercial}`}
+                  className="absolute inset-0 h-full w-full object-cover" icono="tienda" claseIcono="h-8 w-8 text-gray-300" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {horarios.length > 0 && (
         <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
           <h3 className="font-semibold text-gray-900">Horario de atención</h3>

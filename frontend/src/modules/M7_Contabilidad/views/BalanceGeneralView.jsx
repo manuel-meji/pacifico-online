@@ -1,28 +1,109 @@
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import EncabezadoM7 from '../components/EncabezadoM7';
-
-// Los datos se incorporarán cuando esté disponible la consulta real del balance.
-const cuentasBalance = [];
+import { consultarBalanceGeneral } from '../services/balanceGeneralApi';
 
 const tiposDisponibles = ['Activo', 'Pasivo', 'Patrimonio'];
 
+const nombresTipos = {
+  ACTIVO: 'Activo',
+  PASIVO: 'Pasivo',
+  PATRIMONIO: 'Patrimonio',
+};
+
+function obtenerFechaActual() {
+  const fecha = new Date();
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+
+  return `${anio}-${mes}-${dia}`;
+}
+
 function formatoMoneda(monto) {
-  if (monto === null || monto === undefined || monto === '') {
+  if (monto === null || monto === undefined || !Number.isFinite(monto)) {
     return '—';
   }
 
   return new Intl.NumberFormat('es-CR', {
     style: 'currency',
     currency: 'CRC',
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(monto);
 }
 
+function convertirMoneda(centimos) {
+  return Number(centimos ?? 0) / 100;
+}
+
+function obtenerGrupo(codigo) {
+  const partes = String(codigo).split('.');
+  return partes.length >= 2 ? partes.slice(0, 2).join('.') : partes[0];
+}
+
 export default function BalanceGeneralView({ onNavegar }) {
+  const [fechaCorte, setFechaCorte] = useState(obtenerFechaActual);
+  const [balance, setBalance] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [tipoSeleccionado, setTipoSeleccionado] = useState('Todos');
   const [grupoSeleccionado, setGrupoSeleccionado] = useState('Todos');
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarBalance() {
+      setCargando(true);
+      setError('');
+      setBalance(null);
+
+      try {
+        const resultado = await consultarBalanceGeneral(fechaCorte);
+
+        if (activo) {
+          setBalance(resultado);
+        }
+      } catch (errorConsulta) {
+        if (activo) {
+          setError(errorConsulta.message || 'No se pudo consultar el Balance general.');
+        }
+      } finally {
+        if (activo) {
+          setCargando(false);
+        }
+      }
+    }
+
+    if (fechaCorte) {
+      cargarBalance();
+    } else {
+      setBalance(null);
+      setCargando(false);
+    }
+
+    return () => {
+      activo = false;
+    };
+  }, [fechaCorte]);
+
+  const cuentasBalance = useMemo(() => {
+    if (!Array.isArray(balance?.cuentas)) {
+      return [];
+    }
+
+    return balance.cuentas
+      .filter((cuenta) => nombresTipos[String(cuenta.tipo).toUpperCase()])
+      .map((cuenta) => ({
+        id: cuenta.id_cuenta_contable,
+        codigo: String(cuenta.codigo),
+        nombre: cuenta.nombre,
+        tipo: nombresTipos[String(cuenta.tipo).toUpperCase()],
+        grupo: obtenerGrupo(cuenta.codigo),
+        saldo: convertirMoneda(cuenta.saldo_centimos),
+      }));
+  }, [balance]);
 
   const cuentasFiltradas = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
@@ -42,40 +123,27 @@ export default function BalanceGeneralView({ onNavegar }) {
 
       return coincideBusqueda && coincideTipo && coincideGrupo;
     });
-  }, [busqueda, tipoSeleccionado, grupoSeleccionado]);
+  }, [cuentasBalance, busqueda, tipoSeleccionado, grupoSeleccionado]);
 
-  const hayDatos = cuentasBalance.length > 0;
+  const gruposDisponibles = useMemo(
+    () => [...new Set(cuentasBalance.map((cuenta) => cuenta.grupo))].sort(),
+    [cuentasBalance]
+  );
 
-  const activos = hayDatos
-    ? cuentasBalance
-      .filter((cuenta) => cuenta.tipo === 'Activo')
-      .reduce((total, cuenta) => total + cuenta.saldo, 0)
-    : null;
-
-  const pasivos = hayDatos
-    ? cuentasBalance
-      .filter((cuenta) => cuenta.tipo === 'Pasivo')
-      .reduce((total, cuenta) => total + cuenta.saldo, 0)
-    : null;
-
-  const patrimonio = hayDatos
-    ? cuentasBalance
-      .filter((cuenta) => cuenta.tipo === 'Patrimonio')
-      .reduce((total, cuenta) => total + cuenta.saldo, 0)
+  const activos = balance ? convertirMoneda(balance.activos_centimos) : null;
+  const pasivos = balance ? convertirMoneda(balance.pasivos_centimos) : null;
+  const patrimonio = balance ? convertirMoneda(balance.patrimonio_centimos) : null;
+  const resultadoAcumulado = balance
+    ? convertirMoneda(balance.resultado_acumulado_centimos)
     : null;
 
   const totalPasivoPatrimonio =
-    hayDatos ? pasivos + patrimonio : null;
+    balance ? pasivos + patrimonio : null;
 
   const diferencia =
-    hayDatos ? activos - totalPasivoPatrimonio : null;
+    balance ? activos - totalPasivoPatrimonio : null;
 
-  const balanceCuadrado =
-    hayDatos ? Math.abs(diferencia) < 0.005 : null;
-
-  const gruposDisponibles = [
-    ...new Set(cuentasBalance.map((cuenta) => cuenta.grupo)),
-  ];
+  const balanceCuadrado = balance ? balance.cuadra === true : null;
 
   function limpiarFiltros() {
     setBusqueda('');
@@ -109,12 +177,50 @@ export default function BalanceGeneralView({ onNavegar }) {
             <button
               type="button"
               onClick={() => window.print()}
-              className="rounded-lg bg-[#1e3a8a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800"
+              disabled={!balance || cargando}
+              className="rounded-lg bg-[#1e3a8a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Imprimir balance
             </button>
           </div>
         </div>
+
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <label
+            htmlFor="fecha-corte-balance"
+            className="mb-2 block text-sm font-medium text-gray-700"
+          >
+            Fecha de corte
+          </label>
+          <input
+            id="fecha-corte-balance"
+            type="date"
+            value={fechaCorte}
+            onChange={(e) => setFechaCorte(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 sm:w-auto"
+          />
+          <p className="mt-2 text-sm text-gray-500">
+            El balance incluye los movimientos contables registrados hasta la fecha seleccionada.
+          </p>
+        </section>
+
+        {cargando && (
+          <div
+            role="status"
+            className="mb-6 rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-600"
+          >
+            Consultando información contable...
+          </div>
+        )}
+
+        {error && !cargando && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
 
         <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
           <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -151,7 +257,7 @@ export default function BalanceGeneralView({ onNavegar }) {
             Activos = Pasivos + Patrimonio
           </p>
 
-          {hayDatos ? (
+          {balance ? (
             <div className="mt-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <p className="text-sm text-gray-700">
                 {formatoMoneda(activos)} = {formatoMoneda(pasivos)} + {formatoMoneda(patrimonio)}
@@ -179,13 +285,16 @@ export default function BalanceGeneralView({ onNavegar }) {
               Cuentas del balance
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Cuentas contables registradas en el sistema.
+              Cuentas contables con movimientos registrados hasta la fecha de corte.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 border-b border-gray-200 p-5 md:grid-cols-3">
             <div>
-              <label htmlFor="buscar-balance" className="mb-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="buscar-balance"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
                 Buscar cuenta
               </label>
               <input
@@ -199,7 +308,10 @@ export default function BalanceGeneralView({ onNavegar }) {
             </div>
 
             <div>
-              <label htmlFor="tipo-balance" className="mb-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="tipo-balance"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
                 Tipo de cuenta
               </label>
               <select
@@ -210,13 +322,18 @@ export default function BalanceGeneralView({ onNavegar }) {
               >
                 <option value="Todos">Todos los tipos</option>
                 {tiposDisponibles.map((tipo) => (
-                  <option key={tipo} value={tipo}>{tipo}</option>
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label htmlFor="grupo-balance" className="mb-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="grupo-balance"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
                 Grupo contable
               </label>
               <select
@@ -227,7 +344,9 @@ export default function BalanceGeneralView({ onNavegar }) {
               >
                 <option value="Todos">Todos los grupos</option>
                 {gruposDisponibles.map((grupo) => (
-                  <option key={grupo} value={grupo}>{grupo}</option>
+                  <option key={grupo} value={grupo}>
+                    {grupo}
+                  </option>
                 ))}
               </select>
             </div>
@@ -250,12 +369,10 @@ export default function BalanceGeneralView({ onNavegar }) {
             </p>
           </div>
 
-
-          {/* Vista móvil: cada cuenta se muestra como una tarjeta */}
           <div className="space-y-3 p-3 md:hidden">
             {cuentasFiltradas.map((cuenta) => (
               <article
-                key={cuenta.codigo}
+                key={cuenta.id}
                 className="rounded-lg border border-gray-200 bg-white p-4"
               >
                 <div className="mb-3 flex items-start justify-between gap-3">
@@ -267,7 +384,6 @@ export default function BalanceGeneralView({ onNavegar }) {
                       {cuenta.codigo}
                     </p>
                   </div>
-
                 </div>
 
                 <h3 className="break-words font-semibold text-gray-900">
@@ -299,7 +415,12 @@ export default function BalanceGeneralView({ onNavegar }) {
 
             {cuentasFiltradas.length === 0 && (
               <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
-                No hay cuentas que coincidan con los filtros.
+                {cargando
+                  ? 'Cargando cuentas...'
+                  : error
+                    ? 'No fue posible consultar las cuentas.'
+                    : 'No hay cuentas que coincidan con los filtros.'}
+
                 <button
                   type="button"
                   onClick={limpiarFiltros}
@@ -311,7 +432,6 @@ export default function BalanceGeneralView({ onNavegar }) {
             )}
           </div>
 
-          {/* Vista de escritorio: se conserva la tabla */}
           <div className="hidden md:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-[#1e3a8a] text-white">
@@ -326,15 +446,19 @@ export default function BalanceGeneralView({ onNavegar }) {
 
               <tbody className="divide-y divide-gray-100">
                 {cuentasFiltradas.map((cuenta) => (
-                  <tr key={cuenta.codigo} className="transition hover:bg-blue-50">
+                  <tr key={cuenta.id} className="transition hover:bg-blue-50">
                     <td className="whitespace-nowrap px-4 py-4 font-semibold text-[#1e3a8a]">
                       {cuenta.codigo}
                     </td>
                     <td className="px-4 py-4 font-medium text-gray-800">
                       {cuenta.nombre}
                     </td>
-                    <td className="px-4 py-4 text-gray-600">{cuenta.tipo}</td>
-                    <td className="px-4 py-4 text-gray-600">{cuenta.grupo}</td>
+                    <td className="px-4 py-4 text-gray-600">
+                      {cuenta.tipo}
+                    </td>
+                    <td className="px-4 py-4 text-gray-600">
+                      {cuenta.grupo}
+                    </td>
                     <td className="whitespace-nowrap px-4 py-4 text-right font-medium text-gray-800">
                       {formatoMoneda(cuenta.saldo)}
                     </td>
@@ -344,7 +468,12 @@ export default function BalanceGeneralView({ onNavegar }) {
                 {cuentasFiltradas.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-5 py-12 text-center text-gray-500">
-                      No hay cuentas que coincidan con los filtros.
+                      {cargando
+                        ? 'Cargando cuentas...'
+                        : error
+                          ? 'No fue posible consultar las cuentas.'
+                          : 'No hay cuentas que coincidan con los filtros.'}
+
                       <div className="mt-3">
                         <button
                           type="button"
@@ -374,9 +503,101 @@ export default function BalanceGeneralView({ onNavegar }) {
         </section>
 
         <p className="mt-5 text-xs text-gray-500">
-          Los saldos se mostrarán cuando estén disponibles los datos contables correspondientes.
+          {balance
+            ? `Balance consultado al ${balance.fecha_corte}.`
+            : 'Los saldos se mostrarán cuando esté disponible la información contable.'}
         </p>
       </main>
+
+      {balance && (
+        <section className="m7-print-area">
+          <h1>Balance general</h1>
+
+          <p>Pacíficos Online</p>
+          <p>Fecha de corte: {balance.fecha_corte}</p>
+
+          <h2>Estado de situación financiera</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total activos</td>
+                <td>{formatoMoneda(activos)}</td>
+              </tr>
+              <tr>
+                <td>Total pasivos</td>
+                <td>{formatoMoneda(pasivos)}</td>
+              </tr>
+              <tr>
+                <td>Total patrimonio</td>
+                <td>{formatoMoneda(patrimonio)}</td>
+              </tr>
+              <tr>
+                <td>Resultado acumulado incluido en patrimonio</td>
+                <td>{formatoMoneda(resultadoAcumulado)}</td>
+              </tr>
+              <tr>
+                <td>Total pasivos + patrimonio</td>
+                <td>{formatoMoneda(totalPasivoPatrimonio)}</td>
+              </tr>
+              <tr>
+                <td>Diferencia</td>
+                <td>{formatoMoneda(diferencia)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p>
+            Estado del balance: {balanceCuadrado
+              ? 'Balance cuadrado'
+              : 'Diferencia detectada'}
+          </p>
+
+          <h2>Detalle de cuentas contables</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Cuenta</th>
+                <th>Tipo</th>
+                <th>Grupo</th>
+                <th>Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cuentasBalance.map((cuenta) => (
+                <tr key={cuenta.id}>
+                  <td>{cuenta.codigo}</td>
+                  <td>{cuenta.nombre}</td>
+                  <td>{cuenta.tipo}</td>
+                  <td>{cuenta.grupo}</td>
+                  <td>{formatoMoneda(cuenta.saldo)}</td>
+                </tr>
+              ))}
+
+              <tr>
+                <td colSpan={4}>Total activos</td>
+                <td>{formatoMoneda(activos)}</td>
+              </tr>
+              <tr>
+                <td colSpan={4}>Total pasivos + patrimonio</td>
+                <td>{formatoMoneda(totalPasivoPatrimonio)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p className="print-footer">
+            Reporte generado desde el módulo M7 de Pacíficos Online.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

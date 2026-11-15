@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Boxes, Calendar, Check, ChevronDown, ChevronUp, ClipboardList, Clock, CreditCard, History,
-  LoaderCircle, MapPin, Package, PackageCheck, RefreshCw, RotateCcw, Search, Store, Truck, X,
+  Boxes, Calendar, Check, ChevronDown, ChevronUp, ClipboardList, Clock, CreditCard, History, Home,
+  LayoutGrid, LoaderCircle, LogOut, MapPin, Megaphone, Package, PackageCheck, RefreshCw, RotateCcw,
+  Search, ShieldCheck, Store, Truck, User, Wallet, X,
 } from 'lucide-react';
 import { Alerta, Boton, ModalConCampo } from '../components/componentes';
 import {
@@ -10,7 +11,10 @@ import {
 import { colones } from '../services/calculos';
 import { formatearFecha } from '../services/estados';
 import { EtiquetaEstado } from './MisPedidosView';
-import { obtenerUsuario } from '../../Nucleo/services/sesionApi';
+import { cerrarSesion, obtenerUsuario } from '../../Nucleo/services/sesionApi';
+import logoPacificos from '../../../assets/logo-pacificos.png';
+
+const URL_INGRESO = '/app.html?pantalla=ingresar';
 
 // Tabla de transiciones de Subpedido::TRANSICIONES_PERMITIDAS (app/Models/M5_Pedidos/Subpedido.php).
 // RN-M5-05: no se puede cancelar si el subpedido ya está en en_preparacion, despachado o entregado.
@@ -622,76 +626,183 @@ export default function PanelComercioView({ onVolver }) {
   const nombreComercioSesion = comercios.find((c) => c.id === String(usuario?.id_comercio))?.nombre
     || (usuario?.id_comercio ? `Comercio #${usuario.id_comercio}` : null);
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      {/* Barra de integración directa con el Portal de Comercio M2 e Inventario M4 */}
-      <div className="bg-brandDarkBlue text-white border-b border-blue-900">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-9 w-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-              <Store className="w-5 h-5 text-brandGreen" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-blue-200 font-medium truncate">
-                Portal de Comercios · {usuario?.nombre ? `Sesión: ${usuario.nombre}` : 'Operación de pedidos y despachos'}
-              </p>
-              <p className="text-sm sm:text-base font-bold truncate">
-                {nombreComercioSesion || 'Panel de Gestión de Subpedidos y Estados'}
-              </p>
-            </div>
-          </div>
+  const salir = async () => {
+    setAviso(null);
+    try {
+      const respuesta = await cerrarSesion();
+      if (respuesta.ok || respuesta.estado === 401) {
+        window.location.href = URL_INGRESO;
+      } else {
+        setAviso({ tipo: 'error', titulo: 'Error al salir', texto: 'No se pudo cerrar la sesión. Intente de nuevo.' });
+      }
+    } catch {
+      setAviso({ tipo: 'error', titulo: 'Error al salir', texto: 'No se pudo cerrar la sesión. Intente de nuevo.' });
+    }
+  };
 
-          <div className="flex flex-wrap items-center gap-2">
-            <a
-              href="/m2.html"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-bold text-white transition"
-            >
-              <Store className="w-4 h-4" aria-hidden="true" />
-              <span>Mi comercio (M2)</span>
-            </a>
-            <a
-              href="/m4.html"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-bold text-white transition"
-            >
-              <Boxes className="w-4 h-4" aria-hidden="true" />
-              <span>Inventario (M4)</span>
-            </a>
+  const esComercio = usuario?.rol === 'encargado_comercio';
+  const esPlataforma = usuario?.rol === 'encargado_plataforma';
+
+  const claseTab = (activa) =>
+    `flex shrink-0 items-center gap-2 border-b-4 px-4 py-3 text-sm font-bold text-white transition-colors focus:outline-none focus-visible:bg-white/10 ${
+      activa ? 'border-[#9DBB45]' : 'border-transparent opacity-80 hover:opacity-100'
+    }`;
+
+  const tarjetasResumen = [
+    { clave: 'todos', etiqueta: 'Total subpedidos', valor: resumenEstados.total, icono: ClipboardList },
+    { clave: 'pagado', etiqueta: 'Por preparar (Pagados)', valor: resumenEstados.pagado, icono: CreditCard },
+    { clave: 'en_preparacion', etiqueta: 'En preparación', valor: resumenEstados.en_preparacion, icono: Package },
+    { clave: 'despachado', etiqueta: 'Despachados', valor: resumenEstados.despachado, icono: Truck },
+    { clave: 'entregado', etiqueta: 'Entregados', valor: resumenEstados.entregado, icono: PackageCheck },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
+      {/* Encabezado superior idéntico al Portal de Comercios (M2) */}
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+          <a
+            href={esComercio ? '/m2.html' : '/m1.html'}
+            aria-label={esComercio ? 'Pacíficos Online, ir a Mi comercio' : 'Pacíficos Online, ir al inicio'}
+            className="flex items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+          >
+            <img src={logoPacificos} alt="" className="h-10 w-10 rounded-full" />
+            <span className="leading-tight">
+              <span className="block text-lg font-extrabold text-[#1E3A8A]">Pacíficos</span>
+              <span className="block text-[11px] font-bold tracking-widest text-[#7E9C30]">ONLINE</span>
+            </span>
+          </a>
+
+          {usuario ? (
+            <div className="flex items-center gap-3 text-sm font-semibold text-[#1E3A8A]">
+              <span className="hidden items-center gap-1 sm:flex">
+                <User size={18} aria-hidden="true" /> {usuario.nombre}
+              </span>
+              <button
+                type="button"
+                onClick={salir}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-bold text-slate-700 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2 cursor-pointer"
+              >
+                <LogOut size={16} aria-hidden="true" /> Salir
+              </button>
+            </div>
+          ) : usuario === null ? (
             <button
               type="button"
-              onClick={cargar}
-              disabled={cargando}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brandGreen hover:opacity-95 px-3 py-2 text-xs font-bold text-white transition cursor-pointer disabled:opacity-50"
+              onClick={() => { window.location.href = URL_INGRESO; }}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#1E3A8A] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#172E6E] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2 cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} aria-hidden="true" />
-              <span>Actualizar</span>
+              <User size={16} aria-hidden="true" /> Ingresar
             </button>
-          </div>
+          ) : null}
         </div>
-      </div>
+      </header>
+
+      {/* Barra de navegación de secciones de comercios (idéntica a M2) */}
+      <nav className="bg-[#1E3A8A]" aria-label="Secciones de comercios">
+        <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2">
+          {!esComercio && (
+            <a href="/m1.html" className={claseTab(false)}>
+              <Home size={18} aria-hidden="true" /> Portal
+            </a>
+          )}
+          {esComercio && (
+            <a href="/m2.html" className={claseTab(false)}>
+              <Store size={18} aria-hidden="true" /> Mi comercio
+            </a>
+          )}
+          {esPlataforma && (
+            <a href="/m2.html" className={claseTab(false)}>
+              <ShieldCheck size={18} aria-hidden="true" /> Plataforma
+            </a>
+          )}
+          {esComercio && (
+            <a href="/m3.html" className={claseTab(false)}>
+              <LayoutGrid size={18} aria-hidden="true" /> Catálogo
+            </a>
+          )}
+          {esComercio && (
+            <a href="/m4.html" className={claseTab(false)}>
+              <Boxes size={18} aria-hidden="true" /> Inventario
+            </a>
+          )}
+          <span aria-current="page" className={claseTab(true)}>
+            <ClipboardList size={18} aria-hidden="true" /> Pedidos
+          </span>
+          {esComercio && (
+            <a href="/m7.html" className={claseTab(false)}>
+              <Wallet size={18} aria-hidden="true" /> Finanzas
+            </a>
+          )}
+          {(esComercio || esPlataforma) && (
+            <a
+              href="/app.html?pantalla=gestion"
+              title="Productos destacados, promociones, cupones y noticias (M1)"
+              className={claseTab(false)}
+            >
+              <Megaphone size={18} aria-hidden="true" /> Gestión del portal
+            </a>
+          )}
+        </div>
+      </nav>
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 space-y-5">
-        {/* Indicadores rápidos de operación */}
-        <section className="grid grid-cols-2 sm:grid-cols-5 gap-3" aria-label="Resumen de estados">
-          <div className="bg-white rounded-xl border border-gray-200 p-3.5 shadow-2xs">
-            <p className="text-xs font-semibold text-gray-500">Total subpedidos</p>
-            <p className="mt-1 text-xl font-extrabold text-brandDarkBlue">{resumenEstados.total}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="mb-2 text-xs text-slate-500">
+              <a href="/m2.html" className="hover:underline">Inicio</a> /{' '}
+              <span className="font-semibold text-slate-700">Pedidos</span>
+            </p>
+            <h1 className="text-3xl font-extrabold tracking-tight text-[#1E3A8A]">
+              {nombreComercioSesion || 'Gestión de pedidos'}
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Administrá la preparación, despacho y entrega de los subpedidos de tu comercio.
+            </p>
           </div>
-          <div className="bg-white rounded-xl border border-teal-200 p-3.5 shadow-2xs">
-            <p className="text-xs font-semibold text-teal-700">Por preparar (Pagados)</p>
-            <p className="mt-1 text-xl font-extrabold text-teal-800">{resumenEstados.pagado}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-amber-200 p-3.5 shadow-2xs">
-            <p className="text-xs font-semibold text-amber-700">En preparación</p>
-            <p className="mt-1 text-xl font-extrabold text-amber-800">{resumenEstados.en_preparacion}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-indigo-200 p-3.5 shadow-2xs">
-            <p className="text-xs font-semibold text-indigo-700">Despachados</p>
-            <p className="mt-1 text-xl font-extrabold text-indigo-800">{resumenEstados.despachado}</p>
-          </div>
-          <div className="col-span-2 sm:col-span-1 bg-white rounded-xl border border-green-200 p-3.5 shadow-2xs">
-            <p className="text-xs font-semibold text-green-700">Entregados</p>
-            <p className="mt-1 text-xl font-extrabold text-green-800">{resumenEstados.entregado}</p>
-          </div>
+
+          <button
+            type="button"
+            onClick={cargar}
+            disabled={cargando}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#9DBB45] hover:bg-[#8AA83A] px-4 py-2.5 text-sm font-bold text-white transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${cargando ? 'animate-spin' : ''}`} aria-hidden="true" />
+            <span>Actualizar</span>
+          </button>
+        </div>
+
+        {/* Indicadores rápidos de operación siguiendo el estándar visual de la aplicación */}
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-5" aria-label="Resumen de estados">
+          {tarjetasResumen.map((item, idx) => {
+            const Icono = item.icono;
+            const activa = estadoFiltro === item.clave;
+            return (
+              <button
+                key={item.clave}
+                type="button"
+                onClick={() => setEstadoFiltro(item.clave)}
+                aria-pressed={activa}
+                className={`${idx === tarjetasResumen.length - 1 ? 'col-span-2 sm:col-span-1 ' : ''}flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-sm transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] ${
+                  activa
+                    ? 'border-[#1E3A8A] ring-1 ring-[#1E3A8A]/20'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-500">{item.etiqueta}</p>
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                      activa ? 'bg-[#1E3A8A] text-white' : 'bg-slate-100 text-[#1E3A8A]'
+                    }`}
+                  >
+                    <Icono className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                </div>
+                <p className="mt-2 text-2xl font-extrabold text-[#1E3A8A]">{item.valor}</p>
+              </button>
+            );
+          })}
         </section>
 
         {/* Controles de búsqueda, fechas, estado y comercio */}

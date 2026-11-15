@@ -48,11 +48,13 @@ return new class extends Migration
             $table->index('evento_id');
         });
 
-        DB::statement("
-            ALTER TABLE asientos_contables
-            ADD CONSTRAINT chk_asientos_contables_estado
-            CHECK (estado IN ('REGISTRADO', 'PENDIENTE', 'ANULADO'))
-        ");
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("
+                ALTER TABLE asientos_contables
+                ADD CONSTRAINT chk_asientos_contables_estado
+                CHECK (estado IN ('REGISTRADO', 'PENDIENTE', 'ANULADO'))
+            ");
+        }
     }
 
     public function down(): void

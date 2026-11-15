@@ -67,8 +67,9 @@ export default function TarjetaProducto({ producto, onAbrir, mostrarComercio = t
   return (
     <article className="group flex min-w-0 flex-col rounded-xl border border-gray-100 bg-white p-3 shadow-sm transition hover:shadow-md sm:p-4">
       <button type="button" onClick={() => onAbrir?.(producto)} className="rounded-lg text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandBlue" aria-label={`Ver ficha de ${producto.nombre}`}>
-        <div className="grid aspect-square place-items-center overflow-hidden rounded-lg bg-gray-50 text-gray-300">
-          <Imagen src={producto.imagen_principal} loading="lazy" className={`h-full w-full object-contain ${agotado ? 'opacity-60' : ''}`} />
+        {/* Marco cuadrado igual en todas las tarjetas: la imagen lo llena completo (se recorta lo que sobra). */}
+        <div className="relative grid aspect-square place-items-center overflow-hidden rounded-lg bg-gray-50 text-gray-300">
+          <Imagen src={producto.imagen_principal} loading="lazy" className={`absolute inset-0 h-full w-full object-cover ${agotado ? 'opacity-60' : ''}`} />
         </div>
         <h3 className="mt-3 line-clamp-2 min-h-10 break-words text-sm font-medium text-gray-800 group-hover:text-brandBlue">{producto.nombre}</h3>
       </button>

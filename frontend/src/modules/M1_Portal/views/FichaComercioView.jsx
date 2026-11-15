@@ -16,7 +16,8 @@ import useConsulta from '../services/useConsulta';
 // - 404 ERR-004: el comercio no existe o no está activo. 503 ERR-006: M2 no respondió (con Reintentar).
 // - productos_disponibles false: M3 no respondió; se muestra el comercio con un aviso en lugar de los productos.
 export default function FichaComercioView({ idComercio, criterio }) {
-  const { ir, categorias } = usePortal();
+  const { ir, categorias, usuario } = usePortal();
+  const esVistaPrevia = usuario?.rol === 'encargado_comercio';
   const [pestana, setPestana] = useState('productos');
   const pagina = criterio.pagina ?? 1;
   const porPagina = criterio.por_pagina ?? POR_PAGINA[0];
@@ -37,17 +38,20 @@ export default function FichaComercioView({ idComercio, criterio }) {
 
   if (!idComercio || (micrositio.estado === 'error' && !datos)) {
     return (
-      <PaginaPortal>
+      <PaginaPortal vistaPrevia={esVistaPrevia}>
         <div className="mx-auto max-w-xl py-12">
           <ErrorVista resultado={idComercio ? micrositio.resultado : { estado: 404 }} noEncontrado="Este comercio no está disponible"
-            onReintentar={micrositio.reintentar} onVolver={() => ir('inicio')} />
+            onReintentar={micrositio.reintentar} onVolver={() => {
+              if (esVistaPrevia) window.location.href = '/m2.html';
+              else ir('inicio');
+            }} />
         </div>
       </PaginaPortal>
     );
   }
 
   if (!datos) {
-    return <PaginaPortal><div className="py-8"><CargandoBloque etiqueta="Cargando comercio" /></div></PaginaPortal>;
+    return <PaginaPortal vistaPrevia={esVistaPrevia}><div className="py-8"><CargandoBloque etiqueta="Cargando comercio" /></div></PaginaPortal>;
   }
 
   const { comercio } = datos;
@@ -57,19 +61,21 @@ export default function FichaComercioView({ idComercio, criterio }) {
   const sinProductosDeM3 = !filtrando && datos.productos_disponibles === false;
 
   return (
-    <PaginaPortal>
-      <nav aria-label="Ruta de navegación" className="py-3 text-sm text-gray-500">
-        <ol className="flex flex-wrap items-center gap-1">
-          <li><button type="button" onClick={() => ir('inicio')} className="inline-flex min-h-[44px] items-center gap-1 hover:text-brandBlue sm:min-h-0"><Icono nombre="inicio" className="h-4 w-4" /> Inicio</button></li>
-          <li aria-hidden><Icono nombre="derecha" className="h-3.5 w-3.5 text-gray-400" /></li>
-          <li aria-current="page" className="min-w-0 truncate text-gray-800">{comercio.nombre_comercial}</li>
-        </ol>
-      </nav>
+    <PaginaPortal vistaPrevia={esVistaPrevia}>
+      {!esVistaPrevia && (
+        <nav aria-label="Ruta de navegación" className="py-3 text-sm text-gray-500">
+          <ol className="flex flex-wrap items-center gap-1">
+            <li><button type="button" onClick={() => ir('inicio')} className="inline-flex min-h-[44px] items-center gap-1 hover:text-brandBlue sm:min-h-0"><Icono nombre="inicio" className="h-4 w-4" /> Inicio</button></li>
+            <li aria-hidden><Icono nombre="derecha" className="h-3.5 w-3.5 text-gray-400" /></li>
+            <li aria-current="page" className="min-w-0 truncate text-gray-800">{comercio.nombre_comercial}</li>
+          </ol>
+        </nav>
+      )}
 
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         {banner ? (
-          <div className="grid h-32 place-items-center bg-gradient-to-r from-brandDarkBlue to-brandBlue sm:h-48">
-            <Imagen src={banner.imagen_url} alt={banner.texto_alternativo} className="h-full w-full object-cover" icono="tienda" claseIcono="h-10 w-10 text-white/60" />
+          <div className="relative grid h-32 place-items-center overflow-hidden bg-gradient-to-r from-brandDarkBlue to-brandBlue sm:h-48">
+            <Imagen src={banner.imagen_url} alt={banner.texto_alternativo} className="absolute inset-0 h-full w-full object-cover" icono="tienda" claseIcono="h-10 w-10 text-white/60" />
           </div>
         ) : (
           <div className="h-24 bg-gradient-to-r from-brandDarkBlue to-brandBlue sm:h-32" aria-hidden />
