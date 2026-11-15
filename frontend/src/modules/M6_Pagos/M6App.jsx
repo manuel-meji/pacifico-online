@@ -134,6 +134,19 @@ export default function M6App() {
       {!verificando && pantalla === 'factura' && (
         <FacturasPedidoView idPedido={pago?.id_pedido ?? ID_PEDIDO_FACTURAS} />
       )}
+
+      
+      {!verificando && (pantalla === 'resultado' || pantalla === 'factura') && (
+        <div className="mx-auto mt-4 max-w-xl">
+          <a
+            href="/app.html"
+            className="block w-full rounded-lg border border-gray-300 bg-white py-2 text-center text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+          >
+            Volver al menú principal
+          </a>
+        </div>
+      )}
+      
     </div>
   );
 }
