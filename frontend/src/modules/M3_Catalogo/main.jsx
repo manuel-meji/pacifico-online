@@ -93,13 +93,15 @@ function M3AppPrincipal() {
       >
         <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2">
 
-          <a
-            href="/m1.html"
-            className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10"
-          >
-            <Home size={18} />
-            Portal
-          </a>
+          {usuario?.rol !== 'encargado_comercio' && (
+            <a
+              href="/m1.html"
+              className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10"
+            >
+              <Home size={18} />
+              Portal
+            </a>
+          )}
 
           <button
             type="button"
@@ -134,7 +136,7 @@ function M3AppPrincipal() {
 
       <div className="mx-auto max-w-6xl px-4 pt-5">
         <p className="mb-4 text-xs text-slate-500">
-          <a href="/m1.html" className="hover:underline">
+          <a href={usuario?.rol === 'encargado_comercio' ? '/m2.html' : '/m1.html'} className="hover:underline">
             Inicio
           </a>
           {' / '}
