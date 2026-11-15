@@ -107,11 +107,11 @@ export default function M2App() {
                 <ClipboardList size={18} /> Pedidos
               </a>
             )}
-            {/* Finanzas del comercio en M7 (/m7.html): su reporte gerencial ya filtra por comercio con EstablecerComercio. */}
-            {usuario?.rol === 'encargado_comercio' && (
+            {/* Finanzas en M7: comercio usa su propio contexto y plataforma selecciona el comercio dentro de M7. */}
+            {['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol) && (
               <a href="/m7.html"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
-                <Wallet size={18} /> Finanzas
+                <Wallet size={18} /> Finanzas Comerciales
               </a>
             )}
             {/* Panel de gestión de M1 (/app.html?pantalla=gestion): destacados, promociones, cupones y noticias. */}
