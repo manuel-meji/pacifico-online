@@ -76,36 +76,90 @@ class PlanCuentasTest extends TestCase
     }
 
     public function test_rechaza_tipo_invalido(): void
-    {
-        $this->expectException(ErrorNucleoException::class);
-        $this->servicio->validarDatos(1, ['codigo' => '9', 'nombre' => 'X', 'tipo' => 'OTRO']);
-    }
-
-    public function test_rechaza_codigo_vacio(): void
-    {
-        $this->expectException(ErrorNucleoException::class);
-        $this->servicio->validarDatos(1, ['codigo' => '  ', 'nombre' => 'X', 'tipo' => 'ACTIVO']);
-    }
-
-    public function test_rechaza_subcuenta_de_tipo_distinto_al_padre(): void
-    {
-        $this->expectException(ErrorNucleoException::class);
+{
+    try {
         $this->servicio->validarDatos(
             1,
-            ['codigo' => '1.1', 'nombre' => 'X', 'tipo' => 'PASIVO'],
+            [
+                'codigo' => '9',
+                'nombre' => 'X',
+                'tipo' => 'OTRO',
+            ]
+        );
+
+        $this->fail(
+            'Se esperaba ErrorNucleoException por tipo inválido.'
+        );
+    } catch (ErrorNucleoException $e) {
+        $this->assertSame('ERR-M7-003', $e->getCodigo());
+        $this->assertSame(422, $e->getCodigoHttp());
+    }
+}
+
+public function test_rechaza_codigo_vacio(): void
+{
+    try {
+        $this->servicio->validarDatos(
+            1,
+            [
+                'codigo' => '  ',
+                'nombre' => 'X',
+                'tipo' => 'ACTIVO',
+            ]
+        );
+
+        $this->fail(
+            'Se esperaba ErrorNucleoException por código vacío.'
+        );
+    } catch (ErrorNucleoException $e) {
+        $this->assertSame('ERR-M7-003', $e->getCodigo());
+        $this->assertSame(422, $e->getCodigoHttp());
+    }
+}
+
+public function test_rechaza_subcuenta_de_tipo_distinto_al_padre(): void
+{
+    try {
+        $this->servicio->validarDatos(
+            1,
+            [
+                'codigo' => '1.1',
+                'nombre' => 'X',
+                'tipo' => 'PASIVO',
+            ],
             $this->padre('ACTIVO')
         );
-    }
 
-    public function test_rechaza_padre_de_otro_comercio(): void
-    {
-        $this->expectException(ErrorNucleoException::class);
+        $this->fail(
+            'Se esperaba ErrorNucleoException por tipo distinto al padre.'
+        );
+    } catch (ErrorNucleoException $e) {
+        $this->assertSame('ERR-M7-003', $e->getCodigo());
+        $this->assertSame(422, $e->getCodigoHttp());
+    }
+}
+
+public function test_rechaza_padre_de_otro_comercio(): void
+{
+    try {
         $this->servicio->validarDatos(
             1,
-            ['codigo' => '1.1', 'nombre' => 'X', 'tipo' => 'ACTIVO'],
+            [
+                'codigo' => '1.1',
+                'nombre' => 'X',
+                'tipo' => 'ACTIVO',
+            ],
             $this->padre('ACTIVO', 1, 2)
         );
+
+        $this->fail(
+            'Se esperaba ErrorNucleoException por cuenta padre de otro comercio.'
+        );
+    } catch (ErrorNucleoException $e) {
+        $this->assertSame('ERR-M7-003', $e->getCodigo());
+        $this->assertSame(422, $e->getCodigoHttp());
     }
+}
 
     public function test_plan_base_tiene_codigos_unicos_y_tipos_validos(): void
     {
