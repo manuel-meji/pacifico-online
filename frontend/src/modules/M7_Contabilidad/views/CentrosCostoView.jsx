@@ -59,17 +59,23 @@ export default function CentrosCostoView({ onNavegar }) {
     `${centro.codigo} ${centro.nombre}`.toLowerCase().includes(busqueda.trim().toLowerCase())
   );
   const paginas = Math.max(1, Math.ceil(centros.length / 10));
-  const visibles = centros.slice((pagina - 1) * 10, pagina * 10);
   const periodo = { desde: consulta.desde, hasta: consulta.hasta };
   const abrirDetalle = (id, titulo) => setSeleccion({ tipo: 'centro', id, idComercio: datos.id_comercio, titulo, periodo });
+  const hayFechas = Boolean(desde || hasta || consulta.desde || consulta.hasta);
+  const limpiarFechas = () => {
+    setDesde(''); setHasta('');
+    if (consulta.desde || consulta.hasta) {
+      setDatos(null); setError(''); setPagina(1); setConsulta({ comercio, desde: '', hasta: '' });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#f5f7fa]">
       <EncabezadoM7 seccionActiva="Centros de costo" onNavegar={onNavegar} />
-      <main id="contenido" className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <main id="contenido" className="m7-print-area m7-print-area-pantalla mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <h1 className="text-2xl font-bold text-[#1e3a8a]">Centros de costo</h1>
         <p className="mt-2 text-sm text-gray-600">Rentabilidad por centro: ingresos y costos netos de asientos registrados en cuentas de ingresos, costos y gastos. No incluye presupuestos ni responsables.</p>
-        <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={(evento) => {
+        <form className="no-print mt-4 flex flex-wrap items-end gap-3" onSubmit={(evento) => {
           evento.preventDefault(); setDatos(null); setError(''); setPagina(1); setConsulta({ comercio, desde, hasta });
         }}>
           <SelectorComercioM7 valor={comercio} onCambiar={setComercio} onCargados={(lista) => {
@@ -83,13 +89,15 @@ export default function CentrosCostoView({ onNavegar }) {
           <label className="flex flex-col gap-1 text-sm">Hasta
             <input type="date" value={hasta} min={desde || undefined} onChange={(evento) => setHasta(evento.target.value)} className="rounded border bg-white p-2" />
           </label>
-          <button className="rounded bg-[#1e3a8a] p-2 text-white">Actualizar consulta</button>
-          <p className="text-xs text-gray-600">Fechas vacías consultan todo el historial.</p>
+          <button type="button" className="rounded border bg-white p-2 disabled:opacity-50" disabled={!hayFechas} onClick={limpiarFechas}>Limpiar filtros</button>
+          <button className="ml-auto rounded bg-[#1e3a8a] p-2 text-white">Actualizar consulta</button>
         </form>
+        <p className="no-print mt-1 text-xs text-gray-600">Fechas vacías consultan todo el historial.</p>
         {error ? <p role="alert" className="mt-4 text-red-700">{error}</p> : !datos ? (
           <p role="status" className="mt-4">Cargando centros de costo...</p>
         ) : (
           <>
+            <p className="m7-solo-impresion">Comercio: {datos.id_comercio} · Estado: {estado} · Búsqueda: {busqueda.trim() || 'Todas'}</p>
             <section className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Resumen de rentabilidad">
               <article className="rounded-xl bg-white p-5 shadow-sm"><h2>Ingresos</h2><p className="mt-2 text-2xl font-bold text-[#1e3a8a]">{moneda(datos.resumen.ingresos)}</p></article>
               <article className="rounded-xl bg-white p-5 shadow-sm"><h2>Costos</h2><p className="mt-2 text-2xl font-bold text-[#1e3a8a]">{moneda(datos.resumen.costos)}</p></article>
@@ -102,7 +110,7 @@ export default function CentrosCostoView({ onNavegar }) {
             {!datos.hay_movimientos && (
               <p role="status" className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-[#1e3a8a]">Sin movimientos en el período consultado.</p>
             )}
-            <div className="mb-4 flex flex-wrap gap-4">
+            <div className="no-print mb-4 flex flex-wrap gap-4">
               <label className="flex flex-col gap-1">Buscar centro
                 <input className="rounded border p-2" value={busqueda} onChange={(evento) => { setBusqueda(evento.target.value); setPagina(1); }} />
               </label>
@@ -111,7 +119,7 @@ export default function CentrosCostoView({ onNavegar }) {
                   {['Todos', 'Activo', 'Inactivo'].map((opcion) => <option key={opcion}>{opcion}</option>)}
                 </select>
               </label>
-              <button className="self-end rounded border bg-white p-2" onClick={() => { setBusqueda(''); setEstado('Todos'); setPagina(1); }}>Limpiar filtros</button>
+              <button className="self-end rounded border bg-white p-2" onClick={() => { setBusqueda(''); setEstado('Todos'); setPagina(1); }}>Limpiar búsqueda y filtros</button>
               <button className="self-end rounded bg-[#1e3a8a] p-2 text-white" onClick={() => window.print()}>Imprimir reporte</button>
             </div>
             <div className="overflow-x-auto rounded-xl bg-white">
@@ -119,21 +127,21 @@ export default function CentrosCostoView({ onNavegar }) {
                 <thead className="bg-[#1e3a8a] text-white"><tr>
                   <th className="p-3">Código</th><th className="p-3">Centro</th><th className="p-3">Estado</th>
                   <th className="p-3 text-right">Ingresos</th><th className="p-3 text-right">Costos</th>
-                  <th className="p-3 text-right">Utilidad</th><th className="p-3 text-right">Margen</th><th className="p-3">Detalle</th>
+                  <th className="p-3 text-right">Utilidad</th><th className="p-3 text-right">Margen</th><th className="no-print p-3">Detalle</th>
                 </tr></thead>
                 <tbody>
-                  {visibles.map((centro) => <tr key={centro.id_centro_costo} className="border-b">
+                  {centros.map((centro, indice) => <tr key={centro.id_centro_costo} className={`border-b ${indice < (pagina - 1) * 10 || indice >= pagina * 10 ? 'm7-solo-impresion' : ''}`}>
                     <td className="p-3">{centro.codigo}</td><td className="p-3">{centro.nombre}</td>
                     <td className="p-3">{centro.activo ? 'Activo' : 'Inactivo'}</td>
                     <ColumnasRentabilidad fila={centro} />
-                    <td className="p-3"><button className="rounded border border-blue-800 p-2 text-blue-800"
+                    <td className="no-print p-3"><button className="rounded border border-blue-800 p-2 text-blue-800"
                       aria-label={`Ver movimientos de ${centro.codigo}`}
                       onClick={() => abrirDetalle(centro.id_centro_costo, `${centro.codigo} · ${centro.nombre}`)}>Ver movimientos</button></td>
                   </tr>)}
                   {datos.sin_centro && <tr className="border-b bg-amber-50">
                     <td className="p-3">—</td><td className="p-3 font-medium">Sin centro de costo asignado</td><td className="p-3">—</td>
                     <ColumnasRentabilidad fila={datos.sin_centro} />
-                    <td className="p-3"><button className="rounded border border-blue-800 p-2 text-blue-800"
+                    <td className="no-print p-3"><button className="rounded border border-blue-800 p-2 text-blue-800"
                       aria-label="Ver movimientos sin centro asignado"
                       onClick={() => abrirDetalle(null, 'Sin centro de costo asignado')}>Ver movimientos</button></td>
                   </tr>}
@@ -141,7 +149,7 @@ export default function CentrosCostoView({ onNavegar }) {
               </table>
               {centros.length === 0 && <p className="p-4">No hay centros para los filtros seleccionados.</p>}
             </div>
-            <nav aria-label="Paginación de centros" className="mt-4 flex items-center gap-3">
+            <nav aria-label="Paginación de centros" className="no-print mt-4 flex items-center gap-3">
               <button className="rounded border p-2 disabled:opacity-50" disabled={pagina === 1} onClick={() => setPagina(pagina - 1)}>Anterior</button>
               <span>Página {pagina} de {paginas}</span>
               <button className="rounded border p-2 disabled:opacity-50" disabled={pagina === paginas} onClick={() => setPagina(pagina + 1)}>Siguiente</button>

@@ -11,6 +11,7 @@ use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use OverflowException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 use UnexpectedValueException;
 
@@ -211,6 +212,59 @@ final class ConsultasOperativasService
             ],
             'ingresos' => $this->importe($ingresos), 'costos' => $this->importe($costos),
             'utilidad' => $this->importe($ingresos - $costos), 'movimientos' => $movimientos,
+        ];
+    }
+
+    /**
+     * Asiento completo con todas sus líneas, para consultarlo desde los detalles de los reportes.
+     *
+     * @return array{id_asiento: int, id_comercio: int, fecha: string, tipo: string, tipo_evento: string|null, descripcion: string|null, estado: string, id_pedido: int|null, id_subpedido: int|null, id_pago: int|null, id_asiento_original: int|null, total_debe: string, total_haber: string, cuadrado: bool, lineas: list<array{numero_linea: int, codigo_cuenta: string, nombre_cuenta: string, tipo_cuenta: string, centro: array{codigo: string, nombre: string}|null, descripcion: string|null, debe: string, haber: string}>}
+     */
+    public function asiento(int $idComercio, int $idAsiento): array
+    {
+        $asiento = DB::table('asientos_contables')->where('id_comercio', $idComercio)
+            ->where('id_asiento', $idAsiento)->first();
+        if ($asiento === null) {
+            throw new NotFoundHttpException('El asiento no existe para este comercio.');
+        }
+        $registros = DB::table('detalle_asientos as d')
+            ->join('cuentas_contables as c', function (JoinClause $union) use ($idComercio): void {
+                $union->on('c.id_cuenta_contable', '=', 'd.id_cuenta_contable')->where('c.id_comercio', $idComercio);
+            })
+            ->leftJoin('centros_costo as cc', function (JoinClause $union) use ($idComercio): void {
+                $union->on('cc.id_centro_costo', '=', 'd.id_centro_costo')->where('cc.id_comercio', $idComercio);
+            })
+            ->where('d.id_asiento', $idAsiento)->orderBy('d.numero_linea')
+            ->select([
+                'd.numero_linea', 'd.debe', 'd.haber', 'd.descripcion',
+                'c.codigo', 'c.nombre', 'c.tipo as tipo_cuenta', 'cc.codigo as codigo_centro', 'cc.nombre as nombre_centro',
+            ])->get();
+        $totalDebe = 0;
+        $totalHaber = 0;
+        $lineas = [];
+        foreach ($registros as $registro) {
+            $debe = $this->centimos($registro->debe);
+            $haber = $this->centimos($registro->haber);
+            $totalDebe += $debe;
+            $totalHaber += $haber;
+            $lineas[] = [
+                'numero_linea' => (int) $registro->numero_linea,
+                'codigo_cuenta' => $registro->codigo, 'nombre_cuenta' => $registro->nombre, 'tipo_cuenta' => $registro->tipo_cuenta,
+                'centro' => $registro->codigo_centro === null ? null : ['codigo' => $registro->codigo_centro, 'nombre' => $registro->nombre_centro],
+                'descripcion' => $registro->descripcion,
+                'debe' => $this->importe($debe), 'haber' => $this->importe($haber),
+            ];
+        }
+        $entero = fn (int|string|null $valor): ?int => $valor === null ? null : (int) $valor;
+
+        return [
+            'id_asiento' => (int) $asiento->id_asiento, 'id_comercio' => $idComercio,
+            'fecha' => (string) $asiento->fecha, 'tipo' => $asiento->tipo, 'tipo_evento' => $asiento->tipo_evento,
+            'descripcion' => $asiento->descripcion, 'estado' => $asiento->estado,
+            'id_pedido' => $entero($asiento->id_pedido), 'id_subpedido' => $entero($asiento->id_subpedido),
+            'id_pago' => $entero($asiento->id_pago), 'id_asiento_original' => $entero($asiento->id_asiento_original),
+            'total_debe' => $this->importe($totalDebe), 'total_haber' => $this->importe($totalHaber),
+            'cuadrado' => $lineas !== [] && $totalDebe === $totalHaber, 'lineas' => $lineas,
         ];
     }
 

@@ -47,6 +47,11 @@ final class ConsultasOperativasController extends Controller
         return $this->detalleCentro($request, null);
     }
 
+    public function asiento(Request $request, int $idAsiento): JsonResponse
+    {
+        return response()->json(['success' => true, 'data' => $this->consultas->asiento($this->comercio($request), $idAsiento)]);
+    }
+
     private function detalleCentro(Request $request, ?int $idCentroCosto): JsonResponse
     {
         $comercio = $this->comercio($request);
