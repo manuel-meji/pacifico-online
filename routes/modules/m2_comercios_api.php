@@ -86,6 +86,7 @@ Route::prefix('api/m2/v1')
         Route::put('solicitudes/{idSolicitud}', [Solicitudes::class, 'corregir'])
             ->whereNumber('idSolicitud')->middleware('throttle:10,1')->name('solicitudes.corregir');
         Route::middleware('auth:sanctum')->group(function (): void {
+            Route::get('mi-solicitud', [Solicitudes::class, 'miSolicitud'])->name('solicitudes.mia');
             Route::get('solicitudes', [Solicitudes::class, 'listar'])->name('solicitudes.listar');
             Route::get('solicitudes/{idSolicitud}', [Solicitudes::class, 'consultar'])
                 ->whereNumber('idSolicitud')->name('solicitudes.consultar');

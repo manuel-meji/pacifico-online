@@ -10,6 +10,7 @@ use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\Nucleo\Usuario;
 use App\Notifications\Nucleo\InvitacionEncargadoComercio;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -45,10 +46,18 @@ class ServicioIdentidad implements ServicioIdentidadInterface
             throw ErrorNucleoException::validacionFallida($validador->errors()->toArray());
         }
 
-        // El Encargado del comercio no trae contraseña: se genera una aleatoria que nadie
-        // conoce, y la persona define la suya con la invitación.
+        // El Encargado del comercio puede traer la contraseña que definió en su solicitud de
+        // incorporación, ya cifrada por M2. Sin ella, se genera una aleatoria que nadie conoce
+        // y la persona define la suya con la invitación.
+        $cifrada = $rolEnum === RolUsuario::EncargadoComercio ? ($datos['contrasena_cifrada'] ?? null) : null;
+        if ($cifrada !== null && (! is_string($cifrada) || ! Hash::isHashed($cifrada))) {
+            throw ErrorNucleoException::validacionFallida([
+                'contrasena' => ['La contraseña de la solicitud no es válida.'],
+            ]);
+        }
+
         $contrasena = $rolEnum === RolUsuario::EncargadoComercio
-            ? Str::random(64)
+            ? ($cifrada ?? Str::random(64))
             : $campos['contrasena'];
 
         try {
@@ -67,7 +76,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
             ]);
         }
 
-        if ($rolEnum === RolUsuario::EncargadoComercio) {
+        if ($rolEnum === RolUsuario::EncargadoComercio && $cifrada === null) {
             $token = Password::broker('invitaciones')->createToken($usuario);
             $usuario->notify(new InvitacionEncargadoComercio($token));
         }

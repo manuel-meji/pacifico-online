@@ -5,6 +5,8 @@ import { AvisoError, C, Cargando, Encabezado, SesionContexto, textoDeError } fro
 import SolicitudIncorporacion from './views/SolicitudIncorporacion';
 import PanelComercio from './views/PanelComercio';
 import PanelPlataforma from './views/PanelPlataforma';
+import EstadoSolicitud from './views/EstadoSolicitud';
+import { miSolicitud } from './services/m2Api';
 
 const VISTAS = [
   { clave: 'solicitud', nombre: 'Solicitud de incorporación', corto: 'Solicitud', icono: FileText, Vista: SolicitudIncorporacion, rol: null, ocultarPara: ['encargado_comercio'] },
@@ -22,13 +24,27 @@ export default function M2App() {
   const [vista, setVista] = useState('solicitud');
   const [errorCierre, setErrorCierre] = useState('');
 
+  // Encargado de un comercio que todavía no se aprueba (creó su cuenta con la solicitud): solo ve el
+  // estado de la revisión. undefined = consultando; null = comercio aprobado (Activo o Suspendido).
+  const [revision, setRevision] = useState(undefined);
+  const consultarRevision = useCallback(async () => {
+    const r = await miSolicitud();
+    const sinAprobar = r.ok && ['Pendiente', 'Rechazado'].includes(r.datos?.estado_comercio);
+    setRevision(sinAprobar ? r.datos : null);
+  }, []);
+
   useEffect(() => {
     obtenerUsuario().then((r) => {
       const user = r.ok ? r.datos?.user ?? null : null;
       setUsuario(user);
       setVista(vistaInicial(user));
+      if (user?.rol === 'encargado_comercio') consultarRevision();
+      else setRevision(null);
     });
-  }, []);
+  }, [consultarRevision]);
+
+  // Rol con el que se arma la navegación: mientras no se aprueba, el encargado no tiene pestañas ni enlaces.
+  const rolPanel = revision ? 'en_revision' : usuario?.rol;
 
   const salir = async () => {
     setErrorCierre('');
@@ -50,7 +66,7 @@ export default function M2App() {
 
   // Mientras se verifica la sesión (usuario === undefined) no se muestra ninguna pestaña: si no, un encargado
   // vería por un instante la Solicitud, que es la vista de quien no tiene sesión.
-  const visibles = usuario === undefined ? [] : VISTAS.filter(
+  const visibles = usuario === undefined || revision !== null ? [] : VISTAS.filter(
     (v) => (v.rol === null || v.rol === usuario?.rol) && !v.ocultarPara?.includes(usuario?.rol),
   );
   // La solicitud de incorporación es pública (sin sesión, clientes y encargado de plataforma), pero no se
@@ -58,8 +74,10 @@ export default function M2App() {
   const actual = visibles.find((v) => v.clave === vista) ?? visibles[0] ?? VISTAS[0];
 
   let contenido;
-  if (usuario === undefined) {
+  if (usuario === undefined || (usuario && revision === undefined)) {
     contenido = <Cargando texto="Verificando la sesión…" />;
+  } else if (revision) {
+    contenido = <EstadoSolicitud datos={revision} onActualizar={consultarRevision} />;
   } else {
     const { Vista } = actual;
     contenido = <Vista />;
@@ -87,35 +105,35 @@ export default function M2App() {
               </button>
             ))}
             {/* Catálogo de M3 (/m3.html): el encargado del comercio registra y publica sus productos. */}
-            {usuario?.rol === 'encargado_comercio' && (
+            {rolPanel === 'encargado_comercio' && (
               <a href="/m3.html"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <LayoutGrid size={18} /> Catálogo
               </a>
             )}
             {/* Enlace al inventario de M4 (/m4.html): el encargado del comercio entra con la misma sesión del núcleo. */}
-            {usuario?.rol === 'encargado_comercio' && (
+            {rolPanel === 'encargado_comercio' && (
               <a href="/m4.html"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <Boxes size={18} /> Inventario
               </a>
             )}
             {/* Enlace a los pedidos del comercio en M5 (/carrito.html?pantalla=comercio): misma sesión del núcleo. */}
-            {usuario?.rol === 'encargado_comercio' && (
+            {rolPanel === 'encargado_comercio' && (
               <a href="/carrito.html?pantalla=comercio"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <ClipboardList size={18} /> Pedidos
               </a>
             )}
             {/* Finanzas del comercio en M7 (/m7.html): su reporte gerencial ya filtra por comercio con EstablecerComercio. */}
-            {usuario?.rol === 'encargado_comercio' && (
+            {rolPanel === 'encargado_comercio' && (
               <a href="/m7.html"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <Wallet size={18} /> Finanzas
               </a>
             )}
             {/* Panel de gestión de M1 (/app.html?pantalla=gestion): destacados, promociones, cupones y noticias. */}
-            {['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol) && (
+            {['encargado_comercio', 'encargado_plataforma'].includes(rolPanel) && (
               <a href="/app.html?pantalla=gestion" title="Productos destacados, promociones, cupones y noticias (M1)"
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <Megaphone size={18} /> Gestión del portal

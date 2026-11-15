@@ -37,6 +37,7 @@ use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -792,13 +793,34 @@ class ComerciosService implements ComerciosServiceInterface
         return $this->datosSolicitud($solicitud);
     }
 
+    /**
+     * Estado de la revisión para la persona encargada que creó su cuenta con la solicitud: el
+     * panel de M2 le muestra solo esto mientras el comercio no esté aprobado.
+     *
+     * @return array<string, mixed>
+     */
+    public function estadoSolicitudDelComercio(int $idComercio): array
+    {
+        $comercio = Comercio::query()->find($idComercio)
+            ?? throw $this->noEncontrado('El comercio no existe.');
+        $solicitud = SolicitudComercio::query()->where('id_comercio', $idComercio)
+            ->orderByDesc('id_solicitud')->first();
+
+        return [
+            'id_comercio' => $comercio->id_comercio,
+            'nombre_comercial' => $comercio->nombre_comercial,
+            'estado_comercio' => $comercio->estado,
+            'solicitud' => $solicitud?->only(['id_solicitud', 'estado', 'motivo_rechazo', 'created_at', 'fecha_reenvio']),
+        ];
+    }
+
     /** @return array<string, mixed> */
     private function datosSolicitud(SolicitudComercio $solicitud): array
     {
         return $solicitud->only([
             'id_solicitud', 'id_comercio', 'nombre_encargado', 'correo_encargado',
             'telefono_encargado', 'estado', 'requiere_documentos', 'motivo_rechazo',
-            'fecha_reenvio', 'created_at', 'updated_at',
+            'fecha_reenvio', 'cuenta_creada', 'created_at', 'updated_at',
         ]) + [
             'comercio' => $solicitud->comercio->only([
                 'id_comercio', 'cedula_juridica', 'nombre_comercial', 'razon_social',
@@ -949,11 +971,15 @@ class ComerciosService implements ComerciosServiceInterface
             $solicitud->aprobar();
             $comercio->activar();
 
+            // Si la cuenta se creó con la solicitud, ya existe y la aprobación solo activa el comercio.
+            // Las solicitudes sin contraseña crean aquí la cuenta y el núcleo envía la invitación.
             try {
-                $this->identidad->crearCuenta([
-                    'nombre' => $solicitud->nombre_encargado,
-                    'correo' => $solicitud->correo_encargado,
-                ], RolUsuario::EncargadoComercio, $comercio->id_comercio);
+                if (! $solicitud->cuenta_creada) {
+                    $this->identidad->crearCuenta([
+                        'nombre' => $solicitud->nombre_encargado,
+                        'correo' => $solicitud->correo_encargado,
+                    ], RolUsuario::EncargadoComercio, $comercio->id_comercio);
+                }
             } catch (ErrorNucleoException $e) {
                 // El núcleo rechaza el correo del encargado (ya tiene cuenta): se relanza dentro de la
                 // transacción, así que la aprobación y la activación del comercio se revierten.
@@ -1004,11 +1030,31 @@ class ComerciosService implements ComerciosServiceInterface
                 'nombre_encargado' => $datos['nombre_encargado'],
                 'correo_encargado' => $datos['correo_encargado'],
                 'telefono_encargado' => $datos['telefono_encargado'] ?? null,
+                'cuenta_creada' => isset($datos['contrasena_encargado']),
                 'estado' => SolicitudComercio::PENDIENTE,
                 'requiere_documentos' => $documentos !== [],
                 'motivo_rechazo' => null,
                 'fecha_reenvio' => null,
             ]);
+
+            // Con contraseña, la cuenta de la persona encargada se crea ya, con el comercio Pendiente:
+            // puede ingresar para ver el estado de la revisión, pero no administrar el comercio hasta
+            // que se apruebe. M2 solo le pasa al núcleo el cifrado; la contraseña en claro no se guarda.
+            if (isset($datos['contrasena_encargado'])) {
+                try {
+                    $this->identidad->crearCuenta([
+                        'nombre' => $datos['nombre_encargado'],
+                        'correo' => $datos['correo_encargado'],
+                        'contrasena_cifrada' => Hash::make($datos['contrasena_encargado']),
+                    ], RolUsuario::EncargadoComercio, $comercio->id_comercio);
+                } catch (ErrorNucleoException $e) {
+                    if (array_key_exists('correo', $e->getDetalles() ?? [])) {
+                        $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con este correo. Use otro correo para la persona encargada.']]);
+                    }
+
+                    throw $e;
+                }
+            }
 
             foreach ($documentos as $documento) {
                 /** @var UploadedFile $archivo */
