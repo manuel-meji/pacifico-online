@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\Feature\M3_Catalogo\EsquemaCatalogoPrueba;
 use Tests\TestCase;
 
@@ -209,6 +210,8 @@ class M3_ApiCatalogoTest extends TestCase
             'nombre' => 'Hogar',
         ])->assertCreated()->json('id_categoria');
 
+        $cantidadAntes = DB::table('productos')->count();
+
         $this->postJson(self::BASE.'/productos', [
             'id_comercio' => self::OTRO_COMERCIO,
             'id_categoria' => $idCategoria,
@@ -216,6 +219,11 @@ class M3_ApiCatalogoTest extends TestCase
         ])
             ->assertForbidden()
             ->assertJsonPath('error.codigo', 'ERR-002');
+
+        $this->assertSame(
+            $cantidadAntes,
+            DB::table('productos')->count()
+        );
     }
 
     public function test_acepta_el_id_comercio_cuando_coincide_con_la_sesion(): void
@@ -279,6 +287,10 @@ class M3_ApiCatalogoTest extends TestCase
                 'precio' => 5000,
                 'tarifa_impuesto' => 13,
                 'disponible' => true,
+                'atributos' => [
+                    ['tipo_atributo' => 'Talla', 'valor' => 'M'],
+                    ['tipo_atributo' => 'Color', 'valor' => 'Azul'],
+                ],
             ]
         )
             ->assertCreated()
@@ -291,11 +303,19 @@ class M3_ApiCatalogoTest extends TestCase
         )
             ->assertOk()
             ->assertJsonPath('id_variacion', $idVariacion)
-            ->assertJsonPath('disponible', false);
+            ->assertJsonPath('disponible', false)
+            ->assertJsonMissingPath('codigo_barras')
+            ->assertJsonMissingPath('codigo_fabricante')
+            ->assertJsonPath('atributos.0.tipo_atributo', 'Talla')
+            ->assertJsonPath('atributos.1.tipo_atributo', 'Color');
 
         $this->getJson(self::BASE."/variaciones/{$idVariacion}")
             ->assertOk()
-            ->assertJsonPath('disponible', false);
+            ->assertJsonPath('disponible', false)
+            ->assertJsonMissingPath('codigo_barras')
+            ->assertJsonMissingPath('codigo_fabricante')
+            ->assertJsonPath('atributos.0.tipo_atributo', 'Talla')
+            ->assertJsonPath('atributos.1.tipo_atributo', 'Color');
     }
 
     public function test_no_autenticado_no_puede_actualizar_disponibilidad(): void
@@ -418,18 +438,90 @@ class M3_ApiCatalogoTest extends TestCase
             )
                 ->assertStatus(422)
                 ->assertJsonPath('error.codigo', 'ERR-005')
+
                 ->assertJsonStructure([
                     'error' => [
                         'codigo',
                         'mensaje',
                         'detalles' => ['disponible'],
                     ],
-                ]);
+                ]
+                );
+
         }
 
         $this->getJson(self::BASE."/variaciones/{$idVariacion}")
             ->assertOk()
             ->assertJsonPath('disponible', true);
+    }
+
+    public function test_variacion_inexistente_responde_404(): void
+    {
+        $this->comoEncargado(self::COMERCIO);
+
+        $this->patchJson(self::BASE.'/variaciones/999999', [
+            'disponible' => false,
+        ])
+            ->assertNotFound()
+            ->assertJsonPath('error.codigo', 'ERR-004');
+    }
+
+    public function test_disponible_null_responde_422(): void
+    {
+        $this->comoEncargado(self::COMERCIO);
+        $idProducto = $this->productoEnBorrador();
+
+        $idVariacion = $this->postJson(
+            self::BASE."/productos/{$idProducto}/variaciones",
+            [
+                'sku' => 'TEST-NULL',
+                'precio' => 5000,
+                'tarifa_impuesto' => 13,
+                'disponible' => true,
+            ]
+        )->assertCreated()->json('id_variacion');
+
+        $this->patchJson(self::BASE."/variaciones/{$idVariacion}", [
+            'disponible' => null,
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('error.codigo', 'ERR-005');
+    }
+
+    public function test_patch_no_modifica_datos_de_ultimo_evento(): void
+    {
+        $this->comoEncargado(self::COMERCIO);
+        $idProducto = $this->productoEnBorrador();
+
+        $idVariacion = $this->postJson(
+            self::BASE."/productos/{$idProducto}/variaciones",
+            [
+                'sku' => 'TEST-EVENTO',
+                'precio' => 5000,
+                'tarifa_impuesto' => 13,
+                'disponible' => true,
+            ]
+        )->assertCreated()->json('id_variacion');
+
+        $fecha = now()->subDay()->startOfSecond();
+        $evento = (string) Str::uuid();
+
+        DB::table('producto_variaciones')
+            ->where('id_variacion', $idVariacion)
+            ->update([
+                'fecha_ultimo_evento' => $fecha,
+                'id_ultimo_evento' => $evento,
+            ]);
+
+        $this->patchJson(self::BASE."/variaciones/{$idVariacion}", [
+            'disponible' => false,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('producto_variaciones', [
+            'id_variacion' => $idVariacion,
+            'fecha_ultimo_evento' => $fecha,
+            'id_ultimo_evento' => $evento,
+        ]);
     }
 
     public function test_un_sku_repetido_en_el_comercio_responde_409(): void

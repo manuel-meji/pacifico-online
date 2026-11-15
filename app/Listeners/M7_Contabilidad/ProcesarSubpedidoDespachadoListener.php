@@ -6,7 +6,9 @@ namespace App\Listeners\M7_Contabilidad;
 
 use App\Contracts\M7_Contabilidad\CostosProductosVendidosGatewayInterface;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Services\M7_Contabilidad\ComisionPendienteRepository;
 use App\Services\M7_Contabilidad\DTOs\CostoVentaDTO;
+use App\Services\M7_Contabilidad\ProcesarComisionPendienteService;
 use App\Services\M7_Contabilidad\ProcesarSubpedidoDespachadoService;
 use App\Services\Nucleo\ContextoComercio;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +21,8 @@ final class ProcesarSubpedidoDespachadoListener
         private readonly CostosProductosVendidosGatewayInterface $costos,
         private readonly ProcesarSubpedidoDespachadoService $procesador,
         private readonly ContextoComercio $contexto,
+        private readonly ComisionPendienteRepository $comisionesPendientes,
+        private readonly ProcesarComisionPendienteService $procesadorComision,
     ) {}
 
     public function handle(SubpedidoDespachado $evento): void
@@ -76,5 +80,18 @@ final class ProcesarSubpedidoDespachadoListener
         $this->contexto->ejecutarComoSistema(
             fn () => $this->procesador->procesar($dto)
         );
+
+        $this->comisionesPendientes->registrar(
+            eventoId: $evento->id_evento,
+            pedidoId: $evento->id_pedido,
+            subpedidoId: $evento->id_subpedido,
+            comercioId: $evento->id_comercio,
+            fechaEvento: $evento->fecha_evento,
+        );
+
+        $this->procesadorComision->intentar(
+            $evento->id_subpedido
+        );
+
     }
 }

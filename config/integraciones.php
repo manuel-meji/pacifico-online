@@ -109,11 +109,11 @@ return [
             'doble' => M4CatalogoStub::class,
         ],
         'nucleo' => [
-            'modo' => env('M4_NUCLEO_MODO', 'doble'),
+            'modo' => env('M4_NUCLEO_MODO', 'real'),
             'doble' => M4NucleoStub::class,
         ],
         'm5' => [
-            'modo' => env('M4_M5_MODO', 'doble'),
+            'modo' => env('M4_M5_MODO', 'real'),
             'doble' => M4PedidosStub::class,
         ],
 

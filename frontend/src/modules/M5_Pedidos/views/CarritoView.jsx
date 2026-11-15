@@ -1,24 +1,18 @@
 import { useCallback, useState } from 'react';
 import { CreditCard, LoaderCircle, Lock, RefreshCw, ShoppingCart, Trash2 } from 'lucide-react';
 import { Alerta, Boton, Encabezado, ModalConfirmacion, TarjetaComercio, Total } from '../components/componentes';
-import AgregarProductoDemo from '../components/AgregarProductoDemo';
 import { colones } from '../services/calculos';
 
 // CU-001 Gestionar carrito de compras (InterfazCarrito): productos agrupados por comercio
-// GET /api/m5/v1/carrito (grupos_comercio + resumen). Las acciones (cantidad, quitar, vaciar, agregar)
+// GET /api/m5/v1/carrito (grupos_comercio + resumen). Las acciones (cantidad, quitar, vaciar)
 // llegan como props desde M5App y los montos se muestran tal como los devuelve la API.
 export default function CarritoPage({
-  carrito, cargando, error, onReintentar, aviso, avisosItem = {}, avisoDemo, pendientes,
-  onCantidad, onQuitar, onVaciar, onAgregar, onContinuar,
+  carrito, cargando, error, onReintentar, aviso, avisosItem = {}, pendientes,
+  onCantidad, onQuitar, onVaciar, onContinuar,
 }) {
   const [confirmandoVaciar, setConfirmandoVaciar] = useState(false);
   const vaciando = pendientes?.has('vaciar') ?? false;
   const cerrarModalVaciar = useCallback(() => setConfirmandoVaciar(false), []);
-
-  const esModoDemo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('demo');
-  const demo = esModoDemo ? (
-    <AgregarProductoDemo ocupado={pendientes?.has('agregar')} aviso={avisoDemo} onAgregar={onAgregar} />
-  ) : null;
 
   if (cargando) {
     return (
@@ -61,7 +55,6 @@ export default function CarritoPage({
         <Encabezado titulo="Mi carrito" />
         <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
           {aviso && <Alerta tipo={aviso.tipo} titulo={aviso.titulo}>{aviso.texto}</Alerta>}
-          {demo}
           <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-8 sm:p-12 max-w-md mx-auto text-center space-y-4">
             <ShoppingCart className="w-16 h-16 stroke-1 text-gray-300 mx-auto" aria-hidden="true" />
             <div>
@@ -108,8 +101,6 @@ export default function CarritoPage({
             Sus productos están deshabilitados: quítelos para continuar con el resto de su compra.
           </Alerta>
         )}
-
-        {demo}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Columna izquierda: Subpedidos por comercio */}

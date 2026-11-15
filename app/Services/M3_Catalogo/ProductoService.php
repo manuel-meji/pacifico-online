@@ -372,24 +372,36 @@ class ProductoService
 
         $variacion->save();
 
-        return [
+        $respuesta = [
             'id_variacion' => (int) $variacion->getKey(),
             'id_producto' => (int) $variacion->id_producto,
             'sku' => $variacion->sku,
             'precio' => (float) $variacion->precio,
             'tarifa_impuesto' => (float) $variacion->tarifa_impuesto,
-            'codigo_barras' => $variacion->codigo_barras,
-            'codigo_fabricante' => $variacion->codigo_fabricante,
-            'disponible' => (bool) $variacion->disponible,
-            'atributos' => $variacion->atributos()
-                ->get()
-                ->map(fn (AtributoVariacion $atributo): array => [
-                    'tipo_atributo' => $atributo->tipo_atributo,
-                    'valor' => $atributo->valor,
-                ])
-                ->values()
-                ->all(),
         ];
+
+        if ($variacion->codigo_barras !== null) {
+            $respuesta['codigo_barras'] = $variacion->codigo_barras;
+        }
+
+        if ($variacion->codigo_fabricante !== null) {
+            $respuesta['codigo_fabricante'] = $variacion->codigo_fabricante;
+        }
+
+        $respuesta['disponible'] = (bool) $variacion->disponible;
+
+        $respuesta['atributos'] = $variacion->atributos()
+            ->orderBy('id_atributo')
+            ->get()
+            ->map(fn (AtributoVariacion $atributo): array => [
+                'tipo_atributo' => $atributo->tipo_atributo,
+                'valor' => $atributo->valor,
+            ])
+            ->values()
+            ->all();
+
+        return $respuesta;
+
     }
 
     /** RN-M3-07: un comercio suspendido no crea ni publica productos. */

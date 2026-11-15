@@ -686,6 +686,11 @@ class ControladoresM5Test extends TestCase
         $response->assertStatus(409)
             ->assertJsonPath('error.codigo', 'ERR-M5-002');
 
+        $this->assertStringContainsString(
+            'Fallo simulado al confirmar salida física de inventario.',
+            (string) $response->json('error.mensaje')
+        );
+
         Event::assertNotDispatched(SubpedidoDespachado::class);
 
         $subActualizado = $subpedido->fresh();

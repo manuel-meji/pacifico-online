@@ -77,12 +77,11 @@ export default function M5App() {
 
 
   // ---------- Acciones del carrito (la pantalla se actualiza con la respuesta de la API) ----------
-  // Claves en curso: 'cantidad-<id>', 'quitar-<id>', 'vaciar', 'agregar'. El ref evita el doble clic
+  // Claves en curso: 'cantidad-<id>', 'quitar-<id>', 'vaciar'. El ref evita el doble clic
   // antes de que React vuelva a pintar; el estado deshabilita el botón correspondiente.
   const enCurso = useRef(new Set());
   const [pendientes, setPendientes] = useState(() => new Set());
   const [avisosItem, setAvisosItem] = useState({});
-  const [avisoDemo, setAvisoDemo] = useState(null);
 
   const marcarPendiente = (clave, activo) => setPendientes((actual) => {
     const nuevo = new Set(actual);
@@ -150,27 +149,6 @@ export default function M5App() {
       setAvisosItem({});
     } catch (e) {
       setAviso({ tipo: 'error', titulo: 'No se pudo vaciar el carrito', texto: textoError(e) });
-    }
-  }
-
-  async function agregar(idVariacion, cantidad) {
-    setAviso(null);
-    setAvisoDemo(null);
-    try {
-      const respuesta = await ejecutar('agregar', () => agregarItem({ id_variacion: idVariacion, cantidad }));
-      if (!respuesta) return;
-      setCarrito(respuesta);
-      setAvisoDemo({ tipo: 'exito', titulo: 'Producto agregado', texto: respuesta.mensaje || 'El carrito se actualizó.' });
-    } catch (e) {
-      if (e.status === 409) {
-        setAvisoDemo({
-          tipo: 'error',
-          titulo: 'Stock insuficiente',
-          texto: `Cantidad máxima disponible: ${maximoDisponible(e)} (solicitó ${e.detalles?.cantidad_solicitada ?? cantidad} en total).`,
-        });
-      } else {
-        setAvisoDemo({ tipo: 'error', titulo: 'No se pudo agregar el producto', texto: textoError(e) });
-      }
     }
   }
 
@@ -275,8 +253,8 @@ export default function M5App() {
       <div className="flex-1 w-full">
         {pantalla === 'carrito' && (
           <CarritoPage carrito={carrito} cargando={cargando} error={error} onReintentar={cargarCarrito} aviso={aviso}
-            avisosItem={avisosItem} avisoDemo={avisoDemo} pendientes={pendientes}
-            onCantidad={cambiarCantidad} onQuitar={quitar} onVaciar={vaciar} onAgregar={agregar}
+            avisosItem={avisosItem} pendientes={pendientes}
+            onCantidad={cambiarCantidad} onQuitar={quitar} onVaciar={vaciar}
             onContinuar={procederACheckout} />
         )}
         {pantalla === 'checkout' && (
