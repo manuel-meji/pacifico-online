@@ -56,7 +56,7 @@
 ---
 
 ### 5. Decisión del Comité de Arquitectura e Integración
-- **Resolución:** [Aprobada | Rechazada | Diferida]
-- **Justificación de la resolución:** [Explicación técnica]
-- **Número de Acta del Comité:** ACTA-COMITE-[XX]
-- **Fecha de Resolución:** [YYYY-MM-DD]
+- **Resolución:** Aprobada
+- **Justificación de la resolución:** El cambio es compatible: no cambia ninguna operación ni evento que publica M2, solo retira dos dependencias que M2 nunca consumió, y la necesidad la cubren las pantallas de M4 y M7 enlazadas desde el panel de M2. Lo aprobaron Roberth Ponce (M1) y Manuel Mejicano (M5) en consulta por el chat de coordinadores, con la condición de que no rompiera nada de los demás módulos y resolviera la necesidad de M2. M4 actualiza su contrato al mismo tiempo (acuerdo ACU-02 del acta).
+- **Número de Acta del Comité:** ACTA-COMITE-PC4-02 (`docs/actas-comite/ACTA-COMITE-PC4-02_2026-11-13.md`)
+- **Fecha de Resolución:** 2026-11-13 (consulta en el chat de coordinadores; esta SC se registró en el repositorio el 2026-11-14)
