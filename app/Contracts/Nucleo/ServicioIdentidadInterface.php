@@ -15,9 +15,13 @@ interface ServicioIdentidadInterface
      * (PC3, 5.1). No abre una transacción propia: si el módulo que la llama ya tiene una
      * (por ejemplo, M1 al registrar un cliente), la cuenta se revierte junto con ella.
      *
-     * @param  array{nombre?: string, correo?: string, contrasena?: string|null}  $datos
+     * El Encargado del comercio puede traer en contrasena_cifrada la contraseña que definió en su
+     * solicitud de incorporación (M2), ya cifrada: la cuenta queda con esa contraseña y no se envía
+     * la invitación. Sin ella, se le genera una contraseña aleatoria y define la suya con la invitación.
      *
-     * @throws ErrorNucleoException ERR-005 si los datos no son válidos.
+     * @param  array{nombre?: string, correo?: string, contrasena?: string|null, contrasena_cifrada?: string|null}  $datos
+     *
+     * @throws ErrorNucleoException ERR-005 si los datos no son válidos o contrasena_cifrada no es un cifrado válido.
      */
     public function crearCuenta(array $datos, RolUsuario|string $rol, ?int $idComercio = null): Usuario;
 

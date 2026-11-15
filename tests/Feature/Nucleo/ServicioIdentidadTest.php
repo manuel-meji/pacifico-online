@@ -152,6 +152,50 @@ class ServicioIdentidadTest extends TestCase
         $this->assertFalse(Hash::check('secreta123', $usuario->contrasena));
     }
 
+    public function test_encargado_con_contrasena_cifrada_de_la_solicitud_queda_con_ella_y_sin_invitacion(): void
+    {
+        Notification::fake();
+        $this->omitirSiHayLlaveForaneaDeComercio();
+
+        $usuario = $this->servicio()->crearCuenta(
+            $this->datos(['contrasena' => null, 'contrasena_cifrada' => Hash::make('MiClave2026')]),
+            RolUsuario::EncargadoComercio,
+            idComercio: 7,
+        );
+
+        $this->assertTrue(Hash::check('MiClave2026', $usuario->fresh()->contrasena));
+        Notification::assertNothingSent();
+        $this->assertFalse(DB::table('restablecimientos_contrasena')->where('email', 'ana@example.com')->exists());
+    }
+
+    public function test_contrasena_cifrada_que_no_es_un_cifrado_da_err_005_y_no_crea_la_cuenta(): void
+    {
+        Notification::fake();
+        $this->omitirSiHayLlaveForaneaDeComercio();
+
+        $e = $this->codigoDeError(fn () => $this->servicio()->crearCuenta(
+            $this->datos(['contrasena' => null, 'contrasena_cifrada' => 'texto-en-claro']),
+            RolUsuario::EncargadoComercio,
+            7,
+        ));
+
+        $this->assertSame('ERR-005', $e->codigo);
+        $this->assertArrayHasKey('contrasena', $e->getDetalles());
+        $this->assertFalse(Usuario::query()->where('correo', 'ana@example.com')->exists());
+        Notification::assertNothingSent();
+    }
+
+    public function test_un_cliente_no_usa_la_contrasena_cifrada(): void
+    {
+        $usuario = $this->servicio()->crearCuenta(
+            $this->datos(['contrasena_cifrada' => Hash::make('OtraClave2026')]),
+            RolUsuario::Cliente,
+        );
+
+        $this->assertTrue(Hash::check('secreta123', $usuario->contrasena));
+        $this->assertFalse(Hash::check('OtraClave2026', $usuario->contrasena));
+    }
+
     public function test_encargado_de_comercio_sin_id_comercio_da_err_005(): void
     {
         $e = $this->codigoDeError(fn () => $this->servicio()->crearCuenta($this->datos(), RolUsuario::EncargadoComercio));

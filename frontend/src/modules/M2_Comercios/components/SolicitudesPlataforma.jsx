@@ -165,7 +165,7 @@ function DetalleSolicitud({ idSolicitud, onVolver }) {
               pregunta={`¿Aprobar a ${comercio.nombre_comercial}?`}
               aviso="El comercio quedará Activo y se creará la cuenta de su encargado."
               textoConfirmar="Sí, aprobar"
-              onConfirmar={async () => terminar(await aprobarSolicitud(solicitud.id_solicitud), `${comercio.nombre_comercial} fue aprobado y quedó Activo. El núcleo le envía a ${solicitud.correo_encargado} una invitación para definir su contraseña e ingresar.`)}
+              onConfirmar={async () => terminar(await aprobarSolicitud(solicitud.id_solicitud), (solicitud.cuenta_creada ? `${comercio.nombre_comercial} fue aprobado y quedó Activo. La persona encargada ya tiene su cuenta (${solicitud.correo_encargado}) y al ingresar verá su panel.` : `${comercio.nombre_comercial} fue aprobado y quedó Activo. El núcleo le envía a ${solicitud.correo_encargado} una invitación para definir su contraseña e ingresar.`))}
               onCancelar={() => setAccion(null)} />
           )}
           {accion === 'rechazar' && (

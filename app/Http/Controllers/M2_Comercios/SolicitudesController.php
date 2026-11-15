@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\M2_Comercios;
 
+use App\Enums\Nucleo\RolUsuario;
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Http\Controllers\Controller;
 use App\Models\M2_Comercios\SolicitudComercio;
 use App\Services\M2_Comercios\ComerciosService;
@@ -32,6 +34,21 @@ class SolicitudesController extends Controller
             (int) ($datos['pagina'] ?? 1),
             (int) ($datos['por_pagina'] ?? 20),
         ));
+    }
+
+    /**
+     * Estado de la solicitud del propio comercio, para la persona encargada que ingresa antes de
+     * que se apruebe. Solo el Encargado del comercio; los demás roles reciben 403 (ERR-002).
+     */
+    public function miSolicitud(Request $request): JsonResponse
+    {
+        $usuario = $request->user();
+        $rol = $usuario?->rol instanceof RolUsuario ? $usuario->rol : RolUsuario::tryFrom((string) $usuario?->rol);
+        if ($rol !== RolUsuario::EncargadoComercio || $usuario->id_comercio === null) {
+            throw ErrorNucleoException::rolSinPermiso();
+        }
+
+        return response()->json($this->comercios->estadoSolicitudDelComercio((int) $usuario->id_comercio));
     }
 
     public function consultar(int $idSolicitud): JsonResponse
@@ -117,6 +134,9 @@ class SolicitudesController extends Controller
             'nombre_encargado' => ['required', 'string'],
             'correo_encargado' => ['required', 'email'],
             'telefono_encargado' => ['nullable', 'string'],
+            // Con contraseña, la cuenta de la persona encargada se crea con la solicitud. Es opcional en
+            // la API para no romper a quien ya la usa; la pantalla de solicitud la pide siempre.
+            'contrasena_encargado' => ['nullable', 'string', 'min:8', 'max:72', 'confirmed'],
 
             'documentos' => ['sometimes', 'array'],
             'documentos.*.archivo' => [
@@ -131,6 +151,10 @@ class SolicitudesController extends Controller
                 'date',
                 'after:today',
             ],
+        ], [
+            'contrasena_encargado.min' => 'La contraseña debe tener al menos 8 caracteres.',
+            'contrasena_encargado.max' => 'La contraseña no puede tener más de 72 caracteres.',
+            'contrasena_encargado.confirmed' => 'Las contraseñas no coinciden.',
         ]);
 
         $documentos = $datos['documentos'] ?? [];
