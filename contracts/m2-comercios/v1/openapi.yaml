@@ -690,15 +690,17 @@ components:
 # OpenAPI 3.0.3 no modela eventos asíncronos de forma nativa; se
 # documentan aquí como extensión. Implementación comprometida: eventos
 # de Laravel en app/Events/M2_Comercios/, despachados a la cola de la
-# plataforma (no son una llamada síncrona), para que M1, M3, M4 y M5
-# los consuman.
+# plataforma (no son una llamada síncrona), para que M1, M3, M4, M5 y
+# M7 los consuman.
 # ---------------------------------------------------------------
 x-eventos-publicados:
   ComercioAprobado:
     version: v1
     cuando_se_publica: >
       Después de confirmar la aprobación y guardar el comercio en estado
-      Activo. Lo consumen M1, M3 y M4.
+      Activo. Lo consumen M1, M3, M4 y M7 (M7 crea el plan de cuentas base
+      y el centro de costo general del comercio; usa id_comercio e
+      id_evento).
     carga_util:
       id_evento: "string (UUID)"
       fecha_hora: "string (date-time)"
@@ -760,3 +762,6 @@ x-dependencias-consumidas:
 # mínimos» y el resumen financiero lo muestra M7 en su tablero; el panel
 # de M2 enlaza a ambas pantallas (pestañas Inventario y Finanzas). No
 # cambia ninguna operación ni evento publicado por M2.
+# Consumidor agregado (14/11/2026, a pedido de M7): M7 consume
+# ComercioAprobado. No cambia la carga útil ni el momento de publicación,
+# así que no cambia la versión del contrato.
