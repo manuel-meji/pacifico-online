@@ -2,10 +2,10 @@
 
 namespace Tests\Unit\M7_Contabilidad;
 
+use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Models\M7_Contabilidad\CuentaContable;
 use App\Services\M7_Contabilidad\PlanCuentasService;
 use Database\Seeders\M7_PlanCuentasSeeder;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -19,7 +19,8 @@ class PlanCuentasTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->servicio = new PlanCuentasService;
+
+        $this->servicio = app(PlanCuentasService::class);
     }
 
     private function padre(string $tipo = 'ACTIVO', int $nivel = 1, int $comercio = 1): CuentaContable
@@ -76,19 +77,19 @@ class PlanCuentasTest extends TestCase
 
     public function test_rechaza_tipo_invalido(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(ErrorNucleoException::class);
         $this->servicio->validarDatos(1, ['codigo' => '9', 'nombre' => 'X', 'tipo' => 'OTRO']);
     }
 
     public function test_rechaza_codigo_vacio(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(ErrorNucleoException::class);
         $this->servicio->validarDatos(1, ['codigo' => '  ', 'nombre' => 'X', 'tipo' => 'ACTIVO']);
     }
 
     public function test_rechaza_subcuenta_de_tipo_distinto_al_padre(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(ErrorNucleoException::class);
         $this->servicio->validarDatos(
             1,
             ['codigo' => '1.1', 'nombre' => 'X', 'tipo' => 'PASIVO'],
@@ -98,7 +99,7 @@ class PlanCuentasTest extends TestCase
 
     public function test_rechaza_padre_de_otro_comercio(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(ErrorNucleoException::class);
         $this->servicio->validarDatos(
             1,
             ['codigo' => '1.1', 'nombre' => 'X', 'tipo' => 'ACTIVO'],
