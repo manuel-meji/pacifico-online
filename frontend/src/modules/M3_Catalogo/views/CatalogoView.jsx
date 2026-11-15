@@ -1,4 +1,20 @@
+
 import { useEffect, useMemo, useState } from 'react';
+import {
+  Search,
+  SlidersHorizontal,
+  RotateCcw,
+  Package,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  Tag,
+  CheckCircle2,
+  XCircle,
+  LoaderCircle,
+} from 'lucide-react';
+
 import {
   buscarProductos,
   listarCategorias,
@@ -7,11 +23,13 @@ import {
   textoDeError,
 } from '../services/m3Api';
 
-// Consulta del catálogo contra el servicio real de M3 (GET /api/m3/v1/productos, categorias y marcas).
-// El servicio solo devuelve productos publicados de comercios activos. Las variaciones de cada producto
-// se piden al abrirlo (GET /api/m3/v1/productos/{id_producto}).
-
 const POR_PAGINA = 10;
+
+const CAMPO =
+  'mt-1 block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#1E3A8A] focus:ring-2 focus:ring-[#1E3A8A]/15';
+
+const BOTON =
+  'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 
 const dinero = (precio) =>
   new Intl.NumberFormat('es-CR', {
@@ -21,10 +39,17 @@ const dinero = (precio) =>
   }).format(precio);
 
 function rangoDePrecio(producto) {
-  if (producto.precio_desde === null || producto.precio_desde === undefined) return null;
-  if (producto.precio_hasta && producto.precio_hasta !== producto.precio_desde) {
+  if (producto.precio_desde === null || producto.precio_desde === undefined) {
+    return null;
+  }
+
+  if (
+    producto.precio_hasta &&
+    producto.precio_hasta !== producto.precio_desde
+  ) {
     return `${dinero(producto.precio_desde)} – ${dinero(producto.precio_hasta)}`;
   }
+
   return dinero(producto.precio_desde);
 }
 
@@ -42,10 +67,12 @@ export default function CatalogoView() {
 
   const [marcas, setMarcas] = useState([]);
   const [categorias, setCategorias] = useState([]);
-  const [resultado, setResultado] = useState({ productos: [], total_resultados: 0 });
+  const [resultado, setResultado] = useState({
+    productos: [],
+    total_resultados: 0,
+  });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
-  // Detalle por producto: { [id_producto]: { cargando, variaciones, error } }
   const [detalles, setDetalles] = useState({});
 
   useEffect(() => {
@@ -59,11 +86,14 @@ export default function CatalogoView() {
       setTermino(busqueda.trim());
       setPagina(1);
     }, 350);
+
     return () => clearTimeout(espera);
   }, [busqueda]);
 
+  // Consulta el catálogo mediante el servicio real de M3.
   useEffect(() => {
     let vigente = true;
+
     setCargando(true);
     setError(null);
 
@@ -97,18 +127,27 @@ export default function CatalogoView() {
     () => Object.fromEntries(marcas.map((m) => [m.id_marca, m.nombre])),
     [marcas]
   );
+
   const nombreCategoria = useMemo(
-    () => Object.fromEntries(categorias.map((c) => [c.id_categoria, c.nombre])),
+    () =>
+      Object.fromEntries(
+        categorias.map((c) => [c.id_categoria, c.nombre])
+      ),
     [categorias]
   );
 
-  // El servicio no filtra por disponibilidad: se aplica sobre la página cargada. Un producto sin
-  // precio_desde no tiene ninguna variación disponible.
+  // El servicio no filtra por disponibilidad: se aplica sobre la página cargada.
   const productos = soloDisponibles
-    ? resultado.productos.filter((p) => p.precio_desde !== null && p.precio_desde !== undefined)
+    ? resultado.productos.filter(
+        (p) =>
+          p.precio_desde !== null && p.precio_desde !== undefined
+      )
     : resultado.productos;
 
-  const totalPaginas = Math.max(1, Math.ceil((resultado.total_resultados || 0) / POR_PAGINA));
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil((resultado.total_resultados || 0) / POR_PAGINA)
+  );
 
   function cambiarFiltro(asignar) {
     return (evento) => {
@@ -132,252 +171,436 @@ export default function CatalogoView() {
         const { [idProducto]: _quitado, ...resto } = actuales;
         return resto;
       });
+
       return;
     }
 
-    setDetalles((actuales) => ({ ...actuales, [idProducto]: { cargando: true } }));
+    setDetalles((actuales) => ({
+      ...actuales,
+      [idProducto]: { cargando: true },
+    }));
+
     obtenerProducto(idProducto)
       .then((producto) =>
         setDetalles((actuales) => ({
           ...actuales,
-          [idProducto]: { cargando: false, variaciones: producto.variaciones ?? [] },
+          [idProducto]: {
+            cargando: false,
+            variaciones: producto.variaciones ?? [],
+          },
         }))
       )
       .catch((falla) =>
         setDetalles((actuales) => ({
           ...actuales,
-          [idProducto]: { cargando: false, error: textoDeError(falla) },
+          [idProducto]: {
+            cargando: false,
+            error: textoDeError(falla),
+          },
         }))
       );
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900 sm:px-6">
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-6">
-          <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
-            Pacíficos Online · Módulo M3
-          </p>
-          <h1 className="mt-2 text-2xl font-bold sm:text-3xl">
-            Catálogo de productos
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Consultá productos, sus variaciones, precios y disponibilidad.
-          </p>
-        </header>
+    <section className="mx-auto max-w-6xl px-4 pb-8 text-slate-800">
+      <div className="mb-6">
+        <div className="flex items-center gap-2 text-sm font-semibold text-[#7E9C30]">
+          <Package size={18} />
+          <span>Gestión de productos</span>
+        </div>
 
-        <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-          <h2 className="mb-4 text-lg font-semibold">Buscar y filtrar</h2>
+        <h1 className="mt-2 text-2xl font-bold text-[#1E3A8A] sm:text-3xl">
+          Catálogo de productos
+        </h1>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="text-sm font-medium">
-              Buscar producto
+        <p className="mt-2 text-sm text-slate-600 sm:text-base">
+          Consultá productos, sus variaciones, precios y disponibilidad.
+        </p>
+      </div>
+
+      {/* Búsqueda y filtros */}
+      <section
+        aria-labelledby="titulo-filtros"
+        className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"
+      >
+        <div className="mb-5 flex items-center gap-2">
+          <SlidersHorizontal className="text-[#1E3A8A]" size={20} />
+          <h2
+            id="titulo-filtros"
+            className="text-lg font-bold text-slate-800"
+          >
+            Buscar y filtrar
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="block text-sm font-semibold text-slate-700">
+            Buscar producto
+            <div className="relative">
+              <Search
+                size={18}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
               <input
                 type="search"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Nombre o descripción..."
-                className="mt-1 block w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                className={`${CAMPO} pl-10`}
+                aria-label="Buscar producto por nombre o descripción"
               />
-            </label>
+            </div>
+          </label>
 
-            <label className="text-sm font-medium">
-              Marca
-              <select
-                value={idMarca}
-                onChange={cambiarFiltro(setIdMarca)}
-                className="mt-1 block w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 font-normal"
-              >
-                <option value="">Todas las marcas</option>
-                {marcas.map((m) => (
-                  <option key={m.id_marca} value={m.id_marca}>{m.nombre}</option>
-                ))}
-              </select>
-            </label>
+          <label className="block text-sm font-semibold text-slate-700">
+            Marca
+            <select
+              value={idMarca}
+              onChange={cambiarFiltro(setIdMarca)}
+              className={CAMPO}
+            >
+              <option value="">Todas las marcas</option>
+              {marcas.map((m) => (
+                <option key={m.id_marca} value={m.id_marca}>
+                  {m.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <label className="text-sm font-medium">
-              Categoría
-              <select
-                value={idCategoria}
-                onChange={cambiarFiltro(setIdCategoria)}
-                className="mt-1 block w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 font-normal"
-              >
-                <option value="">Todas las categorías</option>
-                {categorias.map((c) => (
-                  <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>
-                ))}
-              </select>
-            </label>
+          <label className="block text-sm font-semibold text-slate-700">
+            Categoría
+            <select
+              value={idCategoria}
+              onChange={cambiarFiltro(setIdCategoria)}
+              className={CAMPO}
+            >
+              <option value="">Todas las categorías</option>
+              {categorias.map((c) => (
+                <option key={c.id_categoria} value={c.id_categoria}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <label className="text-sm font-medium">
-              Ordenar por
-              <select
-                value={orden}
-                onChange={cambiarFiltro(setOrden)}
-                className="mt-1 block w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 font-normal"
-              >
-                <option value="">Sin orden</option>
-                <option value="precio_asc">Precio: menor a mayor</option>
-                <option value="precio_desc">Precio: mayor a menor</option>
-                <option value="novedad">Más recientes</option>
-              </select>
-            </label>
-          </div>
+          <label className="block text-sm font-semibold text-slate-700">
+            Ordenar por
+            <select
+              value={orden}
+              onChange={cambiarFiltro(setOrden)}
+              className={CAMPO}
+            >
+              <option value="">Sin orden</option>
+              <option value="precio_asc">Precio: menor a mayor</option>
+              <option value="precio_desc">Precio: mayor a menor</option>
+              <option value="novedad">Más recientes</option>
+            </select>
+          </label>
+        </div>
 
-          <label className="mt-4 flex items-center gap-2 text-sm">
+        <div className="mt-5 flex flex-col gap-4 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={soloDisponibles}
               onChange={(e) => setSoloDisponibles(e.target.checked)}
-              className="h-4 w-4"
+              className="h-4 w-4 rounded border-slate-300 accent-[#1E3A8A]"
             />
-            Mostrar solo productos con variaciones disponibles (en esta página)
+            Mostrar solo productos con variaciones disponibles
+            <span className="text-xs text-slate-400">
+              (página actual)
+            </span>
           </label>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={limpiarFiltros}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
-            >
-              Limpiar filtros
-            </button>
-            <p className="text-sm text-slate-600" aria-live="polite">
-              {cargando ? 'Buscando...' : `${resultado.total_resultados} productos encontrados`}
-            </p>
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            className={BOTON}
+          >
+            <RotateCcw size={16} />
+            Limpiar filtros
+          </button>
+        </div>
+
+        <div
+          className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4"
+          aria-live="polite"
+        >
+          <p className="text-sm text-slate-500">
+            {cargando
+              ? 'Buscando productos...'
+              : `${resultado.total_resultados} productos encontrados`}
+          </p>
+
+          {cargando && (
+            <LoaderCircle
+              size={18}
+              className="animate-spin text-[#1E3A8A]"
+              aria-label="Cargando"
+            />
+          )}
+        </div>
+      </section>
+
+      {/* Mensaje de error */}
+      {error && (
+        <div
+          role="alert"
+          className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+        >
+          <div className="flex items-start gap-2">
+            <XCircle size={18} className="mt-0.5 shrink-0" />
+            <p>{error}</p>
           </div>
+        </div>
+      )}
+
+      {/* Estado vacío */}
+      {!cargando && !error && productos.length === 0 ? (
+        <section className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <Package size={28} />
+          </div>
+
+          <h2 className="mt-4 text-lg font-bold text-slate-800">
+            No encontramos productos
+          </h2>
+
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+            Probá con otra búsqueda o cambiá los filtros para encontrar
+            productos en el catálogo.
+          </p>
+
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#9DBB45] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8AA83A]"
+          >
+            <RotateCcw size={16} />
+            Limpiar filtros
+          </button>
         </section>
+      ) : (
+        <section
+          aria-label="Resultados del catálogo"
+          className="grid grid-cols-1 gap-4 md:grid-cols-2"
+        >
+          {productos.map((producto) => {
+            const detalle = detalles[producto.id_producto];
+            const precio = rangoDePrecio(producto);
 
-        {error && (
-          <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-            {error}
-          </div>
-        )}
+            return (
+              <article
+                key={producto.id_producto}
+                className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+              >
+                {producto.imagen_principal_url ? (
+                  <img
+                    src={producto.imagen_principal_url}
+                    alt={producto.nombre}
+                    loading="lazy"
+                    className="h-48 w-full border-b border-slate-100 bg-slate-50 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-40 items-center justify-center border-b border-slate-100 bg-slate-50 text-slate-300">
+                    <Package size={44} strokeWidth={1.3} />
+                  </div>
+                )}
 
-        {!cargando && !error && productos.length === 0 ? (
-          <section className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-            <h2 className="font-semibold">No encontramos productos</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Probá con otra búsqueda o cambiá los filtros.
-            </p>
-          </section>
-        ) : (
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {productos.map((producto) => {
-              const detalle = detalles[producto.id_producto];
-              const precio = rangoDePrecio(producto);
-
-              return (
-                <article
-                  key={producto.id_producto}
-                  className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
-                >
+                <div className="flex flex-1 flex-col p-4 sm:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      {producto.id_marca && nombreMarca[producto.id_marca] && (
-                        <p className="text-sm font-medium text-sky-700">{nombreMarca[producto.id_marca]}</p>
-                      )}
-                      <h2 className="mt-1 break-words text-lg font-bold">{producto.nombre}</h2>
+                      {producto.id_marca &&
+                        nombreMarca[producto.id_marca] && (
+                          <p className="text-sm font-semibold text-[#7E9C30]">
+                            {nombreMarca[producto.id_marca]}
+                          </p>
+                        )}
+
+                      <h2 className="mt-1 break-words text-lg font-bold text-slate-800">
+                        {producto.nombre}
+                      </h2>
                     </div>
+
                     {nombreCategoria[producto.id_categoria] && (
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                      <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-[#1E3A8A]">
+                        <Tag size={12} />
                         {nombreCategoria[producto.id_categoria]}
                       </span>
                     )}
                   </div>
 
-                  {producto.imagen_principal_url && (
-                    <img
-                      src={producto.imagen_principal_url}
-                      alt={producto.nombre}
-                      loading="lazy"
-                      className="mt-3 h-40 w-full rounded-lg border border-slate-200 object-cover"
-                    />
-                  )}
-
                   {producto.descripcion && (
-                    <p className="mt-2 text-sm text-slate-600">{producto.descripcion}</p>
+                    <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-600">
+                      {producto.descripcion}
+                    </p>
                   )}
 
-                  <p className={`mt-3 font-bold ${precio ? '' : 'text-sm font-medium text-red-700'}`}>
-                    {precio ?? 'Sin variaciones disponibles'}
-                  </p>
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <p
+                      className={`text-lg font-bold ${
+                        precio ? 'text-[#1E3A8A]' : 'text-sm text-red-700'
+                      }`}
+                    >
+                      {precio ?? 'Sin variaciones disponibles'}
+                    </p>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => alternarVariaciones(producto.id_producto)}
-                    aria-expanded={Boolean(detalle)}
-                    className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
-                  >
-                    {detalle ? 'Ocultar variaciones' : 'Ver variaciones'}
-                  </button>
-
-                  {detalle?.cargando && (
-                    <p className="mt-3 text-sm text-slate-600">Cargando variaciones...</p>
-                  )}
-
-                  {detalle?.error && (
-                    <p role="alert" className="mt-3 text-sm text-red-700">{detalle.error}</p>
-                  )}
-
-                  {detalle?.variaciones && (
-                    <div className="mt-4 space-y-3">
-                      {detalle.variaciones.length === 0 && (
-                        <p className="text-sm text-slate-600">Este producto no tiene variaciones.</p>
+                  <div className="mt-auto pt-4">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        alternarVariaciones(producto.id_producto)
+                      }
+                      aria-expanded={Boolean(detalle)}
+                      aria-controls={`variaciones-${producto.id_producto}`}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#1E3A8A] px-4 py-2.5 text-sm font-semibold text-[#1E3A8A] transition hover:bg-blue-50"
+                    >
+                      {detalle ? (
+                        <>
+                          Ocultar variaciones
+                          <ChevronUp size={17} />
+                        </>
+                      ) : (
+                        <>
+                          Ver variaciones
+                          <ChevronDown size={17} />
+                        </>
                       )}
-                      {detalle.variaciones.map((variacion) => (
-                        <div key={variacion.id_variacion} className="rounded-lg border border-slate-200 p-3">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="break-all text-sm font-semibold">{variacion.sku}</p>
-                              {variacion.atributos?.length > 0 && (
-                                <p className="mt-1 text-sm text-slate-600">{textoAtributos(variacion.atributos)}</p>
-                              )}
-                            </div>
-                            <p className="font-bold">{dinero(variacion.precio)}</p>
-                          </div>
+                    </button>
+                  </div>
 
-                          <p className={`mt-2 text-sm font-medium ${
-                            variacion.disponible ? 'text-emerald-700' : 'text-red-700'
-                          }`}>
-                            {variacion.disponible ? 'Disponible' : 'No disponible'}
-                          </p>
+                  {detalle && (
+                    <div
+                      id={`variaciones-${producto.id_producto}`}
+                      className="mt-4 border-t border-slate-100 pt-4"
+                    >
+                      {detalle.cargando && (
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <LoaderCircle
+                            size={17}
+                            className="animate-spin text-[#1E3A8A]"
+                          />
+                          Cargando variaciones...
                         </div>
-                      ))}
+                      )}
+
+                      {detalle.error && (
+                        <p
+                          role="alert"
+                          className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+                        >
+                          {detalle.error}
+                        </p>
+                      )}
+
+                      {detalle.variaciones && (
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-bold text-slate-700">
+                            Variaciones del producto
+                          </h3>
+
+                          {detalle.variaciones.length === 0 && (
+                            <p className="text-sm text-slate-500">
+                              Este producto no tiene variaciones.
+                            </p>
+                          )}
+
+                          {detalle.variaciones.map((variacion) => (
+                            <div
+                              key={variacion.id_variacion}
+                              className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="break-all text-sm font-bold text-slate-800">
+                                    {variacion.sku}
+                                  </p>
+
+                                  {variacion.atributos?.length > 0 && (
+                                    <p className="mt-1 text-sm text-slate-600">
+                                      {textoAtributos(variacion.atributos)}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <p className="font-bold text-[#1E3A8A]">
+                                  {dinero(variacion.precio)}
+                                </p>
+                              </div>
+
+                              <p
+                                className={`mt-3 flex items-center gap-1.5 text-sm font-semibold ${
+                                  variacion.disponible
+                                    ? 'text-emerald-700'
+                                    : 'text-red-700'
+                                }`}
+                              >
+                                {variacion.disponible ? (
+                                  <CheckCircle2 size={16} />
+                                ) : (
+                                  <XCircle size={16} />
+                                )}
+
+                                {variacion.disponible
+                                  ? 'Disponible'
+                                  : 'No disponible'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
-                </article>
-              );
-            })}
-          </section>
-        )}
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
 
-        {resultado.total_resultados > POR_PAGINA && (
-          <nav className="mt-6 flex flex-wrap items-center justify-center gap-3" aria-label="Paginación">
-            <button
-              type="button"
-              onClick={() => setPagina((p) => Math.max(1, p - 1))}
-              disabled={pagina <= 1 || cargando}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <p className="text-sm text-slate-600">Página {pagina} de {totalPaginas}</p>
-            <button
-              type="button"
-              onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-              disabled={pagina >= totalPaginas || cargando}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
-            >
-              Siguiente
-            </button>
-          </nav>
-        )}
+      {/* Paginación */}
+      {resultado.total_resultados > POR_PAGINA && (
+        <nav
+          className="mt-8 flex flex-wrap items-center justify-center gap-3"
+          aria-label="Paginación del catálogo"
+        >
+          <button
+            type="button"
+            onClick={() => setPagina((p) => Math.max(1, p - 1))}
+            disabled={pagina <= 1 || cargando}
+            className={BOTON}
+          >
+            <ChevronLeft size={17} />
+            Anterior
+          </button>
 
-        <p className="mt-6 text-xs text-slate-500">
-          Datos del servicio de catálogo de M3. Solo se muestran productos publicados de comercios activos.
-        </p>
-      </div>
-    </main>
+          <p
+            className="text-sm font-medium text-slate-600"
+            aria-current="page"
+          >
+            Página {pagina} de {totalPaginas}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              setPagina((p) => Math.min(totalPaginas, p + 1))
+            }
+            disabled={pagina >= totalPaginas || cargando}
+            className={BOTON}
+          >
+            Siguiente
+            <ChevronRight size={17} />
+          </button>
+        </nav>
+      )}
+
+      <p className="mt-8 text-center text-xs text-slate-500">
+        Datos del servicio de catálogo de M3. Solo se muestran productos
+        publicados de comercios activos.
+      </p>
+    </section>
   );
 }
