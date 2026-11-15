@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware([
     'auth:sanctum',
-    RequiereRol::class.':encargado_comercio',
+    RequiereRol::class.':encargado_comercio,encargado_plataforma',
     EstablecerComercio::class,
 ])->group(function (): void {
     Route::get(

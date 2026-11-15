@@ -325,7 +325,7 @@ paths:
         por código. Cada fila suma solo los movimientos directos de esa cuenta,
         sin consolidar hijos para evitar duplicación. Se conservan saldos negativos.
         No son documentos ni vencimientos, abonos o liquidaciones. Excluye IVA por pagar.
-        En modo sistema se requiere id_comercio explícito, nunca agregado global.
+        El encargado de plataforma debe indicar id_comercio; no se agrega información global.
       parameters:
         - $ref: '#/components/parameters/IdComercio'
       responses:
@@ -379,7 +379,7 @@ paths:
         (null si no hay). Los totales del resumen incluyen centros inactivos y sin_centro.
         hay_movimientos es false cuando el período no tiene líneas de ingresos ni gastos
         ("Sin movimientos en el período consultado"). Sin presupuesto ni responsable.
-        En modo sistema se requiere id_comercio explícito, nunca agregado global.
+        El encargado de plataforma debe indicar id_comercio; no se agrega información global.
       parameters:
         - $ref: '#/components/parameters/IdComercio'
         - $ref: '#/components/parameters/FechaDesde'
@@ -443,7 +443,7 @@ paths:
         con la fila del centro. saldo es la utilidad acumulada. Incluye reversiones
         y permite consultar centros inactivos. Un centro sin movimientos devuelve
         lista vacía y totales cero. Un centro inexistente o de otro comercio devuelve 404.
-        En modo sistema se requiere id_comercio explícito.
+        El encargado de plataforma debe indicar id_comercio explícito.
       parameters:
         - name: idCentroCosto
           in: path
@@ -499,7 +499,7 @@ paths:
         el centro de costo (null si la línea no tiene) y los totales de debe y haber.
         Se abre desde los detalles de Centros de costo y de Cuentas por cobrar y pagar.
         Incluye asientos de cualquier estado. Un asiento inexistente o de otro comercio
-        devuelve 404. En modo sistema se requiere id_comercio explícito.
+        devuelve 404. El encargado de plataforma debe indicar id_comercio explícito.
       parameters:
         - name: idAsiento
           in: path
@@ -564,7 +564,7 @@ paths:
       tags: [Plan de cuentas]
       summary: Listar cuentas del comercio
       operationId: listarCuentasContables
-      description: El comercio se obtiene del contexto o se indica en modo sistema; solo_activas filtra las cuentas activas.
+      description: El comercio se obtiene de la sesión o lo indica el encargado de plataforma; solo_activas filtra las cuentas activas.
       parameters:
         - $ref: '#/components/parameters/IdComercio'
         - name: solo_activas
@@ -628,8 +628,12 @@ paths:
       tags: [Libros contables]
       summary: Consultar el libro diario
       operationId: consultarLibroDiario
-      description: Usa el contexto del comercio; en modo sistema la consulta no filtra por comercio.
+      description: >
+        La consulta HTTP se limita al comercio autenticado o, para el encargado
+        de plataforma, al comercio seleccionado mediante id_comercio. El acceso
+        de plataforma se registra en la bitácora.
       parameters:
+        - $ref: '#/components/parameters/IdComercio'
         - $ref: '#/components/parameters/FechaDesde'
         - $ref: '#/components/parameters/FechaHasta'
         - name: tipo
@@ -821,6 +825,7 @@ paths:
         distribución propia. libro identifica el ámbito de asiento_id.
         Los importes globales y el estado de cuadre no se exponen al comercio.
         Identificadores sin asiento devuelven registrado=false.
+        La consulta global de plataforma se registra en la bitácora.
       parameters:
         - name: idPago
           in: path
@@ -871,7 +876,7 @@ components:
       name: id_comercio
       in: query
       required: false
-      description: Opcional para el comercio autenticado; requerido en modo sistema para estas consultas.
+      description: Opcional para el comercio autenticado; obligatorio para el encargado de plataforma. Sus consultas quedan auditadas.
       schema: { type: integer, minimum: 1 }
     FechaDesde:
       name: fecha_desde

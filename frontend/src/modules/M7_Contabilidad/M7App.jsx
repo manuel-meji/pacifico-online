@@ -7,6 +7,8 @@ import {
 } from '../Nucleo/services/sesionApi';
 
 import { SesionM7Context } from './context/SesionM7Context';
+import EncabezadoM7 from './components/EncabezadoM7';
+import SelectorComercioM7 from './components/SelectorComercioM7';
 
 import TableroEjecutivoView from './views/TableroEjecutivoView';
 import PlanCuentasView from './views/PlanCuentasView';
@@ -19,6 +21,7 @@ import CentrosCostoView from './views/CentrosCostoView';
 
 const ROLES_PERMITIDOS = [
   'encargado_comercio',
+  'encargado_plataforma',
 ];
 
 function PantallaCarga() {
@@ -58,41 +61,58 @@ function PantallaAccesoDenegado() {
   );
 }
 
-function ContenidoM7() {
+function ContenidoM7({ usuario }) {
   const [seccionActiva, setSeccionActiva] = useState('Tablero ejecutivo');
+  const [comercio, setComercio] = useState('');
+  const esPlataforma = usuario.rol === 'encargado_plataforma';
+  const idComercio = esPlataforma ? comercio : undefined;
 
   return (
     <div className="m7-app">
-      {seccionActiva === 'Tablero ejecutivo' && (
-        <TableroEjecutivoView onNavegar={setSeccionActiva} />
+      {esPlataforma && !comercio && (
+        <EncabezadoM7 seccionActiva={seccionActiva} onNavegar={setSeccionActiva} />
       )}
-
-      {seccionActiva === 'Plan de cuentas' && (
-        <PlanCuentasView onNavegar={setSeccionActiva} />
+      {esPlataforma && (
+        <div className="no-print mx-auto max-w-7xl px-4 py-4">
+          <SelectorComercioM7 valor={comercio} onCambiar={setComercio} requerido />
+        </div>
       )}
+      {esPlataforma && !comercio ? (
+        <p className="mx-auto max-w-7xl px-4">Seleccione un comercio para consultar sus datos contables.</p>
+      ) : (
+        <div key={idComercio || 'comercio-propio'}>
+          {seccionActiva === 'Tablero ejecutivo' && (
+            <TableroEjecutivoView onNavegar={setSeccionActiva} idComercio={idComercio} />
+          )}
 
-      {seccionActiva === 'Libro diario' && (
-        <LibroDiarioView onNavegar={setSeccionActiva} />
-      )}
+          {seccionActiva === 'Plan de cuentas' && (
+            <PlanCuentasView onNavegar={setSeccionActiva} idComercio={idComercio} />
+          )}
 
-      {seccionActiva === 'Libro mayor' && (
-        <LibroMayorView onNavegar={setSeccionActiva} />
-      )}
+          {seccionActiva === 'Libro diario' && (
+            <LibroDiarioView onNavegar={setSeccionActiva} idComercio={idComercio} />
+          )}
 
-      {seccionActiva === 'Balance general' && (
-        <BalanceGeneralView onNavegar={setSeccionActiva} />
-      )}
+          {seccionActiva === 'Libro mayor' && (
+            <LibroMayorView onNavegar={setSeccionActiva} idComercio={idComercio} />
+          )}
 
-      {seccionActiva === 'Estado de resultados' && (
-        <EstadoResultadosView onNavegar={setSeccionActiva} />
-      )}
+          {seccionActiva === 'Balance general' && (
+            <BalanceGeneralView onNavegar={setSeccionActiva} idComercio={idComercio} />
+          )}
 
-      {seccionActiva === 'Cuentas por cobrar y pagar' && (
-        <CuentasPorCobrarPagarView onNavegar={setSeccionActiva} />
-      )}
+          {seccionActiva === 'Estado de resultados' && (
+            <EstadoResultadosView onNavegar={setSeccionActiva} idComercio={idComercio} />
+          )}
 
-      {seccionActiva === 'Centros de costo' && (
-        <CentrosCostoView onNavegar={setSeccionActiva} />
+          {seccionActiva === 'Cuentas por cobrar y pagar' && (
+            <CuentasPorCobrarPagarView onNavegar={setSeccionActiva} idComercio={idComercio} />
+          )}
+
+          {seccionActiva === 'Centros de costo' && (
+            <CentrosCostoView onNavegar={setSeccionActiva} idComercio={idComercio} />
+          )}
+        </div>
       )}
     </div>
   );
@@ -213,7 +233,7 @@ export default function M7App() {
         errorCerrarSesion,
       }}
     >
-      <ContenidoM7 />
+      <ContenidoM7 usuario={usuario} />
     </SesionM7Context.Provider>
   );
 }
