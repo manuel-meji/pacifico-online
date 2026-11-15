@@ -203,12 +203,16 @@ class M3_EventosConsumidosTest extends TestCase
     }
 
     public function test_un_fallo_interno_no_interrumpe_al_publicador(): void
-    {
-        DB::statement('DROP TABLE estado_comercios_catalogo');
-        Log::spy();
+{
+    DB::statement('DROP TABLE estado_comercios_catalogo');
+    Log::spy();
 
-        event($this->aprobado(7, '10:00:00'));
+    event($this->aprobado(7, '10:00:00'));
 
-        Log::shouldHaveReceived('error')->once();
-    }
+  Log::shouldHaveReceived('error')
+    ->withArgs(fn ($mensaje, $contexto = []) =>
+        $mensaje === 'M3: no se pudo procesar ComercioAprobado.'
+    )
+    ->once();
+}
 }
