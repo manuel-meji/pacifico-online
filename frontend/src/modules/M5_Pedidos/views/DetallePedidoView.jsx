@@ -466,7 +466,13 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
   }
 
   const encabezado = (
-    <Encabezado titulo={`Pedido #${idPedido}`} onVolver={onVolver} etiquetaVolver="Volver a mis pedidos" />
+    <Encabezado
+      titulo={`Pedido #${idPedido}`}
+      seccion="Cuenta"
+      textoPadre="Mis pedidos"
+      onVolver={onVolver}
+      etiquetaVolver="Volver a mis pedidos"
+    />
   );
   const botonVolver = <Boton variante="oscuro" icono={ArrowLeft} onClick={onVolver}>Volver a mis pedidos</Boton>;
 
@@ -532,7 +538,7 @@ export default function DetallePedidoView({ idPedido, onVolver }) {
 
           <dl className="space-y-2 text-sm pt-3 border-t border-gray-100">
             <div className="flex justify-between text-gray-600"><dt>Subtotal</dt><dd className="font-semibold text-gray-900">{monto(pedido.subtotal)}</dd></div>
-            <div className="flex justify-between text-gray-600"><dt>IVA (13 %)</dt><dd className="font-semibold text-gray-900">{monto(pedido.impuesto)}</dd></div>
+            <div className="flex justify-between text-gray-600"><dt>IVA</dt><dd className="font-semibold text-gray-900">{monto(pedido.impuesto)}</dd></div>
             <div className="flex justify-between text-gray-600"><dt>Envío</dt><dd className="font-semibold text-gray-900">{monto(pedido.costo_envio)}</dd></div>
             {Number(pedido.descuento) > 0 && (
               <div className="flex justify-between text-gray-600"><dt>Descuento</dt><dd className="font-semibold text-gray-900">−{monto(pedido.descuento)}</dd></div>

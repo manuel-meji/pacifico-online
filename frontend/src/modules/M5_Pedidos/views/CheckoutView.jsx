@@ -212,7 +212,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   if (cargando) {
     return (
       <>
-        <Encabezado titulo="Checkout" onVolver={onVolver} />
+        <Encabezado titulo="Checkout" onVolver={onVolver} textoPadre="Mi carrito" />
         <main className="max-w-4xl mx-auto px-4 py-16 flex flex-col items-center gap-3 text-gray-500" aria-live="polite">
           <LoaderCircle className="w-8 h-8 animate-spin text-brandBlue" aria-hidden="true" />
           <p className="text-sm font-medium">Cargando el resumen de su compra…</p>
@@ -224,7 +224,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   if (errorCarga) {
     return (
       <>
-        <Encabezado titulo="Checkout" onVolver={onVolver} />
+        <Encabezado titulo="Checkout" onVolver={onVolver} textoPadre="Mi carrito" />
         <main className="max-w-xl mx-auto px-4 py-12 space-y-4">
           <Alerta tipo="error" titulo="No se pudo cargar el carrito">
             {errorCarga.mensaje || errorCarga.message}{errorCarga.codigo ? ` (${errorCarga.codigo})` : ''}
@@ -249,7 +249,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
   if (grupos.length === 0) {
     return (
       <>
-        <Encabezado titulo="Checkout" onVolver={onVolver} />
+        <Encabezado titulo="Checkout" onVolver={onVolver} textoPadre="Mi carrito" />
         <main className="max-w-xl mx-auto px-4 py-12 space-y-4">
           <Alerta tipo="aviso" titulo="Carrito vacío">Agregue productos a su carrito antes de confirmar el pedido.</Alerta>
           <Boton variante="oscuro" onClick={onVolver}>Volver al carrito</Boton>
@@ -271,7 +271,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
 
   return (
     <>
-      <Encabezado titulo="Checkout" onVolver={onVolver} />
+      <Encabezado titulo="Checkout" onVolver={onVolver} textoPadre="Mi carrito" />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-12 space-y-6">
         {errorEnvio && (
           <Alerta tipo="error" titulo="No se pudo crear el pedido">
@@ -425,7 +425,7 @@ export default function CheckoutPage({ onVolver, onVolverConAviso, onPedidoCread
                   </div>
                 )}
                 <div className="flex justify-between text-gray-600">
-                  <dt>IVA (13 %)</dt>
+                  <dt>IVA</dt>
                   <dd className="font-semibold text-gray-900">{colones(resumen.impuesto ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between text-gray-600">

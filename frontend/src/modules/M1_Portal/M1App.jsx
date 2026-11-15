@@ -65,8 +65,10 @@ function urlDe(pantalla, parametros) {
   return `${window.location.pathname}?${url.toString()}`;
 }
 
+const normalizarPantalla = (p) => (p === 'cuenta' ? 'perfil' : p);
+
 export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = null }) {
-  const [pantalla, setPantalla] = useState(pantallaInicial);
+  const [pantalla, setPantalla] = useState(() => normalizarPantalla(pantallaInicial));
   const [parametros, setParametros] = useState(() => leerParametros());
   // Persona con sesión ({ id_usuario, nombre, correo, rol, id_comercio }) o null. Viene de GET /api/user.
   const [usuario, setUsuario] = useState(null);
@@ -128,21 +130,22 @@ export default function M1App({ pantalla: pantallaInicial = 'inicio', simular = 
   // Cambia de pantalla y deja los parámetros en la URL, así funcionan el botón Atrás y recargar la página.
   // Con { reemplazar: true } (cambios de filtros) no se agrega una entrada nueva al historial.
   function navegar(destino, nuevosParametros = {}, { reemplazar = false } = {}) {
-    if (destino === pantalla && JSON.stringify(nuevosParametros) === JSON.stringify(parametros)) return;
+    const pantallaDestino = normalizarPantalla(destino);
+    if (pantallaDestino === pantalla && JSON.stringify(nuevosParametros) === JSON.stringify(parametros)) return;
     setErrorCierre(false);
 
-    const estado = { pantallaM1: destino, parametrosM1: nuevosParametros };
-    if (reemplazar) window.history.replaceState(estado, '', urlDe(destino, nuevosParametros));
-    else window.history.pushState(estado, '', urlDe(destino, nuevosParametros));
+    const estado = { pantallaM1: pantallaDestino, parametrosM1: nuevosParametros };
+    if (reemplazar) window.history.replaceState(estado, '', urlDe(pantallaDestino, nuevosParametros));
+    else window.history.pushState(estado, '', urlDe(pantallaDestino, nuevosParametros));
 
-    setPantalla(destino);
+    setPantalla(pantallaDestino);
     setParametros(nuevosParametros);
     if (!reemplazar) window.scrollTo({ top: 0 });
   }
 
   useEffect(() => {
     function manejarHistorial(evento) {
-      setPantalla(evento.state?.pantallaM1 || pantallaInicial);
+      setPantalla(normalizarPantalla(evento.state?.pantallaM1 || pantallaInicial));
       setParametros(evento.state?.parametrosM1 ?? leerParametros());
     }
 

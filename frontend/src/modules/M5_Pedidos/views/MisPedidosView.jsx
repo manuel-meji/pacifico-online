@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, ClipboardList, LoaderCircle, RefreshCw, ShoppingCart, User } from 'lucide-react';
+import { ChevronRight, ClipboardList, LoaderCircle, RefreshCw, User } from 'lucide-react';
 import { Alerta, Boton, Encabezado } from '../components/componentes';
 import { colones } from '../services/calculos';
 import { formatearFecha, infoEstado } from '../services/estados';
@@ -22,7 +22,7 @@ const ordenarRecientes = (pedidos) =>
 
 // Historial de pedidos del cliente: GET /api/m5/v1/pedidos.
 // Si el usuario no ha iniciado sesión, se le invita amigablemente a ingresar.
-export default function MisPedidosView({ idSeleccionado, onVerDetalle, onVolver }) {
+export default function MisPedidosView({ idSeleccionado, onVerDetalle }) {
   const [pedidos, setPedidos] = useState([]);
   const [conSesion, setConSesion] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -116,10 +116,20 @@ export default function MisPedidosView({ idSeleccionado, onVerDetalle, onVolver 
     );
   } else if (pedidos.length === 0) {
     contenido = (
-      <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-8 sm:p-12 max-w-md mx-auto text-center">
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-8 sm:p-12 max-w-md mx-auto text-center space-y-4">
         <ClipboardList className="w-16 h-16 stroke-1 text-gray-300 mx-auto" aria-hidden="true" />
-        <p className="mt-4 text-xl font-bold text-gray-800">Todavía no tiene pedidos</p>
-        <p className="mt-1 text-sm text-gray-500">Cuando confirme una compra, aparecerá aquí.</p>
+        <div>
+          <p className="text-xl font-bold text-gray-800">Todavía no tiene pedidos</p>
+          <p className="mt-1 text-sm text-gray-500">Cuando confirme una compra, aparecerá aquí.</p>
+        </div>
+        <div>
+          <a
+            href="/app.html"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brandDarkBlue hover:bg-brandBlue text-white font-semibold px-5 py-2.5 transition text-sm shadow-xs cursor-pointer"
+          >
+            Explorar productos en la tienda
+          </a>
+        </div>
       </div>
     );
   } else {
@@ -190,14 +200,11 @@ export default function MisPedidosView({ idSeleccionado, onVerDetalle, onVolver 
     <>
       <Encabezado
         titulo="Mis pedidos"
-        onVolver={onVolver}
+        seccion="Cuenta"
         paso={!cargando && !error && pedidos.length > 0 ? `${pedidos.length} ${pedidos.length === 1 ? 'pedido' : 'pedidos'}` : undefined}
       />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {contenido}
-        {onVolver && !cargando && (
-          <Boton variante="oscuro" icono={ShoppingCart} onClick={onVolver}>Volver al carrito</Boton>
-        )}
       </main>
     </>
   );
