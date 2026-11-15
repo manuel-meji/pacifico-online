@@ -19,7 +19,7 @@ Route::prefix('api/m7/v1')
         Route::middleware([
             'auth:sanctum',
             EstablecerComercio::class,
-            RequiereRol::class.':encargado_comercio,encargado_plataforma',
+            RequiereRol::class.':encargado_comercio',
         ])->group(function (): void {
             Route::get('comercios', [ConsultasOperativasController::class, 'comercios'])
                 ->middleware(RequiereRol::class.':encargado_plataforma')
