@@ -10,26 +10,32 @@ export const usePortal = () => useContext(PortalContext);
 
 // Marco común de inicio, búsqueda, ficha de producto y micrositio: encabezado, contenido y pie.
 // `tipoBusqueda` deja el selector del buscador en 'productos' o 'comercios'.
-export default function PaginaPortal({ terminoBusqueda = '', tipoBusqueda = 'productos', vistaPrevia = false, children }) {
+// `barraPanel` ({ texto, href, etiqueta }) cambia el encabezado del portal por una franja azul con un
+// solo botón de regreso: la usan las pantallas de encargados (vista previa del micrositio y panel de gestión).
+export default function PaginaPortal({ terminoBusqueda = '', tipoBusqueda = 'productos', vistaPrevia = false, barraPanel = null, children }) {
   const { ir, categorias, usuario, cargandoUsuario, cantidadCarrito } = usePortal();
   const esEncargado = ['encargado_comercio', 'encargado_plataforma'].includes(usuario?.rol);
   // "Vendé en Pacíficos Online" no se muestra a quien ya es encargado, ni mientras se consulta la sesión
   // (para que no aparezca un instante antes de saber el rol).
   const mostrarVender = !cargandoUsuario && !esEncargado;
 
-  if (vistaPrevia) {
+  const barra = barraPanel ?? (vistaPrevia
+    ? { texto: 'Vista previa de tu comercio en el portal', href: '/m2.html', etiqueta: 'Volver a Mi comercio' }
+    : null);
+
+  if (barra) {
     return (
       <div className="min-h-screen overflow-x-hidden bg-brandLightBg font-sans text-gray-800 antialiased">
         <div className="border-b border-blue-900 bg-brandDarkBlue text-white">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
             <p className="text-sm font-semibold">
-              Vista previa de tu comercio en el portal
+              {barra.texto}
             </p>
             <a
-              href="/m2.html"
+              href={barra.href}
               className="inline-flex items-center gap-2 rounded-lg bg-[#9DBB45] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#8AA83A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
-              ← Volver a Mi comercio
+              ← {barra.etiqueta}
             </a>
           </div>
         </div>

@@ -51,20 +51,17 @@ export default function GestionView({ seccion }) {
     );
   }
 
+  // Encargados: franja azul con el regreso a su panel de M2 (/m2.html), sin el buscador, las categorías
+  // ni los accesos de cliente del portal. Mientras se consulta la sesión también, para que no parpadee.
+  const esGestor = cargandoUsuario || (usuario && ROLES_GESTION.includes(usuario.rol));
+  const barra = esGestor ? { texto: 'Panel de gestión del portal', href: '/m2.html', etiqueta: 'Volver a mi panel' } : null;
+
   return (
-    <PaginaPortal>
-      <div className="mt-6 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-brandDarkBlue"><Icono nombre="panel" className="h-6 w-6" /> Panel de gestión</h1>
-          {usuario && ROLES_GESTION.includes(usuario.rol) && (
-            <p className="mt-1 text-sm text-gray-600">{usuario.nombre} · {NOMBRE_ROL[usuario.rol]}</p>
-          )}
-        </div>
-        {/* Regreso al panel del encargado en M2 (/m2.html), con la misma sesión del núcleo. */}
+    <PaginaPortal barraPanel={barra}>
+      <div className="mt-6">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-brandDarkBlue"><Icono nombre="panel" className="h-6 w-6" /> Panel de gestión</h1>
         {usuario && ROLES_GESTION.includes(usuario.rol) && (
-          <a href="/m2.html" className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-brandDarkBlue hover:border-brandBlue hover:text-brandBlue">
-            ← Volver a mi panel
-          </a>
+          <p className="mt-1 text-sm text-gray-600">{usuario.nombre} · {NOMBRE_ROL[usuario.rol]}</p>
         )}
       </div>
       {contenido}
