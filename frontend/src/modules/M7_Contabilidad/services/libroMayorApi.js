@@ -6,7 +6,10 @@ function construirConsulta(parametros) {
 
   Object.entries(parametros).forEach(([clave, valor]) => {
     if (valor !== null && valor !== undefined && valor !== '') {
-      consulta.set(clave, valor);
+      const valorConsulta =
+        typeof valor === 'boolean' ? (valor ? '1' : '0') : valor;
+
+      consulta.set(clave, valorConsulta);
     }
   });
 
