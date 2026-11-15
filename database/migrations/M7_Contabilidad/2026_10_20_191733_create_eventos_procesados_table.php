@@ -31,11 +31,13 @@ return new class extends Migration
             );
         });
 
+        if (DB::getDriverName() === 'pgsql') {
         DB::statement("
-            ALTER TABLE eventos_procesados
-            ADD CONSTRAINT chk_eventos_procesados_estado
-            CHECK (estado IN ('PENDIENTE', 'PROCESADO', 'FALLIDO'))
+        ALTER TABLE eventos_procesados
+        ADD CONSTRAINT chk_eventos_procesados_estado
+        CHECK (estado IN ('PENDIENTE', 'PROCESADO', 'FALLIDO'))
         ");
+        }
     }
 
     public function down(): void

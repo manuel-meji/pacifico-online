@@ -39,17 +39,20 @@ return new class extends Migration
                 ->nullOnDelete();
         });
 
-        DB::statement("
-            ALTER TABLE cuentas_contables
-            ADD CONSTRAINT chk_cuentas_contables_tipo
-            CHECK (tipo IN ('ACTIVO', 'PASIVO', 'PATRIMONIO', 'INGRESO', 'GASTO'))
-        ");
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("
+                ALTER TABLE cuentas_contables
+                ADD CONSTRAINT chk_cuentas_contables_tipo
+                CHECK (tipo IN ('ACTIVO', 'PASIVO', 'PATRIMONIO', 'INGRESO', 'GASTO'))
+            ");
 
-        DB::statement("
-            ALTER TABLE cuentas_contables
-            ADD CONSTRAINT chk_cuentas_contables_nivel
-            CHECK (nivel > 0)
-        ");
+            DB::statement('
+                ALTER TABLE cuentas_contables
+                ADD CONSTRAINT chk_cuentas_contables_nivel
+                CHECK (nivel > 0)
+            ');
+        }
+
     }
 
     public function down(): void
