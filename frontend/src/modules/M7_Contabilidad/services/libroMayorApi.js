@@ -46,8 +46,8 @@ async function llamar(ruta) {
   return cuerpo.data;
 }
 
-export function listarCuentasMayor() {
-  return llamar('/libro-mayor/cuentas');
+export function listarCuentasMayor(idComercio) {
+  return llamar(`/libro-mayor/cuentas${construirConsulta({ id_comercio: idComercio })}`);
 }
 
 export function consultarLibroMayor(filtros) {

@@ -325,7 +325,7 @@ paths:
         por código. Cada fila suma solo los movimientos directos de esa cuenta,
         sin consolidar hijos para evitar duplicación. Se conservan saldos negativos.
         No son documentos ni vencimientos, abonos o liquidaciones. Excluye IVA por pagar.
-        En modo sistema se requiere id_comercio explícito, nunca agregado global.
+        El encargado de plataforma debe indicar id_comercio; no se agrega información global.
       parameters:
         - $ref: '#/components/parameters/IdComercio'
       responses:
@@ -379,7 +379,7 @@ paths:
         (null si no hay). Los totales del resumen incluyen centros inactivos y sin_centro.
         hay_movimientos es false cuando el período no tiene líneas de ingresos ni gastos
         ("Sin movimientos en el período consultado"). Sin presupuesto ni responsable.
-        En modo sistema se requiere id_comercio explícito, nunca agregado global.
+        El encargado de plataforma debe indicar id_comercio; no se agrega información global.
       parameters:
         - $ref: '#/components/parameters/IdComercio'
         - $ref: '#/components/parameters/FechaDesde'
@@ -443,7 +443,7 @@ paths:
         con la fila del centro. saldo es la utilidad acumulada. Incluye reversiones
         y permite consultar centros inactivos. Un centro sin movimientos devuelve
         lista vacía y totales cero. Un centro inexistente o de otro comercio devuelve 404.
-        En modo sistema se requiere id_comercio explícito.
+        El encargado de plataforma debe indicar id_comercio explícito.
       parameters:
         - name: idCentroCosto
           in: path
@@ -489,12 +489,82 @@ paths:
         '422': { $ref: '#/components/responses/Validacion' }
         '500': { $ref: '#/components/responses/ErrorInterno' }
 
+  /api/m7/v1/asientos/{idAsiento}:
+    get:
+      tags: [Reportes]
+      summary: Consultar un asiento completo
+      operationId: consultarAsientoContable
+      description: >
+        Devuelve la cabecera del asiento y todas sus líneas en orden, con la cuenta,
+        el centro de costo (null si la línea no tiene) y los totales de debe y haber.
+        Se abre desde los detalles de Centros de costo y de Cuentas por cobrar y pagar.
+        Incluye asientos de cualquier estado. Un asiento inexistente o de otro comercio
+        devuelve 404. El encargado de plataforma debe indicar id_comercio explícito.
+      parameters:
+        - name: idAsiento
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - $ref: '#/components/parameters/IdComercio'
+      responses:
+        '200':
+          description: Asiento con sus líneas y totales
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [id_asiento, id_comercio, fecha, tipo, estado, total_debe, total_haber, cuadrado, lineas]
+                    properties:
+                      id_asiento: { type: integer }
+                      id_comercio: { type: integer }
+                      fecha: { type: string }
+                      tipo: { type: string }
+                      tipo_evento: { type: string, nullable: true }
+                      descripcion: { type: string, nullable: true }
+                      estado: { type: string, enum: [REGISTRADO, PENDIENTE, ANULADO] }
+                      id_pedido: { type: integer, nullable: true }
+                      id_subpedido: { type: integer, nullable: true }
+                      id_pago: { type: integer, nullable: true }
+                      id_asiento_original: { type: integer, nullable: true }
+                      total_debe: { type: string, example: '10.00' }
+                      total_haber: { type: string, example: '10.00' }
+                      cuadrado: { type: boolean, description: Debe y haber coinciden y el asiento tiene líneas. }
+                      lineas:
+                        type: array
+                        items:
+                          type: object
+                          required: [numero_linea, codigo_cuenta, nombre_cuenta, tipo_cuenta, centro, debe, haber]
+                          properties:
+                            numero_linea: { type: integer }
+                            codigo_cuenta: { type: string }
+                            nombre_cuenta: { type: string }
+                            tipo_cuenta: { type: string }
+                            centro:
+                              type: object
+                              nullable: true
+                              properties:
+                                codigo: { type: string }
+                                nombre: { type: string }
+                            descripcion: { type: string, nullable: true }
+                            debe: { type: string }
+                            haber: { type: string }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
   /api/m7/v1/cuentas:
     get:
       tags: [Plan de cuentas]
       summary: Listar cuentas del comercio
       operationId: listarCuentasContables
-      description: El comercio se obtiene del contexto o se indica en modo sistema; solo_activas filtra las cuentas activas.
+      description: El comercio se obtiene de la sesión o lo indica el encargado de plataforma; solo_activas filtra las cuentas activas.
       parameters:
         - $ref: '#/components/parameters/IdComercio'
         - name: solo_activas
@@ -558,8 +628,12 @@ paths:
       tags: [Libros contables]
       summary: Consultar el libro diario
       operationId: consultarLibroDiario
-      description: Usa el contexto del comercio; en modo sistema la consulta no filtra por comercio.
+      description: >
+        La consulta HTTP se limita al comercio autenticado o, para el encargado
+        de plataforma, al comercio seleccionado mediante id_comercio. El acceso
+        de plataforma se registra en la bitácora.
       parameters:
+        - $ref: '#/components/parameters/IdComercio'
         - $ref: '#/components/parameters/FechaDesde'
         - $ref: '#/components/parameters/FechaHasta'
         - name: tipo
@@ -681,6 +755,42 @@ paths:
         '422': { $ref: '#/components/responses/Validacion' }
         '500': { $ref: '#/components/responses/ErrorInterno' }
 
+  /api/m7/v1/balance-general:
+    get:
+      tags: [Reportes]
+      summary: Consultar el balance general a una fecha de corte
+      operationId: consultarBalanceGeneral
+      description: >
+        Acumula las líneas de asientos REGISTRADOS del comercio con fecha menor
+        o igual a fecha_corte. El saldo de cada cuenta se calcula según su
+        naturaleza: ACTIVO y GASTO como debe − haber; PASIVO, PATRIMONIO e
+        INGRESO como haber − debe. El resultado acumulado (ingresos − gastos)
+        se suma al patrimonio, y cuadra indica si activos = pasivos + patrimonio.
+        Todos los importes se expresan en céntimos. Sustituye en v1.1.0 a la
+        ruta /comercios/{id_comercio}/balance-general de v1.0.0.
+      parameters:
+        - $ref: '#/components/parameters/IdComercio'
+        - name: fecha_corte
+          in: query
+          required: true
+          description: Fecha de corte con formato Y-m-d.
+          schema: { type: string, format: date, example: '2026-11-14' }
+      responses:
+        '200':
+          description: Totales del balance general y saldo por cuenta con movimientos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { $ref: '#/components/schemas/BalanceGeneralCorte' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/SinPermisos' }
+        '422': { $ref: '#/components/responses/Validacion' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
+
   /m7:
     get:
       tags: [Estado]
@@ -715,6 +825,7 @@ paths:
         distribución propia. libro identifica el ámbito de asiento_id.
         Los importes globales y el estado de cuadre no se exponen al comercio.
         Identificadores sin asiento devuelven registrado=false.
+        La consulta global de plataforma se registra en la bitácora.
       parameters:
         - name: idPago
           in: path
@@ -765,7 +876,7 @@ components:
       name: id_comercio
       in: query
       required: false
-      description: Opcional para el comercio autenticado; requerido en modo sistema para estas consultas.
+      description: Opcional para el comercio autenticado; obligatorio para el encargado de plataforma. Sus consultas quedan auditadas.
       schema: { type: integer, minimum: 1 }
     FechaDesde:
       name: fecha_desde
@@ -1003,6 +1114,46 @@ components:
         ingresos: { type: string }
         costos: { type: string }
         utilidad_bruta: { type: string }
+    BalanceGeneralCorte:
+      type: object
+      required:
+        - id_comercio
+        - fecha_corte
+        - activos_centimos
+        - pasivos_centimos
+        - patrimonio_centimos
+        - resultado_acumulado_centimos
+        - cuadra
+        - cuentas
+      properties:
+        id_comercio: { type: integer }
+        fecha_corte: { type: string, format: date }
+        activos_centimos: { type: integer }
+        pasivos_centimos: { type: integer }
+        patrimonio_centimos:
+          type: integer
+          description: Patrimonio de las cuentas más el resultado acumulado.
+        resultado_acumulado_centimos:
+          type: integer
+          description: Saldo de cuentas INGRESO menos saldo de cuentas GASTO.
+        cuadra:
+          type: boolean
+          description: Verdadero si activos_centimos = pasivos_centimos + patrimonio_centimos.
+        cuentas:
+          type: array
+          items: { $ref: '#/components/schemas/SaldoCuentaBalance' }
+    SaldoCuentaBalance:
+      type: object
+      required: [id_cuenta_contable, codigo, nombre, tipo, id_cuenta_padre, saldo_centimos]
+      properties:
+        id_cuenta_contable: { type: integer }
+        codigo: { type: string, example: '1.1.02' }
+        nombre: { type: string }
+        tipo: { type: string, enum: [ACTIVO, PASIVO, PATRIMONIO, INGRESO, GASTO] }
+        id_cuenta_padre: { type: integer, nullable: true }
+        saldo_centimos:
+          type: integer
+          description: Saldo según la naturaleza del tipo de cuenta.
 
   # Definiciones de v1.0.0 conservadas para operaciones pendientes.
     CuentaContableInput:

@@ -1,8 +1,18 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderReact, screen, waitFor, within } from '@testing-library/react';
 import CuentasPorCobrarPagarView from '../views/CuentasPorCobrarPagarView';
 import CentrosCostoView from '../views/CentrosCostoView';
+import M7App from '../M7App';
+import { SesionM7Context } from '../context/SesionM7Context';
+
+function render(elemento) {
+  return renderReact(
+    <SesionM7Context.Provider value={{ usuario: { rol: 'encargado_comercio' } }}>
+      {elemento}
+    </SesionM7Context.Provider>
+  );
+}
 
 beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
@@ -30,6 +40,93 @@ function conComercios(consultas, comercios = sinPermisoComercios) {
 }
 
 describe('Consultas contables reales', () => {
+  it('exige seleccionar comercio y conserva ese ámbito al navegar o cambiar de comercio', async () => {
+    const fetch = vi.fn(async (url) => {
+      if (url === '/api/user') {
+        return { ok: true, json: async () => ({ user: { rol: 'encargado_plataforma', nombre: 'Plataforma' } }) };
+      }
+      if (url === '/api/m7/v1/comercios') {
+        return { ok: true, json: async () => ({ success: true, data: { comercios: [
+          { id_comercio: 1, nombre: 'Comercio uno' },
+          { id_comercio: 2, nombre: 'Comercio dos' },
+        ] } }) };
+      }
+      return { ok: false, status: 500, json: async () => ({ error: { mensaje: 'Consulta no disponible.' } }) };
+    });
+    vi.stubGlobal('fetch', fetch);
+    render(<M7App />);
+
+    await screen.findByRole('option', { name: 'Comercio uno' });
+    expect(fetch.mock.calls.filter(([url]) => url.startsWith('/api/m7/v1/') && url !== '/api/m7/v1/comercios')).toHaveLength(0);
+    expect(screen.getByText('Seleccione un comercio para consultar sus datos contables.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Comercio'), { target: { value: '1' } });
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/libro-diario?') && url.includes('id_comercio=1'))).toBe(true));
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/reporte-gerencial?') && url.includes('id_comercio=1'))).toBe(true));
+
+    fireEvent.change(screen.getByLabelText('Comercio'), { target: { value: '2' } });
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/m7/v1/libro-diario?') && url.includes('id_comercio=2'))).toBe(true));
+
+    for (const [seccion, ruta] of [
+      ['Plan de cuentas', '/api/m7/v1/cuentas?'],
+      ['Libro diario', '/api/m7/v1/libro-diario?'],
+      ['Libro mayor', '/api/m7/v1/libro-mayor/cuentas?'],
+      ['Balance general', '/api/m7/v1/balance-general?'],
+      ['Estado de resultados', '/api/m7/v1/reporte-gerencial?'],
+      ['Cuentas por cobrar y pagar', '/api/m7/v1/saldos-cobrar-pagar?'],
+      ['Centros de costo', '/api/m7/v1/centros-costo?'],
+    ]) {
+      fireEvent.click(within(screen.getByRole('navigation', { name: 'Secciones contables' })).getByRole('button', { name: seccion }));
+      await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith(ruta) && url.includes('id_comercio=2'))).toBe(true));
+    }
+  });
+
+  it.each([
+    {
+      Vista: CentrosCostoView,
+      boton: 'Imprimir reporte',
+      busqueda: 'Buscar centro',
+      datos: {
+        id_comercio: 5, fecha_desde: null, fecha_hasta: null, hay_movimientos: true, sin_centro: null,
+        centros: Array.from({ length: 11 }, (_, indice) => ({
+          id_centro_costo: indice + 1, codigo: `C${indice + 1}`, nombre: `Elemento ${indice + 1}`, activo: true,
+          ingresos: '10', costos: '5', utilidad: '5', margen: '50',
+        })),
+        resumen: { cantidad: 11, activos: 11, ingresos: '110', costos: '55', utilidad: '55', margen: '50' },
+      },
+    },
+    {
+      Vista: CuentasPorCobrarPagarView,
+      boton: 'Imprimir listado',
+      busqueda: 'Buscar cuenta',
+      datos: {
+        id_comercio: 5,
+        cuentas: Array.from({ length: 11 }, (_, indice) => ({
+          id_cuenta_contable: indice + 1, codigo: `C${indice + 1}`, nombre: `Elemento ${indice + 1}`,
+          tipo: 'Por cobrar', saldo: '10',
+        })),
+        resumen: { por_cobrar: '110', por_pagar: '0' },
+      },
+    },
+  ])('prepara la impresión de todas las filas filtradas de $boton', async ({ Vista, boton, busqueda, datos }) => {
+    vi.stubGlobal('fetch', conComercios(vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ success: true, data: datos }),
+    })));
+    vi.stubGlobal('print', vi.fn());
+    const { container } = render(<Vista />);
+
+    await screen.findByText('Elemento 1');
+    const reporte = container.querySelector('.m7-print-area');
+    expect(reporte).toBeTruthy();
+    expect(within(reporte).getByText('Elemento 11').closest('tr').classList.contains('m7-solo-impresion')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: boton }));
+    expect(window.print).toHaveBeenCalledOnce();
+
+    fireEvent.change(screen.getByLabelText(busqueda), { target: { value: 'Elemento 1' } });
+    expect(within(reporte).getByText('Elemento 11')).toBeTruthy();
+    expect(within(reporte).queryByText('Elemento 2')).toBeNull();
+  });
+
   it('consulta y filtra los saldos por cuenta, sin documentos ficticios', async () => {
     const fetch = conComercios(vi.fn().mockResolvedValue({
       ok: true,
@@ -155,6 +252,42 @@ describe('Consultas contables reales', () => {
     expect(screen.getByLabelText('Buscar cuenta').value).toBe('Fondos');
   });
 
+  it('abre el asiento completo desde el detalle y Escape solo cierra el asiento', async () => {
+    const fetch = conComercios(vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: {
+        id_comercio: 2,
+        cuentas: [{ id_cuenta_contable: 14, codigo: '1.1.02', nombre: 'Cuentas por cobrar', tipo: 'Por cobrar', saldo: '10.00' }],
+        resumen: { por_cobrar: '10.00', por_pagar: '0.00' },
+      } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: {
+        total_debe: '10.00', total_haber: '0.00', saldo_final: '10.00',
+        movimientos: [{ id_asiento: 5, numero_linea: 1, fecha: '2026-11-14 12:00:00', tipo: 'VENTA',
+          descripcion: 'Venta del subpedido', debe: '10.00', haber: '0.00', saldo: '10.00' }],
+      } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: {
+        id_asiento: 5, id_comercio: 2, fecha: '2026-11-14 12:00:00', tipo: 'VENTA', tipo_evento: 'PedidoConfirmado',
+        descripcion: 'Venta del pedido 9', estado: 'REGISTRADO', id_pedido: 9, id_subpedido: 12, id_pago: null, id_asiento_original: null,
+        total_debe: '10.00', total_haber: '10.00', cuadrado: true,
+        lineas: [
+          { numero_linea: 1, codigo_cuenta: '1.1.02', nombre_cuenta: 'Cuentas por cobrar', tipo_cuenta: 'ACTIVO', centro: null, descripcion: null, debe: '10.00', haber: '0.00' },
+          { numero_linea: 2, codigo_cuenta: '4.1.01', nombre_cuenta: 'Ventas', tipo_cuenta: 'INGRESO', centro: { codigo: 'GEN', nombre: 'General' }, descripcion: null, debe: '0.00', haber: '10.00' },
+        ],
+      } }) }));
+    vi.stubGlobal('fetch', fetch);
+    render(<CuentasPorCobrarPagarView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver movimientos de 1.1.02' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver asiento ASI-0005' }));
+    const asiento = within(screen.getByRole('dialog', { name: 'Asiento ASI-0005' }));
+    expect(await asiento.findByText('4.1.01 · Ventas')).toBeTruthy();
+    expect(asiento.getByText('GEN · General')).toBeTruthy();
+    expect(asiento.getByText('Pedido #9 · Subpedido #12')).toBeTruthy();
+    expect(asiento.getByText(/Asiento cuadrado/)).toBeTruthy();
+    expect(fetch).toHaveBeenLastCalledWith('/api/m7/v1/asientos/5?id_comercio=2', expect.objectContaining({ credentials: 'include' }));
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Asiento ASI-0005' }), { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Asiento ASI-0005' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: /^Movimientos de/ })).toBeTruthy();
+  });
+
   it('abre el detalle del centro, muestra sus referencias y permite reintentar errores del detalle', async () => {
     const fetch = conComercios(vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: {
@@ -211,6 +344,28 @@ describe('Consultas contables reales', () => {
     expect(await dialogo.findByText('Venta anterior')).toBeTruthy();
     expect(dialogo.getByRole('columnheader', { name: 'Utilidad acumulada' })).toBeTruthy();
     expect(fetch).toHaveBeenLastCalledWith('/api/m7/v1/centros-costo/sin-asignar/movimientos?id_comercio=1&fecha_desde=2026-11-01&fecha_hasta=2026-11-30', expect.anything());
+  });
+
+  it('limpia las fechas y vuelve a consultar todo el historial', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: {
+      id_comercio: 1, fecha_desde: null, fecha_hasta: null, hay_movimientos: true, centros: [], sin_centro: null,
+      resumen: { cantidad: 0, activos: 0, ingresos: '0.00', costos: '0.00', utilidad: '0.00', margen: null },
+    } }) });
+    vi.stubGlobal('fetch', fetch);
+    render(<CentrosCostoView />);
+    await screen.findByText('Todo el historial');
+    const limpiar = screen.getByRole('button', { name: 'Limpiar filtros' });
+    expect(limpiar.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-11-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Actualizar consulta' }));
+    await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/m7/v1/centros-costo?fecha_desde=2026-11-01', expect.anything()));
+    await screen.findByText('Todo el historial');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
+
+    expect(screen.getByLabelText('Desde').value).toBe('');
+    await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/m7/v1/centros-costo', expect.anything()));
+    expect(await screen.findByRole('button', { name: 'Limpiar filtros' })).toHaveProperty('disabled', true);
   });
 
   it('avisa cuando no hay movimientos en el período consultado', async () => {

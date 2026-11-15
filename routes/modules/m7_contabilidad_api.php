@@ -1,13 +1,13 @@
 
 <?php
 
+use App\Http\Controllers\M7_Contabilidad\BalanceGeneralController;
 use App\Http\Controllers\M7_Contabilidad\ConsultasOperativasController;
 use App\Http\Controllers\M7_Contabilidad\LibroDiarioController;
 use App\Http\Controllers\M7_Contabilidad\LibroMayorController;
 use App\Http\Controllers\M7_Contabilidad\PlanCuentasController;
 use App\Http\Controllers\M7_Contabilidad\ReporteGerencialController;
-use App\Http\Controllers\M7_Contabilidad\BalanceGeneralController;
-use App\Http\Middleware\EstablecerComercio;
+use App\Http\Middleware\M7_Contabilidad\EstablecerComercioConsulta;
 use App\Http\Middleware\RequiereRol;
 use Illuminate\Support\Facades\Route;
 
@@ -30,12 +30,12 @@ Route::prefix('api/m7/v1')
 
         /*
          * Operaciones contables:
-         * exclusivas para encargado_comercio.
+         * consultas por comercio para los encargados de comercio y plataforma.
          */
         Route::middleware([
             'auth:sanctum',
-            EstablecerComercio::class,
-            RequiereRol::class.':encargado_comercio',
+            RequiereRol::class.':encargado_comercio,encargado_plataforma',
+            EstablecerComercioConsulta::class,
         ])->group(function (): void {
 
             Route::get('saldos-cobrar-pagar', [ConsultasOperativasController::class, 'saldos'])
@@ -50,7 +50,9 @@ Route::prefix('api/m7/v1')
             Route::get('centros-costo/{idCentroCosto}/movimientos', [ConsultasOperativasController::class, 'movimientosCentro'])
                 ->whereNumber('idCentroCosto')
                 ->name('centros-costo.movimientos');
-
+            Route::get('asientos/{idAsiento}', [ConsultasOperativasController::class, 'asiento'])
+                ->whereNumber('idAsiento')
+                ->name('asientos.show');
             Route::get('cuentas', [PlanCuentasController::class, 'listar'])
                 ->name('cuentas.index');
 

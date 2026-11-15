@@ -5,7 +5,7 @@ import { consultarComercios } from '../services/consultasOperativasApi';
  * Selector de comercio por nombre para el encargado de plataforma. Si la sesión no
  * puede listar comercios (encargado de comercio), no se muestra y se usa el de la sesión.
  */
-export default function SelectorComercioM7({ valor, onCambiar, onCargados }) {
+export default function SelectorComercioM7({ valor, onCambiar, onCargados, requerido = false }) {
   const [comercios, setComercios] = useState(null);
   const [estado, setEstado] = useState('cargando');
 
@@ -17,7 +17,7 @@ export default function SelectorComercioM7({ valor, onCambiar, onCargados }) {
       setEstado('listo');
       onCargados?.(lista);
     }).catch((fallo) => {
-      if (activo) setEstado(fallo.estado === 401 || fallo.estado === 403 ? 'oculto' : 'error');
+      if (activo) setEstado(!requerido && (fallo.estado === 401 || fallo.estado === 403) ? 'oculto' : 'error');
     });
     return () => { activo = false; };
     // Solo se consulta al montar; onCargados puede cambiar en cada render.

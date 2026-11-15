@@ -42,7 +42,7 @@ function obtenerGrupo(codigo) {
   return partes.length >= 2 ? partes.slice(0, 2).join('.') : partes[0];
 }
 
-export default function BalanceGeneralView({ onNavegar }) {
+export default function BalanceGeneralView({ onNavegar, idComercio }) {
   const [fechaCorte, setFechaCorte] = useState(obtenerFechaActual);
   const [balance, setBalance] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -60,7 +60,7 @@ export default function BalanceGeneralView({ onNavegar }) {
       setBalance(null);
 
       try {
-        const resultado = await consultarBalanceGeneral(fechaCorte);
+        const resultado = await consultarBalanceGeneral(fechaCorte, idComercio);
 
         if (activo) {
           setBalance(resultado);
@@ -86,7 +86,7 @@ export default function BalanceGeneralView({ onNavegar }) {
     return () => {
       activo = false;
     };
-  }, [fechaCorte]);
+  }, [fechaCorte, idComercio]);
 
   const cuentasBalance = useMemo(() => {
     if (!Array.isArray(balance?.cuentas)) {

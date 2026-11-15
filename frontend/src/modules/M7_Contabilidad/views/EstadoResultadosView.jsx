@@ -42,7 +42,7 @@ function formatoPorcentaje(valor) {
   }).format(valor);
 }
 
-export default function EstadoResultadosView({ onNavegar }) {
+export default function EstadoResultadosView({ onNavegar, idComercio }) {
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
   const [reporte, setReporte] = useState(null);
@@ -73,6 +73,7 @@ export default function EstadoResultadosView({ onNavegar }) {
 
       try {
         const datos = await consultarReporteGerencial({
+          id_comercio: idComercio,
           fecha_desde: fechaDesde,
           fecha_hasta: fechaHasta,
         });
@@ -93,7 +94,7 @@ export default function EstadoResultadosView({ onNavegar }) {
     return () => {
       activo = false;
     };
-  }, [fechaDesde, fechaHasta, filtrosInvalidos]);
+  }, [fechaDesde, fechaHasta, filtrosInvalidos, idComercio]);
 
   function limpiarFiltros() {
     setFechaDesde('');

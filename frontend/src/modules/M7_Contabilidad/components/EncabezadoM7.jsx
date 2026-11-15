@@ -17,6 +17,7 @@ const secciones = [
 
 const nombresRoles = {
   encargado_comercio: 'Encargado de comercio',
+  encargado_plataforma: 'Encargado de plataforma',
 };
 
 export default function EncabezadoM7({

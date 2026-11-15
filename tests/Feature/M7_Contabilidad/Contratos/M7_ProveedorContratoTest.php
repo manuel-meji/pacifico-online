@@ -181,13 +181,13 @@ class M7_ProveedorContratoTest extends TestCase
     }
 
     private function plataforma(): Usuario
-{
-    return UsuarioFactory::new()->create([
-        'rol' => 'encargado_plataforma',
-        'id_comercio' => null,
-        'activo' => true,
-    ]);
-}
+    {
+        return UsuarioFactory::new()->create([
+            'rol' => 'encargado_plataforma',
+            'id_comercio' => null,
+            'activo' => true,
+        ]);
+    }
 
     // listarCuentasContables / consultarCuentaContable
 
@@ -220,14 +220,25 @@ class M7_ProveedorContratoTest extends TestCase
             ]);
     }
 
-    public function test_plataforma_no_puede_listar_las_cuentas_de_un_comercio(): void
-{
-    $this->actingAs($this->plataforma(), 'web')
-        ->getJson('/api/m7/v1/cuentas?id_comercio=2')
-        ->assertForbidden()
-        ->assertJsonStructure(self::ERROR)
-        ->assertJsonPath('error.codigo', 'ERR-002');
-}
+    public function test_plataforma_lista_solo_las_cuentas_del_comercio_seleccionado(): void
+    {
+        $this->crearCuenta(1, '1.1.01', 'Caja comercio 1');
+        $this->crearCuenta(2, '1.1.01', 'Caja comercio 2');
+        $usuario = $this->plataforma();
+
+        $this->actingAs($usuario, 'web')->getJson('/api/m7/v1/cuentas?id_comercio=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.cuentas')
+            ->assertJsonPath('data.cuentas.0.nombre', 'Caja comercio 2');
+
+        $this->assertDatabaseHas('bitacora_auditoria', [
+            'id_usuario' => $usuario->id_usuario,
+            'accion' => 'consulta_comercio',
+            'modulo' => 'M7',
+            'entidad' => 'comercio',
+            'entidad_id' => 2,
+        ]);
+    }
 
     public function test_consultar_cuenta_cumple_el_esquema_y_expone_la_jerarquia(): void
     {
@@ -307,6 +318,51 @@ class M7_ProveedorContratoTest extends TestCase
                     'cantidad',
                 ],
             ]);
+    }
+
+    public function test_libro_diario_de_plataforma_no_mezcla_comercios(): void
+    {
+        $cuenta1 = $this->crearCuenta(1, '4.1.01', 'Ventas 1', 'INGRESO');
+        $cuenta2 = $this->crearCuenta(2, '4.1.01', 'Ventas 2', 'INGRESO');
+        $this->crearAsiento(1, 'VENTA', $cuenta1, 0, 100);
+        $asiento2 = $this->crearAsiento(2, 'VENTA', $cuenta2, 0, 500);
+        $this->actingAs($this->plataforma(), 'web');
+
+        $this->getJson('/api/m7/v1/libro-diario?id_comercio=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.asientos')
+            ->assertJsonPath('data.asientos.0.id', $asiento2)
+            ->assertJsonPath('data.totalHaber', 500);
+    }
+
+    #[DataProvider('rutasPorComercio')]
+    public function test_consultas_exigen_un_comercio_a_plataforma(string $ruta): void
+    {
+        $this->actingAs($this->plataforma(), 'web')->getJson($ruta)->assertUnprocessable();
+    }
+
+    #[DataProvider('rutasPorComercio')]
+    public function test_consultas_rechazan_el_comercio_ajeno(string $ruta): void
+    {
+        $this->actingAs($this->encargado(1), 'web')->getJson($ruta.'?id_comercio=2')->assertForbidden();
+    }
+
+    public static function rutasPorComercio(): array
+    {
+        return [
+            ['/api/m7/v1/cuentas'],
+            ['/api/m7/v1/cuentas/1'],
+            ['/api/m7/v1/libro-diario'],
+            ['/api/m7/v1/libro-mayor'],
+            ['/api/m7/v1/libro-mayor/cuentas'],
+            ['/api/m7/v1/reporte-gerencial'],
+            ['/api/m7/v1/balance-general'],
+            ['/api/m7/v1/saldos-cobrar-pagar'],
+            ['/api/m7/v1/centros-costo'],
+            ['/api/m7/v1/centros-costo/1/movimientos'],
+            ['/api/m7/v1/centros-costo/sin-asignar/movimientos'],
+            ['/api/m7/v1/asientos/1'],
+        ];
     }
 
     public function test_libro_diario_con_estado_invalido_responde_422_err_005(): void
@@ -514,14 +570,25 @@ class M7_ProveedorContratoTest extends TestCase
             ->assertJsonPath('asiento_id', null);
     }
 
-   public function test_plataforma_no_puede_consultar_el_registro_contable_de_un_pago(): void
-{
-    $this->actingAs($this->plataforma(), 'web')
-        ->getJson('/m7/pagos/557/registro-contable')
-        ->assertForbidden()
-        ->assertJsonStructure(self::ERROR)
-        ->assertJsonPath('error.codigo', 'ERR-002');
-}
+    public function test_plataforma_consulta_el_registro_global_del_pago_con_auditoria(): void
+    {
+        $this->registrarCobroGlobal(557);
+        $usuario = $this->plataforma();
+
+        $this->actingAs($usuario, 'web')->getJson('/m7/pagos/557/registro-contable')
+            ->assertOk()
+            ->assertJsonPath('id_pago', 557)
+            ->assertJsonPath('registrado', true)
+            ->assertJsonPath('monto_cobro_centimos', 10000);
+
+        $this->assertDatabaseHas('bitacora_auditoria', [
+            'id_usuario' => $usuario->id_usuario,
+            'accion' => 'consulta_registro_contable_pago',
+            'modulo' => 'M7',
+            'entidad' => 'pago',
+            'entidad_id' => 557,
+        ]);
+    }
 
     public function test_comercio_solo_recibe_subpedidos_contabilizados_de_su_comercio(): void
     {

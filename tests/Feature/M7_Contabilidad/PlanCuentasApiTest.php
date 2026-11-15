@@ -155,15 +155,15 @@ class PlanCuentasApiTest extends TestCase
             );
     }
 
-    public function test_encargado_plataforma_no_puede_consultar_plan_de_cuentas(): void
+    public function test_encargado_plataforma_debe_seleccionar_comercio_para_consultar_plan(): void
     {
         $usuario = $this->usuarioPlataforma();
 
         $respuesta = $this->actingAs($usuario, 'web')
-            ->getJson('/api/m7/v1/cuentas?id_comercio=1');
+            ->getJson('/api/m7/v1/cuentas');
 
         $respuesta
-            ->assertForbidden()
+            ->assertUnprocessable()
             ->assertJsonStructure([
                 'error' => [
                     'codigo',
@@ -171,7 +171,7 @@ class PlanCuentasApiTest extends TestCase
                     'detalles',
                 ],
             ])
-            ->assertJsonPath('error.codigo', 'ERR-002');
+            ->assertJsonPath('error.codigo', 'ERR-005');
     }
 
     public function test_no_expone_cuentas_de_otro_comercio(): void
