@@ -12,33 +12,41 @@ use InvalidArgumentException;
 final class BalanceGeneralService
 {
     public function __construct(
-    private readonly ContextoComercio $contexto,
-    private readonly ValidadorPartidaDoble $validador,
-    private readonly CalculadoraBalanceGeneral $calculadora,
-) {}
+        private readonly ContextoComercio $contexto,
+        private readonly ValidadorPartidaDoble $validador,
+        private readonly CalculadoraBalanceGeneral $calculadora,
+    ) {}
 
-    public function consultar(int $idComercio, string $fechaCorte): array
+    public function consultar(?int $idComercio, string $fechaCorte): array
     {
-        if ($idComercio <= 0) {
-            throw new InvalidArgumentException(
-                'El identificador del comercio no es válido.'
-            );
-        }
-
         $comercioActual = $this->contexto->idActual();
 
-        if (! $this->contexto->esModoSistema()) {
+        if ($this->contexto->esModoSistema()) {
+            if ($idComercio === null) {
+                throw new InvalidArgumentException(
+                    'En modo sistema debe indicar el comercio que desea consultar.'
+                );
+            }
+        } else {
             if ($comercioActual === null) {
                 throw new InvalidArgumentException(
                     'No existe un comercio autorizado en el contexto actual.'
                 );
             }
 
-            if ($idComercio !== $comercioActual) {
+            if ($idComercio !== null && $idComercio !== $comercioActual) {
                 throw new InvalidArgumentException(
                     'No tiene autorización para consultar este comercio.'
                 );
             }
+
+            $idComercio = $comercioActual;
+        }
+
+        if ($idComercio <= 0) {
+            throw new InvalidArgumentException(
+                'El identificador del comercio no es válido.'
+            );
         }
 
         if (
@@ -114,8 +122,6 @@ final class BalanceGeneralService
                 );
         }
 
-        
-
         $resultado = $this->calculadora->calcular(
             array_values($saldosPorCuenta)
         );
@@ -126,27 +132,6 @@ final class BalanceGeneralService
             ...$resultado,
             'cuentas' => array_values($saldosPorCuenta),
         ];
-
-
-foreach ($saldosPorCuenta as $cuenta) {
-    $tipo = strtoupper($cuenta['tipo']);
-
-    $totales[$tipo] += $cuenta['saldo_centimos'];
-}
-
-$resultadoAcumulado = $totales['INGRESO'] - $totales['GASTO'];
-$patrimonioTotal = $totales['PATRIMONIO'] + $resultadoAcumulado;
-
-return [
-    'id_comercio' => $idComercio,
-    'fecha_corte' => $fechaCorte,
-    'activos_centimos' => $totales['ACTIVO'],
-    'pasivos_centimos' => $totales['PASIVO'],
-    'patrimonio_centimos' => $patrimonioTotal,
-    'resultado_acumulado_centimos' => $resultadoAcumulado,
-    'cuentas' => array_values($saldosPorCuenta),
-];
-
     }
 
     private function calcularSaldoMovimiento(

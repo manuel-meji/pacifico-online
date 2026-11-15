@@ -1,11 +1,14 @@
 
 const BASE = '/api/m7/v1';
 
-export async function consultarBalanceGeneral(idComercio, fechaCorte) {
+export async function consultarBalanceGeneral(fechaCorte, idComercio = null) {
   const parametros = new URLSearchParams({
-    id_comercio: String(idComercio),
     fecha_corte: fechaCorte,
   });
+
+  if (idComercio !== null && idComercio !== undefined) {
+    parametros.set('id_comercio', String(idComercio));
+  }
 
   let respuesta;
 
