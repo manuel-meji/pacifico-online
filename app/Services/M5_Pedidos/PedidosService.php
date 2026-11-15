@@ -22,6 +22,7 @@ use App\Models\M5_Pedidos\PedidoLinea;
 use App\Models\M5_Pedidos\PedidoMaestro;
 use App\Models\M5_Pedidos\Subpedido;
 use DomainException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -171,7 +172,10 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
             $descuentoLinea = round($descuentoUnitario * (int) $item->cantidad, 2);
 
             if (! isset($cacheComercios[$comercioId])) {
-                $nombreComercio = 'Comercio #'.$comercioId;
+                $cacheKeyNombre = "m5_comercio_nombre_{$comercioId}";
+                $nombreEnCache = Cache::get($cacheKeyNombre);
+                $nombrePorDefecto = 'Comercio #'.$comercioId;
+                $nombreComercio = is_string($nombreEnCache) && $nombreEnCache !== '' ? $nombreEnCache : $nombrePorDefecto;
                 $costoEnvioComercio = 0.0;
                 $suspendido = false;
 
@@ -179,6 +183,9 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                     try {
                         if (method_exists($comercios, 'obtenerComercioActivo')) {
                             $infoEstado = $comercios->obtenerComercioActivo($comercioId);
+                            if (! empty($infoEstado['nombre_comercial'] ?? $infoEstado['nombre'] ?? null)) {
+                                $nombreComercio = (string) ($infoEstado['nombre_comercial'] ?? $infoEstado['nombre']);
+                            }
                             if (isset($infoEstado['activo']) && ! $infoEstado['activo']) {
                                 $suspendido = true;
                             }
@@ -229,6 +236,10 @@ class PedidosService implements CarritoServiceInterface, GestionPedidosServiceIn
                     } catch (\Throwable) {
                         $suspendido = true;
                     }
+                }
+
+                if ($nombreComercio !== $nombrePorDefecto) {
+                    Cache::put($cacheKeyNombre, $nombreComercio, now()->addDays(7));
                 }
 
                 $cacheComercios[$comercioId] = [
