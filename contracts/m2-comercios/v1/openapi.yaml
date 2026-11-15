@@ -20,7 +20,7 @@ info:
     permitidos de cada operación se indican en x-autorizacion. Un rol no
     permitido recibe 403 (ERR-002) y un recurso de otro comercio, 404
     (ERR-003).
-  version: 1.2.1
+  version: 1.2.2
   contact:
     name: Subgrupo SG2 — Módulo 2
 servers:
@@ -744,8 +744,8 @@ x-dependencias-consumidas:
       ObtenerComisionSubpedido.
     campos_usados: [id_evento, id_subpedido, id_comercio]
     estado: >
-      M5 publica el evento hacia M1, M4 y M7; pendiente de que agregue
-      a M2 como consumidor.
+      M5 declara a M2 como consumidor en su contrato (x-consumidores del
+      despacho y consumidores del evento: M1, M2, M4 y M7).
   obtenerSubpedido:
     productor: M5
     tipo: operación
@@ -754,16 +754,9 @@ x-dependencias-consumidas:
       Obtener el subtotal del subpedido (antes de impuestos y envío),
       que es la base de la comisión. M5 ya declara a M2 como consumidor.
     campos_usados: [id_subpedido, id_comercio, subtotal]
-  AlertaStockMinimo:
-    productor: M4
-    tipo: evento
-    version: 1.0.0 (candidata de M4)
-    uso: Mostrar la alerta de reposición en el panel del comercio.
-    campos_usados: [id_comercio, id_variacion, cantidad_disponible, stock_minimo]
-  obtenerResumenFinancieroComercio:
-    productor: M7
-    tipo: operación
-    ruta: GET /api/v1/m7/comercios/{id_comercio}/resumen-financiero
-    uso: >
-      Mostrar el resumen financiero en el panel del comercio. La consume
-      el frontend del panel de M2; el backend de M2 no la invoca.
+# Versión 1.2.2 (SC-15): se retiraron los consumos AlertaStockMinimo (M4)
+# y obtenerResumenFinancieroComercio (M7), declarados en el diseño y no
+# implementados. La alerta de reposición la muestra M4 en «Existencias y
+# mínimos» y el resumen financiero lo muestra M7 en su tablero; el panel
+# de M2 enlaza a ambas pantallas (pestañas Inventario y Finanzas). No
+# cambia ninguna operación ni evento publicado por M2.

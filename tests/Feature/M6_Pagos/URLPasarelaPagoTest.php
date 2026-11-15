@@ -8,7 +8,7 @@ use App\Contracts\M6_Pagos\PagosServiceInterface;
 use Tests\Feature\M6_Pagos\Concerns\PreparaM6;
 use Tests\TestCase;
 
-class UrlPasarelaPagoTest extends TestCase
+class URLPasarelaPagoTest extends TestCase
 {
     use PreparaM6;
 

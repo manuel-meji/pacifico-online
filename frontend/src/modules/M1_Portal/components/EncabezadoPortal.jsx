@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ReceiptText } from 'lucide-react'; //cambio de justinM6
 import logo from '../assets/logo-pacificos.png';
 import Icono from './IconoComercio';
 import Imagen from './Imagen';
@@ -92,6 +93,13 @@ export default function EncabezadoPortal({ categorias = [], terminoInicial = '',
               <Icono nombre="corazon" className="h-6 w-6" />
               <span className="hidden sm:inline">Deseos</span>
             </a>
+            {/* Historial de pagos y facturas: es una pantalla de M6 y solo se ofrece con sesión. */}
+            {conSesion && (
+              <a href="/m6.html?pantalla=historial" className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue" aria-label="Historial de pagos">
+                <Icono nombre="reloj" className="h-6 w-6" />
+                <span className="hidden sm:inline">Historial de pagos</span>
+              </a>
+            )}
             <a href="/carrito.html" className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 transition hover:text-brandBlue" aria-label={etiquetaCarrito}>
               <span className="relative mr-2.5">
                 <Icono nombre="carrito" className="h-6 w-6" />

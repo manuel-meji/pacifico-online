@@ -10,7 +10,7 @@ use Tests\Feature\M2_Comercios\Concerns\PreparaM2;
 use Tests\TestCase;
 
 /**
- * Pruebas de contrato de M2 como proveedor (OpenAPI v1.2.1, /api/m2/v1):
+ * Pruebas de contrato de M2 como proveedor (OpenAPI v1.2.2, /api/m2/v1):
  * forma de las respuestas, códigos ErrorEstandar y reglas de x-autorizacion.
  */
 class M2_ProveedorContratoTest extends TestCase

@@ -5,8 +5,10 @@ use App\Http\Controllers\M6_Pagos\ConfirmacionPagoController;
 use App\Http\Controllers\M6_Pagos\FacturasController;
 use App\Http\Controllers\M6_Pagos\HistorialController;
 use App\Http\Controllers\M6_Pagos\NotasAjusteController;
-use App\Http\Controllers\M6_Pagos\PagosController;
+use App\Http\Controllers\M6_Pagos\HistorialClienteController;
+use App\Http\Controllers\M6_Pagos\PagosController;   
 use App\Http\Controllers\M6_Pagos\ReembolsosController;
+use App\Http\Middleware\EstablecerCliente; 
 use App\Http\Middleware\M6_Pagos\VerificarFirmaPasarela;
 use Illuminate\Support\Facades\Route;
 
@@ -68,7 +70,8 @@ Route::prefix('api/m6/v1')
             ->name('pedidos.reembolsos');
 
         // CU-008 Historial de pagos y facturas (aislado por cliente y por comercio).
-        Route::get('historial', HistorialController::class)
+     Route::get('historial', HistorialController::class)
+            ->middleware(EstablecerCliente::class)
             ->name('historial');
 
         // CU-003 Conciliación de pagos del período.

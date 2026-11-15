@@ -108,6 +108,31 @@ const PieGuardado = ({ estado, onGuardar, texto = 'Guardar', deshabilitado = fal
   </div>
 );
 
+// Vista previa de imágenes: muestra el archivo elegido antes de guardarlo (con la
+// etiqueta «Sin guardar») y, si no hay archivo nuevo, la imagen ya guardada.
+function useUrlLocal(archivo) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!archivo) { setUrl(null); return undefined; }
+    const local = URL.createObjectURL(archivo);
+    setUrl(local);
+    return () => URL.revokeObjectURL(local);
+  }, [archivo]);
+  return url;
+}
+
+function Miniatura({ ruta, archivo, alt, className, vacio }) {
+  const local = useUrlLocal(archivo);
+  const src = local || ruta;
+  if (!src) return <span className={`flex items-center justify-center bg-slate-100 text-xs text-slate-500 ${className}`}>{vacio}</span>;
+  return (
+    <span className="relative inline-block w-full max-w-[200px]">
+      <img src={src} alt={alt} className={`border border-slate-200 ${className}`} />
+      {local && <span className="absolute left-1 top-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">Sin guardar</span>}
+    </span>
+  );
+}
+
 // Utilidades para listas editables.
 const cambiarEn = (lista, i, campo, valor) => lista.map((x, j) => (j === i ? { ...x, [campo]: valor } : x));
 const quitarDe = (lista, i) => lista.filter((_, j) => j !== i);
@@ -215,8 +240,10 @@ export default function PanelComercio() {
     politicas[i].configuracion_envio.map((t, m) => (m === k ? { ...t, [campo]: valor } : t))));
 
   const listasDeImagenes = [
-    { clave: 'banners', titulo: 'Banners', lista: banners, setLista: setBanners, campoId: 'id_banner', estado: estBanners, guardar: guardarBan, enviar: gestionarBanners, conActivo: true },
-    { clave: 'galeria', titulo: 'Galería de imágenes', lista: galeria, setLista: setGaleria, campoId: 'id_imagen', estado: estGaleria, guardar: guardarGal, enviar: gestionarGaleria, conActivo: false },
+    { clave: 'banners', titulo: 'Banners', lista: banners, setLista: setBanners, campoId: 'id_banner', estado: estBanners, guardar: guardarBan, enviar: gestionarBanners, conActivo: true,
+      medidas: 'JPG, PNG o WEBP de hasta 2 MB, horizontal (el ancho al menos el doble del alto) y de al menos 1200 px de ancho. Recomendado: 1600 × 400 px.' },
+    { clave: 'galeria', titulo: 'Galería de imágenes', lista: galeria, setLista: setGaleria, campoId: 'id_imagen', estado: estGaleria, guardar: guardarGal, enviar: gestionarGaleria, conActivo: false,
+      medidas: 'JPG, PNG o WEBP de hasta 2 MB y de al menos 600 × 400 px.' },
   ];
 
   const abiertos = horarios.filter((h) => !h.cerrado).length;
@@ -273,11 +300,12 @@ export default function PanelComercio() {
                   onGuardar={() => guardarInfo(() => actualizarInformacion(idComercio, descripcion), 'Descripción guardada.')} />
               </Seccion>
               {/* CU-0003: logotipo */}
-              <Seccion separada titulo="Logotipo" descripcion="JPG, PNG o WEBP de hasta 2 MB.">
+              <Seccion separada titulo="Logotipo" descripcion="JPG, PNG o WEBP de hasta 2 MB, cuadrado o casi cuadrado y de al menos 200 × 200 px. Se muestra en un círculo.">
                 <div className="mt-3 flex flex-wrap items-end gap-4">
-                  {logotipo
-                    ? <img src={logotipo} alt={`Logotipo actual de ${nombre}`} className="h-20 w-20 rounded-xl border border-slate-200 object-contain" />
-                    : <span className="flex h-20 w-20 items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-500">Sin logotipo</span>}
+                  <span className="w-20 shrink-0">
+                    <Miniatura ruta={logotipo} archivo={archivoLogo} alt={`Logotipo de ${nombre}`}
+                      className="h-20 w-20 rounded-xl object-contain" vacio="Sin logotipo" />
+                  </span>
                   <div className="min-w-[220px] flex-1">
                     <Campo etiqueta="Nuevo logotipo" type="file" accept="image/jpeg,image/png,image/webp"
                       onChange={(e) => setArchivoLogo(e.target.files?.[0] || null)} error={mensajeDe(estLogo.errores, 'logotipo')} />
@@ -443,18 +471,17 @@ export default function PanelComercio() {
             </Seccion>
           )}
 
-          {listasDeImagenes.filter(({ clave }) => clave === seccion).map(({ clave, titulo, lista, setLista, campoId, estado, guardar, enviar, conActivo }) => (
+          {listasDeImagenes.filter(({ clave }) => clave === seccion).map(({ clave, titulo, lista, setLista, campoId, estado, guardar, enviar, conActivo, medidas }) => (
             /* CU-0004 y CU-0005: banners y galería */
             <Seccion key={clave} titulo={titulo}
-              descripcion="Cada imagen necesita un texto alternativo. Las que quités de la lista se borran al guardar.">
+              descripcion={`${medidas} Cada imagen necesita un texto alternativo. Las que quités de la lista se borran al guardar.`}>
               {lista.length === 0 && <p className="mt-4 text-sm text-slate-500">Todavía no hay imágenes.</p>}
               <div className="mt-2 grid gap-3 md:grid-cols-2">
                 {lista.map((x, i) => (
                   <div key={x[campoId] ?? `nuevo-${i}`} className="rounded-xl border border-slate-200 p-3">
                     <div className="flex items-start justify-between gap-2">
-                      {x.ruta
-                        ? <img src={x.ruta} alt={x.texto_alternativo} className="h-24 w-full max-w-[200px] rounded-lg object-cover" />
-                        : <span className="flex h-24 w-full max-w-[200px] items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-500">Imagen nueva</span>}
+                      <Miniatura ruta={x.ruta} archivo={x.imagen} alt={x.texto_alternativo}
+                        className="h-24 w-full max-w-[200px] rounded-lg object-cover" vacio="Elegí una imagen" />
                       <Boton variante="neutro" aria-label="Quitar imagen" onClick={() => setLista(quitarDe(lista, i))}><Trash2 size={16} /></Boton>
                     </div>
                     <Campo etiqueta="Texto alternativo" value={x.texto_alternativo}

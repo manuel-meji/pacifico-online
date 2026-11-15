@@ -18,7 +18,7 @@ use Illuminate\Support\Carbon;
 use Tests\Feature\M2_Comercios\Concerns\PreparaM2;
 use Tests\TestCase;
 
-/** Pruebas unitarias de la fachada de M2 (ComerciosService), contrato v1.2.1. */
+/** Pruebas unitarias de la fachada de M2 (ComerciosService), contrato v1.2.2. */
 class ComerciosServiceTest extends TestCase
 {
     use PreparaM2;

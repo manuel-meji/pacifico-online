@@ -10,7 +10,7 @@ use App\Exceptions\Nucleo\ErrorNucleoException;
 /**
  * Base para los dobles de M2 que construyen los módulos consumidores.
  *
- * Declara las 8 operaciones del contrato v1.2.1 con sus firmas exactas. Por
+ * Declara las 8 operaciones del contrato v1.2.2 con sus firmas exactas. Por
  * defecto cada una responde ERR-006 (dependencia no disponible): el doble solo
  * sobrescribe las operaciones que su módulo consume.
  *

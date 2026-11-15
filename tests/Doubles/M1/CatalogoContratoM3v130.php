@@ -2,6 +2,7 @@
 
 namespace Tests\Doubles\M1;
 
+use App\Contracts\M3_Catalogo\CatalogoConsultasInterface;
 use App\Contracts\M3_Catalogo\CatalogoServiceInterface;
 use App\Services\M1_Portal\Dobles\CatalogoFake;
 use App\Services\M1_Portal\Dobles\ErrorProveedorException;
@@ -17,7 +18,7 @@ use App\Services\M1_Portal\Dobles\ErrorProveedorException;
  *   id_variacion); las variaciones no traen imágenes propias.
  * - listarRelacionados devuelve null si el producto origen no está visible.
  */
-class CatalogoContratoM3v130 implements CatalogoServiceInterface
+class CatalogoContratoM3v130 implements CatalogoConsultasInterface, CatalogoServiceInterface
 {
     private CatalogoFake $datos;
 

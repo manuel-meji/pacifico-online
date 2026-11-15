@@ -76,4 +76,11 @@ final class ComisionPendienteRepository
                 'updated_at' => now(),
             ]);
     }
+
+    public function obtenerPorSubpedido(int $subpedidoId): ?object
+    {
+    return DB::table('comisiones_contables_pendientes')
+        ->where('id_subpedido', $subpedidoId)
+        ->first();
+    }
 }

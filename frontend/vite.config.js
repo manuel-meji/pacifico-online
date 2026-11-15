@@ -1,11 +1,11 @@
-﻿import { defineConfig } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
-// Entrada de la aplicaciÃ³n integrada: app.html (portal de M1: inicio, bÃºsqueda e inicio de sesiÃ³n).
-// Cada mÃ³dulo conserva su propia pÃ¡gina: carrito.html (M5), m1.html, m2.html, m4.html, m6.html, m7.html.
-// `npm run dev` abre el portal; `npm run build` compila todas las pÃ¡ginas.
+// Entrada de la aplicación integrada: app.html (portal de M1: inicio, búsqueda e inicio de sesión).
+// Cada módulo conserva su propia página: carrito.html (M5), m1.html, m2.html, m4.html, m6.html, m7.html.
+// `npm run dev` abre el portal; `npm run build` compila todas las páginas.
 // `npm run build:single` genera el prototipo de M5 en un HTML de una sola pieza (dist-single/carrito.html).
 const PAGINAS = {
   app: 'app.html',
@@ -23,12 +23,13 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), ...(mode === 'single' ? [viteSingleFile()] : [])],
   server: {
     open: '/app.html',
-    // Proxy al backend Laravel (php artisan serve) para evitar CORS y compartir cookies de sesiÃ³n.
+    // Proxy al backend Laravel (php artisan serve) para evitar CORS y compartir cookies de sesión.
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/login': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/logout': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/crear-contrasena': { target: 'http://127.0.0.1:8000', changeOrigin: true },
     },
   },
   build: { rollupOptions: { input: mode === 'single' ? 'carrito.html' : PAGINAS } },
