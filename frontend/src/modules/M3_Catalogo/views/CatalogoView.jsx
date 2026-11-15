@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   LoaderCircle,
+  PlusCircle,
 } from 'lucide-react';
 
 import {
@@ -56,7 +57,10 @@ function rangoDePrecio(producto) {
 const textoAtributos = (atributos = []) =>
   atributos.map((a) => `${a.tipo_atributo}: ${a.valor}`).join(', ');
 
-export default function CatalogoView() {
+// idComercio: comercio del encargado en la sesión. Con un valor, la consulta se limita a ese comercio
+// ("Mis productos") y la pantalla no ofrece forma de quitar ese filtro. Sin valor, es el catálogo público.
+export default function CatalogoView({ idComercio = null }) {
+  const soloPropios = idComercio !== null && idComercio !== undefined;
   const [busqueda, setBusqueda] = useState('');
   const [termino, setTermino] = useState('');
   const [idMarca, setIdMarca] = useState('');
@@ -104,6 +108,7 @@ export default function CatalogoView() {
       orden,
       pagina,
       por_pagina: POR_PAGINA,
+      id_comercio: soloPropios ? idComercio : undefined,
     })
       .then((respuesta) => {
         if (vigente) setResultado(respuesta);
@@ -121,7 +126,7 @@ export default function CatalogoView() {
     return () => {
       vigente = false;
     };
-  }, [termino, idMarca, idCategoria, orden, pagina]);
+  }, [termino, idMarca, idCategoria, orden, pagina, soloPropios, idComercio]);
 
   const nombreMarca = useMemo(
     () => Object.fromEntries(marcas.map((m) => [m.id_marca, m.nombre])),
@@ -148,6 +153,9 @@ export default function CatalogoView() {
     1,
     Math.ceil((resultado.total_resultados || 0) / POR_PAGINA)
   );
+
+  const hayFiltros = Boolean(termino || idMarca || idCategoria || soloDisponibles);
+  const sinProductosPropios = soloPropios && !hayFiltros;
 
   function cambiarFiltro(asignar) {
     return (evento) => {
@@ -210,12 +218,20 @@ export default function CatalogoView() {
         </div>
 
         <h1 className="mt-2 text-2xl font-bold text-[#1E3A8A] sm:text-3xl">
-          Catálogo de productos
+          {soloPropios ? 'Mis productos' : 'Catálogo de productos'}
         </h1>
 
         <p className="mt-2 text-sm text-slate-600 sm:text-base">
-          Consultá productos, sus variaciones, precios y disponibilidad.
+          {soloPropios
+            ? 'Productos de tu comercio, con sus variaciones, precios y disponibilidad.'
+            : 'Consultá productos, sus variaciones, precios y disponibilidad.'}
         </p>
+
+        {soloPropios && (
+          <p className="mt-2 text-xs text-slate-500">
+            Los productos en borrador aparecen aquí solo cuando estén publicados.
+          </p>
+        )}
       </div>
 
       {/* Búsqueda y filtros */}
@@ -363,23 +379,45 @@ export default function CatalogoView() {
             <Package size={28} />
           </div>
 
-          <h2 className="mt-4 text-lg font-bold text-slate-800">
-            No encontramos productos
-          </h2>
+          {sinProductosPropios ? (
+            <>
+              <h2 className="mt-4 text-lg font-bold text-slate-800">
+                Aún no tienes productos publicados.
+              </h2>
 
-          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-            Probá con otra búsqueda o cambiá los filtros para encontrar
-            productos en el catálogo.
-          </p>
+              <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+                Usa Registrar producto para agregar uno y publicarlo.
+              </p>
 
-          <button
-            type="button"
-            onClick={limpiarFiltros}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#9DBB45] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8AA83A]"
-          >
-            <RotateCcw size={16} />
-            Limpiar filtros
-          </button>
+              <a
+                href="#alta"
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#9DBB45] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8AA83A]"
+              >
+                <PlusCircle size={16} />
+                Registrar producto
+              </a>
+            </>
+          ) : (
+            <>
+              <h2 className="mt-4 text-lg font-bold text-slate-800">
+                No encontramos productos
+              </h2>
+
+              <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+                Probá con otra búsqueda o cambiá los filtros para encontrar
+                productos en el catálogo.
+              </p>
+
+              <button
+                type="button"
+                onClick={limpiarFiltros}
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#9DBB45] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8AA83A]"
+              >
+                <RotateCcw size={16} />
+                Limpiar filtros
+              </button>
+            </>
+          )}
         </section>
       ) : (
         <section
@@ -598,8 +636,9 @@ export default function CatalogoView() {
       )}
 
       <p className="mt-8 text-center text-xs text-slate-500">
-        Datos del servicio de catálogo de M3. Solo se muestran productos
-        publicados de comercios activos.
+        {soloPropios
+          ? 'Datos del servicio de catálogo de M3. Solo se muestran los productos publicados de tu comercio.'
+          : 'Datos del servicio de catálogo de M3. Solo se muestran productos publicados de comercios activos.'}
       </p>
     </section>
   );
