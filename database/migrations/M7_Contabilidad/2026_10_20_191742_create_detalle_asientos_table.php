@@ -50,15 +50,16 @@ return new class extends Migration
          * Una línea debe tener importe en el Debe o en el Haber,
          * pero nunca en ambos ni en ninguno.
          */
-        DB::statement("
-            ALTER TABLE detalle_asientos
-            ADD CONSTRAINT chk_detalle_asientos_debe_haber
-            CHECK (
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('
+                ALTER TABLE detalle_asientos
+                ADD CONSTRAINT chk_detalle_asientos_debe_haber
+                CHECK (
                 (debe > 0 AND haber = 0)
                 OR
-                (haber > 0 AND debe = 0)
-            )
-        ");
+                (haber > 0 AND debe = 0))
+            ');
+        }
     }
 
     public function down(): void
