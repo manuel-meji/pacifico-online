@@ -28,6 +28,12 @@ use Illuminate\Validation\Rule;
  */
 class ServicioIdentidad implements ServicioIdentidadInterface
 {
+    /**
+     * Largo mínimo de la contraseña de las cuentas que la traen (Cliente y Encargado de la
+     * plataforma). Los seeders de demostración validan DEMO_CONTRASENA contra este valor.
+     */
+    public const LARGO_MINIMO_CONTRASENA = 8;
+
     public function crearCuenta(array $datos, RolUsuario|string $rol, ?int $idComercio = null): Usuario
     {
         $rolEnum = $this->resolverRol($rol);
@@ -155,7 +161,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
             'correo' => ['required', 'email', 'max:150', Rule::unique('usuarios', 'correo')],
             'contrasena' => $esEncargadoComercio
                 ? ['nullable']
-                : ['required', 'string', 'min:8'],
+                : ['required', 'string', 'min:'.self::LARGO_MINIMO_CONTRASENA],
             // id_comercio es obligatorio solo para el Encargado del comercio y nulo en los demás (5.2).
             'id_comercio' => $esEncargadoComercio
                 ? ['required', 'integer', 'min:1']

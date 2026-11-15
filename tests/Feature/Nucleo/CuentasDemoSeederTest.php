@@ -8,6 +8,7 @@ use App\Contracts\M2_Comercios\ComerciosServiceInterface;
 use App\Enums\Nucleo\RolUsuario;
 use App\Models\Nucleo\Usuario;
 use App\Services\Nucleo\ContextoComercio;
+use App\Services\Nucleo\ServicioIdentidad;
 use Database\Seeders\M2_Comercios\ComerciosDemoSeeder;
 use Database\Seeders\Nucleo\CuentasDemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -161,6 +162,32 @@ class CuentasDemoSeederTest extends TestCase
         }
 
         $this->assertSame(0, Usuario::query()->count());
+    }
+
+    public function test_con_una_contrasena_mas_corta_que_el_minimo_del_nucleo_lanza_la_excepcion_y_no_crea_nada(): void
+    {
+        $this->seed(ComerciosDemoSeeder::class);
+        config(['nucleo.demo.contrasena' => str_repeat('a', ServicioIdentidad::LARGO_MINIMO_CONTRASENA - 1)]);
+
+        try {
+            $this->seed(CuentasDemoSeeder::class);
+            $this->fail('Se esperaba una RuntimeException por la contraseña corta.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('DEMO_CONTRASENA', $e->getMessage());
+            $this->assertStringContainsString('al menos '.ServicioIdentidad::LARGO_MINIMO_CONTRASENA.' caracteres', $e->getMessage());
+        }
+
+        $this->assertSame(0, Usuario::query()->count());
+    }
+
+    public function test_acepta_una_contrasena_con_el_largo_minimo_del_nucleo(): void
+    {
+        $this->seed(ComerciosDemoSeeder::class);
+        config(['nucleo.demo.contrasena' => str_repeat('a', ServicioIdentidad::LARGO_MINIMO_CONTRASENA)]);
+
+        $this->seed(CuentasDemoSeeder::class);
+
+        $this->assertSame(6, Usuario::query()->count());
     }
 
     public function test_sin_los_comercios_de_m2_lanza_la_excepcion_y_no_crea_nada(): void
