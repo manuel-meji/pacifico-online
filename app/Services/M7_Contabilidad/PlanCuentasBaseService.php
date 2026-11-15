@@ -9,6 +9,7 @@ use App\Models\M7_Contabilidad\CentroCosto;
 use App\Models\M7_Contabilidad\CuentaContable;
 use App\Services\Nucleo\ContextoComercio;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Crea el plan de cuentas base y el centro de costo general de un comercio.
@@ -106,6 +107,49 @@ final class PlanCuentasBaseService
             }
 
             return ['cuentas_creadas' => $creadas, 'centro_creado' => $centro->wasRecentlyCreated];
+        }));
+    }
+
+    /**
+     * Imputa al centro GEN las líneas de ingreso y gasto registradas antes de que existiera.
+     * Solo cambia el centro de costo: importes, cuentas y estados del asiento quedan intactos.
+     */
+    public function imputarLineasSinCentro(int $idComercio, bool $simular = false): int
+    {
+        return $this->contexto->ejecutarComoSistema(fn (): int => DB::transaction(function () use ($idComercio, $simular): int {
+            $centro = DB::table('centros_costo')
+                ->where('id_comercio', $idComercio)
+                ->where('codigo', self::CODIGO_CENTRO_GENERAL)
+                ->where('activo', true)
+                ->lockForUpdate()
+                ->value('id_centro_costo');
+
+            if ($centro === null) {
+                throw new LogicException('El comercio no tiene el centro de costo GEN activo.');
+            }
+
+            $lineas = DB::table('detalle_asientos')
+                ->whereNull('id_centro_costo')
+                ->whereIn('id_asiento', fn ($consulta) => $consulta->select('id_asiento')
+                    ->from('asientos_contables')->where('id_comercio', $idComercio))
+                ->whereIn('id_cuenta_contable', fn ($consulta) => $consulta->select('id_cuenta_contable')
+                    ->from('cuentas_contables')->where('id_comercio', $idComercio)->whereIn('tipo', ['INGRESO', 'GASTO']));
+
+            if ($simular) {
+                return $lineas->count();
+            }
+
+            $imputadas = $lineas->update(['id_centro_costo' => $centro]);
+
+            if ($imputadas > 0) {
+                $this->nucleo->registrarAuditoria('lineas_imputadas_centro_general', 'comercio', $idComercio, [
+                    'modulo' => 'M7',
+                    'id_centro_costo' => (int) $centro,
+                    'lineas_imputadas' => $imputadas,
+                ]);
+            }
+
+            return $imputadas;
         }));
     }
 }

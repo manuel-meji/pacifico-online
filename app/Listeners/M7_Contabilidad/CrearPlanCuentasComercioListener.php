@@ -20,8 +20,16 @@ final class CrearPlanCuentasComercioListener
         private readonly PlanCuentasBaseService $planBase,
     ) {}
 
-    public function handle(ComercioAprobado $evento): void
+    public function handle(object $evento): void
     {
+        if (! $evento instanceof ComercioAprobado) {
+            Log::warning('M7: evento ComercioAprobado ignorado por tipo incompatible.', [
+                'tipo_recibido' => get_debug_type($evento),
+            ]);
+
+            return;
+        }
+
         try {
             $resultado = $this->planBase->crearParaComercio($evento->id_comercio, 'ComercioAprobado');
 
