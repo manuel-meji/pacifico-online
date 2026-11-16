@@ -49,7 +49,7 @@ final class ProcesarSubpedidoDespachadoListener
         }
 
         $idComercio = (int) ($resultado['id_comercio'] ?? 0);
-        $costoTotal = (float) ($resultado['costo_total'] ?? -1);
+        $costoTotal = (float) ($resultado['costo_total'] ?? 0);
 
         if ($idComercio !== $evento->id_comercio) {
             throw new LogicException(
@@ -57,7 +57,7 @@ final class ProcesarSubpedidoDespachadoListener
             );
         }
 
-        if ($costoTotal < 0) {
+        if ($costoTotal <= 0) {
             throw new LogicException(
                 'M4 no devolvió un costo de productos vendidos válido.'
             );
@@ -92,5 +92,6 @@ final class ProcesarSubpedidoDespachadoListener
         $this->procesadorComision->intentar(
             $evento->id_subpedido
         );
+
     }
 }

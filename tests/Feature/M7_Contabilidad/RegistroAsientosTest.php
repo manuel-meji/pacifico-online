@@ -168,9 +168,9 @@ class RegistroAsientosTest extends TestCase
         $this->assertSame(40.50, (float) DB::table('detalle_asientos')->sum('haber'));
     }
 
-  public function test_rechaza_costo_invalido_y_no_registra_el_evento(): void
+    public function test_rechaza_costo_invalido_y_no_registra_el_evento(): void
     {
-        $costo = new CostoVentaDTO('22222222-2222-4222-8222-222222222222', '2026-11-08', 10, 11, 1, '-10.00');
+        $costo = new CostoVentaDTO('22222222-2222-4222-8222-222222222222', '2026-11-08', 10, 11, 1, '0');
         try {
             app(ContextoComercio::class)->ejecutarComoSistema(fn () => app(ProcesarSubpedidoDespachadoService::class)->procesar($costo));
             $this->fail('Se esperaba una excepción por importe inválido.');
@@ -179,22 +179,6 @@ class RegistroAsientosTest extends TestCase
         }
         $this->assertDatabaseCount('asientos_contables', 0);
         $this->assertDatabaseCount('eventos_procesados', 0);
-    }
-
-    public function test_acepta_costo_cero_sin_generar_asiento_y_registra_el_evento(): void
-    {
-        $costo = new CostoVentaDTO('22222222-2222-4222-8222-222222222223', '2026-11-08', 10, 11, 1, '0.00');
-
-        app(ContextoComercio::class)->ejecutarComoSistema(
-            fn () => app(ProcesarSubpedidoDespachadoService::class)->procesar($costo)
-        );
-
-        $this->assertDatabaseCount('asientos_contables', 0);
-        $this->assertDatabaseHas('eventos_procesados', [
-            'evento_id' => '22222222-2222-4222-8222-222222222223',
-            'tipo_evento' => 'SubpedidoDespachado',
-            'estado' => 'PROCESADO',
-        ]);
     }
 
     public function test_rechaza_comercio_distinto_al_contexto(): void
