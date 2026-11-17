@@ -14,7 +14,6 @@ use PHPUnit\Framework\Attributes\TestWith;
 use Tests\Feature\M2_Comercios\Concerns\PreparaM2;
 use Tests\TestCase;
 
-
 class AceptacionSuspenderComercioTest extends TestCase
 {
     use PreparaM2;
