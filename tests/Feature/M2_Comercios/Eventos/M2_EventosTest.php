@@ -9,14 +9,14 @@ use App\Events\M2_Comercios\ComercioAprobado;
 use App\Events\M2_Comercios\ComercioReactivado;
 use App\Events\M2_Comercios\ComercioSuspendido;
 use App\Events\M5_Pedidos\SubpedidoDespachado;
+use App\Listeners\M2_Comercios\RegistrarComision;
 use App\Models\M2_Comercios\ComisionSubpedido;
+use App\Services\M2_Comercios\ComerciosService;
 use Illuminate\Support\Carbon;
 use ReflectionClass;
+use RuntimeException;
 use Tests\Feature\M2_Comercios\Concerns\PreparaM2;
 use Tests\TestCase;
-use App\Listeners\M2_Comercios\RegistrarComision;
-use App\Services\M2_Comercios\ComerciosService;
-use RuntimeException;
 
 class M2_EventosTest extends TestCase
 {
@@ -145,7 +145,7 @@ class M2_EventosTest extends TestCase
             ->with(7009, 'evento-error-001')
             ->andThrow(new RuntimeException('Fallo simulado al registrar comisión'));
 
-        $evento = (new \ReflectionClass(SubpedidoDespachado::class))
+        $evento = (new ReflectionClass(SubpedidoDespachado::class))
             ->newInstanceWithoutConstructor();
 
         $evento->id_subpedido = 7009;
@@ -157,5 +157,4 @@ class M2_EventosTest extends TestCase
 
         $this->assertTrue(true);
     }
-
 }

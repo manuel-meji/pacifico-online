@@ -16,7 +16,6 @@ use Mockery\MockInterface;
 use Tests\Feature\M2_Comercios\Concerns\PreparaM2;
 use Tests\TestCase;
 
-
 class AceptacionAprobarComercioTest extends TestCase
 {
     use PreparaM2;
@@ -50,7 +49,6 @@ class AceptacionAprobarComercioTest extends TestCase
                 ->with('aprobar_solicitud_comercio', 'solicitud_comercio', \Mockery::type('int'), \Mockery::type('array'));
         });
 
-       
         $registro = $this->postJson('/api/m2/v1/solicitudes', self::SOLICITUD)
             ->assertOk()
             ->assertJsonPath('estado', SolicitudComercio::PENDIENTE)
@@ -58,12 +56,10 @@ class AceptacionAprobarComercioTest extends TestCase
         $idSolicitud = $registro->json('id_solicitud');
         $idComercio = $registro->json('id_comercio');
 
-      
         $this->assertNotContains($idComercio, $this->idsEnListadoPublico());
         $this->getJson("/api/m2/v1/comercios/{$idComercio}/publico")
             ->assertNotFound()->assertJsonPath('error.codigo', 'ERR-004');
 
-       
         $this->actingAs($this->usuario('encargado_plataforma'), 'sanctum');
         $pendientes = $this->getJson('/api/m2/v1/solicitudes?estado=Pendiente')->assertOk();
         $fila = collect($pendientes->json('solicitudes'))->firstWhere('id_solicitud', $idSolicitud);
@@ -76,13 +72,11 @@ class AceptacionAprobarComercioTest extends TestCase
             ->assertJsonPath('comercio.cedula_juridica', self::SOLICITUD['cedula_juridica'])
             ->assertJsonPath('requiere_documentos', false);
 
-      
         $this->postJson("/api/m2/v1/solicitudes/{$idSolicitud}/aprobar")
             ->assertOk()
             ->assertJsonPath('id_comercio', $idComercio)
             ->assertJsonPath('estado', Comercio::ACTIVO);
 
-       
         $this->assertContains($idComercio, $this->idsEnListadoPublico());
         $this->getJson("/api/m2/v1/comercios/{$idComercio}/publico")->assertOk();
         $this->getJson("/api/m2/v1/comercios/{$idComercio}")
@@ -90,13 +84,11 @@ class AceptacionAprobarComercioTest extends TestCase
             ->assertJsonPath('estado', Comercio::ACTIVO)
             ->assertJsonPath('motivo_estado', null);
 
-        
         $this->assertNull(collect($this->getJson('/api/m2/v1/solicitudes?estado=Pendiente')->json('solicitudes'))
             ->firstWhere('id_solicitud', $idSolicitud));
         $this->assertNotNull(collect($this->getJson('/api/m2/v1/solicitudes?estado=Aprobada')->json('solicitudes'))
             ->firstWhere('id_solicitud', $idSolicitud));
 
-        
         Event::assertDispatched(ComercioAprobado::class, fn (ComercioAprobado $evento): bool => $evento->id_comercio === $idComercio
             && $evento->estado === Comercio::ACTIVO
             && $evento->nombre_comercial === self::SOLICITUD['nombre_comercial']);

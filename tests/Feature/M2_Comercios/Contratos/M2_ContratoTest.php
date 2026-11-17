@@ -33,7 +33,7 @@ class M2_ContratoTest extends TestCase
 
     public function test_obtener_subpedido_cumple_los_campos_que_m2_consume(): void
     {
-        $fake = new PedidosFake();
+        $fake = new PedidosFake;
 
         $this->assertInstanceOf(
             SubpedidosServiceInterface::class,

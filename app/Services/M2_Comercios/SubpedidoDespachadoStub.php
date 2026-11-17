@@ -7,7 +7,6 @@ namespace App\Services\M2_Comercios;
  *
  * Imita el contrato M5 v1.1.0 / evento v1.0.0 consumido por M2.
  */
-
 class SubpedidoDespachadoStub
 {
     public const ID_EVENTO = '123e4567-e89b-12d3-a456-426614174000';

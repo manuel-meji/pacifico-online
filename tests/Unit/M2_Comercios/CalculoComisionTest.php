@@ -12,7 +12,7 @@ class CalculoComisionTest extends TestCase
 {
     public function test_soluciones_del_milenio_calcula_8_por_ciento(): void
     {
-        $estrategia = new CalculoPorcentaje();
+        $estrategia = new CalculoPorcentaje;
 
         $resultado = $estrategia->calcular('24500.00', '8.00');
 
@@ -21,7 +21,7 @@ class CalculoComisionTest extends TestCase
 
     public function test_temulandia_calcula_monto_fijo(): void
     {
-        $estrategia = new CalculoMontoFijo();
+        $estrategia = new CalculoMontoFijo;
 
         $resultado = $estrategia->calcular('25000.00', '1000.00');
 
@@ -30,7 +30,7 @@ class CalculoComisionTest extends TestCase
 
     public function test_elegancia_calcula_10_por_ciento(): void
     {
-        $estrategia = new CalculoPorcentaje();
+        $estrategia = new CalculoPorcentaje;
 
         $resultado = $estrategia->calcular('55000.00', '10.00');
 
@@ -39,7 +39,7 @@ class CalculoComisionTest extends TestCase
 
     public function test_deportes_pacifico_calcula_9_por_ciento(): void
     {
-        $estrategia = new CalculoPorcentaje();
+        $estrategia = new CalculoPorcentaje;
 
         $resultado = $estrategia->calcular('21458.00', '9.00');
 
@@ -48,7 +48,7 @@ class CalculoComisionTest extends TestCase
 
     public function test_cafe_volcan_calcula_7_por_ciento(): void
     {
-        $estrategia = new CalculoPorcentaje();
+        $estrategia = new CalculoPorcentaje;
 
         $resultado = $estrategia->calcular('21941.00', '7.00');
 
