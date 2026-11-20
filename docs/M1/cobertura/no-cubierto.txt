@@ -1,0 +1,84 @@
+﻿ConflictoDestacadoException.php
+  Metodos: mensajePorDefecto
+  Lineas: 16
+NoticiaNoModificableException.php
+  Metodos: mensajePorDefecto
+  Lineas: 16
+PortalPublicoException.php
+  Metodos: toArray
+  Lineas: 93,94,95,96,97,98,99
+PromocionesController.php
+  Metodos: administracion
+  Lineas: 71,73,74,75,76
+BusquedaUsuario.php
+  Metodos: filtros, cliente
+  Lineas: 63,71
+CategoriaPortal.php
+  Metodos: obtenerVisibles
+  Lineas: 62,63,64,65
+Cupon.php
+  Metodos: usos
+  Lineas: 120
+DireccionCliente.php
+  Metodos: cliente
+  Lineas: 67
+FiltroAplicado.php
+  Metodos: busqueda
+  Lineas: 62
+Promocion.php
+  Metodos: rebajaPrecio
+  Lineas: 146
+AccesoCliente.php
+  Metodos: 
+  Lineas: 40
+BusquedaService.php
+  Metodos: 
+  Lineas: 168,169,172
+ClienteService.php
+  Metodos: traducirDuplicado
+  Lineas: 152,188,189,222,223,261,262,381,384,385,386,387,388
+CompletadorProductos.php
+  Metodos: 
+  Lineas: 97
+ConfiguracionMenuCategorias.php
+  Metodos: filas
+  Lineas: 19,20,21,22,23,24,25,26
+CuponesService.php
+  Metodos: 
+  Lineas: 304,309,322,323,407,409,425,517,557,627,628
+DestacadosService.php
+  Metodos: 
+  Lineas: 88,123,159,160,311,326,370,377,381,462,532,533,540,545,546
+FichaProductoService.php
+  Metodos: 
+  Lineas: 76
+MicrositioService.php
+  Metodos: 
+  Lineas: 165,175
+NoticiasService.php
+  Metodos: 
+  Lineas: 73,77,181,233,238,435,442,443
+PortalService.php
+  Metodos: getDestacados, buscar
+  Lineas: 11,12,13,14,19,20,21,22,23
+PromocionesService.php
+  Metodos: listarAdministracion
+  Lineas: 74,148,210,353,504,538,556,561,571,593,598,623,718,737,738
+RegistroBusquedas.php
+  Metodos: 
+  Lineas: 33,34,37
+SeleccionDestacados.php
+  Metodos: comerciosVigentes
+  Lineas: 35
+PortadaDTO.php
+  Metodos: __construct
+  Lineas: 21
+CatalogoClient.php
+  Metodos: 
+  Lineas: 109,218,281
+InventarioClient.php
+  Metodos: 
+  Lineas: 98
+LlamaProveedor.php
+  Metodos: 
+  Lineas: 50,85,87

@@ -1,0 +1,182 @@
+
+
+[1;37;40mCode Coverage Report:        [0m
+[1;37;40m  2026-11-17 20:25:27        [0m
+[1;37;40m                             [0m
+[1;37;40m Summary:                    [0m
+[30;43m  Classes: 64.84% (59/91)    [0m
+[30;43m  Methods: 82.63% (390/472)  [0m
+[30;42m  Lines:   94.80% (2918/3078)[0m
+
+App\Contracts\M1_Portal\Exceptions\ClienteNoAccesibleException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\ClienteNoEncontradoException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\CorreoYaRegistradoException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\CriterioInvalidoException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\CuponDuplicadoException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\DatosInvalidosException
+  [30;42mMethods: 100.00% ( 4/ 4)[0m   [30;42mLines: 100.00% (  4/  4)[0m
+App\Contracts\M1_Portal\Exceptions\DependenciaNoDisponibleException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\DireccionNoEncontradaException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\LimiteDestacadosException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\PortalPublicoException
+  [30;43mMethods:  87.50% ( 7/ 8)[0m   [37;41mLines:  50.00% (  7/ 14)[0m
+App\Contracts\M1_Portal\Exceptions\PromocionNoModificableException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\RecursoNoEncontradoException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Contracts\M1_Portal\Exceptions\TraslapePromocionException
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Http\Controllers\M1_Portal\BusquedaController
+  [30;42mMethods: 100.00% ( 6/ 6)[0m   [30;42mLines: 100.00% ( 22/ 22)[0m
+App\Http\Controllers\M1_Portal\ClienteController
+  [30;42mMethods: 100.00% ( 6/ 6)[0m   [30;42mLines: 100.00% ( 10/ 10)[0m
+App\Http\Controllers\M1_Portal\ComercioController
+  [30;42mMethods: 100.00% ( 4/ 4)[0m   [30;42mLines: 100.00% ( 18/ 18)[0m
+App\Http\Controllers\M1_Portal\CuponesController
+  [30;42mMethods: 100.00% (10/10)[0m   [30;42mLines: 100.00% ( 17/ 17)[0m
+App\Http\Controllers\M1_Portal\DestacadosController
+  [30;42mMethods: 100.00% (12/12)[0m   [30;42mLines: 100.00% ( 17/ 17)[0m
+App\Http\Controllers\M1_Portal\DireccionClienteController
+  [30;42mMethods: 100.00% ( 4/ 4)[0m   [30;42mLines: 100.00% ( 10/ 10)[0m
+App\Http\Controllers\M1_Portal\FichaProductoController
+  [30;42mMethods: 100.00% ( 2/ 2)[0m   [30;42mLines: 100.00% (  2/  2)[0m
+App\Http\Controllers\M1_Portal\NoticiasController
+  [30;42mMethods: 100.00% ( 9/ 9)[0m   [30;42mLines: 100.00% ( 20/ 20)[0m
+App\Http\Controllers\M1_Portal\PortadaController
+  [30;42mMethods: 100.00% ( 2/ 2)[0m   [30;42mLines: 100.00% (  5/  5)[0m
+App\Http\Controllers\M1_Portal\PromocionesController
+  [30;42mMethods:  91.67% (11/12)[0m   [30;43mLines:  70.59% ( 12/ 17)[0m
+App\Listeners\M1_Portal\EventosComercioListener
+  [30;42mMethods: 100.00% ( 6/ 6)[0m   [30;42mLines: 100.00% ( 13/ 13)[0m
+App\Listeners\M1_Portal\EventosExistenciaListener
+  [30;42mMethods: 100.00% ( 3/ 3)[0m   [30;42mLines: 100.00% (  3/  3)[0m
+App\Models\M1_Portal\BusquedaUsuario
+  [37;41mMethods:  33.33% ( 1/ 3)[0m   [30;43mLines:  75.00% (  6/  8)[0m
+App\Models\M1_Portal\CargoDestacado
+  [30;42mMethods: 100.00% ( 2/ 2)[0m   [30;42mLines: 100.00% ( 24/ 24)[0m
+App\Models\M1_Portal\CategoriaPortal
+  [37;41mMethods:  50.00% ( 1/ 2)[0m   [30;43mLines:  60.00% (  6/ 10)[0m
+App\Models\M1_Portal\Cliente
+  [30;42mMethods: 100.00% ( 5/ 5)[0m   [30;42mLines: 100.00% ( 17/ 17)[0m
+App\Models\M1_Portal\ComercioDestacado
+  [30;42mMethods: 100.00% ( 2/ 2)[0m   [30;42mLines: 100.00% ( 11/ 11)[0m
+App\Models\M1_Portal\Cupon
+  [30;43mMethods:  85.71% ( 6/ 7)[0m   [30;42mLines:  97.56% ( 40/ 41)[0m
+App\Models\M1_Portal\CuponUso
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  6/  6)[0m
+App\Models\M1_Portal\DireccionCliente
+  [30;43mMethods:  66.67% ( 2/ 3)[0m   [30;42mLines:  94.44% ( 17/ 18)[0m
+App\Models\M1_Portal\FiltroAplicado
+  [37;41mMethods:  50.00% ( 1/ 2)[0m   [30;43mLines:  80.00% (  4/  5)[0m
+App\Models\M1_Portal\NoticiaPortal
+  [30;42mMethods: 100.00% ( 7/ 7)[0m   [30;42mLines: 100.00% ( 44/ 44)[0m
+App\Models\M1_Portal\NoticiaPromocion
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  5/  5)[0m
+App\Models\M1_Portal\ProductoDestacado
+  [30;42mMethods: 100.00% ( 2/ 2)[0m   [30;42mLines: 100.00% ( 13/ 13)[0m
+App\Models\M1_Portal\Promocion
+  [30;43mMethods:  87.50% ( 7/ 8)[0m   [30;42mLines:  97.56% ( 40/ 41)[0m
+App\Models\M1_Portal\PromocionPortal
+  [30;42mMethods: 100.00% ( 3/ 3)[0m   [30;42mLines: 100.00% ( 30/ 30)[0m
+App\Models\M1_Portal\PromocionVariacion
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  5/  5)[0m
+App\Models\M1_Portal\SolicitudDestacado
+  [30;42mMethods: 100.00% ( 2/ 2)[0m   [30;42mLines: 100.00% ( 24/ 24)[0m
+App\Models\M1_Portal\TarifaDestacado
+  [30;42mMethods: 100.00% ( 2/ 2)[0m   [30;42mLines: 100.00% ( 12/ 12)[0m
+App\Services\M1_Portal\AccesoCliente
+  [30;43mMethods:  66.67% ( 2/ 3)[0m   [30;43mLines:  83.33% (  5/  6)[0m
+App\Services\M1_Portal\BusquedaService
+  [30;43mMethods:  88.89% ( 8/ 9)[0m   [30;42mLines:  96.43% ( 81/ 84)[0m
+App\Services\M1_Portal\ClienteService
+  [30;43mMethods:  73.68% (14/19)[0m   [30;42mLines:  90.65% (126/139)[0m
+App\Services\M1_Portal\ComercialPortalService
+  [30;42mMethods: 100.00% ( 4/ 4)[0m   [30;42mLines: 100.00% (  4/  4)[0m
+App\Services\M1_Portal\CompletadorProductos
+  [30;43mMethods:  83.33% ( 5/ 6)[0m   [30;42mLines:  97.92% ( 47/ 48)[0m
+App\Services\M1_Portal\CuponesService
+  [30;43mMethods:  77.27% (17/22)[0m   [30;42mLines:  95.49% (233/244)[0m
+App\Services\M1_Portal\DTO\CategoriaDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\ClienteDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\ComercioDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\CriterioBusquedaDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\DestacadosDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\DireccionClienteDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\DisponibilidadDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\FichaProductoDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\ListadoComerciosDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\MicrositioDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\NoticiaDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\ProductoResumenDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\PromocionDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\ResultadoBusquedaDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DTO\VariacionDTO
+  [30;42mMethods: 100.00% ( 1/ 1)[0m   [30;42mLines: 100.00% (  1/  1)[0m
+App\Services\M1_Portal\DestacadosService
+  [30;43mMethods:  68.18% (15/22)[0m   [30;42mLines:  93.02% (200/215)[0m
+App\Services\M1_Portal\Dobles\CarritoFake
+  [37;41mMethods:  38.46% ( 5/13)[0m   [30;43mLines:  76.81% ( 53/ 69)[0m
+App\Services\M1_Portal\Dobles\CatalogoFake
+  [30;43mMethods:  64.71% (11/17)[0m   [30;42mLines:  91.94% (114/124)[0m
+App\Services\M1_Portal\Dobles\ComerciosStub
+  [30;43mMethods:  57.14% ( 4/ 7)[0m   [30;42mLines:  92.31% ( 48/ 52)[0m
+App\Services\M1_Portal\Dobles\DatosPrueba
+  [30;42mMethods: 100.00% (14/14)[0m   [30;42mLines: 100.00% (220/220)[0m
+App\Services\M1_Portal\Dobles\ErrorProveedorException
+  [30;42mMethods: 100.00% ( 5/ 5)[0m   [30;42mLines: 100.00% ( 11/ 11)[0m
+App\Services\M1_Portal\Dobles\InventarioStub
+  [37;41mMethods:  36.36% ( 4/11)[0m   [30;43mLines:  86.27% ( 44/ 51)[0m
+App\Services\M1_Portal\FichaProductoService
+  [30;43mMethods:  83.33% ( 5/ 6)[0m   [30;42mLines:  98.18% ( 54/ 55)[0m
+App\Services\M1_Portal\Integraciones\CachePortal
+  [30;42mMethods: 100.00% ( 7/ 7)[0m   [30;42mLines: 100.00% ( 16/ 16)[0m
+App\Services\M1_Portal\Integraciones\CarritoClient
+  [30;42mMethods: 100.00% ( 3/ 3)[0m   [30;42mLines: 100.00% ( 15/ 15)[0m
+App\Services\M1_Portal\Integraciones\CatalogoClient
+  [30;43mMethods:  75.00% ( 9/12)[0m   [30;42mLines:  97.96% (144/147)[0m
+App\Services\M1_Portal\Integraciones\ComercioClient
+  [30;42mMethods: 100.00% ( 8/ 8)[0m   [30;42mLines: 100.00% ( 74/ 74)[0m
+App\Services\M1_Portal\Integraciones\InventarioClient
+  [30;43mMethods:  75.00% ( 3/ 4)[0m   [30;42mLines:  97.78% ( 44/ 45)[0m
+App\Services\M1_Portal\Integraciones\LlamaProveedor
+  [37;41mMethods:  50.00% ( 2/ 4)[0m   [30;43mLines:  87.50% ( 21/ 24)[0m
+App\Services\M1_Portal\MicrositioService
+  [30;43mMethods:  87.50% ( 7/ 8)[0m   [30;42mLines:  97.44% ( 76/ 78)[0m
+App\Services\M1_Portal\NoticiasService
+  [30;43mMethods:  75.00% (12/16)[0m   [30;42mLines:  95.29% (162/170)[0m
+App\Services\M1_Portal\PortadaService
+  [30;42mMethods: 100.00% ( 5/ 5)[0m   [30;42mLines: 100.00% ( 38/ 38)[0m
+App\Services\M1_Portal\PortalPublicoService
+  [30;42mMethods: 100.00% (34/34)[0m   [30;42mLines: 100.00% (265/265)[0m
+App\Services\M1_Portal\PromocionesService
+  [30;43mMethods:  68.97% (20/29)[0m   [30;42mLines:  94.90% (279/294)[0m
+App\Services\M1_Portal\RegistroBusquedas
+  [30;43mMethods:  66.67% ( 2/ 3)[0m   [30;43mLines:  88.00% ( 22/ 25)[0m
+App\Services\M1_Portal\ReglasDestacados
+  [30;42mMethods: 100.00% ( 3/ 3)[0m   [30;42mLines: 100.00% ( 17/ 17)[0m
+App\Services\M1_Portal\ResolvedorCliente
+  [30;42mMethods: 100.00% ( 2/ 2)[0m   [30;42mLines: 100.00% (  4/  4)[0m
+App\Services\M1_Portal\SeleccionDestacados
+  [30;43mMethods:  66.67% ( 2/ 3)[0m   [30;42mLines:  91.67% ( 11/ 12)[0m
