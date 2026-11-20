@@ -124,8 +124,10 @@ export function registrarSolicitud(datos, documentos = []) {
 }
 
 
-export function corregirSolicitud(idSolicitud, datos) {
-  return llamar(`/solicitudes/${idSolicitud}`, { method: 'PUT', json: datos });
+// CU-0013 con sesión: la persona encargada corrige su solicitud rechazada (con documentos nuevos si hacen falta).
+export function corregirMiSolicitud(datos, documentos = []) {
+  if (documentos.length === 0) return llamar('/mi-solicitud/correccion', { method: 'POST', json: datos });
+  return llamar('/mi-solicitud/correccion', { method: 'POST', formulario: aFormulario({ ...datos, documentos }) });
 }
 
 

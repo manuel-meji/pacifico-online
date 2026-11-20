@@ -9,6 +9,7 @@ use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Http\Controllers\Controller;
 use App\Models\M2_Comercios\SolicitudComercio;
 use App\Services\M2_Comercios\ComerciosService;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -42,13 +43,62 @@ class SolicitudesController extends Controller
      */
     public function miSolicitud(Request $request): JsonResponse
     {
+        $usuario = $this->encargadoConComercio($request);
+
+        return response()->json($this->comercios->estadoSolicitudDelComercio((int) $usuario->id_comercio));
+    }
+
+    /**
+     * CU-0013 con sesión (DEF-34): la persona encargada corrige su solicitud rechazada. El número y la
+     * cédula solo se comparan con los registrados; el correo y los demás datos sí se pueden corregir,
+     * y los documentos rechazados o vencidos se reemplazan por los que se adjunten.
+     */
+    public function corregirMia(Request $request): JsonResponse
+    {
+        $usuario = $this->encargadoConComercio($request);
+
+        $datos = $request->validate([
+            'id_solicitud' => ['sometimes', 'integer'],
+            'cedula_juridica' => ['sometimes', 'string'],
+            'correo_encargado' => ['sometimes', 'email', 'max:150'],
+            'nombre_comercial' => ['sometimes', 'string'],
+            'razon_social' => ['sometimes', 'string'],
+            'direccion_fiscal' => ['sometimes', 'string'],
+            'inscrito_como_contribuyente' => ['sometimes', 'boolean'],
+            'nombre_encargado' => ['sometimes', 'string'],
+            'telefono_encargado' => ['sometimes', 'nullable', 'string'],
+            'documentos' => ['sometimes', 'array'],
+            'documentos.*.archivo' => ['required', 'file', 'mimes:pdf,jpg,png', 'max:5120'],
+            'documentos.*.tipo' => ['required', 'string'],
+            'documentos.*.fecha_vencimiento' => ['required', 'date', 'after:today'],
+        ]);
+
+        $documentos = $datos['documentos'] ?? [];
+        unset($datos['documentos']);
+
+        $solicitud = $this->comercios->corregirSolicitudDelEncargado(
+            (int) $usuario->id_comercio,
+            (int) $usuario->getAuthIdentifier(),
+            $datos,
+            $documentos,
+        );
+
+        return response()->json($solicitud->only([
+            'id_solicitud', 'id_comercio', 'nombre_encargado', 'correo_encargado', 'telefono_encargado',
+            'estado', 'requiere_documentos', 'motivo_rechazo', 'fecha_reenvio', 'created_at', 'updated_at',
+        ]));
+    }
+
+    /** Solo la persona encargada de un comercio consulta o corrige su propia solicitud. */
+    private function encargadoConComercio(Request $request): Authenticatable
+    {
         $usuario = $request->user();
         $rol = $usuario?->rol instanceof RolUsuario ? $usuario->rol : RolUsuario::tryFrom((string) $usuario?->rol);
         if ($rol !== RolUsuario::EncargadoComercio || $usuario->id_comercio === null) {
             throw ErrorNucleoException::rolSinPermiso();
         }
 
-        return response()->json($this->comercios->estadoSolicitudDelComercio((int) $usuario->id_comercio));
+        return $usuario;
     }
 
     public function consultar(int $idSolicitud): JsonResponse
