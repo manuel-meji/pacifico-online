@@ -806,11 +806,23 @@ class ComerciosService implements ComerciosServiceInterface
         $solicitud = SolicitudComercio::query()->where('id_comercio', $idComercio)
             ->orderByDesc('id_solicitud')->first();
 
+        // Lleva los datos que el encargado ve ya llenos al corregir su solicitud (DEF-34) y el
+        // resultado de cada documento, para que sepa cuál debe reemplazar. Solo es de su comercio.
         return [
             'id_comercio' => $comercio->id_comercio,
             'nombre_comercial' => $comercio->nombre_comercial,
             'estado_comercio' => $comercio->estado,
-            'solicitud' => $solicitud?->only(['id_solicitud', 'estado', 'motivo_rechazo', 'created_at', 'fecha_reenvio']),
+            'comercio' => $comercio->only([
+                'cedula_juridica', 'nombre_comercial', 'razon_social', 'direccion_fiscal', 'inscrito_como_contribuyente',
+            ]),
+            'solicitud' => $solicitud?->only([
+                'id_solicitud', 'estado', 'motivo_rechazo', 'created_at', 'fecha_reenvio',
+                'nombre_encargado', 'correo_encargado', 'telefono_encargado',
+            ]),
+            'documentos' => $solicitud === null ? [] : $solicitud->documentos()->orderBy('id_documento_comercio')->get()
+                ->map(fn (DocumentoComercio $documento): array => $documento->only([
+                    'id_documento_comercio', 'tipo', 'fecha_vencimiento', 'resultado', 'observacion',
+                ]) + ['debe_reemplazarse' => $this->debeReemplazarse($documento)])->values()->all(),
         ];
     }
 
@@ -1066,29 +1078,138 @@ class ComerciosService implements ComerciosServiceInterface
             }
 
             foreach ($documentos as $documento) {
-                /** @var UploadedFile $archivo */
-                $archivo = $documento['archivo'];
-
-                $cifrado = Crypt::encryptString($archivo->getContent());
-
-                $ruta = 'm2/documentos/'
-                    .$comercio->id_comercio.'/'
-                    .Str::uuid().'.enc';
-
-                Storage::disk('local')->put($ruta, $cifrado);
-
-                DocumentoComercio::create([
-                    'id_comercio' => $comercio->id_comercio,
-                    'tipo' => $documento['tipo'],
-                    'ruta_cifrada' => $ruta,
-                    'fecha_vencimiento' => $documento['fecha_vencimiento'],
-                    'resultado' => 'pendiente',
-                    'observacion' => null,
-                ]);
+                $this->guardarDocumento($comercio, $documento);
             }
 
             return $solicitud;
         });
+    }
+
+    /** RN-002: el documento se cifra al guardarlo y queda pendiente de evaluación (CU-0022). */
+    private function guardarDocumento(Comercio $comercio, array $documento): DocumentoComercio
+    {
+        /** @var UploadedFile $archivo */
+        $archivo = $documento['archivo'];
+
+        $ruta = 'm2/documentos/'.$comercio->id_comercio.'/'.Str::uuid().'.enc';
+        Storage::disk('local')->put($ruta, Crypt::encryptString($archivo->getContent()));
+
+        return DocumentoComercio::create([
+            'id_comercio' => $comercio->id_comercio,
+            'tipo' => $documento['tipo'],
+            'ruta_cifrada' => $ruta,
+            'fecha_vencimiento' => $documento['fecha_vencimiento'],
+            'resultado' => 'pendiente',
+            'observacion' => null,
+        ]);
+    }
+
+    /** Un documento marcado como inválido o ya vencido impide aprobar la solicitud: hay que reemplazarlo. */
+    private function debeReemplazarse(DocumentoComercio $documento): bool
+    {
+        return $documento->resultado === 'invalido'
+            || ($documento->fecha_vencimiento !== null && $documento->fecha_vencimiento->toDateString() < now()->toDateString());
+    }
+
+    /**
+     * CU-0013 con sesión (DEF-34): la persona encargada corrige su propia solicitud rechazada.
+     *
+     * La solicitud se identifica por la sesión, no por los datos que se escriben. El número de solicitud
+     * y la cédula jurídica no se pueden cambiar: si llegan distintos, el error dice cuál no coincide.
+     * El correo sí se puede corregir; se actualiza también en la cuenta del núcleo para que el ingreso
+     * use el mismo correo. Los documentos inválidos o vencidos se reemplazan por los nuevos.
+     *
+     * @param  array<string, mixed>  $datos
+     * @param  list<array{archivo: UploadedFile, tipo: string, fecha_vencimiento: string}>  $documentos
+     */
+    public function corregirSolicitudDelEncargado(int $idComercio, int $idUsuario, array $datos, array $documentos): SolicitudComercio
+    {
+        $rutasPorBorrar = [];
+
+        $solicitud = DB::transaction(function () use ($idComercio, $idUsuario, $datos, $documentos, &$rutasPorBorrar): SolicitudComercio {
+            $comercio = Comercio::query()->lockForUpdate()->find($idComercio)
+                ?? throw $this->noEncontrado('El comercio no existe.');
+            $solicitud = SolicitudComercio::query()->where('id_comercio', $idComercio)
+                ->orderByDesc('id_solicitud')->lockForUpdate()->first()
+                ?? throw $this->noEncontrado('Tu comercio no tiene una solicitud registrada.');
+
+            $errores = [];
+            if (array_key_exists('id_solicitud', $datos) && (int) $datos['id_solicitud'] !== $solicitud->id_solicitud) {
+                $errores['id_solicitud'] = ["El número de solicitud no corresponde a tu solicitud (#{$solicitud->id_solicitud})."];
+            }
+            if (array_key_exists('cedula_juridica', $datos) && $datos['cedula_juridica'] !== $comercio->cedula_juridica) {
+                $errores['cedula_juridica'] = ['La cédula jurídica no coincide con la registrada en tu solicitud; no se puede cambiar al corregirla.'];
+            }
+            $this->exigirValidos($errores);
+
+            if ($solicitud->estado !== SolicitudComercio::RECHAZADA) {
+                $this->exigirValidos(['estado' => ['Solo se puede corregir una solicitud rechazada.']]);
+            }
+
+            $porReemplazar = $solicitud->documentos()->lockForUpdate()->get()
+                ->filter(fn (DocumentoComercio $documento): bool => $this->debeReemplazarse($documento));
+            if ($porReemplazar->isNotEmpty() && $documentos === []) {
+                $this->exigirValidos(['documentos' => [
+                    'Tenés documentos rechazados o vencidos: subí uno nuevo para reemplazarlos antes de enviar la corrección.',
+                ]]);
+            }
+
+            $correoNuevo = isset($datos['correo_encargado'])
+                && mb_strtolower(trim((string) $datos['correo_encargado'])) !== mb_strtolower((string) $solicitud->correo_encargado)
+                ? trim((string) $datos['correo_encargado'])
+                : null;
+            if ($correoNuevo !== null) {
+                if ($this->identidad->existeCorreo($correoNuevo)) {
+                    $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con este correo. Use otro correo para la persona encargada.']]);
+                }
+                try {
+                    $this->identidad->actualizarCorreo($idUsuario, $correoNuevo);
+                } catch (ErrorNucleoException $e) {
+                    if (array_key_exists('correo', $e->getDetalles() ?? [])) {
+                        $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con este correo. Use otro correo para la persona encargada.']]);
+                    }
+
+                    throw $e;
+                }
+                $solicitud->correo_encargado = $correoNuevo;
+            }
+
+            foreach (['nombre_comercial', 'razon_social', 'direccion_fiscal', 'inscrito_como_contribuyente'] as $campo) {
+                if (array_key_exists($campo, $datos)) {
+                    $comercio->{$campo} = $datos[$campo];
+                }
+            }
+            $comercio->estado = Comercio::PENDIENTE;
+            $comercio->save();
+
+            foreach ($porReemplazar as $documento) {
+                $rutasPorBorrar[] = $documento->ruta_cifrada;
+                $documento->delete();
+            }
+            foreach ($documentos as $documento) {
+                $this->guardarDocumento($comercio, $documento);
+            }
+
+            foreach (['nombre_encargado', 'telefono_encargado'] as $campo) {
+                if (array_key_exists($campo, $datos)) {
+                    $solicitud->{$campo} = $datos[$campo];
+                }
+            }
+            $solicitud->requiere_documentos = $solicitud->requiere_documentos || $documentos !== [];
+            $solicitud->estado = SolicitudComercio::PENDIENTE;
+            $solicitud->motivo_rechazo = null;
+            $solicitud->fecha_reenvio = now();
+            $solicitud->save();
+
+            return $solicitud;
+        });
+
+        // Los archivos reemplazados se borran solo si la corrección se guardó.
+        foreach ($rutasPorBorrar as $ruta) {
+            Storage::disk('local')->delete($ruta);
+        }
+
+        return $solicitud;
     }
 
     public function corregirSolicitud(int $idSolicitud, array $datos): SolicitudComercio

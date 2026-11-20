@@ -87,6 +87,9 @@ Route::prefix('api/m2/v1')
             ->whereNumber('idSolicitud')->middleware('throttle:10,1')->name('solicitudes.corregir');
         Route::middleware('auth:sanctum')->group(function (): void {
             Route::get('mi-solicitud', [Solicitudes::class, 'miSolicitud'])->name('solicitudes.mia');
+            // POST porque puede llevar archivos (multipart); PHP no lee multipart en PUT.
+            Route::post('mi-solicitud/correccion', [Solicitudes::class, 'corregirMia'])
+                ->middleware('throttle:10,1')->name('solicitudes.mia.corregir');
             Route::get('solicitudes', [Solicitudes::class, 'listar'])->name('solicitudes.listar');
             Route::get('solicitudes/{idSolicitud}', [Solicitudes::class, 'consultar'])
                 ->whereNumber('idSolicitud')->name('solicitudes.consultar');

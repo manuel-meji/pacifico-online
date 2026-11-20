@@ -1,5 +1,5 @@
 import { Boton, C, Tarjeta } from '../components/comunes';
-import { CorregirSolicitud } from './SolicitudIncorporacion';
+import { CorregirMiSolicitud } from './SolicitudIncorporacion';
 
 // Lo único que ve la persona encargada mientras su comercio no está aprobado: el estado de la
 // revisión y, si se rechazó, el motivo y el formulario para corregirla. No puede administrar el
@@ -32,7 +32,7 @@ export default function EstadoSolicitud({ datos, onActualizar }) {
         )}
         <Boton variante="neutro" className="mt-4" onClick={onActualizar}>Revisar de nuevo</Boton>
       </Tarjeta>
-      {rechazada && <CorregirSolicitud idInicial={solicitud?.id_solicitud ?? ''} />}
+      {rechazada && <CorregirMiSolicitud revision={datos} onCorregida={onActualizar} />}
     </div>
   );
 }
