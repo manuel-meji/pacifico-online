@@ -113,7 +113,7 @@ class CorreccionConSesionTest extends TestCase
 
         $this->comoEncargado()->postJson(self::RUTA, ['correo_encargado' => 'ocupado@example.test'])
             ->assertStatus(422)
-            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Use otro correo para la persona encargada.');
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Usá otro correo para la persona encargada.');
 
         $this->assertSame('persona@example.test', $this->solicitud->fresh()->correo_encargado);
     }
@@ -127,7 +127,7 @@ class CorreccionConSesionTest extends TestCase
 
         $this->comoEncargado()->postJson(self::RUTA, ['correo_encargado' => 'carrera@example.test', 'razon_social' => 'No debe quedar'])
             ->assertStatus(422)
-            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Use otro correo para la persona encargada.');
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Usá otro correo para la persona encargada.');
 
         $this->assertNotSame('No debe quedar', $this->comercio->fresh()->razon_social);
         $this->assertSame(SolicitudComercio::RECHAZADA, $this->solicitud->fresh()->estado);

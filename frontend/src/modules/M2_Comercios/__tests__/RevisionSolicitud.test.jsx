@@ -26,7 +26,9 @@ async function montar() {
 test('pendiente: solo estado, sin pestañas ni enlaces', async () => {
   estado = 'Pendiente';
   const d = await montar();
-  expect(d.textContent).toContain('Solicitud en revisión');
+  // Hallazgo 19: una sola pestaña («Mi solicitud») y los pasos de la revisión.
+  expect(d.textContent).toContain('Mi solicitud');
+  expect(d.textContent).toContain('En revisión');
   expect(d.textContent).toContain('#12');
   expect(d.textContent).not.toContain('PANEL-MI-COMERCIO');
   expect(d.querySelector('a[href="/m3.html"]')).toBeNull();

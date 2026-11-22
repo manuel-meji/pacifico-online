@@ -25,6 +25,7 @@ class RegistroSolicitudTest extends TestCase
     {
         $identidad = $this->mock(ServicioIdentidadInterface::class);
         $identidad->shouldReceive('existeCorreo')->andReturn($correoConCuenta);
+        $identidad->shouldReceive('crearCuenta')->andReturnUsing(fn (array $datos, $rol, $idComercio) => $this->usuario('encargado_comercio', $idComercio));
 
         return new ComerciosService(
             $identidad,

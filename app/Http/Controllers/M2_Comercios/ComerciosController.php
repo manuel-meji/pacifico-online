@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\M2_Comercios;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\M2_Comercios\Concerns\ValidaEnEspanol;
 use App\Models\M2_Comercios\Comercio;
 use App\Services\M2_Comercios\ComerciosService;
 use Illuminate\Http\JsonResponse;
@@ -18,13 +19,15 @@ use Illuminate\Support\Facades\Gate;
  */
 class ComerciosController extends Controller
 {
+    use ValidaEnEspanol;
+
     public function __construct(private readonly ComerciosService $comercios) {}
 
     public function listar(Request $request): JsonResponse
     {
         Gate::authorize('administrar', new Comercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
             'estado' => ['sometimes', 'in:'.implode(',', Comercio::ESTADOS)],
             'pagina' => ['sometimes', 'integer', 'min:1'],
             'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:'.ComerciosService::MAXIMO_POR_PAGINA],
@@ -47,7 +50,9 @@ class ComerciosController extends Controller
     public function suspender(int $idComercio, Request $request): JsonResponse
     {
         Gate::authorize('suspender', Comercio::query()->findOrFail($idComercio));
-        $datos = $request->validate(['motivo' => ['required', 'string', 'max:1000']]);
+        $datos = $this->validarM2($request, ['motivo' => ['required', 'string', 'max:1000']], [
+            'motivo.required' => 'Escribí el motivo de la suspensión (RN-005).',
+        ]);
 
         $this->comercios->suspenderComercio($idComercio, $datos['motivo']);
 

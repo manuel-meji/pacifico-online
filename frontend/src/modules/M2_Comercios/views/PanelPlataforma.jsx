@@ -1,10 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SECCIONES_PLATAFORMA } from './gestion/secciones';
 
 // Panel de gestión de la plataforma: las pestañas se registran en ./gestion/secciones.js,
 // así otros módulos (por ejemplo, las noticias de M1) agregan la suya sin tocar este archivo.
 export default function PanelPlataforma() {
   const [pestana, setPestana] = useState(SECCIONES_PLATAFORMA[0].clave);
+  // Una vista puede pedir cambiar de pestaña (por ejemplo, «Ver en Comercios» después de aprobar).
+  useEffect(() => {
+    const ir = (e) => { if (SECCIONES_PLATAFORMA.some((p) => p.clave === e.detail)) setPestana(e.detail); };
+    window.addEventListener('m2:pestana', ir);
+    return () => window.removeEventListener('m2:pestana', ir);
+  }, []);
   const { Vista } = SECCIONES_PLATAFORMA.find((p) => p.clave === pestana) ?? SECCIONES_PLATAFORMA[0];
 
   return (

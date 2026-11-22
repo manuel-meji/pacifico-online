@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\M2_Comercios;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\M2_Comercios\Concerns\ValidaEnEspanol;
 use App\Models\M2_Comercios\Comercio;
 use App\Services\M2_Comercios\ComerciosService;
 use Illuminate\Http\JsonResponse;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Gate;
 
 class MicrositiosController extends Controller
 {
+    use ValidaEnEspanol;
+
     /*
      * Medidas mínimas de las imágenes del micrositio, según cómo las muestra el portal:
      * el logotipo va en un círculo, el banner en una franja ancha de poca altura y la
@@ -39,8 +42,10 @@ class MicrositiosController extends Controller
         $lista = str_ends_with($campo, '.*.imagen') ? substr($campo, 0, -strlen('.*.imagen')) : null;
         $deLista = $lista === null ? [] : [
             "{$campo}.required_without" => 'Elegí una imagen.',
-            "{$lista}.*.texto_alternativo.required" => 'Escribí el texto alternativo: describí la imagen para quien no la puede ver.',
-            "{$lista}.*.texto_alternativo.max" => 'El texto alternativo no puede pasar de 150 caracteres.',
+            "{$lista}.*.texto_alternativo.required" => 'Describí qué se ve en la imagen: lo leen los lectores de pantalla y aparece si la imagen no carga.',
+            "{$lista}.*.texto_alternativo.min" => 'Describí la imagen con al menos 5 caracteres, por ejemplo «Fachada de la tienda».',
+            "{$lista}.*.texto_alternativo.regex" => 'La descripción de la imagen debe tener palabras, no solo números o símbolos.',
+            "{$lista}.*.texto_alternativo.max" => 'La descripción de la imagen no puede pasar de 150 caracteres.',
         ];
 
         return $deLista + [
@@ -71,7 +76,7 @@ class MicrositiosController extends Controller
 
         Gate::authorize('actualizar', $comercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
             'logotipo' => [
                 'required',
                 'image',
@@ -89,18 +94,37 @@ class MicrositiosController extends Controller
         );
     }
 
+    /** Hallazgo 21: el logotipo también se puede quitar; el portal muestra el ícono de tienda. */
+    public function quitarLogotipo(int $idComercio): JsonResponse
+    {
+        $comercio = Comercio::findOrFail($idComercio);
+
+        Gate::authorize('actualizar', $comercio);
+
+        return response()->json(
+            $this->comercios->quitarLogotipo($idComercio)
+        );
+    }
+
     public function actualizarInformacion(int $idComercio, Request $request): JsonResponse
     {
         $comercio = Comercio::findOrFail($idComercio);
 
         Gate::authorize('actualizar', $comercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
+            // Opcional (vacía la quita), pero si se escribe tiene que decir algo (hallazgo 22).
             'descripcion' => [
                 'present',
                 'nullable',
                 'string',
+                'min:10',
+                'max:2000',
+                'regex:'.self::CON_LETRAS,
             ],
+        ], [
+            'descripcion.min' => 'Escribí una descripción de al menos 10 caracteres, o dejala vacía para no mostrar ninguna.',
+            'descripcion.regex' => 'La descripción debe tener palabras, no solo números o símbolos.',
         ]);
 
         return response()->json(
@@ -117,7 +141,7 @@ class MicrositiosController extends Controller
 
         Gate::authorize('actualizar', $comercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
             'horarios' => [
                 'required',
                 'array',
@@ -141,6 +165,8 @@ class MicrositiosController extends Controller
                 'nullable',
                 'date_format:H:i',
             ],
+        ], [
+            'horarios.size' => 'Indicá el horario de los 7 días.',
         ]);
 
         return response()->json(
@@ -157,20 +183,28 @@ class MicrositiosController extends Controller
 
         Gate::authorize('actualizar', $comercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
+            // present: una lista vacía quita todos los contactos.
             'contactos' => [
-                'required',
+                'present',
                 'array',
+                'max:8',
             ],
+            // Uno por tipo (hallazgo 33): el portal (contrato 1.2.2) muestra un solo teléfono, correo y
+            // dirección, y una red de cada tipo. El contenido se valida y se normaliza en el servicio.
             'contactos.*.tipo' => [
                 'required',
                 'string',
                 'in:telefono,correo,direccion,facebook,instagram,whatsapp,tiktok,sitio_web',
+                'distinct',
             ],
             'contactos.*.valor' => [
                 'required',
                 'string',
+                'max:255',
             ],
+        ], [
+            'contactos.*.tipo.distinct' => 'Ya agregaste ese tipo de contacto: va uno de cada tipo. Para un segundo número usá WhatsApp.',
         ]);
 
         return response()->json(
@@ -187,37 +221,58 @@ class MicrositiosController extends Controller
 
         Gate::authorize('actualizar', $comercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
             'politicas' => [
-                'required',
+                'present',
                 'array',
+                'max:5',
             ],
+            // Una política por tipo (hallazgo 35).
             'politicas.*.tipo' => [
                 'required',
                 'string',
                 'in:envio,devolucion,garantia,privacidad,otra',
+                'distinct',
             ],
             'politicas.*.contenido' => [
                 'required',
                 'string',
+                'min:10',
+                'max:2000',
+                'regex:'.self::CON_LETRAS,
             ],
             'politicas.*.configuracion_envio' => [
                 'nullable',
                 'array',
+                'max:2',
             ],
+            // M5 elige la tarifa por estas dos zonas (seleccionarTarifaPorZona); con otro texto
+            // cobraría la primera tarifa (hallazgo 34).
             'politicas.*.configuracion_envio.*.zona' => [
                 'required_with:politicas.*.configuracion_envio',
                 'string',
+                'in:GAM,Resto del país',
+                'distinct',
             ],
             'politicas.*.configuracion_envio.*.costo' => [
                 'required_with:politicas.*.configuracion_envio',
                 'numeric',
                 'min:0',
+                'max:100000',
             ],
             'politicas.*.configuracion_envio.*.moneda' => [
                 'required_with:politicas.*.configuracion_envio',
                 'in:CRC',
             ],
+        ], [
+            'politicas.*.tipo.distinct' => 'Ya agregaste una política de ese tipo: va una de cada tipo.',
+            'politicas.*.contenido.min' => 'Explicá la política con al menos 10 caracteres.',
+            'politicas.*.contenido.regex' => 'La política debe tener palabras, no solo números o símbolos.',
+            'politicas.*.configuracion_envio.*.zona.in' => 'Elegí la zona: GAM o Resto del país.',
+            'politicas.*.configuracion_envio.*.zona.distinct' => 'Ya agregaste una tarifa para esa zona.',
+            'politicas.*.configuracion_envio.*.costo.max' => 'El costo de envío no puede pasar de ₡100 000.',
+            'politicas.*.configuracion_envio.*.costo.min' => 'El costo de envío no puede ser negativo.',
+            'politicas.*.configuracion_envio.max' => 'Podés indicar una tarifa para GAM y otra para Resto del país.',
         ]);
 
         return response()->json(
@@ -234,10 +289,11 @@ class MicrositiosController extends Controller
 
         Gate::authorize('actualizar', $comercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
             'galeria' => [
                 'present',
                 'array',
+                'max:12',
             ],
             'galeria.*.id_imagen' => [
                 'nullable',
@@ -258,7 +314,9 @@ class MicrositiosController extends Controller
             'galeria.*.texto_alternativo' => [
                 'required',
                 'string',
+                'min:5',
                 'max:150',
+                'regex:'.self::CON_LETRAS,
             ],
         ], self::mensajesDeImagen('galeria.*.imagen', 'Cada imagen de la galería debe medir al menos 600 × 400 px.'));
 
@@ -276,10 +334,11 @@ class MicrositiosController extends Controller
 
         Gate::authorize('actualizar', $comercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
             'banners' => [
                 'present',
                 'array',
+                'max:5',
             ],
             'banners.*.id_banner' => [
                 'nullable',
@@ -300,7 +359,9 @@ class MicrositiosController extends Controller
             'banners.*.texto_alternativo' => [
                 'required',
                 'string',
+                'min:5',
                 'max:150',
+                'regex:'.self::CON_LETRAS,
             ],
             'banners.*.activo' => [
                 'required',

@@ -54,6 +54,7 @@ Route::prefix('api/m2/v1')
             Route::post('comercios/{idComercio}/publicidad', [Configuracion::class, 'solicitarPublicidad'])
                 ->whereNumber('idComercio')->name('comercios.publicidad.solicitar');
             Route::get('publicidad', [Configuracion::class, 'publicidadPendiente'])->name('publicidad.pendiente');
+            Route::get('publicidad/vigentes', [Configuracion::class, 'publicidadVigente'])->name('publicidad.vigentes');
             Route::post('publicidad/{idPublicidad}', [Configuracion::class, 'gestionarPublicidad'])
                 ->whereNumber('idPublicidad')->name('publicidad.gestionar');
 
@@ -64,6 +65,8 @@ Route::prefix('api/m2/v1')
                     ->whereNumber('idComercio')->name('comercios.micrositio.editar');
                 Route::post('comercios/{idComercio}/micrositio/logotipo', [Micrositios::class, 'guardarLogotipo'])
                     ->whereNumber('idComercio')->name('comercios.micrositio.logotipo');
+                Route::delete('comercios/{idComercio}/micrositio/logotipo', [Micrositios::class, 'quitarLogotipo'])
+                    ->whereNumber('idComercio')->name('comercios.micrositio.logotipo.quitar');
                 Route::put('comercios/{idComercio}/micrositio/galeria', [Micrositios::class, 'gestionarGaleria'])
                     ->whereNumber('idComercio')->name('comercios.micrositio.galeria');
                 Route::put('comercios/{idComercio}/micrositio', [Micrositios::class, 'actualizarInformacion'])

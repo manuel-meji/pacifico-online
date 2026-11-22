@@ -19,7 +19,10 @@ class RegistroSolicitudHttpTest extends TestCase
     {
         parent::setUp();
 
-        $this->mock(ServicioIdentidadInterface::class)->shouldReceive('existeCorreo')->andReturn(false);
+        $identidad = $this->mock(ServicioIdentidadInterface::class);
+        $identidad->shouldReceive('existeCorreo')->andReturn(false);
+        // La cuenta de la persona encargada se crea con la solicitud (hallazgo 23).
+        $identidad->shouldReceive('crearCuenta')->andReturnUsing(fn (array $datos, $rol, $idComercio) => $this->usuario('encargado_comercio', $idComercio));
         $this->mock(NucleoServiceInterface::class);
     }
 
@@ -96,7 +99,7 @@ class RegistroSolicitudHttpTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('error.codigo', 'ERR-005')
             ->assertJsonPath('error.detalles.cedula_juridica.0', 'Ya existe un comercio con esta cédula jurídica.')
-            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Use otro correo para la persona encargada.');
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Usá otro correo para la persona encargada.');
     }
 
     public function test_registrar_con_correo_de_encargado_con_cuenta_responde_err_005(): void
@@ -117,7 +120,7 @@ class RegistroSolicitudHttpTest extends TestCase
         $respuesta
             ->assertStatus(422)
             ->assertJsonPath('error.codigo', 'ERR-005')
-            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Use otro correo para la persona encargada.');
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Usá otro correo para la persona encargada.');
 
         $this->assertDatabaseMissing('comercios', [
             'cedula_juridica' => '3-101-654321',

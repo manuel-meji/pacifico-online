@@ -97,7 +97,7 @@ class MedidasImagenesMicrositioTest extends TestCase
         $enviar = fn (int $ancho, int $alto) => $this->put("/api/m2/v1/comercios/{$id}/micrositio/galeria", [
             'galeria' => [[
                 'imagen' => UploadedFile::fake()->image('foto.png', $ancho, $alto),
-                'texto_alternativo' => 'Foto',
+                'texto_alternativo' => 'Foto del local',
                 'orden' => 1,
             ]],
         ], ['Accept' => 'application/json']);
@@ -154,9 +154,9 @@ class MedidasImagenesMicrositioTest extends TestCase
         ], ['Accept' => 'application/json'])->assertStatus(422);
 
         $detalles = $respuesta->json('error.detalles');
-        $this->assertSame(['Escribí el texto alternativo: describí la imagen para quien no la puede ver.'], $detalles['galeria.0.texto_alternativo']);
+        $this->assertSame(['Describí qué se ve en la imagen: lo leen los lectores de pantalla y aparece si la imagen no carga.'], $detalles['galeria.0.texto_alternativo']);
         $this->assertSame(['Elegí una imagen.'], $detalles['galeria.1.imagen']);
-        $this->assertSame(['El texto alternativo no puede pasar de 150 caracteres.'], $detalles['galeria.1.texto_alternativo']);
+        $this->assertSame(['La descripción de la imagen no puede pasar de 150 caracteres.'], $detalles['galeria.1.texto_alternativo']);
 
         $this->put("/api/m2/v1/comercios/{$id}/micrositio/banners", [
             'banners' => [['imagen' => UploadedFile::fake()->image('b.png', 1600, 400), 'texto_alternativo' => '', 'orden' => 1, 'activo' => true]],

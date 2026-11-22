@@ -67,17 +67,31 @@ class CuentaEnSolicitudTest extends TestCase
         $this->assertSame(Comercio::PENDIENTE, $solicitud->comercio->estado);
     }
 
-    public function test_sin_contrasena_no_crea_la_cuenta_hasta_aprobar(): void
+    /**
+     * Hallazgo 23 (revisión del 22/11): sin contraseña la cuenta también se crea con la solicitud, sin
+     * cifrado, para que el núcleo envíe la invitación. Así el correo queda reservado y la persona puede
+     * corregir su solicitud si la rechazan.
+     */
+    public function test_sin_contrasena_crea_la_cuenta_con_la_solicitud_para_que_el_nucleo_invite(): void
     {
         $this->mock(NucleoServiceInterface::class);
-        $this->mock(ServicioIdentidadInterface::class, function (MockInterface $mock): void {
+        $recibido = [];
+        $this->mock(ServicioIdentidadInterface::class, function (MockInterface $mock) use (&$recibido): void {
             $mock->shouldReceive('existeCorreo')->andReturn(false);
-            $mock->shouldNotReceive('crearCuenta');
+            $mock->shouldReceive('crearCuenta')->once()->andReturnUsing(function (array $datos, $rol, $idComercio) use (&$recibido) {
+                $recibido = compact('datos', 'rol', 'idComercio');
+
+                return $this->usuario('encargado_comercio', $idComercio);
+            });
         });
 
         $this->postJson('/api/m2/v1/solicitudes', self::DATOS)->assertOk();
 
-        $this->assertFalse(SolicitudComercio::query()->where('correo_encargado', 'clave@example.com')->firstOrFail()->cuenta_creada);
+        $solicitud = SolicitudComercio::query()->where('correo_encargado', 'clave@example.com')->firstOrFail();
+        $this->assertTrue($solicitud->cuenta_creada);
+        $this->assertSame(RolUsuario::EncargadoComercio, $recibido['rol']);
+        $this->assertSame($solicitud->id_comercio, $recibido['idComercio']);
+        $this->assertArrayNotHasKey('contrasena_cifrada', $recibido['datos']);
     }
 
     public function test_contrasenas_que_no_coinciden_o_cortas_responden_err_005_en_espanol(): void
@@ -110,7 +124,7 @@ class CuentaEnSolicitudTest extends TestCase
 
         $this->postJson('/api/m2/v1/solicitudes', $this->conContrasena('MiClave2026', 'MiClave2026'))
             ->assertStatus(422)
-            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Use otro correo para la persona encargada.');
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con este correo. Usá otro correo para la persona encargada.');
 
         $this->assertDatabaseMissing('comercios', ['cedula_juridica' => '3-101-654321']);
         $this->assertDatabaseMissing('solicitudes_comercio', ['correo_encargado' => 'clave@example.com']);
