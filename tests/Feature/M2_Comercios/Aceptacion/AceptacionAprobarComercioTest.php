@@ -108,7 +108,9 @@ class AceptacionAprobarComercioTest extends TestCase
         Event::fake([ComercioAprobado::class]);
         $identidad = $this->mock(ServicioIdentidadInterface::class);
         $identidad->shouldReceive('existeCorreo')->andReturn(false);
-        $identidad->shouldNotReceive('crearCuenta');
+        // La cuenta se crea una sola vez, con la solicitud (hallazgo 23); el cliente no aprueba nada.
+        $identidad->shouldReceive('crearCuenta')->once()
+            ->andReturnUsing(fn (array $datos, RolUsuario $rol, int $idComercio) => $this->usuario('encargado_comercio', $idComercio));
         $this->mock(NucleoServiceInterface::class)->shouldNotReceive('registrarAuditoria');
 
         $registro = $this->postJson('/api/m2/v1/solicitudes', self::SOLICITUD)->assertOk();

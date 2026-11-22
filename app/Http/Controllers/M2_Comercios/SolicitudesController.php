@@ -7,6 +7,7 @@ namespace App\Http\Controllers\M2_Comercios;
 use App\Enums\Nucleo\RolUsuario;
 use App\Exceptions\Nucleo\ErrorNucleoException;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\M2_Comercios\Concerns\ValidaEnEspanol;
 use App\Models\M2_Comercios\SolicitudComercio;
 use App\Services\M2_Comercios\ComerciosService;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -18,13 +19,15 @@ use Illuminate\Validation\Rule;
 
 class SolicitudesController extends Controller
 {
+    use ValidaEnEspanol;
+
     public function __construct(private readonly ComerciosService $comercios) {}
 
     public function listar(Request $request): JsonResponse
     {
         Gate::authorize('revisar', new SolicitudComercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
             'estado' => ['nullable', Rule::in([SolicitudComercio::PENDIENTE, SolicitudComercio::APROBADA, SolicitudComercio::RECHAZADA])],
             'pagina' => ['sometimes', 'integer', 'min:1'],
             'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:'.ComerciosService::MAXIMO_POR_PAGINA],
@@ -57,21 +60,12 @@ class SolicitudesController extends Controller
     {
         $usuario = $this->encargadoConComercio($request);
 
-        $datos = $request->validate([
+        // El número y la cédula solo se comparan con los registrados (no se pueden cambiar); los demás
+        // datos cumplen las mismas reglas que en la solicitud (hallazgos 6 y 17).
+        $datos = $this->validarM2($request, [
             'id_solicitud' => ['sometimes', 'integer'],
             'cedula_juridica' => ['sometimes', 'string'],
-            'correo_encargado' => ['sometimes', 'email', 'max:150'],
-            'nombre_comercial' => ['sometimes', 'string'],
-            'razon_social' => ['sometimes', 'string'],
-            'direccion_fiscal' => ['sometimes', 'string'],
-            'inscrito_como_contribuyente' => ['sometimes', 'boolean'],
-            'nombre_encargado' => ['sometimes', 'string'],
-            'telefono_encargado' => ['sometimes', 'nullable', 'string'],
-            'documentos' => ['sometimes', 'array'],
-            'documentos.*.archivo' => ['required', 'file', 'mimes:pdf,jpg,png', 'max:5120'],
-            'documentos.*.tipo' => ['required', 'string'],
-            'documentos.*.fecha_vencimiento' => ['required', 'date', 'after:today'],
-        ]);
+        ] + self::reglasDatosSolicitud(parcial: true));
 
         $documentos = $datos['documentos'] ?? [];
         unset($datos['documentos']);
@@ -112,7 +106,7 @@ class SolicitudesController extends Controller
     {
         Gate::authorize('aprobar', new SolicitudComercio);
 
-        return response()->json($this->comercios->aprobarSolicitud($idSolicitud)->only([
+        return response()->json($this->comercios->aprobarSolicitud($idSolicitud, $request->user())->only([
             'id_comercio', 'cedula_juridica', 'nombre_comercial', 'razon_social',
             'direccion_fiscal', 'inscrito_como_contribuyente', 'estado', 'created_at', 'updated_at',
         ]));
@@ -122,8 +116,11 @@ class SolicitudesController extends Controller
     {
         Gate::authorize('rechazar', new SolicitudComercio);
 
-        $datos = $request->validate(['motivo' => ['required', 'string']]);
-        $solicitud = $this->comercios->rechazarSolicitud($idSolicitud, $datos['motivo']);
+        $datos = $this->validarM2($request, ['motivo' => ['required', 'string', 'min:10', 'max:500']], [
+            'motivo.required' => 'Escribí el motivo del rechazo: la persona encargada lo va a ver para corregir su solicitud.',
+            'motivo.min' => 'Explicá el motivo con un poco más de detalle (al menos 10 caracteres).',
+        ]);
+        $solicitud = $this->comercios->rechazarSolicitud($idSolicitud, $datos['motivo'], $request->user());
 
         return response()->json($solicitud->only([
             'id_solicitud', 'id_comercio', 'nombre_encargado', 'correo_encargado',
@@ -150,9 +147,9 @@ class SolicitudesController extends Controller
     {
         Gate::authorize('evaluarDocumento', new SolicitudComercio);
 
-        $datos = $request->validate([
+        $datos = $this->validarM2($request, [
             'resultado' => ['required', 'string', Rule::in(['valido', 'invalido'])],
-            'observacion' => ['nullable', 'string'],
+            'observacion' => ['nullable', 'string', 'max:500'],
         ]);
 
         $documento = $this->comercios->evaluarDocumento(
@@ -170,49 +167,26 @@ class SolicitudesController extends Controller
 
     public function registrar(Request $request): JsonResponse
     {
-        $datos = $request->validate([
-            'nombre_comercial' => ['required', 'string'],
-            'cedula_juridica' => [
-                'required',
-                'string',
-                'regex:/^[0-9]-[0-9]{3}-[0-9]{6}$/',
-            ],
-            'razon_social' => ['required', 'string'],
-            'direccion_fiscal' => ['required', 'string'],
-            'inscrito_como_contribuyente' => ['required', 'boolean'],
-
-            'nombre_encargado' => ['required', 'string'],
-            'correo_encargado' => ['required', 'email'],
-            'telefono_encargado' => ['nullable', 'string'],
-            // Con contraseña, la cuenta de la persona encargada se crea con la solicitud. Es opcional en
-            // la API para no romper a quien ya la usa; la pantalla de solicitud la pide siempre.
+        $datos = $this->validarM2($request, [
+            'cedula_juridica' => ['required', 'string', 'regex:'.self::CEDULA_JURIDICA],
+            // Con contraseña, la cuenta de la persona encargada queda lista para ingresar; sin ella, el
+            // núcleo le envía una invitación para definirla. En los dos casos la cuenta se crea con la
+            // solicitud (hallazgo 23). La pantalla de solicitud la pide siempre.
             'contrasena_encargado' => ['nullable', 'string', 'min:8', 'max:72', 'confirmed'],
-
-            'documentos' => ['sometimes', 'array'],
-            'documentos.*.archivo' => [
-                'required',
-                'file',
-                'mimes:pdf,jpg,png',
-                'max:5120',
-            ],
-            'documentos.*.tipo' => ['required', 'string'],
-            'documentos.*.fecha_vencimiento' => [
-                'required',
-                'date',
-                'after:today',
-            ],
-        ], [
-            'contrasena_encargado.min' => 'La contraseña debe tener al menos 8 caracteres.',
-            'contrasena_encargado.max' => 'La contraseña no puede tener más de 72 caracteres.',
-            'contrasena_encargado.confirmed' => 'Las contraseñas no coinciden.',
-        ]);
+        ] + self::reglasDatosSolicitud());
 
         $documentos = $datos['documentos'] ?? [];
         unset($datos['documentos']);
 
+        // La ruta es pública; si la usa la plataforma con su sesión (pestaña «Registrar comercio»),
+        // queda registrado quién lo hizo (hallazgo 11).
+        $registrador = auth('sanctum')->user();
+        $rol = $registrador?->rol instanceof RolUsuario ? $registrador->rol : RolUsuario::tryFrom((string) $registrador?->rol);
+
         $solicitud = $this->comercios->registrarSolicitud(
             $datos,
             $documentos,
+            $rol === RolUsuario::EncargadoPlataforma ? $registrador : null,
         );
 
         return response()->json($solicitud->only([
@@ -232,21 +206,13 @@ class SolicitudesController extends Controller
 
     public function corregir(int $idSolicitud, Request $request): JsonResponse
     {
-        $datos = $request->validate([
-            'cedula_juridica' => [
-                'required',
-                'string',
-                'regex:/^[0-9]-[0-9]{3}-[0-9]{6}$/',
-            ],
-            'correo_encargado' => ['required', 'email'],
-
-            'nombre_comercial' => ['sometimes', 'string'],
-            'razon_social' => ['sometimes', 'string'],
-            'direccion_fiscal' => ['sometimes', 'string'],
-            'inscrito_como_contribuyente' => ['sometimes', 'boolean'],
-            'nombre_encargado' => ['sometimes', 'string'],
-            'telefono_encargado' => ['sometimes', 'nullable', 'string'],
-        ]);
+        // Ruta pública anterior al DEF-34 (deuda técnica): número, cédula y correo identifican la solicitud.
+        $reglas = self::reglasDatosSolicitud(parcial: true);
+        unset($reglas['documentos'], $reglas['documentos.*.archivo'], $reglas['documentos.*.tipo'], $reglas['documentos.*.fecha_vencimiento']);
+        $datos = $this->validarM2($request, [
+            'cedula_juridica' => ['required', 'string', 'regex:'.self::CEDULA_JURIDICA],
+            'correo_encargado' => ['required', 'email', 'max:150'],
+        ] + $reglas);
 
         $solicitud = $this->comercios->corregirSolicitud(
             $idSolicitud,

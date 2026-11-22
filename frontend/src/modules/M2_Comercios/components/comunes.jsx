@@ -1,6 +1,6 @@
 
 import { createContext, useContext } from 'react';
-import { AlertCircle, CheckCircle2, ShieldCheck, Loader2, LogOut, User } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info, ShieldCheck, Loader2, LogOut, User } from 'lucide-react';
 import logo from '../../../assets/logo-pacificos.png';
 
 
@@ -29,6 +29,32 @@ export const Etiqueta = ({ estado }) => (
   </span>
 );
 
+
+// Tipos de documento de la solicitud (hallazgos 5 y 12): el valor que guarda el backend y el nombre
+// que se muestra. La constancia de Hacienda respalda la inscripción como contribuyente (RN-001).
+export const TIPOS_DOCUMENTO = [
+  ['cedula_juridica', 'Cédula jurídica'], ['patente', 'Patente comercial'], ['permiso_sanitario', 'Permiso sanitario'],
+  ['constancia_hacienda', 'Constancia de inscripción en Hacienda'], ['otro', 'Otro'],
+];
+const NOMBRES_DOCUMENTO = Object.fromEntries(TIPOS_DOCUMENTO);
+export const nombreDocumento = (tipo) => NOMBRES_DOCUMENTO[tipo] ?? 'Documento';
+
+// Fechas como las ve una persona en Costa Rica (21/11/2026). Las fechas sin hora se toman como locales.
+export const fechaCorta = (valor) => {
+  if (!valor) return '—';
+  const texto = String(valor);
+  return new Date(texto.length === 10 ? `${texto}T00:00:00` : texto).toLocaleDateString('es-CR');
+};
+
+// Medidas de una imagen elegida, para avisar antes de enviarla (hallazgo 28).
+export const medirImagen = (archivo) => new Promise((resolver) => {
+  if (!archivo || typeof URL?.createObjectURL !== 'function') { resolver(null); return; }
+  const url = URL.createObjectURL(archivo);
+  const img = new Image();
+  img.onload = () => { resolver({ ancho: img.naturalWidth, alto: img.naturalHeight }); URL.revokeObjectURL(url); };
+  img.onerror = () => { resolver(null); URL.revokeObjectURL(url); };
+  img.src = url;
+});
 
 export const SesionContexto = createContext({ usuario: null, mensajeDeError: () => '' });
 export const useSesion = () => useContext(SesionContexto);
@@ -68,6 +94,14 @@ export const Aviso = ({ mensaje }) =>
     </p>
   ) : null;
 
+ // Aviso neutro, para resultados que no son un éxito ni un error (por ejemplo, un rechazo ya hecho).
+export const AvisoInfo = ({ mensaje }) =>
+  mensaje ? (
+    <p role="status" className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+      <Info size={18} className="mt-0.5 shrink-0" /> {mensaje}
+    </p>
+  ) : null;
+
 export const Cargando = ({ texto = 'Cargando…' }) => (
   <p className="flex items-center gap-2 py-6 text-sm text-slate-500">
     <Loader2 size={18} className="animate-spin" /> {texto}
@@ -80,6 +114,8 @@ const VARIANTES = {
   primario: `${C.verde} ${C.verdeHover} text-white`,
   secundario: `${C.marino} hover:bg-[#172E6E] text-white`,
   peligro: 'bg-red-600 hover:bg-red-700 text-white',
+  // Acción negativa que no es la principal (hallazgo 13): borde rojo, sin relleno.
+  peligroBorde: 'bg-white text-red-700 ring-1 ring-red-300 hover:bg-red-50',
   neutro: 'bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50',
 };
 export const Boton = ({ variante = 'primario', className = '', type = 'button', children, ...p }) => (
@@ -93,16 +129,18 @@ export const Boton = ({ variante = 'primario', className = '', type = 'button', 
 );
 
 const estiloCampo = 'mt-1 w-full font-normal rounded-lg border border-slate-300 bg-white p-2.5 text-base text-slate-800 focus:border-[#1E3A8A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20 aria-[invalid=true]:border-red-500';
-export const Campo = ({ etiqueta, error, ...p }) => (
+// ayuda: texto corto debajo del campo que dice qué escribir (se oculta cuando hay error).
+const Ayuda = ({ texto }) => (texto ? <span className="mt-1 block text-xs font-normal text-slate-500">{texto}</span> : null);
+export const Campo = ({ etiqueta, error, ayuda, ...p }) => (
   <label className="mt-4 block text-sm font-semibold text-slate-700">{etiqueta}
     <input className={estiloCampo} aria-invalid={error ? 'true' : undefined} {...p} />
-    <MensajeCampo mensaje={error} />
+    {error ? <MensajeCampo mensaje={error} /> : <Ayuda texto={ayuda} />}
   </label>
 );
-export const AreaTexto = ({ etiqueta, error, ...p }) => (
+export const AreaTexto = ({ etiqueta, error, ayuda, ...p }) => (
   <label className="mt-4 block text-sm font-semibold text-slate-700">{etiqueta}
     <textarea rows="3" className={estiloCampo} aria-invalid={error ? 'true' : undefined} {...p} />
-    <MensajeCampo mensaje={error} />
+    {error ? <MensajeCampo mensaje={error} /> : <Ayuda texto={ayuda} />}
   </label>
 );
 export const Seleccion = ({ etiqueta, error, children, ...p }) => (

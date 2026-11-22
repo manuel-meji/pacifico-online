@@ -177,7 +177,7 @@ class AprobacionSolicitudTest extends TestCase
 
         $this->actingAs($this->usuario('encargado_plataforma'), 'sanctum')->postJson($this->ruta($solicitud))
             ->assertUnprocessable()->assertJsonPath('error.codigo', 'ERR-005')
-            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con el correo del encargado, por lo que no se puede crear la cuenta del comercio.');
+            ->assertJsonPath('error.detalles.correo_encargado.0', 'Ya existe una cuenta con el correo del encargado, así que no se puede crear la cuenta del comercio. Rechazá la solicitud y pedile que la corrija con otro correo.');
 
         $this->assertSame(SolicitudComercio::PENDIENTE, $solicitud->fresh()->estado);
         $this->assertSame(Comercio::PENDIENTE, $solicitud->comercio->fresh()->estado);

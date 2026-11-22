@@ -27,10 +27,20 @@ export default function M2App() {
   // Encargado de un comercio que todavía no se aprueba (creó su cuenta con la solicitud): solo ve el
   // estado de la revisión. undefined = consultando; null = comercio aprobado (Activo o Suspendido).
   const [revision, setRevision] = useState(undefined);
+  // Hallazgo 10: si la consulta falla, no se abre el panel completo como si el comercio estuviera
+  // aprobado; se muestra el error y se puede reintentar.
+  const [errorRevision, setErrorRevision] = useState('');
   const consultarRevision = useCallback(async () => {
     const r = await miSolicitud();
-    const sinAprobar = r.ok && ['Pendiente', 'Rechazado'].includes(r.datos?.estado_comercio);
+    if (!r.ok) {
+      setErrorRevision(textoDeError(r));
+      setRevision((actual) => (actual === undefined ? 'error' : actual));
+      return { ok: false };
+    }
+    setErrorRevision('');
+    const sinAprobar = ['Pendiente', 'Rechazado'].includes(r.datos?.estado_comercio);
     setRevision(sinAprobar ? r.datos : null);
+    return { ok: true, aprobado: !sinAprobar };
   }, []);
 
   useEffect(() => {
@@ -45,6 +55,7 @@ export default function M2App() {
 
   // Rol con el que se arma la navegación: mientras no se aprueba, el encargado no tiene pestañas ni enlaces.
   const rolPanel = revision ? 'en_revision' : usuario?.rol;
+  const enRevision = Boolean(revision) && revision !== 'error';
 
   const salir = async () => {
     setErrorCierre('');
@@ -68,7 +79,10 @@ export default function M2App() {
   // vería por un instante la Solicitud, que es la vista de quien no tiene sesión.
   const visibles = usuario === undefined || revision !== null ? [] : VISTAS.filter(
     (v) => (v.rol === null || v.rol === usuario?.rol) && !v.ocultarPara?.includes(usuario?.rol),
-  );
+  ).map((v) => (v.clave === 'solicitud' && usuario?.rol === 'encargado_plataforma'
+    // Hallazgo 11: para la plataforma, la solicitud pública es el registro de un comercio en su nombre.
+    ? { ...v, nombre: 'Registrar comercio', corto: 'Registrar comercio' }
+    : v));
   // La solicitud de incorporación es pública (sin sesión, clientes y encargado de plataforma), pero no se
   // muestra al encargado de comercio porque su cuenta está ligada a un solo comercio.
   const actual = visibles.find((v) => v.clave === vista) ?? visibles[0] ?? VISTAS[0];
@@ -76,6 +90,16 @@ export default function M2App() {
   let contenido;
   if (usuario === undefined || (usuario && revision === undefined)) {
     contenido = <Cargando texto="Verificando la sesión…" />;
+  } else if (revision === 'error') {
+    contenido = (
+      <div className="mx-auto max-w-2xl">
+        <AvisoError mensaje={`No se pudo consultar el estado de tu comercio. ${errorRevision}`} />
+        <button type="button" onClick={consultarRevision}
+          className="mt-3 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">
+          Reintentar
+        </button>
+      </div>
+    );
   } else if (revision) {
     contenido = <EstadoSolicitud datos={revision} onActualizar={consultarRevision} />;
   } else {
@@ -95,6 +119,14 @@ export default function M2App() {
                 className="flex shrink-0 items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-white opacity-80 transition-colors hover:opacity-100 focus:outline-none focus-visible:bg-white/10">
                 <Home size={18} /> Portal
               </a>
+            )}
+            {/* Hallazgo 19: mientras la solicitud está en revisión, una sola pestaña, para que la pantalla se
+                vea como el resto del panel sin dar acceso a nada más. */}
+            {(enRevision || revision === 'error') && (
+              <span aria-current="page"
+                className="flex shrink-0 items-center gap-2 border-b-4 border-[#9DBB45] px-4 py-3 text-sm font-bold text-white">
+                <FileText size={18} /> Mi solicitud
+              </span>
             )}
             {visibles.map(({ clave, corto, icono: Icono }) => (
               <button key={clave} type="button" onClick={() => setVista(clave)}
@@ -142,9 +174,9 @@ export default function M2App() {
           </div>
         </nav>
         <main className="mx-auto max-w-6xl px-4 py-6">
-          {usuario?.rol !== 'encargado_comercio' && (
+          {(usuario?.rol !== 'encargado_comercio' || enRevision) && (
             <p className="mb-4 text-xs text-slate-500">
-              <a href="/m1.html" className="hover:underline">Inicio</a> / Comercios / <span className="font-semibold text-slate-700">{actual.nombre}</span>
+              <a href="/m1.html" className="hover:underline">Inicio</a> / Comercios / <span className="font-semibold text-slate-700">{enRevision ? 'Mi solicitud' : actual.nombre}</span>
             </p>
           )}
           <AvisoError mensaje={errorCierre} />

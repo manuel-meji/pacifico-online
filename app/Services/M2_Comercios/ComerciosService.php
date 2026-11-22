@@ -32,9 +32,12 @@ use App\Services\M2_Comercios\Comision\CalculoMontoFijo;
 use App\Services\M2_Comercios\Comision\CalculoPorcentaje;
 use App\Services\Nucleo\ContextoComercio;
 use Closure;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -62,6 +65,8 @@ class ComerciosService implements ComerciosServiceInterface
     public const MAXIMO_POR_PAGINA = 50;
 
     public const MAXIMO_LOTE = 50;
+
+    private const CORREO_EN_USO = 'Ya existe una cuenta con este correo. Usá otro correo para la persona encargada.';
 
     public function __construct(
         private readonly ServicioIdentidadInterface $identidad,
@@ -413,9 +418,27 @@ class ComerciosService implements ComerciosServiceInterface
             'id_comercio' => $idComercio,
         ]);
 
+        $anterior = $micrositio->logotipo;
         $micrositio->cambiarLogotipo(
             $this->guardarImagen("m2/comercios/{$idComercio}/logotipo", $archivo)
         );
+        $this->eliminarArchivoPublico($anterior);
+
+        return $micrositio;
+    }
+
+    /** Hallazgo 21: quita el logotipo; el archivo se borra después de guardar el cambio. */
+    public function quitarLogotipo(int $idComercio): Micrositio
+    {
+        $this->buscar($idComercio);
+
+        $micrositio = Micrositio::query()->firstOrCreate([
+            'id_comercio' => $idComercio,
+        ]);
+
+        $anterior = $micrositio->logotipo;
+        $micrositio->cambiarLogotipo(null);
+        $this->eliminarArchivoPublico($anterior);
 
         return $micrositio;
     }
@@ -455,10 +478,15 @@ class ComerciosService implements ComerciosServiceInterface
                 $apertura = $horario['hora_apertura'] ?? null;
                 $cierre = $horario['hora_cierre'] ?? null;
 
+                // Hallazgo 31: el error va en el campo que falta, para que la pantalla lo marque.
                 if ($apertura === null || $cierre === null) {
-                    $errores["horarios.{$indice}"] = [
-                        'Un día abierto debe indicar hora de apertura y cierre.',
-                    ];
+                    $mensaje = ['Indicá la hora de apertura y de cierre, o marcá el día como cerrado.'];
+                    if ($apertura === null) {
+                        $errores["horarios.{$indice}.hora_apertura"] = $mensaje;
+                    }
+                    if ($cierre === null) {
+                        $errores["horarios.{$indice}.hora_cierre"] = $mensaje;
+                    }
                 } elseif ($apertura >= $cierre) {
                     $errores["horarios.{$indice}.hora_apertura"] = [
                         'La hora de apertura debe ser anterior a la hora de cierre.',
@@ -499,6 +527,19 @@ class ComerciosService implements ComerciosServiceInterface
     public function guardarContactos(int $idComercio, array $contactos): array
     {
         $this->buscar($idComercio);
+
+        // Hallazgo 32: cada valor se valida según su tipo y se guarda normalizado (un teléfono como
+        // 8888-8888, una red como enlace https de esa red), así el portal nunca muestra un enlace roto.
+        $errores = [];
+        foreach ($contactos as $indice => $contacto) {
+            [$valor, $error] = ContactoComercio::normalizar((string) $contacto['tipo'], (string) $contacto['valor']);
+            if ($error !== null) {
+                $errores["contactos.{$indice}.valor"] = [$error];
+            } else {
+                $contactos[$indice]['valor'] = $valor;
+            }
+        }
+        $this->exigirValidos($errores);
 
         return DB::transaction(function () use ($idComercio, $contactos): array {
             ContactoComercio::query()
@@ -816,7 +857,7 @@ class ComerciosService implements ComerciosServiceInterface
                 'cedula_juridica', 'nombre_comercial', 'razon_social', 'direccion_fiscal', 'inscrito_como_contribuyente',
             ]),
             'solicitud' => $solicitud?->only([
-                'id_solicitud', 'estado', 'motivo_rechazo', 'created_at', 'fecha_reenvio',
+                'id_solicitud', 'estado', 'motivo_rechazo', 'created_at', 'fecha_reenvio', 'fecha_revision',
                 'nombre_encargado', 'correo_encargado', 'telefono_encargado',
             ]),
             'documentos' => $solicitud === null ? [] : $solicitud->documentos()->orderBy('id_documento_comercio')->get()
@@ -832,7 +873,8 @@ class ComerciosService implements ComerciosServiceInterface
         return $solicitud->only([
             'id_solicitud', 'id_comercio', 'nombre_encargado', 'correo_encargado',
             'telefono_encargado', 'estado', 'requiere_documentos', 'motivo_rechazo',
-            'fecha_reenvio', 'cuenta_creada', 'created_at', 'updated_at',
+            'fecha_reenvio', 'cuenta_creada', 'fecha_revision', 'nombre_revisor', 'ultimo_motivo_rechazo',
+            'nombre_registrador', 'created_at', 'updated_at',
         ]) + [
             'comercio' => $solicitud->comercio->only([
                 'id_comercio', 'cedula_juridica', 'nombre_comercial', 'razon_social',
@@ -914,9 +956,9 @@ class ComerciosService implements ComerciosServiceInterface
 
     // --- CU-0016: rechazar solicitud comercial (Jorge) ---
 
-    public function rechazarSolicitud(int $idSolicitud, string $motivo): SolicitudComercio
+    public function rechazarSolicitud(int $idSolicitud, string $motivo, ?Authenticatable $revisor = null): SolicitudComercio
     {
-        return DB::transaction(function () use ($idSolicitud, $motivo): SolicitudComercio {
+        return DB::transaction(function () use ($idSolicitud, $motivo, $revisor): SolicitudComercio {
             $motivo = trim($motivo);
             if ($motivo === '') {
                 $this->exigirValidos(['motivo' => ['El motivo de rechazo es obligatorio.']]);
@@ -925,14 +967,12 @@ class ComerciosService implements ComerciosServiceInterface
             $solicitud = SolicitudComercio::query()->lockForUpdate()->find($idSolicitud)
                 ?? throw $this->noEncontrado('La solicitud no existe.');
 
-            if (! $solicitud->estaPendiente()) {
-                $this->exigirValidos(['estado' => ['La solicitud ya fue revisada.']]);
-            }
+            $this->exigirPendiente($solicitud);
 
             $comercio = $solicitud->comercio()->lockForUpdate()->first()
                 ?? throw $this->noEncontrado('El comercio no existe.');
 
-            $solicitud->rechazar($motivo);
+            $solicitud->rechazar($motivo, ...$this->datosRevisor($revisor));
             $comercio->estado = Comercio::RECHAZADO;
             $comercio->save();
 
@@ -948,22 +988,20 @@ class ComerciosService implements ComerciosServiceInterface
 
     // --- CU-0015: aprobar solicitud comercial (Jorge) ---
 
-    public function aprobarSolicitud(int $idSolicitud): Comercio
+    public function aprobarSolicitud(int $idSolicitud, ?Authenticatable $revisor = null): Comercio
     {
-        return DB::transaction(function () use ($idSolicitud): Comercio {
+        return DB::transaction(function () use ($idSolicitud, $revisor): Comercio {
             $solicitud = SolicitudComercio::query()->lockForUpdate()->find($idSolicitud)
                 ?? throw $this->noEncontrado('La solicitud no existe.');
 
-            if (! $solicitud->estaPendiente()) {
-                $this->exigirValidos(['estado' => ['La solicitud ya fue revisada.']]);
-            }
+            $this->exigirPendiente($solicitud);
 
             $comercio = $solicitud->comercio()->lockForUpdate()->first()
                 ?? throw $this->noEncontrado('El comercio no existe.');
 
             $errores = [];
             if (! $comercio->inscrito_como_contribuyente) {
-                $errores['inscrito_como_contribuyente'] = ['El comercio debe estar inscrito como contribuyente.'];
+                $errores['inscrito_como_contribuyente'] = ['El comercio debe estar inscrito como contribuyente ante Hacienda (RN-001).'];
             }
             foreach (['cedula_juridica', 'razon_social', 'direccion_fiscal'] as $campo) {
                 if (trim((string) $comercio->{$campo}) === '') {
@@ -973,9 +1011,9 @@ class ComerciosService implements ComerciosServiceInterface
 
             if ($solicitud->requiere_documentos) {
                 $documentos = $solicitud->documentos()->lockForUpdate()->get();
-                $fecha = now();
-                if ($documentos->isEmpty() || $documentos->contains(fn (DocumentoComercio $documento): bool => ! $documento->esValido($fecha))) {
-                    $errores['documentos'] = ['Los documentos requeridos deben existir, estar validados y vigentes.'];
+                $problema = $this->problemaDeDocumentos($documentos);
+                if ($problema !== null) {
+                    $errores['documentos'] = [$problema];
                 }
             }
             $this->exigirValidos($errores);
@@ -989,11 +1027,12 @@ class ComerciosService implements ComerciosServiceInterface
                 ]);
             }
 
-            $solicitud->aprobar();
+            $solicitud->aprobar(...$this->datosRevisor($revisor));
             $comercio->activar();
 
-            // Si la cuenta se creó con la solicitud, ya existe y la aprobación solo activa el comercio.
-            // Las solicitudes sin contraseña crean aquí la cuenta y el núcleo envía la invitación.
+            // Desde la revisión del 22/11 (hallazgo 23) la cuenta se crea siempre con la solicitud, así que
+            // aprobar solo activa el comercio. Este paso queda para las solicitudes anteriores, que se
+            // registraron sin contraseña y todavía no tienen cuenta: se crea aquí y el núcleo invita.
             try {
                 if (! $solicitud->cuenta_creada) {
                     $this->identidad->crearCuenta([
@@ -1005,7 +1044,7 @@ class ComerciosService implements ComerciosServiceInterface
                 // El núcleo rechaza el correo del encargado (ya tiene cuenta): se relanza dentro de la
                 // transacción, así que la aprobación y la activación del comercio se revierten.
                 if (array_key_exists('correo', $e->getDetalles() ?? [])) {
-                    $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con el correo del encargado, por lo que no se puede crear la cuenta del comercio.']]);
+                    $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con el correo del encargado, así que no se puede crear la cuenta del comercio. Rechazá la solicitud y pedile que la corrija con otro correo.']]);
                 }
 
                 throw $e;
@@ -1022,9 +1061,9 @@ class ComerciosService implements ComerciosServiceInterface
     }
 
     // --- CU-0012 y CU-0013: solicitud de incorporación
-    public function registrarSolicitud(array $datos, array $documentos): SolicitudComercio
+    public function registrarSolicitud(array $datos, array $documentos, ?Authenticatable $plataforma = null): SolicitudComercio
     {
-        return DB::transaction(function () use ($datos, $documentos): SolicitudComercio {
+        return DB::transaction(function () use ($datos, $documentos, $plataforma): SolicitudComercio {
             // Cédula y correo se validan juntos, antes de crear nada, para que el formulario muestre ambos errores.
             $errores = [];
             if (Comercio::query()
@@ -1033,7 +1072,7 @@ class ComerciosService implements ComerciosServiceInterface
                 $errores['cedula_juridica'] = ['Ya existe un comercio con esta cédula jurídica.'];
             }
             if ($this->identidad->existeCorreo($datos['correo_encargado'])) {
-                $errores['correo_encargado'] = ['Ya existe una cuenta con este correo. Use otro correo para la persona encargada.'];
+                $errores['correo_encargado'] = [self::CORREO_EN_USO];
             }
             $this->exigirValidos($errores);
 
@@ -1051,34 +1090,44 @@ class ComerciosService implements ComerciosServiceInterface
                 'nombre_encargado' => $datos['nombre_encargado'],
                 'correo_encargado' => $datos['correo_encargado'],
                 'telefono_encargado' => $datos['telefono_encargado'] ?? null,
-                'cuenta_creada' => isset($datos['contrasena_encargado']),
+                'cuenta_creada' => true,
                 'estado' => SolicitudComercio::PENDIENTE,
                 'requiere_documentos' => $documentos !== [],
                 'motivo_rechazo' => null,
                 'fecha_reenvio' => null,
             ]);
 
-            // Con contraseña, la cuenta de la persona encargada se crea ya, con el comercio Pendiente:
-            // puede ingresar para ver el estado de la revisión, pero no administrar el comercio hasta
-            // que se apruebe. M2 solo le pasa al núcleo el cifrado; la contraseña en claro no se guarda.
-            if (isset($datos['contrasena_encargado'])) {
-                try {
-                    $this->identidad->crearCuenta([
-                        'nombre' => $datos['nombre_encargado'],
-                        'correo' => $datos['correo_encargado'],
-                        'contrasena_cifrada' => Hash::make($datos['contrasena_encargado']),
-                    ], RolUsuario::EncargadoComercio, $comercio->id_comercio);
-                } catch (ErrorNucleoException $e) {
-                    if (array_key_exists('correo', $e->getDetalles() ?? [])) {
-                        $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con este correo. Use otro correo para la persona encargada.']]);
-                    }
-
-                    throw $e;
-                }
-            }
-
             foreach ($documentos as $documento) {
                 $this->guardarDocumento($comercio, $documento);
+            }
+
+            // Hallazgo 11: si la registra la plataforma en nombre del comercio, queda dicho quién y en la bitácora.
+            if ($plataforma !== null) {
+                [$idUsuario, $nombre] = $this->datosRevisor($plataforma);
+                $solicitud->forceFill(['registrada_por' => $idUsuario, 'nombre_registrador' => $nombre])->save();
+                $this->nucleo->registrarAuditoria('registrar_solicitud_comercio', 'solicitud_comercio', $solicitud->id_solicitud, [
+                    'modulo' => 'M2', 'id_comercio' => $comercio->id_comercio, 'por_plataforma' => true,
+                ]);
+            }
+
+            // Hallazgo 23: la cuenta de la persona encargada se crea siempre con la solicitud, con el
+            // comercio Pendiente. Así el correo queda reservado desde el inicio, la persona puede ver el
+            // estado de la revisión y corregir si la rechazan, y aprobar ya no depende de crear la cuenta.
+            // Con contraseña, M2 solo le pasa al núcleo el cifrado (la contraseña en claro no se guarda);
+            // sin ella, el núcleo le envía una invitación para definirla. Va al final de la transacción,
+            // para que un error al guardar los documentos no deje una cuenta creada.
+            $cuenta = ['nombre' => $datos['nombre_encargado'], 'correo' => $datos['correo_encargado']];
+            if (isset($datos['contrasena_encargado'])) {
+                $cuenta['contrasena_cifrada'] = Hash::make($datos['contrasena_encargado']);
+            }
+            try {
+                $this->identidad->crearCuenta($cuenta, RolUsuario::EncargadoComercio, $comercio->id_comercio);
+            } catch (ErrorNucleoException $e) {
+                if (array_key_exists('correo', $e->getDetalles() ?? [])) {
+                    $this->exigirValidos(['correo_encargado' => [self::CORREO_EN_USO]]);
+                }
+
+                throw $e;
             }
 
             return $solicitud;
@@ -1146,9 +1195,14 @@ class ComerciosService implements ComerciosServiceInterface
                 $this->exigirValidos(['estado' => ['Solo se puede corregir una solicitud rechazada.']]);
             }
 
-            $porReemplazar = $solicitud->documentos()->lockForUpdate()->get()
-                ->filter(fn (DocumentoComercio $documento): bool => $this->debeReemplazarse($documento));
-            if ($porReemplazar->isNotEmpty() && $documentos === []) {
+            // Se reemplazan los inválidos o vencidos y, además, los del mismo tipo que un documento nuevo:
+            // cada tipo queda una sola vez en la solicitud (hallazgo 25).
+            $tiposNuevos = array_map(fn (array $documento): string => (string) $documento['tipo'], $documentos);
+            $actuales = $solicitud->documentos()->lockForUpdate()->get();
+            $pendientesDeReemplazo = $actuales->filter(fn (DocumentoComercio $documento): bool => $this->debeReemplazarse($documento));
+            $porReemplazar = $actuales->filter(fn (DocumentoComercio $documento): bool => $this->debeReemplazarse($documento)
+                || in_array($documento->tipo, $tiposNuevos, true));
+            if ($pendientesDeReemplazo->isNotEmpty() && $documentos === []) {
                 $this->exigirValidos(['documentos' => [
                     'Tenés documentos rechazados o vencidos: subí uno nuevo para reemplazarlos antes de enviar la corrección.',
                 ]]);
@@ -1160,13 +1214,13 @@ class ComerciosService implements ComerciosServiceInterface
                 : null;
             if ($correoNuevo !== null) {
                 if ($this->identidad->existeCorreo($correoNuevo)) {
-                    $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con este correo. Use otro correo para la persona encargada.']]);
+                    $this->exigirValidos(['correo_encargado' => [self::CORREO_EN_USO]]);
                 }
                 try {
                     $this->identidad->actualizarCorreo($idUsuario, $correoNuevo);
                 } catch (ErrorNucleoException $e) {
                     if (array_key_exists('correo', $e->getDetalles() ?? [])) {
-                        $this->exigirValidos(['correo_encargado' => ['Ya existe una cuenta con este correo. Use otro correo para la persona encargada.']]);
+                        $this->exigirValidos(['correo_encargado' => [self::CORREO_EN_USO]]);
                     }
 
                     throw $e;
@@ -1398,10 +1452,13 @@ class ComerciosService implements ComerciosServiceInterface
                 $this->exigirValidos(['dias' => ['Ya tenés una solicitud de destacado pendiente de revisión.']]);
             }
 
+            // Hallazgo 38: si ya hay un destacado aprobado que no terminó, el nuevo lo extiende (empieza
+            // al día siguiente) en vez de superponerse y perder días.
+            $inicio = $this->inicioDelSiguienteDestacado($comercio->id_comercio);
             $publicidad = $comercio->publicidades()->create([
                 'ubicacion' => 'portada',
-                'inicio' => now()->toDateString(),
-                'fin' => now()->addDays($dias - 1)->toDateString(),
+                'inicio' => $inicio->toDateString(),
+                'fin' => $inicio->copy()->addDays($dias - 1)->toDateString(),
                 'activa' => true,
                 'estado' => $porPlataforma ? PublicidadComercio::APROBADA : PublicidadComercio::PENDIENTE,
                 'dias_solicitados' => $dias,
@@ -1421,38 +1478,89 @@ class ComerciosService implements ComerciosServiceInterface
      * Diseño (tabla 4.1): la plataforma aprueba o rechaza una solicitud de destacado.
      * Al aprobar, el periodo empieza el día de la aprobación.
      */
-    public function gestionarPublicidad(int $idPublicidad, string $accion): PublicidadComercio
+    public function gestionarPublicidad(int $idPublicidad, string $accion, ?string $motivo = null): PublicidadComercio
     {
-        if (! in_array($accion, ['aprobar', 'rechazar'], true)) {
-            $this->exigirValidos(['accion' => ['La acción debe ser aprobar o rechazar.']]);
+        if (! in_array($accion, ['aprobar', 'rechazar', 'retirar'], true)) {
+            $this->exigirValidos(['accion' => ['La acción debe ser aprobar, rechazar o retirar.']]);
+        }
+        $motivo = $motivo === null ? null : trim($motivo);
+        // Hallazgo 37: rechazar o retirar un destacado lleva motivo, como el rechazo de una solicitud (RN-016).
+        if ($accion !== 'aprobar' && ($motivo === null || $motivo === '')) {
+            $this->exigirValidos(['motivo' => ['Escribí el motivo: el comercio lo va a ver en su historial.']]);
         }
 
-        return DB::transaction(function () use ($idPublicidad, $accion): PublicidadComercio {
+        return DB::transaction(function () use ($idPublicidad, $accion, $motivo): PublicidadComercio {
             $publicidad = PublicidadComercio::query()->lockForUpdate()->find($idPublicidad)
                 ?? throw $this->noEncontrado('La solicitud de destacado no existe.');
 
-            if (! $publicidad->estaPendiente()) {
-                $this->exigirValidos(['estado' => ['La solicitud de destacado ya fue revisada.']]);
-            }
-
-            if ($accion === 'aprobar') {
-                $dias = $publicidad->dias_solicitados ?? 7;
-                $publicidad->fill([
-                    'estado' => PublicidadComercio::APROBADA,
-                    'inicio' => now()->toDateString(),
-                    'fin' => now()->addDays($dias - 1)->toDateString(),
-                ]);
+            if ($accion === 'retirar') {
+                // Hallazgo 38: la plataforma puede retirar un destacado aprobado que todavía no terminó.
+                if ($publicidad->estado !== PublicidadComercio::APROBADA || ! $publicidad->activa
+                    || $publicidad->fin->toDateString() < now()->toDateString()) {
+                    $this->exigirValidos(['estado' => ['Solo se puede retirar un destacado vigente o programado.']]);
+                }
+                $publicidad->fill(['activa' => false, 'motivo' => $motivo]);
             } else {
-                $publicidad->fill(['estado' => PublicidadComercio::RECHAZADA, 'activa' => false]);
+                if (! $publicidad->estaPendiente()) {
+                    $this->exigirValidos(['estado' => ['La solicitud de destacado ya fue revisada en otra sesión.']]);
+                }
+
+                if ($accion === 'aprobar') {
+                    $dias = $publicidad->dias_solicitados ?? 7;
+                    $inicio = $this->inicioDelSiguienteDestacado($publicidad->id_comercio, $publicidad->id_publicidad_comercio);
+                    $publicidad->fill([
+                        'estado' => PublicidadComercio::APROBADA,
+                        'inicio' => $inicio->toDateString(),
+                        'fin' => $inicio->copy()->addDays($dias - 1)->toDateString(),
+                    ]);
+                } else {
+                    $publicidad->fill(['estado' => PublicidadComercio::RECHAZADA, 'activa' => false, 'motivo' => $motivo]);
+                }
             }
             $publicidad->save();
 
             $this->nucleo->registrarAuditoria($accion.'_destacado_comercio', 'publicidad_comercio', $publicidad->id_publicidad_comercio, [
-                'modulo' => 'M2', 'id_comercio' => $publicidad->id_comercio,
+                'modulo' => 'M2', 'id_comercio' => $publicidad->id_comercio, 'motivo' => $motivo,
             ]);
 
             return $publicidad;
         });
+    }
+
+    /**
+     * Día en que empieza un destacado nuevo: hoy, o el día siguiente al fin del destacado aprobado que
+     * todavía no terminó (vigente o ya programado), para que se encadenen sin superponerse.
+     */
+    private function inicioDelSiguienteDestacado(int $idComercio, ?int $excepto = null): Carbon
+    {
+        $hoy = now()->startOfDay();
+        $ultimoFin = PublicidadComercio::query()
+            ->where('id_comercio', $idComercio)
+            ->where('estado', PublicidadComercio::APROBADA)
+            ->where('activa', true)
+            ->whereDate('fin', '>=', $hoy->toDateString())
+            ->when($excepto !== null, fn ($q) => $q->where('id_publicidad_comercio', '!=', $excepto))
+            ->max('fin');
+
+        return $ultimoFin === null ? $hoy : Carbon::parse($ultimoFin)->startOfDay()->addDay();
+    }
+
+    /** Hallazgo 37: destacados aprobados que no terminaron, para que la plataforma los vea y los pueda retirar. */
+    public function listarPublicidadVigente(): array
+    {
+        $hoy = now()->toDateString();
+
+        return [
+            'publicidades' => PublicidadComercio::query()->with('comercio')
+                ->where('estado', PublicidadComercio::APROBADA)
+                ->where('activa', true)
+                ->whereDate('fin', '>=', $hoy)
+                ->orderBy('inicio')->orderBy('id_publicidad_comercio')->get()
+                ->map(fn (PublicidadComercio $p): array => $this->datosPublicidad($p) + [
+                    'nombre_comercial' => $p->comercio?->nombre_comercial,
+                    'dias_restantes' => (int) now()->startOfDay()->diffInDays($p->fin->copy()->startOfDay()) + 1,
+                ])->values()->all(),
+        ];
     }
 
     /** Publicidades de un comercio, la más reciente primero. */
@@ -1492,6 +1600,11 @@ class ComerciosService implements ComerciosServiceInterface
             'inicio' => $p->inicio?->toDateString(),
             'fin' => $p->fin?->toDateString(),
             'vigente' => $p->estaVigente(),
+            // Un destacado aprobado que la plataforma retiró antes de terminar.
+            'retirada' => ($p->estado ?? PublicidadComercio::APROBADA) === PublicidadComercio::APROBADA && ! $p->activa,
+            'motivo' => $p->getAttribute('motivo'),
+            'solicitado_el' => $p->created_at?->toDateString(),
+            'revisado_el' => ($p->estado ?? PublicidadComercio::APROBADA) === PublicidadComercio::PENDIENTE ? null : $p->updated_at?->toDateString(),
         ];
     }
 
@@ -1500,6 +1613,67 @@ class ComerciosService implements ComerciosServiceInterface
         if (! in_array($dias, PublicidadComercio::DIAS_PERMITIDOS, true)) {
             $this->exigirValidos(['dias' => ['El periodo debe ser de 7, 15 o 30 días.']]);
         }
+    }
+
+    /**
+     * RN-011 y hallazgo 24: si otra persona ya revisó la solicitud, el mensaje dice cómo quedó, para que
+     * la pantalla se actualice y no parezca que sigue pendiente.
+     */
+    private function exigirPendiente(SolicitudComercio $solicitud): void
+    {
+        if (! $solicitud->estaPendiente()) {
+            $estado = $solicitud->estado === SolicitudComercio::APROBADA ? 'aprobada' : 'rechazada';
+            $this->exigirValidos(['estado' => ["Esta solicitud ya fue {$estado} en otra sesión. Se actualizó la pantalla con su estado."]]);
+        }
+    }
+
+    /** @return array{0: ?int, 1: ?string} id y nombre de quien revisa, si hay sesión. */
+    private function datosRevisor(?Authenticatable $revisor): array
+    {
+        $revisor ??= auth()->user();
+        if ($revisor === null) {
+            return [null, null];
+        }
+
+        $nombre = $revisor->getAttribute('nombre');
+
+        return [(int) $revisor->getAuthIdentifier(), is_string($nombre) ? $nombre : null];
+    }
+
+    /**
+     * Qué impide aprobar por los documentos (RN-002), dicho de forma que se sepa qué hacer.
+     *
+     * @param  Collection<int, DocumentoComercio>  $documentos
+     */
+    private function problemaDeDocumentos($documentos): ?string
+    {
+        if ($documentos->isEmpty()) {
+            return 'La solicitud requiere documentos y no tiene ninguno.';
+        }
+
+        $hoy = now()->toDateString();
+        $sinRevisar = $documentos->where('resultado', 'pendiente')->count();
+        $invalidos = $documentos->where('resultado', 'invalido')->count();
+        $vencidos = $documentos->filter(fn (DocumentoComercio $d): bool => $d->fecha_vencimiento !== null
+            && $d->fecha_vencimiento->toDateString() < $hoy)->count();
+
+        $partes = [];
+        if ($sinRevisar > 0) {
+            $partes[] = $sinRevisar === 1 ? 'revisar 1 documento' : "revisar {$sinRevisar} documentos";
+        }
+        if ($invalidos > 0) {
+            $partes[] = $invalidos === 1 ? '1 documento está inválido' : "{$invalidos} documentos están inválidos";
+        }
+        if ($vencidos > 0) {
+            $partes[] = $vencidos === 1 ? '1 documento está vencido' : "{$vencidos} documentos están vencidos";
+        }
+
+        if ($partes === [] && $documentos->contains(fn (DocumentoComercio $d): bool => ! $d->esValido(now()))) {
+            // Cualquier otro caso que RN-002 no acepte.
+            $partes[] = 'que todos los documentos estén validados y vigentes';
+        }
+
+        return $partes === [] ? null : 'Para aprobar falta: '.implode('; ', $partes).'.';
     }
 
     private function noEncontrado(string $mensaje): ErrorNucleoException
@@ -1515,7 +1689,7 @@ class ComerciosService implements ComerciosServiceInterface
                 self::MODULO,
                 'ERR-005',
                 422,
-                'Revisa los datos marcados (detalle por campo en detalles).',
+                'Revisá los datos marcados (detalle por campo en detalles).',
                 $errores,
             );
         }

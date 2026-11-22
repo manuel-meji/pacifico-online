@@ -26,24 +26,38 @@ class SolicitudComercio extends Model
 
     protected $guarded = ['id_solicitud'];
 
-    protected $casts = ['requiere_documentos' => 'boolean', 'fecha_reenvio' => 'datetime', 'cuenta_creada' => 'boolean'];
+    protected $casts = [
+        'requiere_documentos' => 'boolean', 'fecha_reenvio' => 'datetime', 'cuenta_creada' => 'boolean',
+        'fecha_revision' => 'datetime',
+    ];
 
     public function estaPendiente(): bool
     {
         return $this->estado === self::PENDIENTE;
     }
 
-    public function rechazar(string $motivo): void
+    /** El motivo también queda como último motivo de rechazo, que se conserva después de corregir. */
+    public function rechazar(string $motivo, ?int $idRevisor = null, ?string $nombreRevisor = null): void
     {
         $this->estado = self::RECHAZADA;
         $this->motivo_rechazo = $motivo;
+        $this->ultimo_motivo_rechazo = $motivo;
+        $this->registrarRevision($idRevisor, $nombreRevisor);
         $this->save();
     }
 
-    public function aprobar(): void
+    public function aprobar(?int $idRevisor = null, ?string $nombreRevisor = null): void
     {
         $this->estado = self::APROBADA;
+        $this->registrarRevision($idRevisor, $nombreRevisor);
         $this->save();
+    }
+
+    private function registrarRevision(?int $idRevisor, ?string $nombreRevisor): void
+    {
+        $this->fecha_revision = now();
+        $this->revisado_por = $idRevisor;
+        $this->nombre_revisor = $nombreRevisor;
     }
 
     public function comercio(): BelongsTo

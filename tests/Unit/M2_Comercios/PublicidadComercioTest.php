@@ -64,7 +64,7 @@ class PublicidadComercioTest extends TestCase
         $c = $this->crearComercio();
         $pendiente = $this->servicio->solicitarPublicidad($c->id_comercio, 30, false);
 
-        $this->servicio->gestionarPublicidad($pendiente->id_publicidad_comercio, 'rechazar');
+        $this->servicio->gestionarPublicidad($pendiente->id_publicidad_comercio, 'rechazar', 'El comercio no cumple las condiciones de publicidad.');
 
         $this->assertFalse($this->servicio->listarPublicidadComercio($c->id_comercio)['destacado']);
         $this->esperarError('ERR-005', fn () => $this->servicio->gestionarPublicidad($pendiente->id_publicidad_comercio, 'aprobar'));

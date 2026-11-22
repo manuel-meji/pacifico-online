@@ -191,8 +191,14 @@ export function listarPublicidadPendiente() {
   return llamar('/publicidad');
 }
 
-export function gestionarPublicidad(idPublicidad, accion) {
-  return llamar(`/publicidad/${idPublicidad}`, { method: 'POST', json: { accion } });
+// Destacados aprobados que no terminaron (vigentes o programados), para que la plataforma los vea o retire.
+export function listarPublicidadVigente() {
+  return llamar('/publicidad/vigentes');
+}
+
+// accion: aprobar, rechazar (con motivo) o retirar (con motivo).
+export function gestionarPublicidad(idPublicidad, accion, motivo = null) {
+  return llamar(`/publicidad/${idPublicidad}`, { method: 'POST', json: { accion, ...(motivo ? { motivo } : {}) } });
 }
 
 
@@ -202,6 +208,10 @@ export function consultarMicrositio(idComercio) {
 
 export function actualizarInformacion(idComercio, descripcion) {
   return llamar(`/comercios/${idComercio}/micrositio`, { method: 'PUT', json: { descripcion: descripcion ?? null } });
+}
+
+export function quitarLogotipo(idComercio) {
+  return llamar(`/comercios/${idComercio}/micrositio/logotipo`, { method: 'DELETE' });
 }
 
 export function guardarLogotipo(idComercio, archivo) {
