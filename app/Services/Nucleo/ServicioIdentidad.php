@@ -41,7 +41,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
 
         $campos = [
             'nombre' => isset($datos['nombre']) ? trim((string) $datos['nombre']) : null,
-            'correo' => isset($datos['correo']) ? $this->normalizarCorreo((string) $datos['correo']) : null,
+            'correo' => isset($datos['correo']) ? self::normalizarCorreo((string) $datos['correo']) : null,
             'contrasena' => $datos['contrasena'] ?? null,
             'id_comercio' => $idComercio,
         ];
@@ -95,7 +95,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
         $usuario = Usuario::query()->find($idUsuario)
             ?? throw ErrorNucleoException::recursoNoEncontrado();
 
-        $nuevo = $this->normalizarCorreo($correo);
+        $nuevo = self::normalizarCorreo($correo);
 
         $validador = Validator::make(['correo' => $nuevo], [
             'correo' => [
@@ -123,7 +123,7 @@ class ServicioIdentidad implements ServicioIdentidadInterface
 
     public function existeCorreo(string $correo): bool
     {
-        $correoNormalizado = $this->normalizarCorreo($correo);
+        $correoNormalizado = self::normalizarCorreo($correo);
 
         if ($correoNormalizado === '') {
             return false;
@@ -141,7 +141,12 @@ class ServicioIdentidad implements ServicioIdentidadInterface
         return Usuario::query()->where('correo', $correoNormalizado)->exists();
     }
 
-    private function normalizarCorreo(string $correo): string
+    /**
+     * Regla única de normalización del correo del núcleo: minúsculas y sin espacios en los extremos.
+     * Es estático para que el login y el limitador de intentos apliquen la misma regla sin pasar
+     * por el contrato.
+     */
+    public static function normalizarCorreo(string $correo): string
     {
         return mb_strtolower(trim($correo));
     }

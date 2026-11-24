@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Nucleo;
 
 use App\Http\Controllers\Controller;
+use App\Services\Nucleo\ServicioIdentidad;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -19,7 +20,7 @@ class SesionController extends Controller
         ]);
 
         if (! Auth::guard('web')->attempt([
-            'correo' => $credentials['correo'],
+            'correo' => ServicioIdentidad::normalizarCorreo($credentials['correo']),
             'password' => $credentials['contrasena'],
             'activo' => true,
         ])) {

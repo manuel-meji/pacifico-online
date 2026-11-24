@@ -7,6 +7,7 @@ use App\Enums\Nucleo\RolUsuario;
 use App\Models\Nucleo\Usuario;
 use Database\Factories\UsuarioFactory;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
@@ -145,6 +146,83 @@ class SesionTest extends TestCase
     {
         $this->postJson('/login', ['correo' => 'not-an-email', 'contrasena' => 'password'])
             ->assertUnprocessable()->assertJsonValidationErrors(['correo'], 'error.detalles');
+    }
+
+    public function test_login_sin_correo_devuelve_422(): void
+    {
+        $this->postJson('/login', ['contrasena' => 'password'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['correo'], 'error.detalles');
+
+        $this->assertGuest('web');
+    }
+
+    public function test_login_con_el_correo_como_arreglo_devuelve_422(): void
+    {
+        $this->postJson('/login', ['correo' => ['a@example.com'], 'contrasena' => 'password'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['correo'], 'error.detalles');
+
+        $this->assertGuest('web');
+    }
+
+    /**
+     * @return array<string, array{0: callable(string): string}>
+     */
+    public static function formatosDeCorreo(): array
+    {
+        return [
+            'mayúsculas' => [fn (string $correo): string => mb_strtoupper($correo)],
+            'espacios al inicio y al final' => [fn (string $correo): string => "  {$correo}  "],
+            'mezclado' => [fn (string $correo): string => '  '.ucfirst(mb_strtoupper(mb_substr($correo, 0, 4))).mb_substr($correo, 4).' '],
+        ];
+    }
+
+    #[DataProvider('formatosDeCorreo')]
+    public function test_login_acepta_el_correo_sin_distinguir_formato(callable $formato): void
+    {
+        $user = UsuarioFactory::new()->create(['correo' => 'cuenta.formato@example.com']);
+
+        $this->postJson('/login', ['correo' => $formato($user->correo), 'contrasena' => 'password'])
+            ->assertOk()
+            ->assertExactJson(['user' => $user->only(['id_usuario', 'nombre', 'correo', 'rol', 'id_comercio'])]);
+
+        $this->assertAuthenticatedAs($user, 'web');
+    }
+
+    #[DataProvider('formatosDeCorreo')]
+    public function test_cuenta_inactiva_sigue_rechazada_aunque_cambie_el_formato(callable $formato): void
+    {
+        $user = UsuarioFactory::new()->inactivo()->create(['correo' => 'cuenta.inactiva@example.com']);
+
+        $this->postJson('/login', ['correo' => $formato($user->correo), 'contrasena' => 'password'])
+            ->assertUnprocessable()
+            ->assertJsonPath('error.codigo', 'ERR-005')
+            ->assertJsonPath('error.detalles.correo.0', 'Las credenciales proporcionadas son incorrectas.');
+
+        $this->assertGuest('web');
+    }
+
+    public function test_el_limite_de_intentos_cuenta_igual_con_cualquier_formato_del_correo(): void
+    {
+        UsuarioFactory::new()->create(['correo' => 'formato.limite@example.com']);
+        $this->freezeTime();
+
+        $formatos = [
+            'formato.limite@example.com',
+            'FORMATO.LIMITE@EXAMPLE.COM',
+            '  formato.limite@example.com  ',
+            'Formato.Limite@example.com',
+            ' FORMATO.limite@example.com',
+        ];
+
+        foreach ($formatos as $correo) {
+            $this->postJson('/login', ['correo' => $correo, 'contrasena' => 'incorrecta'])
+                ->assertUnprocessable();
+        }
+
+        $this->postJson('/login', ['correo' => 'formato.limite@example.com', 'contrasena' => 'incorrecta'])
+            ->assertTooManyRequests()->assertJsonPath('error.codigo', 'ERR-429');
     }
 
     public function test_guest_cannot_read_the_current_user_or_logout(): void

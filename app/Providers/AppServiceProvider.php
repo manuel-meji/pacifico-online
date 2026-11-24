@@ -41,7 +41,6 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Str;
 use Tests\Doubles\M1\FakeClienteClient;
 use Tests\Doubles\M2\FakeComercioClient;
 use Tests\Doubles\M5\FakePedidoClient;
@@ -115,9 +114,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('login', function (Request $request): Limit {
-            return Limit::perMinute(5)->by(hash('sha256',
-                Str::lower($request->string('correo')->toString()).'|'.$request->ip()
-            ));
+            // Un correo que no es texto (arreglo, objeto) no se normaliza: lo rechaza validate() con 422.
+            $correo = $request->input('correo');
+            $correo = is_string($correo) ? ServicioIdentidad::normalizarCorreo($correo) : '';
+
+            return Limit::perMinute(5)->by(hash('sha256', $correo.'|'.$request->ip()));
         });
 
         $this->loadMigrationsFrom(glob(database_path('migrations/*'), GLOB_ONLYDIR));
