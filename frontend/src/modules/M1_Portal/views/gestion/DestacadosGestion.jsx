@@ -5,7 +5,8 @@ import { colones } from '../../services/formato';
 import { buscarProductos, obtenerFichaProducto, obtenerMicrositio } from '../../services/m1Api';
 import {
   aIsoCostaRica, aprobarSolicitud, definirTarifa, destacarProductoPlataforma, listarSolicitudesAdministracion,
-  listarSolicitudesComercio, listarTarifas, rechazarSolicitud, solicitarDestacado,
+  listarSolicitudesComercio, listarTarifas, MAXIMO_LOTE_COMERCIOS, obtenerResumenComerciosLote, rechazarSolicitud,
+  solicitarDestacado,
 } from '../../services/destacadosApi';
 
 // Productos destacados en el panel de gestión (contrato M1 1.4.0, SC-08).
@@ -47,6 +48,30 @@ function useNombresProductos(ids) {
   return (id) => nombres[id] ?? (id in nombres ? `Producto ${id}` : 'Cargando…');
 }
 
+// Nombre comercial de cada comercio de la lista con una sola consulta a M2 (ObtenerResumenComerciosLote),
+// no una por tarjeta; solo se piden los ids que faltan. Si M2 no responde o no devuelve un comercio
+// (no existe o no está Activo), se muestra "Comercio {id}".
+function useNombresComercios(ids) {
+  const [nombres, setNombres] = useState({});
+  const clave = [...new Set(ids)].sort((a, b) => a - b).join(',');
+
+  useEffect(() => {
+    let activo = true;
+    const faltan = clave.split(',').filter((id) => id && !(id in nombres)).map(Number);
+    for (let i = 0; i < faltan.length; i += MAXIMO_LOTE_COMERCIOS) {
+      const lote = faltan.slice(i, i + MAXIMO_LOTE_COMERCIOS);
+      obtenerResumenComerciosLote(lote).then((r) => {
+        if (!activo) return;
+        const encontrados = Object.fromEntries((r.ok ? r.datos?.comercios ?? [] : []).map((c) => [c.id_comercio, c.nombre_comercial]));
+        setNombres((n) => ({ ...n, ...Object.fromEntries(lote.map((id) => [id, encontrados[id] ?? null])) }));
+      });
+    }
+    return () => { activo = false; };
+  }, [clave]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (id) => nombres[id] || `Comercio ${id}`;
+}
+
 function Seccion({ titulo, descripcion, children }) {
   return (
     <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6">
@@ -75,15 +100,15 @@ function BotonSecundario({ children, className = '', ...props }) {
   );
 }
 
-// Tarjeta de una solicitud, para el comercio y para la plataforma.
-function TarjetaSolicitud({ solicitud, nombreProducto, mostrarComercio = false, children }) {
+// Tarjeta de una solicitud, para el comercio y para la plataforma (esta pasa nombreComercio).
+function TarjetaSolicitud({ solicitud, nombreProducto, nombreComercio = null, children }) {
   return (
     <li className="rounded-lg border border-gray-200 p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="break-words font-semibold text-gray-900">{nombreProducto(solicitud.id_producto)}</p>
           <p className="text-sm text-gray-600">
-            {mostrarComercio && `Comercio ${solicitud.id_comercio} · `}{solicitud.periodo_dias} días · {colones(solicitud.monto)}
+            {nombreComercio && `${nombreComercio(solicitud.id_comercio)} · `}{solicitud.periodo_dias} días · {colones(solicitud.monto)}
           </p>
         </div>
         <BadgeEstado estado={solicitud.estado} />
@@ -286,12 +311,21 @@ function SolicitudesPlataforma() {
   useEffect(() => { cargar(); }, [cargar]);
 
   const nombreProducto = useNombresProductos((solicitudes || []).map((s) => s.id_producto));
+  const nombreComercio = useNombresComercios((solicitudes || []).map((s) => s.id_comercio));
+
+  // Nombre del producto para los avisos; si su ficha todavía no llegó, "Producto {id}" en vez de "Cargando…".
+  const productoDe = (s) => {
+    const nombre = nombreProducto(s.id_producto);
+    return nombre === 'Cargando…' ? `Producto ${s.id_producto}` : nombre;
+  };
 
   async function aprobar(s) {
     setOcupada(s.id_solicitud_destacado); setAviso(null);
     const r = await aprobarSolicitud(s.id_solicitud_destacado);
     setOcupada(null);
-    setAviso(r.ok ? { tipo: 'exito', texto: 'Solicitud aprobada: el producto ya está destacado.' } : { tipo: 'error', texto: textoError(r) });
+    setAviso(r.ok
+      ? { tipo: 'exito', texto: `Solicitud aprobada: ${productoDe(s)} queda destacado por ${s.periodo_dias} días.` }
+      : { tipo: 'error', texto: textoError(r) });
     if (r.ok) cargar();
   }
 
@@ -300,7 +334,9 @@ function SolicitudesPlataforma() {
     setOcupada(s.id_solicitud_destacado); setAviso(null);
     const r = await rechazarSolicitud(s.id_solicitud_destacado, motivo.trim());
     setOcupada(null);
-    setAviso(r.ok ? { tipo: 'exito', texto: 'Solicitud rechazada.' } : { tipo: 'error', texto: detalles(r).motivo || textoError(r) });
+    setAviso(r.ok
+      ? { tipo: 'exito', texto: `Solicitud rechazada: ${productoDe(s)} no se destacará por ${s.periodo_dias} días.` }
+      : { tipo: 'error', texto: detalles(r).motivo || textoError(r) });
     if (r.ok) { setRechazando(null); setMotivo(''); cargar(); }
   }
 
@@ -320,7 +356,7 @@ function SolicitudesPlataforma() {
       {solicitudes && solicitudes.length > 0 && (
         <ul className="space-y-3">
           {solicitudes.map((s) => (
-            <TarjetaSolicitud key={s.id_solicitud_destacado} solicitud={s} nombreProducto={nombreProducto} mostrarComercio>
+            <TarjetaSolicitud key={s.id_solicitud_destacado} solicitud={s} nombreProducto={nombreProducto} nombreComercio={nombreComercio}>
               {s.estado === 'pendiente' && (
                 rechazando === s.id_solicitud_destacado ? (
                   <div className="mt-3 space-y-2">

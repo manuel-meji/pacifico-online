@@ -1,8 +1,17 @@
 // Cliente de la API de productos destacados de M1 (contrato 1.4.0, SC-08), para el panel de gestión.
 // Respuestas: { ok: true, datos } o { ok: false, estado, error: { codigo, mensaje, detalles } }.
-import { consulta, llamarM1 } from './m1Api';
+import { consulta, llamarApi, llamarM1 } from './m1Api';
 
 const json = (datos) => ({ body: JSON.stringify(datos) });
+
+// Máximo de comercios por consulta en ObtenerResumenComerciosLote (contrato de M2).
+export const MAXIMO_LOTE_COMERCIOS = 50;
+
+// POST /api/m2/v1/comercios/publico/lote (contrato de M2, ObtenerResumenComerciosLote): resumen de varios
+// comercios en una sola llamada → { comercios: [{ id_comercio, nombre_comercial, ... }] }. Solo devuelve los
+// comercios Activos; los demás ids se omiten. 422 ERR-005 si se mandan más de 50.
+export const obtenerResumenComerciosLote = (idsComercio) =>
+  llamarApi('/api/m2/v1/comercios/publico/lote', { method: 'POST', ...json({ ids_comercio: idsComercio }) });
 
 // GET /destacados/tarifas (pública): [{ periodo_dias, monto, moneda, actualizada }].
 export const listarTarifas = () => llamarM1('/destacados/tarifas');
