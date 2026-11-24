@@ -81,7 +81,7 @@ export default function FichaComercioView({ idComercio, criterio }) {
           <div className="h-24 bg-gradient-to-r from-brandDarkBlue to-brandBlue sm:h-32" aria-hidden />
         )}
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-          <div className="-mt-12 grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-white bg-blue-100 text-2xl font-black text-brandDarkBlue shadow">
+          <div className="relative z-10 -mt-12 grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-white bg-blue-100 text-2xl font-black text-brandDarkBlue shadow">
             <Imagen src={comercio.logo_url} alt={`Logotipo de ${comercio.nombre_comercial}`} className="h-full w-full object-cover" icono="tienda" claseIcono="h-8 w-8 text-brandDarkBlue" />
           </div>
           <div className="min-w-0 flex-1">
