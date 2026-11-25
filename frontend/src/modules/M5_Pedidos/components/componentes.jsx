@@ -486,7 +486,7 @@ export function TarjetaComercio({ grupo, numero, editable, suspendido, pendiente
       </div>
       {suspendido && (
         <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-          <CircleAlert className="w-3.5 h-3.5 text-red-600" aria-hidden="true" /> Membresía suspendida: productos deshabilitados
+          <CircleAlert className="w-3.5 h-3.5 text-red-600" aria-hidden="true" /> Comercio suspendido temporalmente: productos deshabilitados
         </span>
       )}
       {editable ? (
