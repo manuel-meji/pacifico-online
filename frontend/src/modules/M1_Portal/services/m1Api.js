@@ -34,7 +34,8 @@ async function llamar(ruta, opciones = {}, reintentado = false) {
   let resp;
 
   try {
-    resp = await fetch(`${BASE}${ruta}`, {
+    // Las rutas de M1 son relativas a BASE; las de otros módulos (llamarApi) llegan completas (/api/...).
+    resp = await fetch(ruta.startsWith('/api/') ? ruta : `${BASE}${ruta}`, {
       ...opciones,
       method: metodo,
       credentials: 'include',
@@ -118,6 +119,12 @@ export function actualizarDireccion(idCliente, idDireccionCliente, datos) {
 // (services/destacadosApi.js, promocionesApi.js, noticiasApi.js), con el mismo CSRF y formato de error.
 export function llamarM1(ruta, opciones = {}) {
   return llamar(ruta, opciones);
+}
+
+// Llamada a la API publicada de otro módulo (ruta completa, por ejemplo /api/m2/v1/...), con el mismo
+// CSRF y formato de error del núcleo que las de M1.
+export function llamarApi(rutaCompleta, opciones = {}) {
+  return llamar(rutaCompleta, opciones);
 }
 
 // Cadena de consulta (?a=1&b=2) sin los parámetros vacíos.
