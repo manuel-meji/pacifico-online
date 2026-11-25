@@ -8,7 +8,7 @@ use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Support\Carbon;
 
-/** ComercioReactivado (contrato v1.2.1): se publica después de confirmar la reactivación (RN-017: comisión y membresía se mantienen). Lo consumen M1, M3, M4 y M5. */
+/** ComercioReactivado (contrato v1.2.2): se publica después de confirmar la reactivación (RN-017: comisión y membresía se mantienen). Lo consumen M1, M3, M4 y M5. */
 class ComercioReactivado implements ShouldDispatchAfterCommit
 {
     use Dispatchable;

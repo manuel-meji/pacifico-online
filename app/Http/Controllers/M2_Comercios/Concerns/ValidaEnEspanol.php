@@ -25,8 +25,11 @@ trait ValidaEnEspanol
     /** Solo letras, espacios, apóstrofo, punto y guion; empieza con letra. */
     protected const SOLO_NOMBRE = "/^\\p{L}[\\p{L}\\s'.-]*$/u";
 
-    /** Cédula jurídica de Costa Rica: 3-XXX-XXXXXX (hallazgo 7). */
-    protected const CEDULA_JURIDICA = '/^3-\d{3}-\d{6}$/';
+    /**
+     * Cédula jurídica de Costa Rica: X-XXX-XXXXXX (hallazgo 7). El primer dígito es la clase de persona
+     * jurídica: 2 (Estado e instituciones), 3 (sociedades y asociaciones), 4 o 5 (hallazgo 46).
+     */
+    protected const CEDULA_JURIDICA = '/^[2-5]-\d{3}-\d{6}$/';
 
     /** Teléfono de Costa Rica de 8 dígitos, con +506, guiones o espacios opcionales. */
     protected const TELEFONO_CR = '/^(\+?506[\s-]?)?[24-8]\d{3}[\s-]?\d{4}$/';
@@ -108,7 +111,7 @@ trait ValidaEnEspanol
             ],
 
             // Mensajes que dicen qué hacer, por campo.
-            'cedula_juridica.regex' => 'La cédula jurídica debe tener el formato 3-XXX-XXXXXX, por ejemplo 3-101-123456.',
+            'cedula_juridica.regex' => 'La cédula jurídica debe tener el formato X-XXX-XXXXXX y empezar con 2, 3, 4 o 5, por ejemplo 3-101-123456.',
             'nombre_comercial.regex' => 'El nombre comercial debe tener al menos una letra.',
             'razon_social.regex' => 'La razón social debe tener al menos una letra.',
             'direccion_fiscal.regex' => 'La dirección fiscal debe tener letras (provincia, cantón y señas).',

@@ -62,7 +62,7 @@ export default function M2App() {
     const respuesta = await cerrarSesion();
     // Con ok o 401 (ya no había sesión) se va al inicio de sesión único. Si falló por conexión se conserva la sesión.
     if (respuesta.ok || respuesta.estado === 401) window.location.href = URL_INGRESO;
-    else setErrorCierre('No se pudo cerrar la sesión. Intente de nuevo.');
+    else setErrorCierre('No se pudo cerrar la sesión. Intentá de nuevo.');
   };
 
  

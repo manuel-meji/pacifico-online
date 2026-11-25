@@ -12,7 +12,7 @@ use App\Models\Nucleo\VerificaRol;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
- * Autorización HTTP de las consultas de M2 (x-autorizacion del contrato v1.2.1).
+ * Autorización HTTP de las consultas de M2 (x-autorizacion del contrato v1.2.2).
  *
  * Orden de las verificaciones: rol (403, ERR-002) y luego ámbito del comercio
  * (404, ERR-003, para no revelar si el comercio existe).

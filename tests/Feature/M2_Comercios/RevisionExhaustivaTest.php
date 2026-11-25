@@ -78,7 +78,7 @@ class RevisionExhaustivaTest extends TestCase
         $this->mock(NucleoServiceInterface::class);
 
         $detalles = $this->registrar([
-            'cedula_juridica' => '2-123-123456',
+            'cedula_juridica' => '9-123-123456',
             'nombre_comercial' => '222',
             'razon_social' => str_repeat('a', 151),
             'direccion_fiscal' => 'Cañas',
@@ -86,7 +86,7 @@ class RevisionExhaustivaTest extends TestCase
             'telefono_encargado' => '1234',
         ])->assertStatus(422)->json('error.detalles');
 
-        $this->assertSame(['La cédula jurídica debe tener el formato 3-XXX-XXXXXX, por ejemplo 3-101-123456.'], $detalles['cedula_juridica']);
+        $this->assertSame(['La cédula jurídica debe tener el formato X-XXX-XXXXXX y empezar con 2, 3, 4 o 5, por ejemplo 3-101-123456.'], $detalles['cedula_juridica']);
         $this->assertSame(['El nombre comercial debe tener al menos una letra.'], $detalles['nombre_comercial']);
         $this->assertSame(['La razón social no puede pasar de 150 caracteres.'], $detalles['razon_social']);
         $this->assertStringContainsString('dirección fiscal completa', $detalles['direccion_fiscal'][0]);

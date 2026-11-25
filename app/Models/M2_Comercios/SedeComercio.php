@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Sede física del comercio (tienda o bodega). Su id_sede es el id_ubicacion de M4
- * (contrato M2 v1.2.1, SedeHabilitada). La consulta obtenerSedesComercio la usa M4
+ * (contrato M2 v1.2.2, SedeHabilitada). La consulta obtenerSedesComercio la usa M4
  * para validar dónde puede reservar inventario.
  */
 class SedeComercio extends Model

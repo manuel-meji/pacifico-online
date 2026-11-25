@@ -5,7 +5,7 @@ const METODOS_CON_CSRF = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 const SIN_CONEXION = {
   codigo: 'ERR-006',
-  mensaje: 'No se pudo conectar con la plataforma. Intente de nuevo en unos minutos.',
+  mensaje: 'No se pudo conectar con la plataforma. Intentá de nuevo en unos minutos.',
   detalles: null,
 };
 
@@ -73,7 +73,7 @@ async function llamar(ruta, opciones = {}, reintentado = false) {
     return {
       ok: false,
       estado: 429,
-      error: { codigo: 'ERR-429', mensaje: 'Demasiados intentos. Espere un minuto y vuelva a intentarlo.', detalles: null },
+      error: { codigo: 'ERR-429', mensaje: 'Demasiados intentos. Esperá un minuto y volvé a intentarlo.', detalles: null },
     };
   }
 
@@ -118,16 +118,19 @@ export function obtenerComercioPublico(idComercio) {
 }
 
 
+// Solo los campos que espera el servidor: la clave de cada fila es de la pantalla (hallazgo 47).
+const camposDocumento = (documentos) => documentos.map((d) => ({ tipo: d.tipo, fecha_vencimiento: d.fecha_vencimiento, archivo: d.archivo }));
+
 export function registrarSolicitud(datos, documentos = []) {
   if (documentos.length === 0) return llamar('/solicitudes', { method: 'POST', json: datos });
-  return llamar('/solicitudes', { method: 'POST', formulario: aFormulario({ ...datos, documentos }) });
+  return llamar('/solicitudes', { method: 'POST', formulario: aFormulario({ ...datos, documentos: camposDocumento(documentos) }) });
 }
 
 
 // CU-0013 con sesión: la persona encargada corrige su solicitud rechazada (con documentos nuevos si hacen falta).
 export function corregirMiSolicitud(datos, documentos = []) {
   if (documentos.length === 0) return llamar('/mi-solicitud/correccion', { method: 'POST', json: datos });
-  return llamar('/mi-solicitud/correccion', { method: 'POST', formulario: aFormulario({ ...datos, documentos }) });
+  return llamar('/mi-solicitud/correccion', { method: 'POST', formulario: aFormulario({ ...datos, documentos: camposDocumento(documentos) }) });
 }
 
 

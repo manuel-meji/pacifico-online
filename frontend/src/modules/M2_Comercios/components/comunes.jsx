@@ -1,6 +1,6 @@
 
 import { createContext, useContext } from 'react';
-import { AlertCircle, CheckCircle2, Info, ShieldCheck, Loader2, LogOut, User } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info, ShieldCheck, Loader2, LogOut, Trash2, User } from 'lucide-react';
 import logo from '../../../assets/logo-pacificos.png';
 
 
@@ -127,6 +127,18 @@ export const Boton = ({ variante = 'primario', className = '', type = 'button', 
     {children}
   </button>
 );
+
+// Hallazgo 43: todos los basureros iguales, como «Quitar logotipo» pero solo con el ícono. Conservan su
+// tamaño también en celular (w-fit): en una cuadrícula de una columna no se estiran a todo lo ancho.
+export const BotonQuitar = ({ etiqueta, className = '', ...p }) => (
+  <Boton variante="peligroBorde" aria-label={etiqueta} title={etiqueta} className={`w-fit justify-self-start px-2.5 ${className}`} {...p}>
+    <Trash2 size={16} aria-hidden="true" />
+  </Boton>
+);
+
+// Hallazgo 42: en las listas de «uno por tipo», la opción ya usada sigue visible pero deshabilitada y dice
+// por qué. «femenino» es para las que concuerdan en femenino (política, zona).
+export const textoOpcion = (texto, usada, femenino = false) => (usada ? `${texto} (ya agregad${femenino ? 'a' : 'o'})` : texto);
 
 const estiloCampo = 'mt-1 w-full font-normal rounded-lg border border-slate-300 bg-white p-2.5 text-base text-slate-800 focus:border-[#1E3A8A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20 aria-[invalid=true]:border-red-500';
 // ayuda: texto corto debajo del campo que dice qué escribir (se oculta cuando hay error).

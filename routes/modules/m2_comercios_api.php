@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| M2 — API del contrato OpenAPI v1.2.1 (contracts/m2-comercios/v1/openapi.yaml)
+| M2 — API del contrato OpenAPI v1.2.2 (contracts/m2-comercios/v1/openapi.yaml)
 |--------------------------------------------------------------------------
 | Prefijo /api/m2/v1, grupo "api" (sin CSRF). Las carga
 | App\Providers\M2ComerciosServiceProvider. Las rutas web del módulo siguen en

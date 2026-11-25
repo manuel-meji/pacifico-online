@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { PencilLine, Plus, Send, Trash2 } from 'lucide-react';
+import { PencilLine, Plus, Send } from 'lucide-react';
 import { corregirMiSolicitud, registrarSolicitud } from '../services/m2Api';
 import {
-  Aviso, AvisoError, Boton, C, Campo, MensajeCampo, Seleccion, TIPOS_DOCUMENTO, Tarjeta, erroresDeCampo, mensajeDe, nombreDocumento,
-  textoDeError, useSesion,
+  Aviso, AvisoError, Boton, BotonQuitar, C, Campo, MensajeCampo, Seleccion, TIPOS_DOCUMENTO, Tarjeta, erroresDeCampo, mensajeDe, nombreDocumento,
+  textoDeError, textoOpcion, useSesion,
 } from '../components/comunes';
 
 // Solicitud de incorporación de un comercio (CU-0012). Es pública: el interesado todavía no tiene cuenta
@@ -19,6 +19,51 @@ export const formatearCedula = (texto) => {
   const d = String(texto).replace(/\D/g, '').slice(0, 10);
   return [d.slice(0, 1), d.slice(1, 4), d.slice(4)].filter(Boolean).join('-');
 };
+
+// Hallazgo 40: lo que se puede revisar sin el servidor, con los mismos mensajes que devuelve M2
+// (ValidaEnEspanol). Se usa cuando la contraseña no cumple: como esa solicitud no se envía, se marcan aquí
+// todos los demás campos de una vez, en vez de mostrar solo el error de la contraseña. El servidor vuelve
+// a validar todo al enviar.
+const CON_LETRAS = /\p{L}/u;
+const SOLO_NOMBRE = /^\p{L}[\p{L}\s'.-]*$/u;
+const CEDULA_JURIDICA = /^[2-5]-\d{3}-\d{6}$/;
+const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const TELEFONO_CR = /^(\+?506[\s-]?)?[24-8]\d{3}[\s-]?\d{4}$/;
+
+export const MENSAJE_CEDULA = 'La cédula jurídica debe tener el formato X-XXX-XXXXXX y empezar con 2, 3, 4 o 5, por ejemplo 3-101-123456.';
+
+export function validarSolicitudEnCliente(datos, { conContrasena = true } = {}) {
+  const errores = {};
+  const texto = (campo) => String(datos[campo] ?? '').trim();
+  const revisar = (campo, reglas) => {
+    const valor = texto(campo);
+    const fallo = reglas.find(([cumple]) => !cumple(valor));
+    if (fallo) errores[campo] = [fallo[1]];
+  };
+  const lleno = (v) => v !== '';
+  revisar('nombre_comercial', [[lleno, 'Completá el nombre comercial.'], [(v) => v.length >= 2, 'El nombre comercial debe tener al menos 2 caracteres.'],
+    [(v) => CON_LETRAS.test(v), 'El nombre comercial debe tener al menos una letra.']]);
+  revisar('cedula_juridica', [[lleno, 'Completá la cédula jurídica.'], [(v) => CEDULA_JURIDICA.test(v), MENSAJE_CEDULA]]);
+  revisar('razon_social', [[lleno, 'Completá la razón social.'], [(v) => v.length >= 3, 'La razón social debe tener al menos 3 caracteres.'],
+    [(v) => CON_LETRAS.test(v), 'La razón social debe tener al menos una letra.']]);
+  revisar('direccion_fiscal', [[lleno, 'Completá la dirección fiscal.'],
+    [(v) => v.length >= 10, 'Escribí la dirección fiscal completa (al menos 10 caracteres): provincia, cantón y señas.'],
+    [(v) => CON_LETRAS.test(v), 'La dirección fiscal debe tener letras (provincia, cantón y señas).']]);
+  revisar('nombre_encargado', [[lleno, 'Completá el nombre de la persona encargada.'],
+    [(v) => v.length >= 3, 'El nombre de la persona encargada debe tener al menos 3 caracteres.'],
+    [(v) => SOLO_NOMBRE.test(v), 'El nombre solo puede tener letras y espacios.']]);
+  revisar('correo_encargado', [[lleno, 'Completá el correo de la persona encargada.'],
+    [(v) => CORREO.test(v), 'Escribí un correo válido, por ejemplo nombre@dominio.com.']]);
+  if (texto('telefono_encargado') !== '') {
+    revisar('telefono_encargado', [[(v) => TELEFONO_CR.test(v), 'Escribí un teléfono de Costa Rica de 8 dígitos, por ejemplo 8888-8888.']]);
+  }
+  if (conContrasena) {
+    const contrasena = String(datos.contrasena_encargado ?? '');
+    if (contrasena.length < 8) errores.contrasena_encargado = ['La contraseña debe tener al menos 8 caracteres.'];
+    else if (contrasena !== datos.contrasena_encargado_confirmation) errores.contrasena_encargado = ['Las contraseñas no coinciden.'];
+  }
+  return errores;
+}
 
 const COMERCIO_VACIO = {
   nombre_comercial: '', cedula_juridica: '', razon_social: '', direccion_fiscal: '',
@@ -36,10 +81,13 @@ const manana = () => {
 // error de un campo cuando la persona lo corrige (hallazgo 8), sin esperar al próximo envío.
 function useEnvio(mensajeDeError) {
   const [estado, setEstado] = useState({ enviando: false, errores: {}, error: '', respuesta: null });
+  // Con «documentos» borra también los de cada fila (documentos.1.archivo…): al quitar una fila ya no
+  // corresponden a la misma posición (hallazgo 47).
   const limpiar = (campo) => setEstado((e) => {
-    if (!e.errores[campo]) return e;
+    const claves = Object.keys(e.errores).filter((k) => k === campo || k.startsWith(`${campo}.`));
+    if (claves.length === 0) return e;
     const errores = { ...e.errores };
-    delete errores[campo];
+    claves.forEach((k) => delete errores[k]);
     return { ...e, errores, error: Object.keys(errores).length ? e.error : '' };
   });
   const enviar = async (accion) => {
@@ -80,7 +128,7 @@ function CamposComercio({ datos, setDatos, errores, onLimpiar, bloquearIdentidad
         {!bloquearIdentidad && (
           <Campo etiqueta="Cédula jurídica" placeholder="3-101-123456" inputMode="numeric" maxLength={12}
             {...campo('cedula_juridica')} onChange={(e) => cambiar('cedula_juridica', formatearCedula(e.target.value))}
-            ayuda="Formato 3-XXX-XXXXXX: escribí los 10 dígitos y los guiones se ponen solos." />
+            ayuda="Formato X-XXX-XXXXXX, empieza con 2, 3, 4 o 5: escribí los 10 dígitos y los guiones se ponen solos." />
         )}
         <Campo etiqueta="Razón social" maxLength={150} {...campo('razon_social')} ayuda="Como aparece en el Registro Nacional, por ejemplo «Soda La Pacífica S.A.»." />
         <Campo etiqueta="Dirección fiscal" maxLength={255} {...campo('direccion_fiscal')} ayuda="Provincia, cantón y señas." />
@@ -124,6 +172,9 @@ function CamposComercio({ datos, setDatos, errores, onLimpiar, bloquearIdentidad
 
 // Documentos por adjuntar (registro y corrección). Cada uno lleva tipo, vencimiento y archivo; cada tipo va
 // una sola vez (hallazgo 25), así que los tipos ya usados no se ofrecen de nuevo.
+let siguienteDocumento = 1;
+const claveDocumento = () => `documento-${siguienteDocumento++}`;
+
 function EditorDocumentos({ documentos, setDocumentos, errores, onLimpiar, textoAgregar = 'Agregar documento' }) {
   const cambiarDocumento = (i, campo, valor) => {
     setDocumentos(documentos.map((d, j) => (j === i ? { ...d, [campo]: valor } : d)));
@@ -136,11 +187,13 @@ function EditorDocumentos({ documentos, setDocumentos, errores, onLimpiar, texto
     <>
       {documentos.map((d, i) => (
         // Hallazgo 3: los campos se alinean arriba, así un error en uno no desalinea la fila.
-        <div key={i} className="mt-3 grid gap-x-4 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-start">
+        // Hallazgo 47: cada fila tiene su clave; con la posición, al quitar una, el campo de archivo de la
+        // siguiente podía quedar mostrando el nombre del archivo equivocado.
+        <div key={d.clave ?? i} className="mt-3 grid gap-x-4 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-start">
           <Seleccion etiqueta="Tipo" value={d.tipo} onChange={(e) => cambiarDocumento(i, 'tipo', e.target.value)}
             error={mensajeDe(errores, `documentos.${i}.tipo`)}>
             {TIPOS_DOCUMENTO.map(([v, t]) => (
-              <option key={v} value={v} disabled={v !== d.tipo && usados.includes(v)}>{t}</option>
+              <option key={v} value={v} disabled={v !== d.tipo && usados.includes(v)}>{textoOpcion(t, v !== d.tipo && usados.includes(v))}</option>
             ))}
           </Seleccion>
           <Campo etiqueta="Vence el" type="date" min={manana()} value={d.fecha_vencimiento}
@@ -149,14 +202,12 @@ function EditorDocumentos({ documentos, setDocumentos, errores, onLimpiar, texto
           <Campo etiqueta="Archivo" type="file" accept="application/pdf,image/jpeg,image/png"
             onChange={(e) => cambiarDocumento(i, 'archivo', e.target.files?.[0] || null)}
             error={mensajeDe(errores, `documentos.${i}.archivo`)} />
-          <Boton variante="neutro" className="sm:mt-[2.6rem]" aria-label="Quitar documento"
-            onClick={() => setDocumentos(documentos.filter((_, j) => j !== i))}>
-            <Trash2 size={16} />
-          </Boton>
+          <BotonQuitar etiqueta="Quitar documento" className="sm:mt-[2.6rem]"
+            onClick={() => { setDocumentos(documentos.filter((_, j) => j !== i)); onLimpiar?.('documentos'); }} />
         </div>
       ))}
       <Boton variante="neutro" className="mt-3" disabled={!puedeAgregar}
-        onClick={() => setDocumentos([...documentos, { tipo: libre, fecha_vencimiento: '', archivo: null }])}>
+        onClick={() => setDocumentos([...documentos, { clave: claveDocumento(), tipo: libre, fecha_vencimiento: '', archivo: null }])}>
         <Plus size={16} /> {textoAgregar}
       </Boton>
       <MensajeCampo mensaje={mensajeDe(errores, 'documentos')} />
@@ -185,13 +236,15 @@ function NuevaSolicitud() {
       delete datosLimpios.contrasena_encargado;
       delete datosLimpios.contrasena_encargado_confirmation;
     }
-    // Se revisa aquí para avisar sin esperar al servidor; el servidor vuelve a validar las dos reglas.
-    const errorContrasena = porPlataforma ? null : datos.contrasena_encargado.length < 8
-      ? 'La contraseña debe tener al menos 8 caracteres.'
-      : datos.contrasena_encargado !== datos.contrasena_encargado_confirmation ? 'Las contraseñas no coinciden.' : null;
-    if (errorContrasena) {
-      await enviar(async () => ({ ok: false, estado: 422, error: { codigo: 'ERR-005', mensaje: 'Revisá los datos marcados.', detalles: { contrasena_encargado: [errorContrasena] } } }));
-      return;
+    // La contraseña se revisa aquí porque el servidor la acepta vacía (la plataforma registra sin ella).
+    // Si no cumple, la solicitud no se envía y se marcan de una vez todos los campos que se pueden revisar
+    // sin el servidor, no solo la contraseña (hallazgo 40).
+    if (!porPlataforma) {
+      const errores = validarSolicitudEnCliente(datos);
+      if (errores.contrasena_encargado) {
+        await enviar(async () => ({ ok: false, estado: 422, error: { codigo: 'ERR-005', mensaje: 'Revisá los datos marcados.', detalles: errores } }));
+        return;
+      }
     }
     const ok = await enviar(() => registrarSolicitud(datosLimpios, documentos));
     if (ok) {
