@@ -32,7 +32,8 @@ const TELEFONO_CR = /^(\+?506[\s-]?)?[24-8]\d{3}[\s-]?\d{4}$/;
 
 export const MENSAJE_CEDULA = 'La cédula jurídica debe tener el formato X-XXX-XXXXXX y empezar con 2, 3, 4 o 5, por ejemplo 3-101-123456.';
 
-export function validarSolicitudEnCliente(datos, { conContrasena = true } = {}) {
+// contrasenaOpcional: la plataforma puede dejarla vacía (hallazgo 51); si la escribe, cumple las mismas reglas.
+export function validarSolicitudEnCliente(datos, { conContrasena = true, contrasenaOpcional = false } = {}) {
   const errores = {};
   const texto = (campo) => String(datos[campo] ?? '').trim();
   const revisar = (campo, reglas) => {
@@ -57,7 +58,8 @@ export function validarSolicitudEnCliente(datos, { conContrasena = true } = {}) 
   if (texto('telefono_encargado') !== '') {
     revisar('telefono_encargado', [[(v) => TELEFONO_CR.test(v), 'Escribí un teléfono de Costa Rica de 8 dígitos, por ejemplo 8888-8888.']]);
   }
-  if (conContrasena) {
+  const sinContrasena = !String(datos.contrasena_encargado ?? '') && !String(datos.contrasena_encargado_confirmation ?? '');
+  if (conContrasena && !(contrasenaOpcional && sinContrasena)) {
     const contrasena = String(datos.contrasena_encargado ?? '');
     if (contrasena.length < 8) errores.contrasena_encargado = ['La contraseña debe tener al menos 8 caracteres.'];
     // Hallazgo 49: la diferencia se marca en la confirmación, que es donde se corrige.
@@ -124,7 +126,7 @@ function useEnvio(mensajeDeError) {
 
 // Campos del comercio y del encargado, compartidos por el registro y la corrección. Los máximos son los
 // mismos que valida el servidor (hallazgo 6).
-function CamposComercio({ datos, setDatos, errores, onLimpiar, bloquearIdentidad = false, sinContrasena = false }) {
+function CamposComercio({ datos, setDatos, errores, onLimpiar, bloquearIdentidad = false, contrasenaInicial = false }) {
   const cambiar = (nombre, valor) => {
     setDatos({ ...datos, [nombre]: valor });
     onLimpiar?.(nombre);
@@ -173,13 +175,23 @@ function CamposComercio({ datos, setDatos, errores, onLimpiar, bloquearIdentidad
         <Campo etiqueta="Teléfono (opcional)" type="tel" autoComplete="tel" inputMode="tel" maxLength={14} placeholder="8888-8888"
           {...campo('telefono_encargado')} />
         {/* Con la contraseña la persona ingresa apenas envía la solicitud para ver el estado de la revisión.
-            Cuando registra la plataforma, no se pide: el núcleo le envía una invitación para definirla. */}
-        {!bloquearIdentidad && !sinContrasena && (
+            Hallazgo 51: cuando registra la plataforma, la contraseña inicial es opcional; si queda vacía, el
+            núcleo le envía a la persona encargada una invitación por correo para definirla. */}
+        {!bloquearIdentidad && !contrasenaInicial && (
           <>
             <Campo etiqueta="Contraseña para ingresar (mínimo 8 caracteres)" type="password" autoComplete="new-password"
               minLength={8} maxLength={72} required {...campo('contrasena_encargado')} />
             <Campo etiqueta="Confirmá la contraseña" type="password" autoComplete="new-password"
               minLength={8} maxLength={72} required {...campo('contrasena_encargado_confirmation')} />
+          </>
+        )}
+        {!bloquearIdentidad && contrasenaInicial && (
+          <>
+            <Campo etiqueta="Contraseña inicial del encargado (opcional)" type="password" autoComplete="new-password"
+              minLength={8} maxLength={72} {...campo('contrasena_encargado')}
+              ayuda="Mínimo 8 caracteres. Pasásela a la persona encargada para que ingrese. Si la dejás vacía, se le envía una invitación por correo para que la defina." />
+            <Campo etiqueta="Confirmá la contraseña inicial" type="password" autoComplete="new-password"
+              minLength={8} maxLength={72} {...campo('contrasena_encargado_confirmation')} />
           </>
         )}
       </div>
@@ -240,9 +252,10 @@ const AYUDA_DOCUMENTOS = 'Respaldo legal que la plataforma revisa antes de aprob
 
 function NuevaSolicitud() {
   const { usuario, mensajeDeError } = useSesion();
-  // Hallazgo 11: la plataforma registra el comercio en su nombre; la persona encargada define su contraseña
-  // con la invitación del núcleo.
+  // Hallazgo 11: la plataforma registra el comercio en su nombre. Hallazgo 51: puede darle una contraseña
+  // inicial; si no, la persona encargada la define con la invitación del núcleo.
   const porPlataforma = usuario?.rol === 'encargado_plataforma';
+  const [conContrasenaInicial, setConContrasenaInicial] = useState(false);
   const [datos, setDatos] = useState(COMERCIO_VACIO);
   const [documentos, setDocumentos] = useState([]);
   const [estado, enviar, limpiar] = useEnvio(mensajeDeError);
@@ -250,7 +263,8 @@ function NuevaSolicitud() {
   const alEnviar = async (e) => {
     e.preventDefault();
     const datosLimpios = { ...datos, telefono_encargado: datos.telefono_encargado || null };
-    if (porPlataforma) {
+    const contrasenaInicial = porPlataforma && Boolean(datos.contrasena_encargado);
+    if (porPlataforma && !contrasenaInicial) {
       delete datosLimpios.contrasena_encargado;
       delete datosLimpios.contrasena_encargado_confirmation;
     }
@@ -258,7 +272,7 @@ function NuevaSolicitud() {
     // Si no cumple, la solicitud no se envía y se marcan de una vez todos los campos que se pueden revisar
     // sin el servidor, no solo la contraseña (hallazgo 40).
     // Lo mismo con un documento que pesa de más (hallazgo 48): no se envía y se marca junto con lo demás.
-    const errores = validarSolicitudEnCliente(datos, { conContrasena: !porPlataforma });
+    const errores = validarSolicitudEnCliente(datos, { contrasenaOpcional: porPlataforma });
     const pesos = revisarPesoDocumentos(documentos);
     const contrasenaMal = errores.contrasena_encargado || errores.contrasena_encargado_confirmation;
     if (contrasenaMal || Object.keys(pesos).length) {
@@ -267,6 +281,7 @@ function NuevaSolicitud() {
     }
     const ok = await enviar(() => registrarSolicitud(datosLimpios, documentos));
     if (ok) {
+      setConContrasenaInicial(contrasenaInicial);
       setDatos(COMERCIO_VACIO);
       setDocumentos([]);
     }
@@ -280,7 +295,9 @@ function NuevaSolicitud() {
         <p className={`mt-1 text-4xl font-extrabold ${C.verdeTexto}`}>#{estado.respuesta.id_solicitud}</p>
         <p className="mt-3 text-sm text-slate-600">
           {porPlataforma
-            ? `La solicitud quedó Pendiente en la pestaña Solicitudes. ${estado.respuesta.correo_encargado} recibe una invitación para definir su contraseña y ver el estado de la revisión.`
+            ? (conContrasenaInicial
+              ? `La solicitud quedó Pendiente en la pestaña Solicitudes. La persona encargada ya puede ingresar con ${estado.respuesta.correo_encargado} y la contraseña inicial que definiste, para ver el estado de la revisión.`
+              : `La solicitud quedó Pendiente en la pestaña Solicitudes. ${estado.respuesta.correo_encargado} recibe una invitación por correo para definir su contraseña y ver el estado de la revisión.`)
             : `Ya podés ingresar con ${estado.respuesta.correo_encargado} y la contraseña que definiste para ver el estado de la revisión. Si la plataforma te pide corregir algo, lo corregís desde ahí mismo, y cuando apruebe tu comercio, desde ahí vas a poder administrarlo.`}
         </p>
         <Boton variante="neutro" className="mt-4" onClick={() => window.location.reload()}>
@@ -298,10 +315,10 @@ function NuevaSolicitud() {
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           {porPlataforma
-            ? 'Registrás la solicitud en nombre del comercio: queda Pendiente para revisarla en la pestaña Solicitudes, y la persona encargada recibe una invitación para definir su contraseña.'
+            ? 'Registrás la solicitud en nombre del comercio: queda Pendiente para revisarla en la pestaña Solicitudes. Podés darle a la persona encargada una contraseña inicial, o dejarla vacía para que reciba una invitación por correo.'
             : 'Completá los datos y la plataforma revisará tu solicitud. Si adjuntás documentos, deben estar vigentes.'}
         </p>
-        <CamposComercio datos={datos} setDatos={setDatos} errores={estado.errores} onLimpiar={limpiar} sinContrasena={porPlataforma} />
+        <CamposComercio datos={datos} setDatos={setDatos} errores={estado.errores} onLimpiar={limpiar} contrasenaInicial={porPlataforma} />
 
         <h3 className="mt-6 text-sm font-extrabold uppercase tracking-wide text-slate-500">Documentos (opcional)</h3>
         <p className="max-w-prose text-xs text-slate-500">{AYUDA_DOCUMENTOS}</p>

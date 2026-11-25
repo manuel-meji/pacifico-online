@@ -7,6 +7,7 @@ namespace Tests\Feature\M2_Comercios;
 use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Contracts\Nucleo\ServicioIdentidadInterface;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Mockery\MockInterface;
@@ -116,5 +117,45 @@ class RevisionFinalTest extends TestCase
         $detalles = $this->registrarConDocumento($rechazado)->assertStatus(422)->json('error.detalles');
 
         $this->assertContains('No se pudo subir el archivo: puede pesar como máximo 2 MB.', $detalles['documentos.0.archivo']);
+    }
+
+    // --- Hallazgo 51: la plataforma puede dar una contraseña inicial y no depender del correo ---
+
+    /** @return array<string, mixed> lo que M2 le pasa al núcleo para crear la cuenta */
+    private function registrarComoPlataforma(array $extra): array
+    {
+        $recibido = [];
+        $this->mock(NucleoServiceInterface::class, fn (MockInterface $mock) => $mock->shouldReceive('registrarAuditoria'));
+        $this->mock(ServicioIdentidadInterface::class, function (MockInterface $mock) use (&$recibido): void {
+            $mock->shouldReceive('existeCorreo')->andReturn(false);
+            $mock->shouldReceive('crearCuenta')->once()->andReturnUsing(function (array $datos, $rol, $idComercio) use (&$recibido) {
+                $recibido = $datos;
+
+                return $this->usuario('encargado_comercio', $idComercio);
+            });
+        });
+
+        $this->actingAs($this->usuario('encargado_plataforma'), 'sanctum')
+            ->postJson('/api/m2/v1/solicitudes', ['cedula_juridica' => '3-101-765432'] + $extra + self::SOLICITUD)
+            ->assertOk();
+
+        return $recibido;
+    }
+
+    public function test_hallazgo_51_con_contrasena_inicial_la_cuenta_queda_lista_sin_invitacion(): void
+    {
+        $datos = $this->registrarComoPlataforma([]);
+
+        // Con la contraseña cifrada, el núcleo crea la cuenta lista y no envía la invitación (ServicioIdentidad::crearCuenta).
+        $this->assertArrayHasKey('contrasena_cifrada', $datos);
+        $this->assertTrue(Hash::check('MiClave2026', $datos['contrasena_cifrada']));
+        $this->assertDatabaseHas('solicitudes_comercio', ['correo_encargado' => 'maria@sodalapacifica.cr', 'cuenta_creada' => true]);
+    }
+
+    public function test_hallazgo_51_sin_contrasena_sigue_la_invitacion_por_correo(): void
+    {
+        $datos = $this->registrarComoPlataforma(['contrasena_encargado' => null, 'contrasena_encargado_confirmation' => null]);
+
+        $this->assertArrayNotHasKey('contrasena_cifrada', $datos);
     }
 }
