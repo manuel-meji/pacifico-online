@@ -97,7 +97,8 @@ export default function CarritoPage({
         {aviso && <Alerta tipo={aviso.tipo} titulo={aviso.titulo}>{aviso.texto}</Alerta>}
         {suspendidos.length > 0 && (
           <Alerta tipo="aviso" titulo="Comercio suspendido">
-            {suspendidos.map((g) => g.nombre_comercio).join(', ')} tiene la membresía suspendida.
+            {suspendidos.map((g) => g.nombre_comercio).join(', ')}{' '}
+            {suspendidos.length === 1 ? 'está suspendido' : 'están suspendidos'} temporalmente.
             Sus productos están deshabilitados: quítelos para continuar con el resto de su compra.
           </Alerta>
         )}
