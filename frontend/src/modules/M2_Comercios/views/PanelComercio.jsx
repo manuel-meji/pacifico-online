@@ -7,8 +7,8 @@ import {
   guardarContactos, guardarHorarios, guardarLogotipo, guardarPoliticas, quitarLogotipo,
 } from '../services/m2Api';
 import {
-  AreaTexto, Aviso, AvisoError, Boton, C, Campo, Cargando, MensajeCampo, Seleccion, Tarjeta,
-  erroresDeCampo, fechaCorta, medirImagen, mensajeDe, textoDeError, useSesion,
+  AreaTexto, Aviso, AvisoError, Boton, BotonQuitar, C, Campo, Cargando, MensajeCampo, Seleccion, Tarjeta,
+  erroresDeCampo, fechaCorta, medirImagen, mensajeDe, textoDeError, textoOpcion, useSesion,
 } from '../components/comunes';
 
 // "Mi comercio": el encargado del comercio edita su micrositio (CU-0001 a CU-0007).
@@ -77,7 +77,11 @@ function useGuardado(mensajeDeError) {
     const general = Object.keys(errores).length ? 'Revisá los datos marcados.' : (mensajeDeError?.(r) || textoDeError(r));
     setEstado({ guardando: false, errores, aviso: '', error: general });
   }, [mensajeDeError]);
-  return [estado, guardar];
+  // Hallazgo 47: los errores del servidor vienen por posición (contactos.2.valor). Al quitar o mover una
+  // fila ya no corresponden a la misma fila, así que se borran; el próximo guardado los vuelve a revisar.
+  const limpiarErrores = useCallback(() => setEstado((e) => (
+    Object.keys(e.errores).length || e.error ? { ...e, errores: {}, error: '' } : e)), []);
+  return [estado, guardar, limpiarErrores];
 }
 
 const Seccion = ({ titulo, descripcion, children, separada = false }) => (
@@ -225,10 +229,10 @@ export default function PanelComercio() {
   const [estInfo, guardarInfo] = useGuardado(mensajeDeError);
   const [estLogo, guardarLogo] = useGuardado(mensajeDeError);
   const [estHorarios, guardarHor] = useGuardado(mensajeDeError);
-  const [estContactos, guardarCont] = useGuardado(mensajeDeError);
-  const [estPoliticas, guardarPol] = useGuardado(mensajeDeError);
-  const [estBanners, guardarBan] = useGuardado(mensajeDeError);
-  const [estGaleria, guardarGal] = useGuardado(mensajeDeError);
+  const [estContactos, guardarCont, limpiarContactos] = useGuardado(mensajeDeError);
+  const [estPoliticas, guardarPol, limpiarPoliticas] = useGuardado(mensajeDeError);
+  const [estBanners, guardarBan, limpiarBanners] = useGuardado(mensajeDeError);
+  const [estGaleria, guardarGal, limpiarGaleria] = useGuardado(mensajeDeError);
   const [estDestacar, guardarDestacar] = useGuardado(mensajeDeError);
 
   const aplicar = (d) => {
@@ -364,21 +368,29 @@ export default function PanelComercio() {
   };
 
   // Hallazgo 28: la imagen se mide al elegirla; si no cumple, se dice cuánto mide y no se agrega.
-  const elegirImagen = async (clave, setLista, lista, i, archivo) => {
+  // Hallazgo 47: el error se guarda con la identidad de la fila (su id o su clave), no con su posición,
+  // para que no pase a otra fila al quitarla, moverla o agregar una nueva.
+  const elegirImagen = async (clave, setLista, lista, i, archivo, fila) => {
     const error = await revisarImagen(clave, archivo);
-    setErroresImagen((e) => ({ ...e, [`${clave}.${i}.imagen`]: error || '' }));
+    setErroresImagen((e) => ({ ...e, [`${clave}.${fila}`]: error || '' }));
     if (!error) setLista(cambiarEn(lista, i, 'imagen', archivo || null));
   };
+  const olvidarErrorImagen = (clave, fila) => setErroresImagen((e) => {
+    if (!(`${clave}.${fila}` in e)) return e;
+    const copia = { ...e };
+    delete copia[`${clave}.${fila}`];
+    return copia;
+  });
 
   const cambiarTarifa = (i, k, campo, valor) => setPoliticas(cambiarEn(politicas, i, 'configuracion_envio',
     politicas[i].configuracion_envio.map((t, m) => (m === k ? { ...t, [campo]: valor } : t))));
 
   const listasDeImagenes = [
-    { clave: 'banners', titulo: 'Banners', lista: banners, setLista: setBanners, campoId: 'id_banner', estado: estBanners, guardar: guardarBan, enviar: gestionarBanners, conActivo: true,
+    { clave: 'banners', titulo: 'Banners', lista: banners, setLista: setBanners, campoId: 'id_banner', estado: estBanners, guardar: guardarBan, limpiar: limpiarBanners, enviar: gestionarBanners, conActivo: true,
       medidas: 'JPG, PNG o WEBP de hasta 2 MB, horizontal (el ancho al menos el doble del alto) y de al menos 1200 px de ancho. Recomendado: 1600 × 400 px.',
       uso: 'Solo el primer banner visible se muestra, como portada de tu micrositio. Para mostrar otro, subilo al primer lugar o desmarcá «Visible» en los de arriba.',
       vacio: <span className="flex aspect-[4/1] w-full max-w-[200px] items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 text-[11px] text-slate-500">Banner horizontal · 1600 × 400 px</span> },
-    { clave: 'galeria', titulo: 'Galería de imágenes', lista: galeria, setLista: setGaleria, campoId: 'id_imagen', estado: estGaleria, guardar: guardarGal, enviar: gestionarGaleria, conActivo: false,
+    { clave: 'galeria', titulo: 'Galería de imágenes', lista: galeria, setLista: setGaleria, campoId: 'id_imagen', estado: estGaleria, guardar: guardarGal, limpiar: limpiarGaleria, enviar: gestionarGaleria, conActivo: false,
       medidas: 'JPG, PNG o WEBP de hasta 2 MB y de al menos 600 × 400 px.',
       uso: 'En el micrositio se muestran todas, en este orden.',
       vacio: 'Elegí una imagen' },
@@ -418,9 +430,11 @@ export default function PanelComercio() {
         <p className="mt-1 text-slate-600">Editá lo que ven los clientes en tu micrositio. Cada parte se guarda por separado.</p>
       </header>
 
-      <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)_270px]">
+      {/* Hallazgo 45: grid-cols-1 y min-w-0 limitan la columna al ancho de la pantalla en celular; sin eso,
+          la tira de secciones estiraba toda la página en vez de deslizarse sola. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[210px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)_270px]">
         {/* Navegación por secciones: lateral en escritorio, deslizable en celular */}
-        <nav aria-label="Secciones del micrositio">
+        <nav aria-label="Secciones del micrositio" className="min-w-0">
           <ul className="flex gap-2 overflow-x-auto pb-1 lg:sticky lg:top-4 lg:flex-col lg:overflow-visible lg:pb-0">
             {secciones.map(({ clave, nombre: titulo, icono: Icono, resumen }) => {
               const activa = seccion === clave;
@@ -548,12 +562,17 @@ export default function PanelComercio() {
                     <Seleccion etiqueta="Tipo" value={c.tipo} error={mensajeDe(estContactos.errores, `contactos.${i}.tipo`)}
                       onChange={(e) => setContactos(cambiarEn(contactos, i, 'tipo', e.target.value))}>
                       {/* Hallazgo 33: uno por tipo; el portal muestra uno solo de cada uno. */}
-                      {TIPOS_CONTACTO.map(([v, t]) => <option key={v} value={v} disabled={v !== c.tipo && usados.includes(v)}>{t}</option>)}
+                      {/* Hallazgo 42: la opción usada queda deshabilitada y dice por qué. */}
+                      {TIPOS_CONTACTO.map(([v, t]) => {
+                        const usada = v !== c.tipo && usados.includes(v);
+                        return <option key={v} value={v} disabled={usada}>{textoOpcion(t, usada)}</option>;
+                      })}
                     </Seleccion>
                     <Campo etiqueta="Valor" value={c.valor} placeholder={ejemplo ? `Ej.: ${ejemplo}` : ''} ayuda={ayuda} maxLength={255}
                       error={mensajeDe(estContactos.errores, `contactos.${i}.valor`)}
                       onChange={(e) => setContactos(cambiarEn(contactos, i, 'valor', e.target.value))} />
-                    <Boton variante="neutro" className="sm:mt-[2.6rem]" aria-label="Quitar contacto" onClick={() => setContactos(quitarDe(contactos, i))}><Trash2 size={16} /></Boton>
+                    <BotonQuitar etiqueta="Quitar contacto" className="sm:mt-[2.6rem]"
+                      onClick={() => { setContactos(quitarDe(contactos, i)); limpiarContactos(); }} />
                   </div>
                 );
               })}
@@ -585,10 +604,14 @@ export default function PanelComercio() {
                       <div className="w-full max-w-[240px]">
                         <Seleccion etiqueta="Tipo" value={p.tipo} error={mensajeDe(estPoliticas.errores, `politicas.${i}.tipo`)}
                           onChange={(e) => setPoliticas(cambiarEn(politicas, i, 'tipo', e.target.value))}>
-                          {TIPOS_POLITICA.map(([v, t]) => <option key={v} value={v} disabled={v !== p.tipo && usadas.includes(v)}>{t}</option>)}
+                          {TIPOS_POLITICA.map(([v, t]) => {
+                            const usada = v !== p.tipo && usadas.includes(v);
+                            return <option key={v} value={v} disabled={usada}>{textoOpcion(t, usada, true)}</option>;
+                          })}
                         </Seleccion>
                       </div>
-                      <Boton variante="neutro" className="mt-[2.6rem]" aria-label="Quitar política" onClick={() => setPoliticas(quitarDe(politicas, i))}><Trash2 size={16} /></Boton>
+                      <BotonQuitar etiqueta="Quitar política" className="mt-[2.6rem] shrink-0"
+                        onClick={() => { setPoliticas(quitarDe(politicas, i)); limpiarPoliticas(); }} />
                     </div>
                     <AreaTexto etiqueta="Contenido" value={p.contenido} maxLength={2000} error={mensajeDe(estPoliticas.errores, `politicas.${i}.contenido`)}
                       ayuda="De 10 a 2000 caracteres." onChange={(e) => setPoliticas(cambiarEn(politicas, i, 'contenido', e.target.value))} />
@@ -601,15 +624,19 @@ export default function PanelComercio() {
                             <Seleccion etiqueta="Zona" value={t.zona || ''} onChange={(e) => cambiarTarifa(i, k, 'zona', e.target.value)}
                               error={mensajeDe(estPoliticas.errores, `politicas.${i}.configuracion_envio.${k}.zona`)}>
                               {!ZONAS_ENVIO.includes(t.zona) && <option value={t.zona || ''}>{t.zona ? `${t.zona} (elegí GAM o Resto del país)` : 'Elegí la zona'}</option>}
-                              {ZONAS_ENVIO.map((z) => <option key={z} value={z} disabled={z !== t.zona && zonasUsadas.includes(z)}>{z}</option>)}
+                              {ZONAS_ENVIO.map((z) => {
+                                const usada = z !== t.zona && zonasUsadas.includes(z);
+                                return <option key={z} value={z} disabled={usada}>{textoOpcion(z, usada, true)}</option>;
+                              })}
                             </Seleccion>
                             <Campo etiqueta="Costo (₡)" type="number" min="0" max="100000" step="1" value={t.costo ?? ''}
                               onChange={(e) => cambiarTarifa(i, k, 'costo', e.target.value)}
                               error={mensajeDe(estPoliticas.errores, `politicas.${i}.configuracion_envio.${k}.costo`)} />
-                            <Boton variante="neutro" className="sm:mt-[2.6rem]" aria-label="Quitar tarifa"
-                              onClick={() => setPoliticas(cambiarEn(politicas, i, 'configuracion_envio', quitarDe(p.configuracion_envio, k)))}>
-                              <Trash2 size={16} />
-                            </Boton>
+                            <BotonQuitar etiqueta="Quitar tarifa" className="sm:mt-[2.6rem]"
+                              onClick={() => {
+                                setPoliticas(cambiarEn(politicas, i, 'configuracion_envio', quitarDe(p.configuracion_envio, k)));
+                                limpiarPoliticas();
+                              }} />
                           </div>
                         ))}
                         <Boton variante="neutro" className="mt-2" disabled={!zonaLibre}
@@ -700,15 +727,17 @@ export default function PanelComercio() {
             </Seccion>
           )}
 
-          {listasDeImagenes.filter(({ clave }) => clave === seccion).map(({ clave, titulo, lista, setLista, campoId, estado, guardar, enviar, conActivo, medidas, uso, vacio }) => {
+          {listasDeImagenes.filter(({ clave }) => clave === seccion).map(({ clave, titulo, lista, setLista, campoId, estado, guardar, limpiar, enviar, conActivo, medidas, uso, vacio }) => {
             /* CU-0004 y CU-0005: banners y galería */
             const portada = conActivo ? lista.findIndex((x) => x.activo && (x.ruta || x.imagen)) : -1;
             return (
               <Seccion key={clave} titulo={titulo} descripcion={`${medidas} ${uso}`}>
                 {lista.length === 0 && <p className="mt-4 text-sm text-slate-500">Todavía no hay imágenes.</p>}
                 <div className="mt-2 grid gap-3 md:grid-cols-2">
-                  {lista.map((x, i) => (
-                    <div key={x[campoId] ?? x.clave} className="rounded-xl border border-slate-200 p-3">
+                  {lista.map((x, i) => {
+                    const fila = x[campoId] ?? x.clave;
+                    return (
+                    <div key={fila} className="rounded-xl border border-slate-200 p-3">
                       <div className="flex items-start justify-between gap-2">
                         <span className="relative w-full max-w-[200px]">
                           <Miniatura ruta={x.ruta} archivo={x.imagen} alt={x.texto_alternativo}
@@ -720,10 +749,11 @@ export default function PanelComercio() {
                         {/* Hallazgo 27: ordenar con flechas. */}
                         <span className="flex shrink-0 gap-1">
                           <Boton variante="neutro" className="px-2.5" aria-label="Subir una posición" disabled={i === 0}
-                            onClick={() => setLista(mover(lista, i, -1))}><ArrowUp size={16} /></Boton>
+                            onClick={() => { setLista(mover(lista, i, -1)); limpiar(); }}><ArrowUp size={16} /></Boton>
                           <Boton variante="neutro" className="px-2.5" aria-label="Bajar una posición" disabled={i === lista.length - 1}
-                            onClick={() => setLista(mover(lista, i, 1))}><ArrowDown size={16} /></Boton>
-                          <Boton variante="neutro" className="px-2.5" aria-label="Quitar imagen" onClick={() => setLista(quitarDe(lista, i))}><Trash2 size={16} /></Boton>
+                            onClick={() => { setLista(mover(lista, i, 1)); limpiar(); }}><ArrowDown size={16} /></Boton>
+                          <BotonQuitar etiqueta="Quitar imagen"
+                            onClick={() => { setLista(quitarDe(lista, i)); olvidarErrorImagen(clave, fila); limpiar(); }} />
                         </span>
                       </div>
                       {/* Hallazgo 30: para qué sirve el texto alternativo. */}
@@ -733,8 +763,8 @@ export default function PanelComercio() {
                         onChange={(e) => setLista(cambiarEn(lista, i, 'texto_alternativo', e.target.value))}
                         error={mensajeDe(estado.errores, `${clave}.${i}.texto_alternativo`)} />
                       <Campo etiqueta={x.ruta ? 'Reemplazar imagen (opcional)' : 'Imagen'} type="file" accept="image/jpeg,image/png,image/webp"
-                        onChange={(e) => elegirImagen(clave, setLista, lista, i, e.target.files?.[0] || null)}
-                        error={erroresImagen[`${clave}.${i}.imagen`] || mensajeDe(estado.errores, `${clave}.${i}.imagen`)} />
+                        onChange={(e) => elegirImagen(clave, setLista, lista, i, e.target.files?.[0] || null, fila)}
+                        error={erroresImagen[`${clave}.${fila}`] || mensajeDe(estado.errores, `${clave}.${i}.imagen`)} />
                       {conActivo && (
                         <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
                           <input type="checkbox" checked={x.activo} onChange={(e) => setLista(cambiarEn(lista, i, 'activo', e.target.checked))} />
@@ -742,7 +772,8 @@ export default function PanelComercio() {
                         </label>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <Boton variante="neutro" className="mt-4"
                   onClick={() => setLista([...lista, conActivo

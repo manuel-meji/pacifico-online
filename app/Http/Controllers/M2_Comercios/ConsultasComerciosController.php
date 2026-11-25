@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Controlador delgado de las 8 operaciones del contrato v1.2.1 (/api/m2/v1).
+ * Controlador delgado de las 8 operaciones del contrato v1.2.2 (/api/m2/v1).
  *
  * Valida la forma de la entrada, autoriza (ComercioPolicy) y delega en la fachada.
  * Los errores (ValidationException, ErrorNucleoException) los convierte en
