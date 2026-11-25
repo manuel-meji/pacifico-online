@@ -8,7 +8,7 @@ import {
 } from '../services/m2Api';
 import {
   AreaTexto, Aviso, AvisoError, Boton, BotonQuitar, C, Campo, Cargando, MensajeCampo, Seleccion, Tarjeta,
-  erroresDeCampo, fechaCorta, medirImagen, mensajeDe, textoDeError, textoOpcion, useSesion,
+  MAXIMO_ARCHIVO, MAXIMO_ENVIO, erroresDeCampo, fechaCorta, medirImagen, mensajeDe, pesoTexto, textoDeError, textoOpcion, useSesion,
 } from '../components/comunes';
 
 // "Mi comercio": el encargado del comercio edita su micrositio (CU-0001 a CU-0007).
@@ -46,6 +46,8 @@ const REGLAS_IMAGEN = {
 };
 const revisarImagen = async (tipo, archivo) => {
   if (!archivo) return null;
+  // Hallazgo 48: más de 2 MB no llega al servidor; se avisa al elegirla.
+  if (archivo.size > MAXIMO_ARCHIVO) return `Tu imagen pesa ${pesoTexto(archivo.size)}. Cada imagen puede pesar como máximo 2 MB.`;
   const medidas = await medirImagen(archivo);
   return medidas ? REGLAS_IMAGEN[tipo](medidas) : null;
 };
@@ -782,7 +784,15 @@ export default function PanelComercio() {
                   <Plus size={16} /> Agregar imagen
                 </Boton>
                 <MensajeCampo mensaje={mensajeDe(estado.errores, clave)} />
-                <PieGuardado estado={estado} onGuardar={() => guardar(() => enviar(idComercio, paraEnviar(lista, campoId)), `${titulo}: cambios guardados.`, () => recargar(clave))} />
+                <PieGuardado estado={estado} onGuardar={() => {
+                  // Hallazgo 48: las imágenes nuevas van en un solo envío; si juntas pasan del límite, se avisa aquí.
+                  const total = lista.reduce((suma, x) => suma + (x.imagen?.size || 0), 0);
+                  const accion = total > MAXIMO_ENVIO
+                    ? async () => ({ ok: false, estado: 422, error: { detalles: { [clave]: [
+                      `Las imágenes nuevas pesan ${pesoTexto(total)} juntas y se pueden enviar hasta 7 MB a la vez. Guardá algunas primero y después agregá las demás.`] } } })
+                    : () => enviar(idComercio, paraEnviar(lista, campoId));
+                  guardar(accion, `${titulo}: cambios guardados.`, () => recargar(clave));
+                }} />
               </Seccion>
             );
           })}

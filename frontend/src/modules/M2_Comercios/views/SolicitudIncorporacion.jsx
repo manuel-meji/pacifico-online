@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { PencilLine, Plus, Send } from 'lucide-react';
 import { corregirMiSolicitud, registrarSolicitud } from '../services/m2Api';
 import {
-  Aviso, AvisoError, Boton, BotonQuitar, C, Campo, MensajeCampo, Seleccion, TIPOS_DOCUMENTO, Tarjeta, erroresDeCampo, mensajeDe, nombreDocumento,
-  textoDeError, textoOpcion, useSesion,
+  Aviso, AvisoError, Boton, BotonQuitar, C, Campo, MAXIMO_ARCHIVO, MAXIMO_ENVIO, MensajeCampo, Seleccion, TIPOS_DOCUMENTO, Tarjeta,
+  erroresDeCampo, mensajeDe, nombreDocumento, pesoTexto, textoDeError, textoOpcion, useSesion,
 } from '../components/comunes';
 
 // Solicitud de incorporación de un comercio (CU-0012). Es pública: el interesado todavía no tiene cuenta
@@ -60,7 +60,24 @@ export function validarSolicitudEnCliente(datos, { conContrasena = true } = {}) 
   if (conContrasena) {
     const contrasena = String(datos.contrasena_encargado ?? '');
     if (contrasena.length < 8) errores.contrasena_encargado = ['La contraseña debe tener al menos 8 caracteres.'];
-    else if (contrasena !== datos.contrasena_encargado_confirmation) errores.contrasena_encargado = ['Las contraseñas no coinciden.'];
+    // Hallazgo 49: la diferencia se marca en la confirmación, que es donde se corrige.
+    else if (contrasena !== datos.contrasena_encargado_confirmation) errores.contrasena_encargado_confirmation = ['Las contraseñas no coinciden.'];
+  }
+  return errores;
+}
+
+// Hallazgo 48: el peso de los documentos se revisa antes de enviar, porque PHP rechaza lo que pasa de
+// 2 MB por archivo o de 8 MB por envío sin que llegue a M2.
+export function revisarPesoDocumentos(documentos) {
+  const errores = {};
+  documentos.forEach((d, i) => {
+    if (d.archivo && d.archivo.size > MAXIMO_ARCHIVO) {
+      errores[`documentos.${i}.archivo`] = [`Este archivo pesa ${pesoTexto(d.archivo.size)}. Cada documento puede pesar como máximo 2 MB.`];
+    }
+  });
+  const total = documentos.reduce((suma, d) => suma + (d.archivo?.size || 0), 0);
+  if (total > MAXIMO_ENVIO) {
+    errores.documentos = [`Los documentos pesan ${pesoTexto(total)} juntos y se pueden enviar hasta 7 MB a la vez. Usá archivos más livianos.`];
   }
   return errores;
 }
@@ -202,7 +219,8 @@ function EditorDocumentos({ documentos, setDocumentos, errores, onLimpiar, texto
           <Campo etiqueta="Archivo" type="file" accept="application/pdf,image/jpeg,image/png"
             onChange={(e) => cambiarDocumento(i, 'archivo', e.target.files?.[0] || null)}
             error={mensajeDe(errores, `documentos.${i}.archivo`)} />
-          <BotonQuitar etiqueta="Quitar documento" className="sm:mt-[2.6rem]"
+          {/* Hallazgo 50: en celular, separado del campo de archivo. */}
+          <BotonQuitar etiqueta="Quitar documento" className="mt-3 sm:mt-[2.6rem]"
             onClick={() => { setDocumentos(documentos.filter((_, j) => j !== i)); onLimpiar?.('documentos'); }} />
         </div>
       ))}
@@ -218,7 +236,7 @@ function EditorDocumentos({ documentos, setDocumentos, errores, onLimpiar, texto
 // Hallazgo 4: para qué sirven los documentos.
 const AYUDA_DOCUMENTOS = 'Respaldo legal que la plataforma revisa antes de aprobar tu comercio, como la cédula jurídica, '
   + 'la patente comercial, el permiso sanitario o la constancia de inscripción en Hacienda. Si adjuntás alguno, tiene que '
-  + 'estar vigente. PDF, JPG o PNG de hasta 5 MB; se guardan cifrados.';
+  + 'estar vigente. PDF, JPG o PNG de hasta 2 MB cada uno; se guardan cifrados.';
 
 function NuevaSolicitud() {
   const { usuario, mensajeDeError } = useSesion();
@@ -239,12 +257,13 @@ function NuevaSolicitud() {
     // La contraseña se revisa aquí porque el servidor la acepta vacía (la plataforma registra sin ella).
     // Si no cumple, la solicitud no se envía y se marcan de una vez todos los campos que se pueden revisar
     // sin el servidor, no solo la contraseña (hallazgo 40).
-    if (!porPlataforma) {
-      const errores = validarSolicitudEnCliente(datos);
-      if (errores.contrasena_encargado) {
-        await enviar(async () => ({ ok: false, estado: 422, error: { codigo: 'ERR-005', mensaje: 'Revisá los datos marcados.', detalles: errores } }));
-        return;
-      }
+    // Lo mismo con un documento que pesa de más (hallazgo 48): no se envía y se marca junto con lo demás.
+    const errores = validarSolicitudEnCliente(datos, { conContrasena: !porPlataforma });
+    const pesos = revisarPesoDocumentos(documentos);
+    const contrasenaMal = errores.contrasena_encargado || errores.contrasena_encargado_confirmation;
+    if (contrasenaMal || Object.keys(pesos).length) {
+      await enviar(async () => ({ ok: false, estado: 422, error: { codigo: 'ERR-005', mensaje: 'Revisá los datos marcados.', detalles: { ...errores, ...pesos } } }));
+      return;
     }
     const ok = await enviar(() => registrarSolicitud(datosLimpios, documentos));
     if (ok) {
@@ -324,6 +343,11 @@ export function CorregirMiSolicitud({ revision, onCorregida }) {
     if (porReemplazar.length > 0 && documentos.length === 0) {
       await enviar(async () => ({ ok: false, estado: 422, error: { codigo: 'ERR-005', mensaje: 'Revisá los datos marcados.', detalles: {
         documentos: ['Tenés documentos rechazados o vencidos: subí uno nuevo para reemplazarlos antes de enviar la corrección.'] } } }));
+      return;
+    }
+    const pesos = revisarPesoDocumentos(documentos);
+    if (Object.keys(pesos).length) {
+      await enviar(async () => ({ ok: false, estado: 422, error: { codigo: 'ERR-005', mensaje: 'Revisá los datos marcados.', detalles: pesos } }));
       return;
     }
     const cuerpo = {

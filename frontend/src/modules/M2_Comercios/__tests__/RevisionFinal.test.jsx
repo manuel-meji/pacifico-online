@@ -27,7 +27,7 @@ vi.mock('../components/comunes', async (original) => ({
 
 import * as api from '../services/m2Api';
 import { SesionContexto } from '../components/comunes';
-import SolicitudIncorporacion, { MENSAJE_CEDULA, validarSolicitudEnCliente } from '../views/SolicitudIncorporacion';
+import SolicitudIncorporacion, { MENSAJE_CEDULA, revisarPesoDocumentos, validarSolicitudEnCliente } from '../views/SolicitudIncorporacion';
 import PanelComercio from '../views/PanelComercio';
 
 beforeEach(() => { vi.clearAllMocks(); });
@@ -47,8 +47,10 @@ const escribir = async (input, valor) => {
   Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, valor);
   await act(async () => input.dispatchEvent(new Event('input', { bubbles: true })));
 };
-const elegirArchivo = async (input, nombre) => {
-  Object.defineProperty(input, 'files', { configurable: true, value: [new File(['x'], nombre, { type: 'image/png' })] });
+const elegirArchivo = async (input, nombre, megas = 0) => {
+  const archivo = new File(['x'], nombre, { type: nombre.endsWith('.pdf') ? 'application/pdf' : 'image/png' });
+  if (megas) Object.defineProperty(archivo, 'size', { value: megas * 1024 * 1024 });
+  Object.defineProperty(input, 'files', { configurable: true, value: [archivo] });
   await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
   await act(async () => {});
 };
@@ -216,4 +218,73 @@ test('hallazgo 44: los mensajes sin conexión y de demasiados intentos van en vo
 
   expect(sinConexion.error.mensaje).toBe('No se pudo conectar con la plataforma. Intentá de nuevo en unos minutos.');
   expect(limite.error.mensaje).toBe('Demasiados intentos. Esperá un minuto y volvé a intentarlo.');
+});
+
+// --- Hallazgos 48 a 50 (verificación de Mia y pruebas de Abril, 24/11) ---
+
+const llenarContrasena = async (d) => {
+  await escribir(campo(d, 'Contraseña para ingresar'), 'MiClave2026');
+  await escribir(campo(d, 'Confirmá la contraseña'), 'MiClave2026');
+};
+
+test('hallazgo 48: un documento de más de 2 MB no se envía y dice cuánto pesa', async () => {
+  const d = await montar(<SolicitudIncorporacion />);
+  await llenarContrasena(d);
+  await clic(boton(d, 'Agregar documento'));
+  await elegirArchivo(d.querySelector('input[type="file"]'), 'patente.pdf', 3);
+  await enviar(d);
+
+  expect(api.registrarSolicitud).not.toHaveBeenCalled();
+  expect(d.textContent).toContain('Este archivo pesa 3,0 MB. Cada documento puede pesar como máximo 2 MB.');
+  expect(d.textContent).toContain('Completá el nombre comercial.');
+  expect(d.textContent).toContain('PDF, JPG o PNG de hasta 2 MB cada uno');
+});
+
+test('hallazgo 48: varios documentos que juntos pasan de 7 MB se avisan antes de enviar', () => {
+  const doc = (megas) => {
+    const archivo = new File(['x'], 'a.pdf');
+    Object.defineProperty(archivo, 'size', { value: megas * 1024 * 1024 });
+    return { archivo };
+  };
+  const errores = revisarPesoDocumentos([doc(1.9), doc(1.9), doc(1.9), doc(1.9)]);
+  expect(errores['documentos.0.archivo']).toBeUndefined();
+  expect(errores.documentos[0]).toContain('se pueden enviar hasta 7 MB a la vez');
+  expect(revisarPesoDocumentos([doc(1.9), doc(1.9)])).toEqual({});
+});
+
+test('hallazgo 48: una imagen de más de 2 MB se avisa al elegirla', async () => {
+  const d = await montarPanel();
+  await clic(boton(d, 'Banners'));
+  await clic(boton(d, 'Agregar imagen'));
+  await elegirArchivo([...d.querySelectorAll('input[type="file"]')][1], 'grande.png', 2.5);
+  expect(d.textContent).toContain('Tu imagen pesa 2,5 MB. Cada imagen puede pesar como máximo 2 MB.');
+});
+
+test('hallazgo 48: un 413 de PHP no se confunde con falta de conexión', async () => {
+  const real = await vi.importActual('../services/m2Api');
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 413, json: async () => { throw new Error('html'); } });
+  const r = await real.consultarMicrositio(1);
+  globalThis.fetch = fetchOriginal;
+
+  expect(r.estado).toBe(413);
+  expect(r.error.mensaje).toContain('Los archivos pesan demasiado para enviarlos juntos.');
+});
+
+test('hallazgo 49: «Las contraseñas no coinciden» sale bajo la confirmación', async () => {
+  const d = await montar(<SolicitudIncorporacion />);
+  await escribir(campo(d, 'Contraseña para ingresar'), 'MiClave2026');
+  await escribir(campo(d, 'Confirmá la contraseña'), 'OtraClave2026');
+  await enviar(d);
+
+  const etiqueta = (texto) => [...d.querySelectorAll('label')].find((l) => l.textContent.startsWith(texto));
+  expect(etiqueta('Confirmá la contraseña').textContent).toContain('Las contraseñas no coinciden.');
+  expect(etiqueta('Contraseña para ingresar').textContent).not.toContain('Las contraseñas no coinciden.');
+});
+
+test('hallazgo 50: la papelera de documentos tiene separación arriba en celular', async () => {
+  const d = await montar(<SolicitudIncorporacion />);
+  await clic(boton(d, 'Agregar documento'));
+  const quitar = d.querySelector('button[aria-label="Quitar documento"]');
+  expect(quitar.className).toMatch(/(^| )mt-3( |$)/);
 });

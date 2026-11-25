@@ -53,6 +53,7 @@ class MicrositiosController extends Controller
             "{$campo}.image" => 'El archivo debe ser una imagen.',
             "{$campo}.mimes" => 'La imagen debe ser JPG, PNG o WEBP.',
             "{$campo}.max" => 'La imagen no puede pesar más de 2 MB.',
+            "{$campo}.uploaded" => 'No se pudo subir la imagen: puede pesar como máximo 2 MB.',
             "{$campo}.dimensions" => $mensajeDimensiones,
         ];
     }

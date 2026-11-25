@@ -46,6 +46,12 @@ export const fechaCorta = (valor) => {
   return new Date(texto.length === 10 ? `${texto}T00:00:00` : texto).toLocaleDateString('es-CR');
 };
 
+// Hallazgo 48: lo que deja subir PHP por defecto: 2 MB por archivo (upload_max_filesize) y 8 MB por envío
+// (post_max_size). La pantalla lo revisa antes de enviar, con margen: 7 MB por envío.
+export const MAXIMO_ARCHIVO = 2 * 1024 * 1024;
+export const MAXIMO_ENVIO = 7 * 1024 * 1024;
+export const pesoTexto = (bytes) => `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+
 // Medidas de una imagen elegida, para avisar antes de enviarla (hallazgo 28).
 export const medirImagen = (archivo) => new Promise((resolver) => {
   if (!archivo || typeof URL?.createObjectURL !== 'function') { resolver(null); return; }
