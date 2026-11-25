@@ -288,3 +288,49 @@ test('hallazgo 50: la papelera de documentos tiene separación arriba en celular
   const quitar = d.querySelector('button[aria-label="Quitar documento"]');
   expect(quitar.className).toMatch(/(^| )mt-3( |$)/);
 });
+
+// --- Hallazgo 51: la plataforma puede dar una contraseña inicial ---
+
+const PLATAFORMA = { rol: 'encargado_plataforma', nombre: 'Plataforma' };
+const llenarComercio = async (d) => {
+  await escribir(campo(d, 'Nombre comercial'), 'Demo Defensa');
+  await escribir(campo(d, 'Cédula jurídica'), '3101990001');
+  await escribir(campo(d, 'Razón social'), 'Demo Defensa S.A.');
+  await escribir(campo(d, 'Dirección fiscal'), 'Liberia, Guanacaste, frente al parque');
+  await escribir(campo(d, 'Nombre completo'), 'Ana Mora');
+  await escribir(campo(d, 'Correo electrónico'), 'ana@demo.cr');
+};
+
+test('hallazgo 51: con contraseña inicial se envía y el aviso dice que ya puede ingresar', async () => {
+  api.registrarSolicitud.mockResolvedValue({ ok: true, datos: { id_solicitud: 90, correo_encargado: 'ana@demo.cr' } });
+  const d = await montar(<SolicitudIncorporacion />, PLATAFORMA);
+  await llenarComercio(d);
+  await escribir(campo(d, 'Contraseña inicial del encargado'), 'Inicial2026');
+  await escribir(campo(d, 'Confirmá la contraseña inicial'), 'Inicial2026');
+  await enviar(d);
+
+  const [datos] = api.registrarSolicitud.mock.calls[0];
+  expect(datos.contrasena_encargado).toBe('Inicial2026');
+  expect(d.textContent).toContain('ya puede ingresar con ana@demo.cr y la contraseña inicial que definiste');
+});
+
+test('hallazgo 51: sin contraseña inicial se envía sin ella y el aviso habla de la invitación', async () => {
+  api.registrarSolicitud.mockResolvedValue({ ok: true, datos: { id_solicitud: 91, correo_encargado: 'ana@demo.cr' } });
+  const d = await montar(<SolicitudIncorporacion />, PLATAFORMA);
+  await llenarComercio(d);
+  await enviar(d);
+
+  const [datos] = api.registrarSolicitud.mock.calls[0];
+  expect(datos).not.toHaveProperty('contrasena_encargado');
+  expect(d.textContent).toContain('recibe una invitación por correo');
+});
+
+test('hallazgo 51: si la plataforma escribe una contraseña inicial corta, no se envía', async () => {
+  const d = await montar(<SolicitudIncorporacion />, PLATAFORMA);
+  await llenarComercio(d);
+  await escribir(campo(d, 'Contraseña inicial del encargado'), 'corta');
+  await enviar(d);
+
+  expect(api.registrarSolicitud).not.toHaveBeenCalled();
+  expect(d.textContent).toContain('La contraseña debe tener al menos 8 caracteres.');
+});

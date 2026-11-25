@@ -99,10 +99,11 @@ test('hallazgo 25: un documento de cada tipo', async () => {
   expect(segundo.querySelector('option[value="cedula_juridica"]').disabled).toBe(true);
 });
 
-test('hallazgo 11: la plataforma registra el comercio sin pedir contraseña', async () => {
+test('hallazgos 11 y 51: la plataforma registra el comercio y la contraseña inicial es opcional', async () => {
   const d = await montar(<SolicitudIncorporacion />, { rol: 'encargado_plataforma', nombre: 'Plataforma' });
   expect(d.textContent).toContain('Registrar un comercio');
-  expect(d.querySelector('input[type="password"]')).toBeNull();
+  expect(d.textContent).toContain('Contraseña inicial del encargado (opcional)');
+  expect([...d.querySelectorAll('input[type="password"]')].every((i) => !i.required)).toBe(true);
 });
 
 test('hallazgo 10: si falla la consulta del estado no abre el panel completo', async () => {
