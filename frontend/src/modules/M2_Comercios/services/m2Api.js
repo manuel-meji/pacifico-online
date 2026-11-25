@@ -77,6 +77,16 @@ async function llamar(ruta, opciones = {}, reintentado = false) {
     };
   }
 
+  // Hallazgo 48: PHP corta el envío que pasa de post_max_size antes de llegar a M2, sin el formato de
+  // error de M2. No es falta de conexión: se dice qué pasó.
+  if (resp.status === 413) {
+    return {
+      ok: false,
+      estado: 413,
+      error: { codigo: 'ERR-413', mensaje: 'Los archivos pesan demasiado para enviarlos juntos. Subí menos o más livianos: cada uno puede pesar como máximo 2 MB.', detalles: null },
+    };
+  }
+
   return { ok: false, estado: resp.status, error: cuerpo?.error || SIN_CONEXION };
 }
 

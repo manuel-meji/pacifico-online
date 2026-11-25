@@ -6,6 +6,8 @@ namespace Tests\Feature\M2_Comercios;
 
 use App\Contracts\Nucleo\NucleoServiceInterface;
 use App\Contracts\Nucleo\ServicioIdentidadInterface;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Mockery\MockInterface;
 use Tests\Feature\M2_Comercios\Concerns\PreparaM2;
@@ -72,5 +74,47 @@ class RevisionFinalTest extends TestCase
         }
 
         $this->assertDatabaseCount('comercios', 0);
+    }
+
+    // --- Hallazgo 48: el límite de los documentos es el que deja subir PHP (2 MB) ---
+
+    private function registrarConDocumento(UploadedFile $archivo): TestResponse
+    {
+        return $this->post('/api/m2/v1/solicitudes', ['cedula_juridica' => '3-101-765432', 'documentos' => [
+            ['tipo' => 'patente', 'fecha_vencimiento' => now()->addYear()->toDateString(), 'archivo' => $archivo],
+        ]] + self::SOLICITUD, ['Accept' => 'application/json']);
+    }
+
+    public function test_hallazgo_48_un_documento_de_mas_de_2_mb_se_rechaza_en_espanol(): void
+    {
+        Storage::fake('local');
+        $this->identidadQueCreaCuentas();
+
+        $detalles = $this->registrarConDocumento(UploadedFile::fake()->create('patente.pdf', 3000, 'application/pdf'))
+            ->assertStatus(422)->json('error.detalles');
+
+        $this->assertSame(['El documento no puede pesar más de 2 MB.'], $detalles['documentos.0.archivo']);
+        $this->assertDatabaseCount('comercios', 0);
+    }
+
+    public function test_hallazgo_48_un_documento_de_2_mb_se_acepta(): void
+    {
+        Storage::fake('local');
+        $this->identidadQueCreaCuentas();
+
+        $this->registrarConDocumento(UploadedFile::fake()->create('patente.pdf', 2000, 'application/pdf'))->assertOk();
+    }
+
+    public function test_hallazgo_48_si_php_no_deja_subir_el_archivo_el_mensaje_va_en_espanol(): void
+    {
+        $this->identidadQueCreaCuentas();
+        $ruta = tempnam(sys_get_temp_dir(), 'm2');
+        file_put_contents($ruta, '%PDF-1.4');
+        // Así llega un archivo que pasó de upload_max_filesize: con error y sin contenido válido.
+        $rechazado = new UploadedFile($ruta, 'patente.pdf', 'application/pdf', UPLOAD_ERR_INI_SIZE, true);
+
+        $detalles = $this->registrarConDocumento($rechazado)->assertStatus(422)->json('error.detalles');
+
+        $this->assertContains('No se pudo subir el archivo: puede pesar como máximo 2 MB.', $detalles['documentos.0.archivo']);
     }
 }

@@ -66,7 +66,8 @@ trait ValidaEnEspanol
             'correo_encargado' => [...$req, 'email', 'max:150'],
             'telefono_encargado' => ['sometimes', 'nullable', 'string', 'regex:'.self::TELEFONO_CR],
             'documentos' => ['sometimes', 'array', 'max:5'],
-            'documentos.*.archivo' => ['required', 'file', 'mimes:pdf,jpg,png', 'max:5120'],
+            // Hallazgo 48: 2 MB, el límite que deja subir PHP por defecto (upload_max_filesize=2M).
+            'documentos.*.archivo' => ['required', 'file', 'mimes:pdf,jpg,png', 'max:2048'],
             'documentos.*.tipo' => ['required', 'string', 'in:'.implode(',', self::TIPOS_DOCUMENTO), 'distinct'],
             'documentos.*.fecha_vencimiento' => ['required', 'date', 'after:today'],
         ];
@@ -96,6 +97,8 @@ trait ValidaEnEspanol
             'image' => 'El archivo debe ser una imagen.',
             'mimes' => 'El archivo debe ser PDF, JPG o PNG.',
             'confirmed' => 'Las contraseñas no coinciden.',
+            // Hallazgo 48: PHP rechazó el archivo antes de llegar a M2 (más pesado que upload_max_filesize).
+            'uploaded' => 'No se pudo subir el archivo: puede pesar como máximo 2 MB.',
             'between' => ['numeric' => ':Attribute debe estar entre :min y :max.'],
             'size' => ['array' => ':Attribute debe tener :size elementos.'],
             'min' => [
@@ -106,7 +109,7 @@ trait ValidaEnEspanol
             'max' => [
                 'string' => ':Attribute no puede pasar de :max caracteres.',
                 'numeric' => ':Attribute no puede ser mayor que :max.',
-                'file' => 'El archivo no puede pesar más de 5 MB.',
+                'file' => 'El archivo no puede pesar más de 2 MB.',
                 'array' => 'Podés agregar como máximo :max.',
             ],
 
@@ -122,6 +125,7 @@ trait ValidaEnEspanol
             'documentos.max' => 'Podés adjuntar como máximo 5 documentos.',
             'documentos.*.tipo.distinct' => 'Ya agregaste un documento de ese tipo; cada tipo va una sola vez.',
             'documentos.*.archivo.mimes' => 'El documento debe ser PDF, JPG o PNG.',
+            'documentos.*.archivo.max' => 'El documento no puede pesar más de 2 MB.',
             'documentos.*.archivo.required' => 'Adjuntá el archivo del documento.',
             'documentos.*.fecha_vencimiento.after' => 'El documento debe estar vigente: la fecha de vencimiento tiene que ser posterior a hoy.',
             'contrasena_encargado.min' => 'La contraseña debe tener al menos 8 caracteres.',
